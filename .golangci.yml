@@ -1,0 +1,68 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - depguard
+    - errcheck
+    - forbidigo
+    - gosec
+    - govet
+    - misspell
+    - revive
+    - staticcheck
+    - unparam
+  settings:
+    depguard:
+      rules:
+        mcp-sdk:
+          files:
+            - "$all"
+            - "!**/internal/mcpserver/**"
+            - "!**/internal/tools/docsgen/**"
+            - "!**/internal/deps/**"
+          deny:
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: only internal/mcpserver and internal/tools/docsgen talk to the MCP SDK
+        jsonschema:
+          files:
+            - "$all"
+            - "!**/internal/mcpserver/**"
+            - "!**/internal/tools/docsgen/**"
+            - "!**/internal/tool/*.go"
+          deny:
+            - pkg: github.com/google/jsonschema-go
+              desc: schemas are inferred by internal/tool; tools declare plain Go structs
+        domain-tools:
+          files:
+            - "**/internal/tools/**"
+          deny:
+            - pkg: github.com/idoo/hamn/internal/asc
+              desc: tool packages use tool.Env.ASC, never the client directly
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print.*$
+          msg: stdout is the MCP stdio channel; log to stderr or return results
+        - pattern: ^os\.Stdout$
+          msg: stdout is the MCP stdio channel
+    gosec:
+      excludes:
+        - G104 # covered by errcheck
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: ^cmd/
+        linters: [forbidigo]
+      - path: _test\.go
+        linters: [gosec, unparam]
+      - path: internal/tools/all/
+        linters: [revive]
+        text: blank-imports
+
+formatters:
+  enable:
+    - gofumpt
