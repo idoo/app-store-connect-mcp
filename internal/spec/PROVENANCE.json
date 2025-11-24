@@ -1,0 +1,9 @@
+{
+  "spec_version": "4.5.1",
+  "spec_sha256": "7518d3a94a8bd701ac25c1c601b95b8f53aad92091affb15a2a9d331713dac1a",
+  "zip_sha256": "7b826ae9ca3e45b0e7df2643cbb811c9930632640944db11a8af4586fab9db46",
+  "source_url": "https://developer.apple.com/sample-code/app-store-connect/app-store-connect-openapi-specification.zip",
+  "generated": "2026-10-25",
+  "paths": 1001,
+  "operations": 1303
+}
