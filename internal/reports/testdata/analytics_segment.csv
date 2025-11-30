@@ -1,0 +1,6 @@
+Date,App Name,App Apple Identifier,Event,Page Type,Source Type,Territory,Counts,Unique Counts
+2026-10-24,Example Notes,1000000001,Page view,Product page,App Store search,US,120,90
+2026-10-24,Example Notes,1000000001,Page view,Product page,App Store browse,US,40,33
+2026-10-24,Example Notes,1000000001,Page view,Product page,App Store search,DE,25,20
+2026-10-24,Example Notes,1000000001,Page view,Product page,Web referrer,"Korea, Republic of",3,3
+2026-10-23,Example Notes,1000000001,Page view,Product page,App Store search,US,100,80

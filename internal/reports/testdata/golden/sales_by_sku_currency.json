@@ -1,0 +1,103 @@
+{
+  "totals": {
+    "units": {
+      "download": 17,
+      "iap": 5,
+      "redownload": 4,
+      "subscription": 7,
+      "update": 30
+    },
+    "proceeds": {
+      "EUR": "1.38",
+      "JPY": "420",
+      "USD": "18.84"
+    }
+  },
+  "groups": [
+    {
+      "key": {
+        "currency": "USD",
+        "sku": "com.example.notes"
+      },
+      "units": {
+        "download": 12,
+        "update": 30
+      },
+      "proceeds": {
+        "USD": "0.00"
+      }
+    },
+    {
+      "key": {
+        "currency": "USD",
+        "sku": "notes.monthly"
+      },
+      "units": {
+        "subscription": 6
+      },
+      "proceeds": {
+        "USD": "16.74"
+      }
+    },
+    {
+      "key": {
+        "currency": "EUR",
+        "sku": "com.example.notes"
+      },
+      "units": {
+        "download": 5
+      },
+      "proceeds": {
+        "EUR": "0.00"
+      }
+    },
+    {
+      "key": {
+        "currency": "JPY",
+        "sku": "com.example.notes"
+      },
+      "units": {
+        "redownload": 4
+      },
+      "proceeds": {
+        "JPY": "0"
+      }
+    },
+    {
+      "key": {
+        "currency": "USD",
+        "sku": "notes.pro"
+      },
+      "units": {
+        "iap": 3
+      },
+      "proceeds": {
+        "USD": "2.10"
+      }
+    },
+    {
+      "key": {
+        "currency": "EUR",
+        "sku": "notes.pro"
+      },
+      "units": {
+        "iap": 2
+      },
+      "proceeds": {
+        "EUR": "1.38"
+      }
+    },
+    {
+      "key": {
+        "currency": "JPY",
+        "sku": "notes.monthly"
+      },
+      "units": {
+        "subscription": 1
+      },
+      "proceeds": {
+        "JPY": "420"
+      }
+    }
+  ]
+}
