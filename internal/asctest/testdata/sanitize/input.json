@@ -1,0 +1,67 @@
+{
+  "data": [
+    {
+      "type": "apps",
+      "id": "1234567890",
+      "attributes": {
+        "name": "Hjul — Bike Tracker",
+        "bundleId": "se.jvcr.hjul",
+        "sku": "HJUL2024",
+        "primaryLocale": "en-US",
+        "contactEmail": "Ivan@JVCR.se"
+      },
+      "relationships": {
+        "appStoreVersions": {
+          "links": {
+            "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/relationships/appStoreVersions",
+            "related": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appStoreVersions"
+          },
+          "data": [{ "type": "appStoreVersions", "id": "a1b2c3d4-0000-4000-8000-000000000001" }]
+        }
+      },
+      "links": { "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890" }
+    }
+  ],
+  "included": [
+    {
+      "type": "customerReviews",
+      "id": "00000042-aaaa-bbbb-cccc-1234567890ab",
+      "attributes": {
+        "rating": 5,
+        "title": "Love it",
+        "body": "Great app, email me at fan@example.org!",
+        "reviewerNickname": "BikeFan99",
+        "createdDate": "2026-10-01T10:00:00-07:00",
+        "territory": "SWE"
+      }
+    },
+    {
+      "type": "appScreenshots",
+      "id": "77777777",
+      "attributes": {
+        "fileName": "01-home.png",
+        "imageAsset": {
+          "templateUrl": "https://is1-ssl.mzstatic.com/image/thumb/Purple/v4/ab/cd/ef/x.png/{w}x{h}bb.{f}",
+          "width": 1320,
+          "height": 2868
+        },
+        "sourceFileChecksum": "0123456789abcdef"
+      }
+    },
+    {
+      "type": "certificates",
+      "id": "CERT99",
+      "attributes": { "certificateContent": "MIIF...base64...", "serialNumber": "7A3F00" }
+    },
+    {
+      "type": "apps",
+      "id": "1234567890",
+      "attributes": { "bundleId": "se.jvcr.hjul", "supportUrl": "https://jvcr.se/hjul/support?ref=x" }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps?limit=1",
+    "next": "https://api.appstoreconnect.apple.com/v1/apps?cursor=eyJvZmZzZXQiOjF9&limit=1"
+  },
+  "meta": { "paging": { "total": 7, "limit": 1 } }
+}
