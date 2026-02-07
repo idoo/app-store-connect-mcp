@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/customerReviews"
+  },
+  "meta": {
+    "paging": {
+      "limit": 5,
+      "total": 0
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "identifier": "com.example.app4",
+        "name": "name",
+        "platform": "UNIVERSAL",
+        "seedId": "CODE0005"
+      },
+      "id": "id-0006",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0006"
+      },
+      "relationships": {
+        "bundleIdCapabilities": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0006/bundleIdCapabilities",
+            "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0006/relationships/bundleIdCapabilities"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        },
+        "profiles": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0006/profiles",
+            "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0006/relationships/profiles"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        }
+      },
+      "type": "bundleIds"
+    },
+    {
+      "attributes": {
+        "identifier": "com.example.app5",
+        "name": "name 0025 lorem ipsum dol",
+        "platform": "UNIVERSAL",
+        "seedId": "CODE0005"
+      },
+      "id": "id-0007",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0007"
+      },
+      "relationships": {
+        "bundleIdCapabilities": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0007/bundleIdCapabilities",
+            "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0007/relationships/bundleIdCapabilities"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        },
+        "profiles": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0007/profiles",
+            "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0007/relationships/profiles"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        }
+      },
+      "type": "bundleIds"
+    },
+    {
+      "attributes": {
+        "identifier": "CODE0006",
+        "name": "name 0026 lorem i",
+        "platform": "UNIVERSAL",
+        "seedId": "CODE0005"
+      },
+      "id": "id-0008",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0008"
+      },
+      "relationships": {
+        "bundleIdCapabilities": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0008/bundleIdCapabilities",
+            "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0008/relationships/bundleIdCapabilities"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        },
+        "profiles": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0008/profiles",
+            "self": "https://api.appstoreconnect.apple.com/v1/bundleIds/id-0008/relationships/profiles"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        }
+      },
+      "type": "bundleIds"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/bundleIds"
+  },
+  "meta": {
+    "paging": {
+      "limit": 3,
+      "total": 59
+    }
+  }
+}
