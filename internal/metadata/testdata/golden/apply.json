@@ -1,0 +1,140 @@
+{
+  "requests": [
+    {
+      "body": null,
+      "method": "DELETE",
+      "path": "/v1/appInfoLocalizations/I-DE"
+    },
+    {
+      "body": null,
+      "method": "DELETE",
+      "path": "/v1/appStoreVersionLocalizations/V-DE"
+    },
+    {
+      "body": {
+        "data": {
+          "attributes": {
+            "description": "Desc",
+            "keywords": "k",
+            "locale": "fr-FR"
+          },
+          "relationships": {
+            "appStoreVersion": {
+              "data": {
+                "id": "VER",
+                "type": "appStoreVersions"
+              }
+            }
+          },
+          "type": "appStoreVersionLocalizations"
+        }
+      },
+      "method": "POST",
+      "path": "/v1/appStoreVersionLocalizations"
+    },
+    {
+      "body": {
+        "data": {
+          "attributes": {
+            "locale": "fr-FR",
+            "name": "Hamn"
+          },
+          "relationships": {
+            "appInfo": {
+              "data": {
+                "id": "INFO",
+                "type": "appInfos"
+              }
+            }
+          },
+          "type": "appInfoLocalizations"
+        }
+      },
+      "method": "POST",
+      "path": "/v1/appInfoLocalizations"
+    },
+    {
+      "body": {
+        "data": {
+          "attributes": {
+            "subtitle": "Ship faster"
+          },
+          "id": "I-EN",
+          "type": "appInfoLocalizations"
+        }
+      },
+      "method": "PATCH",
+      "path": "/v1/appInfoLocalizations/I-EN"
+    },
+    {
+      "body": {
+        "data": {
+          "attributes": {
+            "whatsNew": "Bug fixes"
+          },
+          "id": "V-EN",
+          "type": "appStoreVersionLocalizations"
+        }
+      },
+      "method": "PATCH",
+      "path": "/v1/appStoreVersionLocalizations/V-EN"
+    }
+  ],
+  "results": [
+    {
+      "locale": "de-DE",
+      "level": "appInfo",
+      "op": "delete",
+      "id": "I-DE",
+      "outcome": "already"
+    },
+    {
+      "locale": "de-DE",
+      "level": "version",
+      "op": "delete",
+      "id": "V-DE",
+      "outcome": "ok"
+    },
+    {
+      "locale": "en-US",
+      "level": "appInfo",
+      "op": "update",
+      "fields": [
+        "subtitle"
+      ],
+      "id": "I-EN",
+      "outcome": "ok"
+    },
+    {
+      "locale": "en-US",
+      "level": "version",
+      "op": "update",
+      "fields": [
+        "whatsNew"
+      ],
+      "id": "V-EN",
+      "outcome": "ok"
+    },
+    {
+      "locale": "fr-FR",
+      "level": "appInfo",
+      "op": "create",
+      "fields": [
+        "name"
+      ],
+      "id": "I-FR",
+      "outcome": "ok"
+    },
+    {
+      "locale": "fr-FR",
+      "level": "version",
+      "op": "create",
+      "fields": [
+        "description",
+        "keywords"
+      ],
+      "id": "V-FR",
+      "outcome": "ok"
+    }
+  ]
+}
