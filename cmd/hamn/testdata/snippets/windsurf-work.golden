@@ -1,0 +1,12 @@
+// ~/.codeium/windsurf/mcp_config.json
+{
+  "mcpServers": {
+    "hamn": {
+      "args": [],
+      "command": "/ABS/PATH/hamn",
+      "env": {
+        "HAMN_PROFILE": "work"
+      }
+    }
+  }
+}

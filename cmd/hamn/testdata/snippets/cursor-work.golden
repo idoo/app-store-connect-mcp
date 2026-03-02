@@ -1,0 +1,12 @@
+// ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "hamn": {
+      "args": [],
+      "command": "/ABS/PATH/hamn",
+      "env": {
+        "HAMN_PROFILE": "work"
+      }
+    }
+  }
+}
