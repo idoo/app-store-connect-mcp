@@ -30,7 +30,7 @@ var AllToolsets = []Toolset{
 }
 
 // DefaultToolsets lists the toolsets enabled when no selection is given.
-var DefaultToolsets = []Toolset{Core, Release, TestFlight, Metadata, Reviews, Reports}
+var DefaultToolsets = []Toolset{Core, Release, TestFlight, Metadata, Reviews, Reports, Screenshots}
 
 // Valid reports whether ts is a known toolset.
 func (ts Toolset) Valid() bool { return slices.Contains(AllToolsets, ts) }
