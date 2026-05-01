@@ -1,0 +1,26 @@
+GO ?= go
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
+
+.PHONY: build test vet lint generate smoke tidy
+
+build:
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/hamn ./cmd/hamn
+
+test:
+	$(GO) test -race ./...
+
+vet:
+	$(GO) vet ./...
+
+lint:
+	golangci-lint run ./...
+
+generate:
+	$(GO) generate ./...
+
+smoke:
+	$(GO) test -tags live -count=1 ./test/live/...
+
+tidy:
+	$(GO) mod tidy

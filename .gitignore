@@ -1,0 +1,9 @@
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+*.p8
+.hamn.toml
+.env
+.DS_Store
