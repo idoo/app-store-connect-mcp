@@ -1,0 +1,9 @@
+title = "hamn gitleaks config"
+
+[extend]
+useDefault = true
+
+# Synthetic, non-functional secrets used to prove redaction works.
+[[allowlists]]
+description = "redaction test fixtures"
+paths = ['''internal/asc/redact_test\.go''']
