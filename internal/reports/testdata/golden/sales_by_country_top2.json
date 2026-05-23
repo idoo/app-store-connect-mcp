@@ -1,0 +1,45 @@
+{
+  "totals": {
+    "units": {
+      "download": 17,
+      "iap": 5,
+      "redownload": 4,
+      "subscription": 7,
+      "update": 30
+    },
+    "proceeds": {
+      "EUR": "1.38",
+      "JPY": "420",
+      "USD": "18.84"
+    }
+  },
+  "groups": [
+    {
+      "key": {
+        "country": "US"
+      },
+      "units": {
+        "download": 12,
+        "iap": 3,
+        "subscription": 6,
+        "update": 30
+      },
+      "proceeds": {
+        "USD": "18.84"
+      }
+    },
+    {
+      "key": {
+        "country": "DE"
+      },
+      "units": {
+        "download": 5,
+        "iap": 2
+      },
+      "proceeds": {
+        "EUR": "1.38"
+      }
+    }
+  ],
+  "omitted": 1
+}

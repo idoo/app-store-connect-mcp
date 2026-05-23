@@ -1,0 +1,12 @@
+{
+  "proceeds": {
+    "EUR": "1.38",
+    "JPY": "420",
+    "USD": "27.21"
+  },
+  "units": 15,
+  "missing_rates": [
+    "EUR",
+    "JPY"
+  ]
+}

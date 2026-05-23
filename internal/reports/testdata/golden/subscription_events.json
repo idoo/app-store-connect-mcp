@@ -1,0 +1,15 @@
+{
+  "by_event": {
+    "Cancel": 2,
+    "Introductory Offer Opt-Out of Auto-Renew": 3,
+    "Paid Subscription from Introductory Offer": 5,
+    "Refund": 1,
+    "Renew": 6,
+    "Start Introductory Offer": 9,
+    "Subscribe": 2
+  },
+  "conversions": 5,
+  "cancellations": 5,
+  "refunds": 1,
+  "starts": 11
+}

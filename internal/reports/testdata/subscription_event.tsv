@@ -1,0 +1,9 @@
+Event Date	Event	App Name	App Apple ID	Subscription Name	Subscription Apple ID	Subscription Group ID	Standard Subscription Duration	Subscription Offer Type	Subscription Offer Duration	Marketing Opt-In	Marketing Opt-In Duration	Preserved Pricing	Proceeds Reason	Promotional Offer Name	Promotional Offer ID	Consecutive Paid Periods	Original Start Date	Device	Client	State	Country	Previous Subscription Name	Previous Subscription Apple ID	Days Before Canceling	Cancellation Reason	Days Canceled	Quantity
+2026-10-24	Start Introductory Offer	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month	Free Trial		No						1	2026-10-01	iPhone			US						9
+2026-10-24	Paid Subscription from Introductory Offer	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			US						4
+2026-10-24	Paid Subscription from Introductory Offer	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			DE						1
+2026-10-24	Cancel	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			US				Voluntary		2
+2026-10-24	Introductory Offer Opt-Out of Auto-Renew	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			US						3
+2026-10-24	Refund	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			US						1
+2026-10-24	Renew	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			US						6
+2026-10-24	Subscribe	Example Notes	1000000001	Notes Monthly	1000000099	20000001	1 Month			No						1	2026-10-01	iPhone			US						2
