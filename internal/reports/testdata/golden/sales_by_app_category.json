@@ -1,0 +1,81 @@
+{
+  "totals": {
+    "units": {
+      "download": 17,
+      "iap": 5,
+      "redownload": 4,
+      "subscription": 7,
+      "update": 30
+    },
+    "proceeds": {
+      "EUR": "1.38",
+      "JPY": "420",
+      "USD": "18.84"
+    }
+  },
+  "groups": [
+    {
+      "key": {
+        "app": "com.example.notes",
+        "product_category": "update"
+      },
+      "units": {
+        "update": 30
+      },
+      "proceeds": {
+        "USD": "0.00"
+      }
+    },
+    {
+      "key": {
+        "app": "com.example.notes",
+        "product_category": "download"
+      },
+      "units": {
+        "download": 17
+      },
+      "proceeds": {
+        "EUR": "0.00",
+        "USD": "0.00"
+      }
+    },
+    {
+      "key": {
+        "app": "com.example.notes",
+        "product_category": "subscription"
+      },
+      "units": {
+        "subscription": 7
+      },
+      "proceeds": {
+        "JPY": "420",
+        "USD": "16.74"
+      }
+    },
+    {
+      "key": {
+        "app": "com.example.notes",
+        "product_category": "iap"
+      },
+      "units": {
+        "iap": 5
+      },
+      "proceeds": {
+        "EUR": "1.38",
+        "USD": "2.10"
+      }
+    },
+    {
+      "key": {
+        "app": "com.example.notes",
+        "product_category": "redownload"
+      },
+      "units": {
+        "redownload": 4
+      },
+      "proceeds": {
+        "JPY": "0"
+      }
+    }
+  ]
+}

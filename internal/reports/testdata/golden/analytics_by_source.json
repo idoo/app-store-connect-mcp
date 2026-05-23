@@ -1,0 +1,37 @@
+{
+  "dimensions": [
+    "source type"
+  ],
+  "metrics": [
+    "Counts",
+    "Unique Counts"
+  ],
+  "totals": {
+    "Counts": "288",
+    "Unique Counts": "226"
+  },
+  "groups": [
+    {
+      "key": {
+        "source type": "App Store search"
+      },
+      "metrics": {
+        "Counts": "245",
+        "Unique Counts": "190"
+      },
+      "rows": 3
+    },
+    {
+      "key": {
+        "source type": "App Store browse"
+      },
+      "metrics": {
+        "Counts": "40",
+        "Unique Counts": "33"
+      },
+      "rows": 1
+    }
+  ],
+  "omitted": 1,
+  "row_count": 5
+}
