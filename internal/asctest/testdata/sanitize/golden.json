@@ -1,0 +1,84 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "bundleId": "com.example.app1",
+        "contactEmail": "user0001@example.com",
+        "name": "name 0001 lorem ips",
+        "primaryLocale": "en-US",
+        "sku": "CODE0001"
+      },
+      "id": "id-0001",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001"
+      },
+      "relationships": {
+        "appStoreVersions": {
+          "data": [
+            {
+              "id": "id-0002",
+              "type": "appStoreVersions"
+            }
+          ],
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/appStoreVersions",
+            "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/relationships/appStoreVersions"
+          }
+        }
+      },
+      "type": "apps"
+    }
+  ],
+  "included": [
+    {
+      "attributes": {
+        "body": "body 0002 lorem ipsum dolor sit amet lo",
+        "createdDate": "2026-10-01T10:00:00-07:00",
+        "rating": 5,
+        "reviewerNickname": "reviewerN",
+        "territory": "SWE",
+        "title": "title 0"
+      },
+      "id": "id-0003",
+      "type": "customerReviews"
+    },
+    {
+      "attributes": {
+        "fileName": "01-home.png",
+        "imageAsset": {
+          "height": 2868,
+          "templateUrl": "https://example.invalid/u0001/{w}x{h}bb.{f}",
+          "width": 1320
+        },
+        "sourceFileChecksum": "0123456789abcdef"
+      },
+      "id": "id-0004",
+      "type": "appScreenshots"
+    },
+    {
+      "attributes": {
+        "certificateContent": "REDACTED",
+        "serialNumber": "CODE0002"
+      },
+      "id": "id-0005",
+      "type": "certificates"
+    },
+    {
+      "attributes": {
+        "bundleId": "com.example.app1",
+        "supportUrl": "https://example.invalid/u0002"
+      },
+      "id": "id-0001",
+      "type": "apps"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps?limit=1"
+  },
+  "meta": {
+    "paging": {
+      "limit": 1,
+      "total": 7
+    }
+  }
+}
