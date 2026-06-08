@@ -1,0 +1,5 @@
+Provider	Provider Country	SKU	Developer	Title	Version	Product Type Identifier	Units	Developer Proceeds	Begin Date	End Date	Customer Currency	Country Code	Currency of Proceeds	Apple Identifier	Customer Price	Promo Code	Parent Identifier	Subscription	Period	Category	CMB	Device	Supported Platforms	Proceeds Reason	Preserved Pricing	Client	Order Type
+APPLE	US	com.example.notes	Example Dev	Example Notes	1.2	1F	3	0	10/20/2026	10/20/2026	USD	US	USD	1000000001	0							iPhone	iOS				
+APPLE	US	notes.pro	Example Dev	Notes Pro Unlock		IA1	1	0.70	10/20/2026	10/20/2026	USD	US	USD	1000000099	0.99		com.example.notes					iPhone	iOS				
+APPLE	US	notes.pro	Example Dev	Notes Pro Unlock		IA1	2	1.25	10/20/2026	10/20/2026	EUR	DE	EUR	1000000099	1.99		com.example.notes					iPhone	iOS				
+APPLE	US	com.other.app	Example Dev	Other App	2.0	1F	100	0	10/20/2026	10/20/2026	USD	US	USD	2000000001	0							iPhone	iOS				
