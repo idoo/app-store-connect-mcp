@@ -1,0 +1,113 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "createdDate": "2026-10-18T16:23:31.000+00:00",
+        "expirationDate": "2027-03-31T17:00:53.000+00:00",
+        "name": "name 0030 lorem ipsum",
+        "platform": "IOS",
+        "profileContent": "REDACTED",
+        "profileState": "ACTIVE",
+        "profileType": "IOS_APP_STORE",
+        "profileVersion": "1",
+        "uuid": "00000000-0000-4000-8000-000000000021"
+      },
+      "id": "id-0011",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011"
+      },
+      "relationships": {
+        "bundleId": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011/bundleId",
+            "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011/relationships/bundleId"
+          }
+        },
+        "certificates": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011/certificates",
+            "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011/relationships/certificates"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        },
+        "devices": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011/devices",
+            "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0011/relationships/devices"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        }
+      },
+      "type": "profiles"
+    },
+    {
+      "attributes": {
+        "createdDate": "2026-10-19T15:34:57.000+00:00",
+        "expirationDate": "2027-10-19T15:34:57.000+00:00",
+        "name": "name 0031 lorem ipsum dolor si",
+        "platform": "MAC_OS",
+        "profileContent": "REDACTED",
+        "profileState": "INVALID",
+        "profileType": "MAC_APP_DEVELOPMENT",
+        "profileVersion": "1",
+        "uuid": "00000000-0000-4000-8000-000000000022"
+      },
+      "id": "id-0012",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012"
+      },
+      "relationships": {
+        "bundleId": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012/bundleId",
+            "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012/relationships/bundleId"
+          }
+        },
+        "certificates": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012/certificates",
+            "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012/relationships/certificates"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        },
+        "devices": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012/devices",
+            "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0012/relationships/devices"
+          },
+          "meta": {
+            "paging": {
+              "limit": 2147483647,
+              "total": 0
+            }
+          }
+        }
+      },
+      "type": "profiles"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/profiles"
+  },
+  "meta": {
+    "paging": {
+      "limit": 2,
+      "total": 33
+    }
+  }
+}

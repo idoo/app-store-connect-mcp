@@ -1,0 +1,91 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "contentHosting": false,
+        "familySharable": false,
+        "inAppPurchaseType": "NON_CONSUMABLE",
+        "name": "name 0021 loremx",
+        "productId": "CODE0004",
+        "reviewNote": "reviewNote 0022 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l",
+        "state": "READY_TO_SUBMIT"
+      },
+      "id": "id-0004",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004"
+      },
+      "relationships": {
+        "appStoreReviewScreenshot": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/appStoreReviewScreenshot",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/appStoreReviewScreenshot"
+          }
+        },
+        "content": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/content",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/content"
+          }
+        },
+        "iapPriceSchedule": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/iapPriceSchedule",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/iapPriceSchedule"
+          }
+        },
+        "images": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/images",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/images"
+          }
+        },
+        "inAppPurchaseAvailability": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/inAppPurchaseAvailability",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/inAppPurchaseAvailability"
+          }
+        },
+        "inAppPurchaseLocalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/inAppPurchaseLocalizations",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/inAppPurchaseLocalizations"
+          }
+        },
+        "offerCodes": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/offerCodes",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/offerCodes"
+          }
+        },
+        "pricePoints": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/pricePoints",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/pricePoints"
+          }
+        },
+        "promotedPurchase": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/promotedPurchase",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/promotedPurchase"
+          }
+        },
+        "versions": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/versions",
+            "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/id-0004/relationships/versions"
+          }
+        }
+      },
+      "type": "inAppPurchases"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/inAppPurchasesV2"
+  },
+  "meta": {
+    "paging": {
+      "limit": 5,
+      "total": 1
+    }
+  }
+}

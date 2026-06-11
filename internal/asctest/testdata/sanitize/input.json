@@ -57,6 +57,32 @@
       "type": "apps",
       "id": "1234567890",
       "attributes": { "bundleId": "se.jvcr.hjul", "supportUrl": "https://jvcr.se/hjul/support?ref=x" }
+    },
+    {
+      "type": "profiles",
+      "id": "PROF77ABCD",
+      "attributes": {
+        "uuid": "3F2504E0-4F89-41D3-9D01-0305E82C3301",
+        "teamId": "9X8Y7Z6W5V",
+        "profileState": "ACTIVE",
+        "profileType": "IOS_APP_STORE",
+        "platform": "IOS",
+        "expirationDate": "2027-01-02T03:04:05.000+0000"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/profiles/PROF77ABCD?filter%5Bapps%5D=6808967650&fields%5Bprofiles%5D=name"
+      }
+    },
+    {
+      "type": "appStoreReviewDetails",
+      "id": "6808967650",
+      "attributes": {
+        "reviewNote": "Login with ivan / hunter2 at the lake house",
+        "someNewField": "Unlisted free text from Apple",
+        "locale": "en-US",
+        "versionString": "3.1.2",
+        "contactPhone": "+46 70 123 45 67"
+      }
     }
   ],
   "links": {

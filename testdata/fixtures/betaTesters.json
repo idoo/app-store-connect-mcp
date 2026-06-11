@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "appDevices": [
+          {
+            "appBuildVersion": "appBuil",
+            "model": "model 0009",
+            "osVersion": "27.0.1",
+            "platform": "IOS"
+          }
+        ],
+        "email": "user0004@example.com",
+        "firstName": "firstNam",
+        "inviteType": "EMAIL",
+        "lastName": "last",
+        "state": "INSTALLED"
+      },
+      "id": "00000000-0000-4000-8000-000000000014",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014"
+      },
+      "relationships": {
+        "apps": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014/apps",
+            "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014/relationships/apps"
+          }
+        },
+        "betaGroups": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014/betaGroups",
+            "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014/relationships/betaGroups"
+          }
+        },
+        "builds": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014/builds",
+            "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/00000000-0000-4000-8000-000000000014/relationships/builds"
+          }
+        }
+      },
+      "type": "betaTesters"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/betaTesters"
+  },
+  "meta": {
+    "paging": {
+      "limit": 3,
+      "total": 1
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "certificateContent": "REDACTED",
+        "certificateType": "DISTRIBUTION",
+        "csrContent": null,
+        "displayName": "displayName 0",
+        "expirationDate": "2027-03-31T17:00:53.000+00:00",
+        "name": "name 0028 lorem ipsum dolor sit a",
+        "platform": null,
+        "serialNumber": "CODE0007"
+      },
+      "id": "id-0009",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/certificates/id-0009"
+      },
+      "relationships": {
+        "merchantId": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/certificates/id-0009/merchantId",
+            "self": "https://api.appstoreconnect.apple.com/v1/certificates/id-0009/relationships/merchantId"
+          }
+        },
+        "passTypeId": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/certificates/id-0009/passTypeId",
+            "self": "https://api.appstoreconnect.apple.com/v1/certificates/id-0009/relationships/passTypeId"
+          }
+        }
+      },
+      "type": "certificates"
+    },
+    {
+      "attributes": {
+        "certificateContent": "REDACTED",
+        "certificateType": "MAC_INSTALLER_DISTRIBUTION",
+        "csrContent": null,
+        "displayName": "displayName 0",
+        "expirationDate": "2027-07-30T18:25:57.000+00:00",
+        "name": "name 0029 lorem ipsum dolor sit amet lore",
+        "platform": "MAC_OS",
+        "serialNumber": "CODE0008"
+      },
+      "id": "id-0010",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/certificates/id-0010"
+      },
+      "relationships": {
+        "merchantId": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/certificates/id-0010/merchantId",
+            "self": "https://api.appstoreconnect.apple.com/v1/certificates/id-0010/relationships/merchantId"
+          }
+        },
+        "passTypeId": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/certificates/id-0010/passTypeId",
+            "self": "https://api.appstoreconnect.apple.com/v1/certificates/id-0010/relationships/passTypeId"
+          }
+        }
+      },
+      "type": "certificates"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/certificates"
+  },
+  "meta": {
+    "paging": {
+      "limit": 2,
+      "total": 5
+    }
+  }
+}

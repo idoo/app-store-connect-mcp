@@ -1,0 +1,159 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "appStoreAgeRating": "FOUR_PLUS",
+        "appStoreState": "READY_FOR_SALE",
+        "australiaAgeRating": null,
+        "brazilAgeRating": "L",
+        "brazilAgeRatingV2": "SELF_RATED_L",
+        "franceAgeRating": null,
+        "koreaAgeRating": null,
+        "state": "READY_FOR_DISTRIBUTION"
+      },
+      "id": "00000000-0000-4000-8000-000000000001",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001"
+      },
+      "relationships": {
+        "ageRatingDeclaration": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/ageRatingDeclaration",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/ageRatingDeclaration"
+          }
+        },
+        "appInfoLocalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/appInfoLocalizations",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/appInfoLocalizations"
+          }
+        },
+        "primaryCategory": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/primaryCategory",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/primaryCategory"
+          }
+        },
+        "primarySubcategoryOne": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/primarySubcategoryOne",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/primarySubcategoryOne"
+          }
+        },
+        "primarySubcategoryTwo": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/primarySubcategoryTwo",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/primarySubcategoryTwo"
+          }
+        },
+        "secondaryCategory": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/secondaryCategory",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/secondaryCategory"
+          }
+        },
+        "secondarySubcategoryOne": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/secondarySubcategoryOne",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/secondarySubcategoryOne"
+          }
+        },
+        "secondarySubcategoryTwo": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/secondarySubcategoryTwo",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/secondarySubcategoryTwo"
+          }
+        },
+        "territoryAgeRatings": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/territoryAgeRatings",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/relationships/territoryAgeRatings"
+          }
+        }
+      },
+      "type": "appInfos"
+    },
+    {
+      "attributes": {
+        "appStoreAgeRating": "FOUR_PLUS",
+        "appStoreState": "READY_FOR_REVIEW",
+        "australiaAgeRating": null,
+        "brazilAgeRating": "L",
+        "brazilAgeRatingV2": "SELF_RATED_L",
+        "franceAgeRating": null,
+        "koreaAgeRating": null,
+        "state": "READY_FOR_REVIEW"
+      },
+      "id": "00000000-0000-4000-8000-000000000002",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002"
+      },
+      "relationships": {
+        "ageRatingDeclaration": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/ageRatingDeclaration",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/ageRatingDeclaration"
+          }
+        },
+        "appInfoLocalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/appInfoLocalizations",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/appInfoLocalizations"
+          }
+        },
+        "primaryCategory": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/primaryCategory",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/primaryCategory"
+          }
+        },
+        "primarySubcategoryOne": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/primarySubcategoryOne",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/primarySubcategoryOne"
+          }
+        },
+        "primarySubcategoryTwo": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/primarySubcategoryTwo",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/primarySubcategoryTwo"
+          }
+        },
+        "secondaryCategory": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/secondaryCategory",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/secondaryCategory"
+          }
+        },
+        "secondarySubcategoryOne": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/secondarySubcategoryOne",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/secondarySubcategoryOne"
+          }
+        },
+        "secondarySubcategoryTwo": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/secondarySubcategoryTwo",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/secondarySubcategoryTwo"
+          }
+        },
+        "territoryAgeRatings": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/territoryAgeRatings",
+            "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000002/relationships/territoryAgeRatings"
+          }
+        }
+      },
+      "type": "appInfos"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/appInfos"
+  },
+  "meta": {
+    "paging": {
+      "limit": 50,
+      "total": 2
+    }
+  }
+}

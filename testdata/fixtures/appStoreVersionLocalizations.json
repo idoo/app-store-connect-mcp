@@ -1,0 +1,97 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "description": "description 0015 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem",
+        "keywords": "keywords 0016 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lor",
+        "locale": "en-US",
+        "marketingUrl": null,
+        "promotionalText": null,
+        "supportUrl": "https://example.invalid/u0002",
+        "whatsNew": "whatsNew 0017 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sitx"
+      },
+      "id": "00000000-0000-4000-8000-000000000017",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017"
+      },
+      "relationships": {
+        "appPreviewSets": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/appPreviewSets",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/relationships/appPreviewSets"
+          }
+        },
+        "appScreenshotSets": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/appScreenshotSets",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/relationships/appScreenshotSets"
+          }
+        },
+        "placements": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/placements",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/relationships/placements"
+          }
+        },
+        "searchKeywords": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/searchKeywords",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/relationships/searchKeywords"
+          }
+        }
+      },
+      "type": "appStoreVersionLocalizations"
+    },
+    {
+      "attributes": {
+        "description": "description 0018 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem",
+        "keywords": "keywords 0019 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet l",
+        "locale": "ru",
+        "marketingUrl": null,
+        "promotionalText": null,
+        "supportUrl": "https://example.invalid/u0002",
+        "whatsNew": "whatsNew 0020 lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet lorem ipsum dolor sit amet"
+      },
+      "id": "00000000-0000-4000-8000-000000000018",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018"
+      },
+      "relationships": {
+        "appPreviewSets": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/appPreviewSets",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/relationships/appPreviewSets"
+          }
+        },
+        "appScreenshotSets": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/appScreenshotSets",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/relationships/appScreenshotSets"
+          }
+        },
+        "placements": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/placements",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/relationships/placements"
+          }
+        },
+        "searchKeywords": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/searchKeywords",
+            "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000018/relationships/searchKeywords"
+          }
+        }
+      },
+      "type": "appStoreVersionLocalizations"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/00000000-0000-4000-8000-000000000003/appStoreVersionLocalizations"
+  },
+  "meta": {
+    "paging": {
+      "limit": 50,
+      "total": 2
+    }
+  }
+}

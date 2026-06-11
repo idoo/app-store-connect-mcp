@@ -1,0 +1,114 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "platform": "IOS",
+        "state": "READY_FOR_REVIEW",
+        "submittedDate": null
+      },
+      "id": "00000000-0000-4000-8000-000000000028",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000028"
+      },
+      "relationships": {
+        "items": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000028/items",
+            "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000028/relationships/items"
+          }
+        }
+      },
+      "type": "reviewSubmissions"
+    },
+    {
+      "attributes": {
+        "platform": "IOS",
+        "state": "COMPLETE",
+        "submittedDate": "2026-10-19T17:06:56.653Z"
+      },
+      "id": "00000000-0000-4000-8000-000000000029",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000029"
+      },
+      "relationships": {
+        "items": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000029/items",
+            "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000029/relationships/items"
+          }
+        }
+      },
+      "type": "reviewSubmissions"
+    },
+    {
+      "attributes": {
+        "platform": "IOS",
+        "state": "COMPLETE",
+        "submittedDate": "2026-10-08T02:19:49.108Z"
+      },
+      "id": "00000000-0000-4000-8000-000000000030",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000030"
+      },
+      "relationships": {
+        "items": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000030/items",
+            "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000030/relationships/items"
+          }
+        }
+      },
+      "type": "reviewSubmissions"
+    },
+    {
+      "attributes": {
+        "platform": "IOS",
+        "state": "COMPLETE",
+        "submittedDate": "2026-10-05T00:47:06.902Z"
+      },
+      "id": "00000000-0000-4000-8000-000000000031",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000031"
+      },
+      "relationships": {
+        "items": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000031/items",
+            "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000031/relationships/items"
+          }
+        }
+      },
+      "type": "reviewSubmissions"
+    },
+    {
+      "attributes": {
+        "platform": "IOS",
+        "state": "COMPLETE",
+        "submittedDate": "2026-10-03T17:01:31.887Z"
+      },
+      "id": "00000000-0000-4000-8000-000000000032",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000032"
+      },
+      "relationships": {
+        "items": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000032/items",
+            "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/00000000-0000-4000-8000-000000000032/relationships/items"
+          }
+        }
+      },
+      "type": "reviewSubmissions"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions"
+  },
+  "meta": {
+    "paging": {
+      "limit": 5,
+      "nextCursor": "BQ",
+      "total": 11
+    }
+  }
+}

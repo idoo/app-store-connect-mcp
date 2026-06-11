@@ -16,7 +16,7 @@
         "appStoreVersions": {
           "data": [
             {
-              "id": "id-0002",
+              "id": "00000000-0000-4000-8000-000000000001",
               "type": "appStoreVersions"
             }
           ],
@@ -39,20 +39,20 @@
         "territory": "SWE",
         "title": "title 0"
       },
-      "id": "id-0003",
+      "id": "00000000-0000-4000-8000-000000000002",
       "type": "customerReviews"
     },
     {
       "attributes": {
-        "fileName": "01-home.png",
+        "fileName": "fileName 00",
         "imageAsset": {
           "height": 2868,
           "templateUrl": "https://example.invalid/u0001/{w}x{h}bb.{f}",
           "width": 1320
         },
-        "sourceFileChecksum": "0123456789abcdef"
+        "sourceFileChecksum": "sourceFileChecks"
       },
-      "id": "id-0004",
+      "id": "id-0002",
       "type": "appScreenshots"
     },
     {
@@ -60,7 +60,7 @@
         "certificateContent": "REDACTED",
         "serialNumber": "CODE0002"
       },
-      "id": "id-0005",
+      "id": "id-0003",
       "type": "certificates"
     },
     {
@@ -70,10 +70,36 @@
       },
       "id": "id-0001",
       "type": "apps"
+    },
+    {
+      "attributes": {
+        "expirationDate": "2027-01-02T03:04:05.000+0000",
+        "platform": "IOS",
+        "profileState": "ACTIVE",
+        "profileType": "IOS_APP_STORE",
+        "teamId": "CODE0003",
+        "uuid": "00000000-0000-4000-8000-000000000003"
+      },
+      "id": "id-0004",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/profiles/id-0004"
+      },
+      "type": "profiles"
+    },
+    {
+      "attributes": {
+        "contactPhone": "contactPhone 000",
+        "locale": "en-US",
+        "reviewNote": "reviewNote 0008 lorem ipsum dolor sit ametx",
+        "someNewField": "someNewField 0009 lorem ipsum",
+        "versionString": "3.1.2"
+      },
+      "id": "id-0005",
+      "type": "appStoreReviewDetails"
     }
   ],
   "links": {
-    "self": "https://api.appstoreconnect.apple.com/v1/apps?limit=1"
+    "self": "https://api.appstoreconnect.apple.com/v1/apps"
   },
   "meta": {
     "paging": {

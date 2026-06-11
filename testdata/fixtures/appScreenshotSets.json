@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "screenshotDisplayType": "APP_IPAD_PRO_3GEN_129"
+      },
+      "id": "00000000-0000-4000-8000-000000000019",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/00000000-0000-4000-8000-000000000019"
+      },
+      "relationships": {
+        "appScreenshots": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/00000000-0000-4000-8000-000000000019/appScreenshots",
+            "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/00000000-0000-4000-8000-000000000019/relationships/appScreenshots"
+          }
+        }
+      },
+      "type": "appScreenshotSets"
+    },
+    {
+      "attributes": {
+        "screenshotDisplayType": "APP_IPHONE_67"
+      },
+      "id": "00000000-0000-4000-8000-000000000020",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/00000000-0000-4000-8000-000000000020"
+      },
+      "relationships": {
+        "appScreenshots": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/00000000-0000-4000-8000-000000000020/appScreenshots",
+            "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/00000000-0000-4000-8000-000000000020/relationships/appScreenshots"
+          }
+        }
+      },
+      "type": "appScreenshotSets"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/00000000-0000-4000-8000-000000000017/appScreenshotSets"
+  },
+  "meta": {
+    "paging": {
+      "limit": 50,
+      "total": 2
+    }
+  }
+}

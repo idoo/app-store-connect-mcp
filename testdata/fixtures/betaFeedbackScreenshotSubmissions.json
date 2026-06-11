@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/betaFeedbackScreenshotSubmissions"
+  },
+  "meta": {
+    "paging": {
+      "limit": 2,
+      "total": 0
+    }
+  }
+}
