@@ -14,6 +14,7 @@ import (
 // placeholder kinds of the deterministic mapping.
 const (
 	kindID     = "id"
+	kindUUID   = "uuid"
 	kindEmail  = "email"
 	kindURL    = "url"
 	kindBundle = "bundle"
@@ -24,14 +25,25 @@ const (
 var (
 	emailRe   = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	bundleRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){2,}$`)
-	idSegRe   = regexp.MustCompile(`^([0-9]{5,}|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,})$`)
-	textAttrs = setOf(
-		"name", "firstName", "lastName", "nickname", "reviewerNickname", "title", "body",
-		"description", "keywords", "whatsNew", "promotionalText", "subtitle", "comment",
-		"copyright", "contactFirstName", "contactLastName", "contactPhone", "demoAccountName",
-		"notes", "reviewNotes", "responseBody", "privacyPolicyText", "displayName", "username",
-		"referenceName", "deviceModel", "appStoreConnectUserName", "submittedByActor",
-		"feedbackComment", "testerName", "marketingMessage", "promotionalOfferName",
+	uuidRe    = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	numericRe = regexp.MustCompile(`^[0-9]{5,}$`)
+	enumRe    = regexp.MustCompile(`^[A-Z0-9_]+$`)
+	dateRe    = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z|[+-][0-9]{2}:?[0-9]{2})?)?$`)
+	localeRe  = regexp.MustCompile(`^[a-z]{2,3}(-[A-Z][A-Za-z0-9]{1,3}){0,2}$`)
+	versionRe = regexp.MustCompile(`^[0-9]{1,4}(\.[0-9]{1,6}){0,3}$`)
+	// safeTokenRe bounds what an allowlisted key may hold: one short token.
+	safeTokenRe = regexp.MustCompile(`^[A-Za-z0-9_.:+-]{1,64}$`)
+	// literalSegRe matches API path literals (v1, apps, inAppPurchasesV2);
+	// any other path segment is treated as an id.
+	literalSegRe = regexp.MustCompile(`^(v[0-9]+|[a-z][a-zA-Z0-9]*)$`)
+	// safeKeys hold structural values kept verbatim when they are one
+	// short token; everything not kept is replaced (default deny).
+	safeKeys = setOf(
+		"type", "locale", "platform", "primaryLocale", "version", "versionString",
+		"cfBundleShortVersionString", "cfBundleVersion", "inAppPurchaseType", "productType",
+		"profileState", "profileType", "certificateType", "contentRightsDeclaration",
+		"releaseType", "currency", "territory", "minOsVersion", "processingState",
+		"appStoreState", "appVersionState", "reviewType", "kind", "status", "state",
 	)
 	codeAttrs = setOf(
 		"sku", "vendorNumber", "udid", "serialNumber", "seedId", "teamId", "productId",
@@ -43,8 +55,8 @@ var (
 	)
 	bundleAttrs = setOf("bundleId", "bundleIdentifier", "buildBundleId")
 	emailAttrs  = setOf("email", "contactEmail", "feedbackEmail", "supportEmail")
-	// apiHosts keep their host (and become fake-server links); ids in their
-	// paths are mapped and pagination cursors dropped.
+	// apiHosts keep their host (and become fake-server links); their paths
+	// keep only literals, ids are mapped and the query is dropped.
 	apiHosts = setOf("api.appstoreconnect.apple.com")
 )
 
@@ -68,16 +80,20 @@ func NewSanitizer() *Sanitizer {
 // Sanitize returns doc with a fresh [Sanitizer] applied.
 func Sanitize(doc []byte) ([]byte, error) { return NewSanitizer().Sanitize(doc) }
 
-// Sanitize rewrites one JSON document:
-//   - "id" values → id-0001…; ids inside API URL paths use the same mapping;
-//   - emails → user0001@example.com;
-//   - bundle ids → com.example.app1…;
-//   - free text (names, nicknames, titles, bodies, descriptions…) →
-//     "<key> 0001 lorem…" with the original rune length;
+// Sanitize rewrites one JSON document, default-deny for strings:
+//   - "id" values and numeric strings of 5+ digits → id-0001…; UUIDs →
+//     00000000-0000-4000-8000-000000000001…; the same mapping applies to
+//     ids inside API URL paths;
+//   - emails → user0001@example.com; bundle ids → com.example.app1…;
 //   - codes (sku, udid, vendor number…) → CODE0001…; secrets → REDACTED;
-//   - API links keep the host, map ids and lose cursors (and links.next is
-//     dropped); other URLs → https://example.invalid/u0001, keeping a
-//     trailing image template like {w}x{h}bb.{f}.
+//   - API links keep the host and path literals, map ids and drop the whole
+//     query (links.next is dropped); other URLs →
+//     https://example.invalid/u0001, keeping a trailing image template
+//     like {w}x{h}bb.{f};
+//   - kept verbatim: one short token under a structural key (type, locale,
+//     platform, state…), enums (^[A-Z0-9_]+$), ISO dates, locale codes and
+//     version numbers;
+//   - every other string → "<key> 0001 lorem…" with the same rune length.
 //
 // Objects are walked in sorted key order, so output is deterministic. The
 // result is indented JSON with a trailing newline.
@@ -129,16 +145,21 @@ func (s *Sanitizer) object(key string, m map[string]any) map[string]any {
 	return m
 }
 
-// str sanitizes one string value found under key.
+// str sanitizes one string value found under key. It is default-deny: a
+// value survives only when it is structural (allowlisted key holding one
+// short token, an enum, ISO date, locale code or version number); every
+// other string is mapped or replaced by a same-length placeholder.
 func (s *Sanitizer) str(key, v string) string {
 	if v == "" {
 		return v
 	}
 	switch {
-	case key == "id":
-		return s.mapped(kindID, v, func(n int) string { return fmt.Sprintf("id-%04d", n) })
 	case secretAttrs[key]:
 		return "REDACTED"
+	case uuidRe.MatchString(v):
+		return s.mapped(kindUUID, strings.ToLower(v), func(n int) string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", n) })
+	case key == "id" || numericRe.MatchString(v):
+		return s.mapped(kindID, v, func(n int) string { return fmt.Sprintf("id-%04d", n) })
 	case emailAttrs[key] || emailRe.MatchString(v):
 		return s.mapped(kindEmail, strings.ToLower(v), func(n int) string { return fmt.Sprintf("user%04d@example.com", n) })
 	case strings.HasPrefix(v, "https://") || strings.HasPrefix(v, "http://"):
@@ -147,10 +168,11 @@ func (s *Sanitizer) str(key, v string) string {
 		return s.mapped(kindBundle, v, func(n int) string { return fmt.Sprintf("com.example.app%d", n) })
 	case codeAttrs[key]:
 		return s.mapped(kindCode, v, func(n int) string { return fmt.Sprintf("CODE%04d", n) })
-	case textAttrs[key]:
-		return s.text(key, v)
+	case safeKeys[key] && safeTokenRe.MatchString(v),
+		enumRe.MatchString(v), dateRe.MatchString(v), localeRe.MatchString(v), versionRe.MatchString(v):
+		return v
 	}
-	return v
+	return s.text(key, v)
 }
 
 // text returns a placeholder with v's rune length.
@@ -182,14 +204,11 @@ func (s *Sanitizer) url(v string) string {
 			}
 			if m, ok := s.maps[kindID][seg]; ok {
 				segs[i] = m
-			} else if idSegRe.MatchString(seg) {
-				segs[i] = s.mapped(kindID, seg, func(n int) string { return fmt.Sprintf("id-%04d", n) })
+			} else if !literalSegRe.MatchString(seg) {
+				segs[i] = s.str("id", seg)
 			}
 		}
-		q := u.Query()
-		q.Del("cursor")
-		out := url.URL{Scheme: "https", Host: u.Host, Path: strings.Join(segs, "/"), RawQuery: q.Encode()}
-		return out.String()
+		return (&url.URL{Scheme: "https", Host: u.Host, Path: strings.Join(segs, "/")}).String()
 	}
 	tail := ""
 	if i := strings.LastIndex(u.Path, "/"); i >= 0 && strings.Contains(u.Path[i:], "{") {

@@ -1,0 +1,233 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "createdDate": "2026-09-27T14:24:10.429Z",
+        "name": "name",
+        "productType": "APP"
+      },
+      "id": "00000000-0000-4000-8000-000000000023",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023"
+      },
+      "relationships": {
+        "additionalRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/additionalRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/relationships/additionalRepositories"
+          }
+        },
+        "app": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/app",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/relationships/app"
+          }
+        },
+        "buildRuns": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/buildRuns",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/relationships/buildRuns"
+          }
+        },
+        "primaryRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/primaryRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/relationships/primaryRepositories"
+          }
+        },
+        "workflows": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/workflows",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000023/relationships/workflows"
+          }
+        }
+      },
+      "type": "ciProducts"
+    },
+    {
+      "attributes": {
+        "createdDate": "2026-10-18T16:38:20.902Z",
+        "name": "name 00",
+        "productType": "APP"
+      },
+      "id": "00000000-0000-4000-8000-000000000024",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024"
+      },
+      "relationships": {
+        "additionalRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/additionalRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/relationships/additionalRepositories"
+          }
+        },
+        "app": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/app",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/relationships/app"
+          }
+        },
+        "buildRuns": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/buildRuns",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/relationships/buildRuns"
+          }
+        },
+        "primaryRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/primaryRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/relationships/primaryRepositories"
+          }
+        },
+        "workflows": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/workflows",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000024/relationships/workflows"
+          }
+        }
+      },
+      "type": "ciProducts"
+    },
+    {
+      "attributes": {
+        "createdDate": "2026-09-27T14:40:15.149Z",
+        "name": "name 00",
+        "productType": "APP"
+      },
+      "id": "00000000-0000-4000-8000-000000000025",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025"
+      },
+      "relationships": {
+        "additionalRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/additionalRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/relationships/additionalRepositories"
+          }
+        },
+        "app": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/app",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/relationships/app"
+          }
+        },
+        "buildRuns": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/buildRuns",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/relationships/buildRuns"
+          }
+        },
+        "primaryRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/primaryRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/relationships/primaryRepositories"
+          }
+        },
+        "workflows": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/workflows",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000025/relationships/workflows"
+          }
+        }
+      },
+      "type": "ciProducts"
+    },
+    {
+      "attributes": {
+        "createdDate": "2026-09-27T17:10:20.274Z",
+        "name": "name 00",
+        "productType": "APP"
+      },
+      "id": "00000000-0000-4000-8000-000000000026",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026"
+      },
+      "relationships": {
+        "additionalRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/additionalRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/relationships/additionalRepositories"
+          }
+        },
+        "app": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/app",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/relationships/app"
+          }
+        },
+        "buildRuns": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/buildRuns",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/relationships/buildRuns"
+          }
+        },
+        "primaryRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/primaryRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/relationships/primaryRepositories"
+          }
+        },
+        "workflows": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/workflows",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000026/relationships/workflows"
+          }
+        }
+      },
+      "type": "ciProducts"
+    },
+    {
+      "attributes": {
+        "createdDate": "2026-10-19T16:28:10.037Z",
+        "name": "name 00",
+        "productType": "APP"
+      },
+      "id": "00000000-0000-4000-8000-000000000027",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027"
+      },
+      "relationships": {
+        "additionalRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/additionalRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/relationships/additionalRepositories"
+          }
+        },
+        "app": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/app",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/relationships/app"
+          }
+        },
+        "buildRuns": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/buildRuns",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/relationships/buildRuns"
+          }
+        },
+        "primaryRepositories": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/primaryRepositories",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/relationships/primaryRepositories"
+          }
+        },
+        "workflows": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/workflows",
+            "self": "https://api.appstoreconnect.apple.com/v1/ciProducts/00000000-0000-4000-8000-000000000027/relationships/workflows"
+          }
+        }
+      },
+      "type": "ciProducts"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/ciProducts"
+  },
+  "meta": {
+    "paging": {
+      "limit": 5,
+      "total": 5
+    }
+  }
+}

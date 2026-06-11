@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "locale": "en-US",
+        "name": "name 001",
+        "privacyChoicesUrl": null,
+        "privacyPolicyText": null,
+        "privacyPolicyUrl": "https://example.invalid/u0001",
+        "subtitle": "subtitle 0013 lorem ipsumx"
+      },
+      "id": "00000000-0000-4000-8000-000000000015",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/00000000-0000-4000-8000-000000000015"
+      },
+      "type": "appInfoLocalizations"
+    },
+    {
+      "attributes": {
+        "locale": "ru",
+        "name": "name 001",
+        "privacyChoicesUrl": null,
+        "privacyPolicyText": null,
+        "privacyPolicyUrl": "https://example.invalid/u0001",
+        "subtitle": "subtitle 0014 lorem ipsum do"
+      },
+      "id": "00000000-0000-4000-8000-000000000016",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/00000000-0000-4000-8000-000000000016"
+      },
+      "type": "appInfoLocalizations"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appInfos/00000000-0000-4000-8000-000000000001/appInfoLocalizations"
+  },
+  "meta": {
+    "paging": {
+      "limit": 50,
+      "total": 2
+    }
+  }
+}

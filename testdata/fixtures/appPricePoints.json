@@ -1,0 +1,71 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "customerPrice": "0.0",
+        "proceeds": "0.0"
+      },
+      "id": "id-0018",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0018"
+      },
+      "relationships": {
+        "equalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0018/equalizations",
+            "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0018/relationships/equalizations"
+          }
+        }
+      },
+      "type": "appPricePoints"
+    },
+    {
+      "attributes": {
+        "customerPrice": "0.29",
+        "proceeds": "0.21"
+      },
+      "id": "id-0019",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0019"
+      },
+      "relationships": {
+        "equalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0019/equalizations",
+            "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0019/relationships/equalizations"
+          }
+        }
+      },
+      "type": "appPricePoints"
+    },
+    {
+      "attributes": {
+        "customerPrice": "0.39",
+        "proceeds": "0.28"
+      },
+      "id": "id-0020",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0020"
+      },
+      "relationships": {
+        "equalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0020/equalizations",
+            "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/id-0020/relationships/equalizations"
+          }
+        }
+      },
+      "type": "appPricePoints"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/appPricePoints"
+  },
+  "meta": {
+    "paging": {
+      "limit": 3,
+      "nextCursor": "ne",
+      "total": 117917
+    }
+  }
+}

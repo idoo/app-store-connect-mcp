@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "referenceName": "referenceNam"
+      },
+      "id": "id-0005",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005"
+      },
+      "relationships": {
+        "subscriptionGroupLocalizations": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005/subscriptionGroupLocalizations",
+            "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005/relationships/subscriptionGroupLocalizations"
+          }
+        },
+        "subscriptions": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005/subscriptions",
+            "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005/relationships/subscriptions"
+          }
+        },
+        "versions": {
+          "links": {
+            "related": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005/versions",
+            "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/id-0005/relationships/versions"
+          }
+        }
+      },
+      "type": "subscriptionGroups"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/subscriptionGroups"
+  },
+  "meta": {
+    "paging": {
+      "limit": 5,
+      "total": 1
+    }
+  }
+}

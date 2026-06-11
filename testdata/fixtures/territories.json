@@ -1,0 +1,64 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "currency": "USD"
+      },
+      "id": "id-0013",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/id-0013"
+      },
+      "type": "territories"
+    },
+    {
+      "attributes": {
+        "currency": "USD"
+      },
+      "id": "id-0014",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/id-0014"
+      },
+      "type": "territories"
+    },
+    {
+      "attributes": {
+        "currency": "USD"
+      },
+      "id": "id-0015",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/id-0015"
+      },
+      "type": "territories"
+    },
+    {
+      "attributes": {
+        "currency": "USD"
+      },
+      "id": "id-0016",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/id-0016"
+      },
+      "type": "territories"
+    },
+    {
+      "attributes": {
+        "currency": "AED"
+      },
+      "id": "id-0017",
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/id-0017"
+      },
+      "type": "territories"
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/territories"
+  },
+  "meta": {
+    "paging": {
+      "limit": 5,
+      "nextCursor": "BQ",
+      "total": 175
+    }
+  }
+}

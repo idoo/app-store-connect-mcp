@@ -1,0 +1,23 @@
+{
+  "data": {
+    "attributes": {
+      "availableInNewTerritories": true
+    },
+    "id": "id-0001",
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v2/appAvailabilities/id-0001"
+    },
+    "relationships": {
+      "territoryAvailabilities": {
+        "links": {
+          "related": "https://api.appstoreconnect.apple.com/v2/appAvailabilities/id-0001/territoryAvailabilities",
+          "self": "https://api.appstoreconnect.apple.com/v2/appAvailabilities/id-0001/relationships/territoryAvailabilities"
+        }
+      }
+    },
+    "type": "appAvailabilities"
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/id-0001/appAvailabilityV2"
+  }
+}
