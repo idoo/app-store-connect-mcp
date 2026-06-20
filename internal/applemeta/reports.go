@@ -175,36 +175,3 @@ func Period(preset string, now time.Time) (from, to time.Time, pendingDays []str
 	}
 	return from, to, pendingDays, nil
 }
-
-// ProductCategory groups Sales report rows by Product Type Identifier.
-type ProductCategory string
-
-// Product categories.
-const (
-	CategoryDownload   ProductCategory = "download"
-	CategoryUpdate     ProductCategory = "update"
-	CategoryRedownload ProductCategory = "redownload"
-	CategoryIAP        ProductCategory = "iap"
-	CategoryUnknown    ProductCategory = "unknown"
-)
-
-// productTypes follows Apple's "Product Type Identifiers" reference. Codes
-// ending in -M, F1/F3/F7/FI1 are Mac; T is iPad; F is universal; 1E* are
-// custom apps; -B are app bundles.
-var productTypes = map[string]ProductCategory{
-	"1": CategoryDownload, "1F": CategoryDownload, "1T": CategoryDownload, "F1": CategoryDownload,
-	"1E": CategoryDownload, "1EP": CategoryDownload, "1EU": CategoryDownload, "1-B": CategoryDownload, "F1-B": CategoryDownload,
-	"7": CategoryUpdate, "7F": CategoryUpdate, "7T": CategoryUpdate, "F7": CategoryUpdate,
-	"3": CategoryRedownload, "3F": CategoryRedownload, "3T": CategoryRedownload, "F3": CategoryRedownload,
-	"IA1": CategoryIAP, "IA9": CategoryIAP, "IAY": CategoryIAP, "IAC": CategoryIAP, "FI1": CategoryIAP,
-	"IA1-M": CategoryIAP, "IA9-M": CategoryIAP, "IAY-M": CategoryIAP, "IAC-M": CategoryIAP,
-}
-
-// ProductCategoryOf maps a Product Type Identifier (case-insensitive) to its
-// category; unknown identifiers return CategoryUnknown.
-func ProductCategoryOf(id string) ProductCategory {
-	if c, ok := productTypes[strings.ToUpper(strings.TrimSpace(id))]; ok {
-		return c
-	}
-	return CategoryUnknown
-}
