@@ -1,0 +1,10 @@
+// VS Code: run "MCP: Open User Configuration" (mcp.json)
+{
+  "servers": {
+    "hamn": {
+      "args": [],
+      "command": "/ABS/PATH/hamn",
+      "type": "stdio"
+    }
+  }
+}

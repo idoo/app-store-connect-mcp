@@ -1,0 +1,4 @@
+# ~/.codex/config.toml
+[mcp_servers.hamn]
+command = "/ABS/PATH/hamn"
+args = []
