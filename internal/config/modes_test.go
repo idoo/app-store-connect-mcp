@@ -22,7 +22,7 @@ func TestParseToolsets(t *testing.T) {
 		{"default", def, ""},
 		{"all", tool.AllToolsets, ""},
 		{"+signing", append(slices.Clone(def), tool.Signing), ""},
-		{"+signing,-reports", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight, tool.Metadata, tool.Reviews, tool.Signing}, ""},
+		{"+signing,-reports", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight, tool.Metadata, tool.Reviews, tool.Screenshots, tool.Signing}, ""},
 		{"release testflight", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight}, ""},
 		{"all,-admin,-webhooks", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight, tool.Metadata, tool.Reviews, tool.Reports, tool.Screenshots, tool.Uploads, tool.Monetization, tool.Signing, tool.XcodeCloud, tool.Store}, ""},
 		{"STORE", []tool.Toolset{tool.Core, tool.Store}, ""},
