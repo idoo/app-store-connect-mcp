@@ -1,0 +1,62 @@
+[
+  {
+    "Method": "GET",
+    "Path": "/v1/apps/100",
+    "Query": {
+      "fields[appStoreVersions]": [
+        "platform,versionString,appVersionState,appStoreState,releaseType,createdDate"
+      ],
+      "fields[apps]": [
+        "name,bundleId,sku,primaryLocale,appStoreVersions"
+      ],
+      "include": [
+        "appStoreVersions"
+      ],
+      "limit[appStoreVersions]": [
+        "50"
+      ]
+    }
+  },
+  {
+    "Method": "GET",
+    "Path": "/v1/builds",
+    "Query": {
+      "fields[builds]": [
+        "version,uploadedDate,processingState,expired,minOsVersion,preReleaseVersion"
+      ],
+      "fields[preReleaseVersions]": [
+        "version,platform"
+      ],
+      "filter[app]": [
+        "100"
+      ],
+      "include": [
+        "preReleaseVersion"
+      ],
+      "limit": [
+        "5"
+      ],
+      "sort": [
+        "-uploadedDate"
+      ]
+    }
+  },
+  {
+    "Method": "GET",
+    "Path": "/v1/apps/100/appInfos",
+    "Query": {
+      "fields[appInfoLocalizations]": [
+        "locale"
+      ],
+      "fields[appInfos]": [
+        "appInfoLocalizations"
+      ],
+      "include": [
+        "appInfoLocalizations"
+      ],
+      "limit[appInfoLocalizations]": [
+        "50"
+      ]
+    }
+  }
+]
