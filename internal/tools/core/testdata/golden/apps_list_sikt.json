@@ -1,0 +1,20 @@
+{
+  "data": {
+    "apps": [
+      {
+        "id": "200",
+        "name": "Sikt",
+        "bundleId": "se.jvcr.sift",
+        "sku": "SIFT",
+        "primaryLocale": "sv",
+        "platforms": [
+          "IOS",
+          "MAC_OS"
+        ]
+      }
+    ],
+    "matched": 1,
+    "returned": 1,
+    "total": 3
+  }
+}
