@@ -1,0 +1,53 @@
+{
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/v1/appScreenshots",
+      "body": {
+        "data": {
+          "attributes": {
+            "fileName": "01-home.png",
+            "fileSize": 4096
+          },
+          "relationships": {
+            "appScreenshotSet": {
+              "data": {
+                "id": "set-1",
+                "type": "appScreenshotSets"
+              }
+            }
+          },
+          "type": "appScreenshots"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/appScreenshots/shot-1",
+      "body": {
+        "data": {
+          "attributes": {
+            "sourceFileChecksum": "1696b8fe138e867797eb6683cf13d99c",
+            "uploaded": true
+          },
+          "id": "shot-1",
+          "type": "appScreenshots"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v1/appScreenshots/shot-1"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/appScreenshots/shot-1"
+    }
+  ],
+  "result": {
+    "id": "shot-1",
+    "type": "appScreenshots",
+    "state": "COMPLETE",
+    "source_file_checksum": "1696b8fe138e867797eb6683cf13d99c"
+  }
+}

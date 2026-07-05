@@ -1,0 +1,96 @@
+{
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/v1/apps/app-1/buildUploads",
+      "query": "filter%5BcfBundleShortVersionString%5D=2.3.1\u0026filter%5BcfBundleVersion%5D=417\u0026filter%5Bplatform%5D=IOS"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/buildUploads",
+      "body": {
+        "data": {
+          "attributes": {
+            "cfBundleShortVersionString": "2.3.1",
+            "cfBundleVersion": "417",
+            "platform": "IOS"
+          },
+          "relationships": {
+            "app": {
+              "data": {
+                "id": "app-1",
+                "type": "apps"
+              }
+            }
+          },
+          "type": "buildUploads"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/buildUploadFiles",
+      "body": {
+        "data": {
+          "attributes": {
+            "assetType": "ASSET",
+            "fileName": "Hjul.ipa",
+            "fileSize": 7001,
+            "uti": "com.apple.ipa"
+          },
+          "relationships": {
+            "buildUpload": {
+              "data": {
+                "id": "bu-1",
+                "type": "buildUploads"
+              }
+            }
+          },
+          "type": "buildUploadFiles"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/buildUploadFiles/buf-1",
+      "body": {
+        "data": {
+          "attributes": {
+            "sourceFileChecksums": {
+              "file": {
+                "algorithm": "MD5",
+                "hash": "2b95c4745939526262b1e72f195b1821"
+              }
+            },
+            "uploaded": true
+          },
+          "id": "buf-1",
+          "type": "buildUploadFiles"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v1/buildUploads/bu-1"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/buildUploads/bu-1"
+    }
+  ],
+  "result": {
+    "build_upload_id": "bu-1",
+    "build_upload_file_id": "buf-1",
+    "version": "2.3.1",
+    "build_number": "417",
+    "platform": "IOS",
+    "state": "COMPLETE",
+    "md5": "2b95c4745939526262b1e72f195b1821",
+    "warnings": [
+      {
+        "code": "W1",
+        "description": "Missing icon size."
+      }
+    ]
+  }
+}
