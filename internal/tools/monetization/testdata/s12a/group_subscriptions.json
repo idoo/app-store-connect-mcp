@@ -1,0 +1,15 @@
+{"data":[
+ {"type":"subscriptions","id":"s-year","attributes":{"name":"Yearly","productId":"se.jvcr.hjul.plus.year","state":"APPROVED","subscriptionPeriod":"ONE_YEAR","groupLevel":1,"familySharable":true},
+  "relationships":{"versions":{"data":[{"type":"subscriptionVersions","id":"sv1"}]},
+   "introductoryOffers":{"data":[{"type":"subscriptionIntroductoryOffers","id":"io1"},{"type":"subscriptionIntroductoryOffers","id":"io2"}]},
+   "promotionalOffers":{"data":[]},"offerCodes":{"data":[{"type":"subscriptionOfferCodes","id":"oc1"}]},"winBackOffers":{"data":[]}}},
+ {"type":"subscriptions","id":"s-month","attributes":{"name":"Monthly","productId":"se.jvcr.hjul.plus.month","state":"MISSING_METADATA","subscriptionPeriod":"ONE_MONTH","groupLevel":2},
+  "relationships":{"versions":{"data":[]},"introductoryOffers":{"data":[]},"promotionalOffers":{"data":[]},"offerCodes":{"data":[]},"winBackOffers":{"data":[]}}}
+],
+"included":[
+ {"type":"subscriptionVersions","id":"sv1","attributes":{"version":1,"state":"APPROVED"}},
+ {"type":"subscriptionIntroductoryOffers","id":"io1","attributes":{"offerMode":"FREE_TRIAL"}},
+ {"type":"subscriptionIntroductoryOffers","id":"io2","attributes":{"offerMode":"FREE_TRIAL"}},
+ {"type":"subscriptionOfferCodes","id":"oc1","attributes":{"offerMode":"PAY_AS_YOU_GO"}}
+],
+"links":{},"meta":{"paging":{"total":2,"limit":200}}}
