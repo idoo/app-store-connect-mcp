@@ -1,0 +1,111 @@
+{
+  "data": {
+    "app": {
+      "id": "100",
+      "bundle_id": "se.jvcr.hjul",
+      "name": "Hjul",
+      "platforms": [
+        "IOS"
+      ]
+    },
+    "version": {
+      "id": "v1",
+      "string": "1.4",
+      "appVersionState": "PREPARE_FOR_SUBMISSION",
+      "platform": "IOS",
+      "release_type": "AFTER_APPROVAL",
+      "exists": true
+    },
+    "build": {
+      "id": "b1",
+      "number": "42",
+      "processing_state": "VALID",
+      "uses_non_exempt_encryption": false
+    },
+    "checks": [
+      {
+        "id": "version",
+        "status": "ok",
+        "detail": "IOS 1.4 is PREPARE_FOR_SUBMISSION"
+      },
+      {
+        "id": "build",
+        "status": "ok",
+        "detail": "build 42 attached and VALID"
+      },
+      {
+        "id": "export_compliance",
+        "status": "ok",
+        "detail": "exempt encryption declared"
+      },
+      {
+        "id": "whats_new",
+        "status": "ok",
+        "detail": "What's New set in every locale"
+      },
+      {
+        "id": "listing",
+        "status": "ok",
+        "detail": "every locale has the required fields within limits"
+      },
+      {
+        "id": "screenshots",
+        "status": "ok",
+        "detail": "required display types covered"
+      },
+      {
+        "id": "review_detail",
+        "status": "ok",
+        "detail": "App Review contact set; no demo account (add one if the app needs a login)"
+      },
+      {
+        "id": "age_rating",
+        "status": "ok",
+        "detail": "age rating declaration complete"
+      },
+      {
+        "id": "content_rights",
+        "status": "ok",
+        "detail": "DOES_NOT_USE_THIRD_PARTY_CONTENT"
+      },
+      {
+        "id": "pricing_availability",
+        "status": "ok",
+        "detail": "price schedule and availability set"
+      },
+      {
+        "id": "in_app_products",
+        "status": "ok",
+        "detail": "1 product(s) ready; release_submit attaches them",
+        "items": [
+          "iap Pro"
+        ]
+      },
+      {
+        "id": "app_privacy",
+        "status": "ok",
+        "detail": "not readable via the API; confirm App Privacy answers are current",
+        "fix_via": {
+          "manual": "https://appstoreconnect.apple.com/apps/100/distribution/privacy"
+        }
+      },
+      {
+        "id": "submission",
+        "status": "ok",
+        "detail": "no review submission in flight"
+      },
+      {
+        "id": "phased_release",
+        "status": "ok",
+        "detail": "not enabled (immediate release to all users)"
+      }
+    ],
+    "summary": {
+      "ok": 14,
+      "warn": 0,
+      "block": 0,
+      "ready": true
+    },
+    "app_store_connect": "https://appstoreconnect.apple.com/apps/100/distribution/ios/version/inflight"
+  }
+}
