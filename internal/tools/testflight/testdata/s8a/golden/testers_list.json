@@ -1,0 +1,113 @@
+{
+  "data": {
+    "app": {
+      "id": "app1",
+      "name": "Hjul"
+    },
+    "group": {
+      "id": "g-ext",
+      "name": "External Testers",
+      "internal": false
+    },
+    "returned": 2,
+    "testers": [
+      {
+        "id": "t1",
+        "email": {
+          "untrusted": "ann@example.com"
+        },
+        "name": {
+          "untrusted": "Ann Lee"
+        },
+        "state": "INSTALLED",
+        "invite_type": "EMAIL",
+        "groups": [
+          "External Testers"
+        ]
+      },
+      {
+        "id": "t2",
+        "email": {
+          "untrusted": "bob@example.com"
+        },
+        "name": {
+          "untrusted": "Ann Lee"
+        },
+        "state": "INSTALLED",
+        "invite_type": "EMAIL",
+        "groups": [
+          "External Testers"
+        ]
+      }
+    ],
+    "total": 2
+  },
+  "requests": [
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaGroups]": [
+          "name"
+        ],
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType,betaGroups"
+        ],
+        "filter[betaGroups]": [
+          "g-ext"
+        ],
+        "include": [
+          "betaGroups"
+        ],
+        "limit": [
+          "200"
+        ],
+        "limit[betaGroups]": [
+          "50"
+        ],
+        "sort": [
+          "email"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    }
+  ]
+}

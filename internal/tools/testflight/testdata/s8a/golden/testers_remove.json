@@ -1,0 +1,107 @@
+{
+  "data": {
+    "app": {
+      "id": "app1",
+      "name": "Hjul"
+    },
+    "group": {
+      "id": "g-ext",
+      "name": "External Testers",
+      "internal": false
+    },
+    "not_found": [
+      "ghost@example.com"
+    ],
+    "removed": [
+      "Ann@example.com",
+      "t2"
+    ],
+    "scope": "group"
+  },
+  "requests": [
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType"
+        ],
+        "filter[betaGroups]": [
+          "g-ext"
+        ],
+        "filter[email]": [
+          "Ann@example.com,ghost@example.com"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType"
+        ],
+        "filter[betaGroups]": [
+          "g-ext"
+        ],
+        "filter[id]": [
+          "t2"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "DELETE",
+      "Path": "/v1/betaGroups/g-ext/relationships/betaTesters",
+      "Query": null,
+      "Body": {
+        "data": [
+          {
+            "id": "t1",
+            "type": "betaTesters"
+          },
+          {
+            "id": "t2",
+            "type": "betaTesters"
+          }
+        ]
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "data": {
+    "app": {
+      "id": "app1",
+      "name": "Hjul"
+    },
+    "count": 2,
+    "groups": [
+      {
+        "id": "g-ext",
+        "name": "External Testers",
+        "internal": false,
+        "testers": 42,
+        "builds": 3,
+        "public_link_enabled": true,
+        "public_link": "https://testflight.apple.com/join/abc",
+        "public_link_limit": 500,
+        "feedback_enabled": true,
+        "created": "2026-01-01T00:00:00Z"
+      },
+      {
+        "id": "g-int",
+        "name": "Team",
+        "internal": true,
+        "testers": 0,
+        "all_builds": true,
+        "public_link_enabled": false,
+        "feedback_enabled": true
+      }
+    ]
+  },
+  "requests": [
+    {
+      "Method": "GET",
+      "Path": "/v1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup,hasAccessToAllBuilds,publicLinkEnabled,publicLink,publicLinkLimitEnabled,publicLinkLimit,feedbackEnabled,createdDate,betaTesters,builds"
+        ],
+        "fields[betaTesters]": [
+          "state"
+        ],
+        "fields[builds]": [
+          "version"
+        ],
+        "filter[app]": [
+          "app1"
+        ],
+        "include": [
+          "betaTesters,builds"
+        ],
+        "limit": [
+          "200"
+        ],
+        "limit[betaTesters]": [
+          "1"
+        ],
+        "limit[builds]": [
+          "1"
+        ],
+        "sort": [
+          "name"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    }
+  ]
+}
