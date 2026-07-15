@@ -1,0 +1,202 @@
+{
+  "data": {
+    "added": 2,
+    "already": 2,
+    "app": {
+      "id": "app1",
+      "name": "Hjul"
+    },
+    "failed": 1,
+    "group": {
+      "id": "g-ext",
+      "name": "External Testers",
+      "internal": false
+    },
+    "testers": [
+      {
+        "email": "new@example.com",
+        "outcome": "added",
+        "id": "t-new",
+        "detail": "invited"
+      },
+      {
+        "email": "existing@example.com",
+        "outcome": "added",
+        "id": "t-old",
+        "detail": "existing tester linked to the group"
+      },
+      {
+        "email": "racy@example.com",
+        "outcome": "already",
+        "id": "t-racy"
+      },
+      {
+        "email": "member@example.com",
+        "outcome": "already",
+        "id": "t-mem"
+      },
+      {
+        "email": "not-an-email",
+        "outcome": "error",
+        "detail": "not a valid email address"
+      }
+    ]
+  },
+  "requests": [
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType"
+        ],
+        "filter[betaGroups]": [
+          "g-ext"
+        ],
+        "filter[email]": [
+          "new@example.com,existing@example.com,racy@example.com,member@example.com"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType"
+        ],
+        "filter[email]": [
+          "new@example.com,existing@example.com,racy@example.com"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "POST",
+      "Path": "/v1/betaGroups/g-ext/relationships/betaTesters",
+      "Query": null,
+      "Body": {
+        "data": [
+          {
+            "id": "t-old",
+            "type": "betaTesters"
+          }
+        ]
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "POST",
+      "Path": "/v1/betaTesters",
+      "Query": null,
+      "Body": {
+        "data": {
+          "attributes": {
+            "email": "new@example.com",
+            "firstName": "Nia"
+          },
+          "relationships": {
+            "betaGroups": {
+              "data": [
+                {
+                  "id": "g-ext",
+                  "type": "betaGroups"
+                }
+              ]
+            }
+          },
+          "type": "betaTesters"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "POST",
+      "Path": "/v1/betaTesters",
+      "Query": null,
+      "Body": {
+        "data": {
+          "attributes": {
+            "email": "racy@example.com"
+          },
+          "relationships": {
+            "betaGroups": {
+              "data": [
+                {
+                  "id": "g-ext",
+                  "type": "betaGroups"
+                }
+              ]
+            }
+          },
+          "type": "betaTesters"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType"
+        ],
+        "filter[betaGroups]": [
+          "g-ext"
+        ],
+        "filter[email]": [
+          "racy@example.com"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    }
+  ]
+}
