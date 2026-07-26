@@ -1,0 +1,78 @@
+{
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/v1/appStoreVersions",
+      "body": {
+        "data": {
+          "attributes": {
+            "platform": "IOS",
+            "releaseType": "AFTER_APPROVAL",
+            "versionString": "2.0"
+          },
+          "relationships": {
+            "app": {
+              "data": {
+                "id": "100",
+                "type": "apps"
+              }
+            }
+          },
+          "type": "appStoreVersions"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/appStoreVersionPhasedReleases",
+      "body": {
+        "data": {
+          "attributes": {
+            "phasedReleaseState": "INACTIVE"
+          },
+          "relationships": {
+            "appStoreVersion": {
+              "data": {
+                "id": "v2",
+                "type": "appStoreVersions"
+              }
+            }
+          },
+          "type": "appStoreVersionPhasedReleases"
+        }
+      }
+    }
+  ],
+  "result": {
+    "app": {
+      "id": "100",
+      "bundle_id": "se.jvcr.hjul",
+      "name": "Hjul",
+      "platforms": [
+        "IOS"
+      ]
+    },
+    "platform": "IOS",
+    "version": {
+      "id": "v2",
+      "string": "2.0",
+      "created": true
+    },
+    "steps": [
+      {
+        "step": "create_version",
+        "status": "done"
+      },
+      {
+        "step": "phased_release",
+        "status": "done",
+        "detail": "INACTIVE; starts when the version is released"
+      },
+      {
+        "step": "whats_new",
+        "status": "skipped",
+        "detail": "version was just created; run release_status again to plan What's New on its locales"
+      }
+    ]
+  }
+}

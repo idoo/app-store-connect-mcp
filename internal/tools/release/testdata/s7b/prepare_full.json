@@ -1,0 +1,155 @@
+{
+  "requests": [
+    {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersions/v1/relationships/build",
+      "body": {
+        "data": {
+          "id": "b2",
+          "type": "builds"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/builds/b2",
+      "body": {
+        "data": {
+          "attributes": {
+            "usesNonExemptEncryption": false
+          },
+          "id": "b2",
+          "type": "builds"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersions/v1",
+      "body": {
+        "data": {
+          "attributes": {
+            "releaseType": "MANUAL"
+          },
+          "id": "v1",
+          "type": "appStoreVersions"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v1/appStoreVersionPhasedReleases",
+      "body": {
+        "data": {
+          "attributes": {
+            "phasedReleaseState": "INACTIVE"
+          },
+          "relationships": {
+            "appStoreVersion": {
+              "data": {
+                "id": "v1",
+                "type": "appStoreVersions"
+              }
+            }
+          },
+          "type": "appStoreVersionPhasedReleases"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersionLocalizations/loc0",
+      "body": {
+        "data": {
+          "attributes": {
+            "whatsNew": "New sails."
+          },
+          "id": "loc0",
+          "type": "appStoreVersionLocalizations"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersionLocalizations/loc1",
+      "body": {
+        "data": {
+          "attributes": {
+            "whatsNew": "New sails."
+          },
+          "id": "loc1",
+          "type": "appStoreVersionLocalizations"
+        }
+      }
+    }
+  ],
+  "result": {
+    "app": {
+      "id": "100",
+      "bundle_id": "se.jvcr.hjul",
+      "name": "Hjul",
+      "platforms": [
+        "IOS"
+      ]
+    },
+    "platform": "IOS",
+    "version": {
+      "id": "v1",
+      "string": "1.4"
+    },
+    "build": {
+      "id": "b2",
+      "number": "43",
+      "processing_state": "VALID"
+    },
+    "steps": [
+      {
+        "step": "attach_build",
+        "status": "done",
+        "detail": "build 43"
+      },
+      {
+        "step": "export_compliance",
+        "status": "done",
+        "detail": "usesNonExemptEncryption=false"
+      },
+      {
+        "step": "release_type",
+        "status": "done",
+        "detail": "MANUAL"
+      },
+      {
+        "step": "phased_release",
+        "status": "done",
+        "detail": "INACTIVE; starts when the version is released"
+      },
+      {
+        "step": "whats_new",
+        "status": "done",
+        "detail": "2 locales"
+      }
+    ],
+    "whats_new": [
+      {
+        "locale": "de-DE",
+        "level": "version",
+        "op": "update",
+        "fields": [
+          "whatsNew"
+        ],
+        "id": "loc1",
+        "outcome": "ok"
+      },
+      {
+        "locale": "en-US",
+        "level": "version",
+        "op": "update",
+        "fields": [
+          "whatsNew"
+        ],
+        "id": "loc0",
+        "outcome": "ok"
+      }
+    ]
+  }
+}

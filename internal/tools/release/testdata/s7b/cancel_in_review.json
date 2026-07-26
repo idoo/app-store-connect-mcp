@@ -1,0 +1,41 @@
+{
+  "requests": [
+    {
+      "method": "PATCH",
+      "path": "/v1/reviewSubmissions/rs1",
+      "body": {
+        "data": {
+          "attributes": {
+            "canceled": true
+          },
+          "id": "rs1",
+          "type": "reviewSubmissions"
+        }
+      }
+    }
+  ],
+  "result": {
+    "app": {
+      "id": "100",
+      "bundle_id": "se.jvcr.hjul",
+      "name": "Hjul",
+      "platforms": [
+        "IOS"
+      ]
+    },
+    "platform": "IOS",
+    "submission": {
+      "id": "rs1",
+      "state": "CANCELING",
+      "items": [
+        {
+          "id": "it1",
+          "state": "READY_FOR_REVIEW",
+          "kind": "appStoreVersion",
+          "target_id": "v1"
+        }
+      ]
+    },
+    "action": "cancel"
+  }
+}
