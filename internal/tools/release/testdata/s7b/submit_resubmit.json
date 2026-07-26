@@ -1,0 +1,68 @@
+{
+  "requests": [
+    {
+      "method": "PATCH",
+      "path": "/v1/reviewSubmissionItems/it1",
+      "body": {
+        "data": {
+          "attributes": {
+            "resolved": true
+          },
+          "id": "it1",
+          "type": "reviewSubmissionItems"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/reviewSubmissions/rs1",
+      "body": {
+        "data": {
+          "attributes": {
+            "submitted": true
+          },
+          "id": "rs1",
+          "type": "reviewSubmissions"
+        }
+      }
+    }
+  ],
+  "result": {
+    "app": {
+      "id": "100",
+      "bundle_id": "se.jvcr.hjul",
+      "name": "Hjul",
+      "platforms": [
+        "IOS"
+      ]
+    },
+    "platform": "IOS",
+    "version": {
+      "id": "v1",
+      "string": "1.4"
+    },
+    "submission": {
+      "id": "rs1",
+      "state": "WAITING_FOR_REVIEW",
+      "items": [
+        {
+          "id": "it1",
+          "state": "REJECTED",
+          "kind": "appStoreVersion",
+          "target_id": "v1"
+        }
+      ]
+    },
+    "items": [
+      {
+        "kind": "appStoreVersion",
+        "label": "version 1.4",
+        "target_id": "v1",
+        "action": "kept"
+      }
+    ],
+    "resolved_items": [
+      "it1"
+    ]
+  }
+}
