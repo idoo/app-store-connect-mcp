@@ -1,0 +1,269 @@
+{
+  "data": {
+    "app": {
+      "id": "app1",
+      "name": "Hjul"
+    },
+    "platform": "IOS",
+    "build": {
+      "id": "b1",
+      "number": "42",
+      "processing_state": "VALID"
+    },
+    "compliance": {
+      "uses_non_exempt_encryption": false,
+      "outcome": "updated"
+    },
+    "what_to_test": [
+      {
+        "locale": "en-US",
+        "outcome": "created"
+      }
+    ],
+    "beta_app_localizations": [
+      {
+        "locale": "en-US",
+        "outcome": "updated"
+      }
+    ],
+    "beta_review_detail": {
+      "outcome": "updated",
+      "fields": [
+        "contactPhone",
+        "notes"
+      ]
+    },
+    "groups": [
+      {
+        "id": "g-ext",
+        "name": "External Testers",
+        "internal": false,
+        "outcome": "added"
+      }
+    ],
+    "beta_review": {
+      "state": "WAITING_FOR_REVIEW",
+      "outcome": "submitted",
+      "note": "external testers get the build once Beta App Review approves it"
+    }
+  },
+  "requests": [
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/builds/b1",
+      "Query": {
+        "fields[betaAppReviewSubmissions]": [
+          "betaReviewState,submittedDate"
+        ],
+        "fields[betaBuildLocalizations]": [
+          "locale,whatsNew"
+        ],
+        "fields[betaGroups]": [
+          "name"
+        ],
+        "fields[buildBetaDetails]": [
+          "internalBuildState,externalBuildState"
+        ],
+        "fields[builds]": [
+          "version,processingState,expired,usesNonExemptEncryption,betaGroups,betaBuildLocalizations,buildBetaDetail,betaAppReviewSubmission"
+        ],
+        "include": [
+          "betaGroups,betaBuildLocalizations,buildBetaDetail,betaAppReviewSubmission"
+        ],
+        "limit[betaBuildLocalizations]": [
+          "50"
+        ],
+        "limit[betaGroups]": [
+          "50"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1",
+      "Query": {
+        "fields[apps]": [
+          "primaryLocale"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaAppLocalizations",
+      "Query": {
+        "fields[betaAppLocalizations]": [
+          "locale,feedbackEmail,description,marketingUrl,privacyPolicyUrl"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaAppReviewDetail",
+      "Query": {
+        "fields[betaAppReviewDetails]": [
+          "contactFirstName,contactLastName,contactPhone,contactEmail,demoAccountName,demoAccountPassword,demoAccountRequired,notes"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "PATCH",
+      "Path": "/v1/builds/b1",
+      "Query": null,
+      "Body": {
+        "data": {
+          "attributes": {
+            "usesNonExemptEncryption": false
+          },
+          "id": "b1",
+          "type": "builds"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "POST",
+      "Path": "/v1/betaBuildLocalizations",
+      "Query": null,
+      "Body": {
+        "data": {
+          "attributes": {
+            "locale": "en-US",
+            "whatsNew": "New maps"
+          },
+          "relationships": {
+            "build": {
+              "data": {
+                "id": "b1",
+                "type": "builds"
+              }
+            }
+          },
+          "type": "betaBuildLocalizations"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "PATCH",
+      "Path": "/v1/betaAppLocalizations/bal-en",
+      "Query": null,
+      "Body": {
+        "data": {
+          "attributes": {
+            "feedbackEmail": "beta@example.com"
+          },
+          "id": "bal-en",
+          "type": "betaAppLocalizations"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "PATCH",
+      "Path": "/v1/betaAppReviewDetails/rd1",
+      "Query": null,
+      "Body": {
+        "data": {
+          "attributes": {
+            "contactPhone": "+46700000000",
+            "notes": "no login"
+          },
+          "id": "rd1",
+          "type": "betaAppReviewDetails"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "POST",
+      "Path": "/v1/betaGroups/g-ext/relationships/builds",
+      "Query": null,
+      "Body": {
+        "data": [
+          {
+            "id": "b1",
+            "type": "builds"
+          }
+        ]
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    },
+    {
+      "Method": "POST",
+      "Path": "/v1/betaAppReviewSubmissions",
+      "Query": null,
+      "Body": {
+        "data": {
+          "relationships": {
+            "build": {
+              "data": {
+                "id": "b1",
+                "type": "builds"
+              }
+            }
+          },
+          "type": "betaAppReviewSubmissions"
+        }
+      },
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": true
+    }
+  ]
+}
