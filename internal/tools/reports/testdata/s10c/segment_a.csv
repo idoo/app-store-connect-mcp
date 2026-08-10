@@ -1,0 +1,4 @@
+Date,App Name,App Apple Identifier,Event,Source Type,Territory,Counts,Unique Counts
+2026-10-20,Example Notes,1000000001,Impression,App Store search,US,120,90
+2026-10-20,Example Notes,1000000001,Impression,App Store browse,US,40,33
+2026-10-20,Example Notes,1000000001,Impression,App Store search,DE,25,20
