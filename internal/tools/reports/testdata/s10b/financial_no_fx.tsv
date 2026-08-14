@@ -1,0 +1,10 @@
+Start Date	End Date	UPC	ISRC/ISBN	Vendor Identifier	Quantity	Partner Share	Extended Partner Share	Partner Share Currency	Sales or Return	Apple Identifier	Artist/Show/Developer/Author	Title	Label/Studio/Network/Developer/Publisher	Grid	Product Type Identifier	ISAN/Other Identifier	Country Of Sale	Pre-order Flag	Promo Code	Customer Price	Customer Currency
+09/28/2026	10/25/2026			notes.pro	3	0.70	2.10	USD	S	1000000001	Example Dev	Notes Pro Unlock			IA1		US			0.99	USD
+09/28/2026	10/25/2026			notes.monthly	10	2.79	27.90	USD	S	1000000001	Example Dev	Notes Monthly			IAY		US			3.99	USD
+09/28/2026	10/25/2026			notes.monthly	-1	2.79	-2.79	USD	R	1000000001	Example Dev	Notes Monthly			IAY		US			3.99	USD
+09/28/2026	10/25/2026			notes.pro	2	0.69	1.38	EUR	S	1000000001	Example Dev	Notes Pro Unlock			IA1		DE			0.99	EUR
+09/28/2026	10/25/2026			notes.monthly	1	420	420	JPY	S	1000000001	Example Dev	Notes Monthly			IAY		JP			600	JPY
+
+Total_Rows					5
+Total_Amount								448.59
+Total_Units					15

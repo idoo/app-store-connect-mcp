@@ -1,0 +1,10 @@
+Provider	Provider Country	SKU	Developer	Title	Version	Product Type Identifier	Units	Developer Proceeds	Begin Date	End Date	Customer Currency	Country Code	Currency of Proceeds	Apple Identifier	Customer Price	Promo Code	Parent Identifier	Subscription	Period	Category	CMB	Device	Supported Platforms	Proceeds Reason	Preserved Pricing	Client	Order Type
+APPLE	US	com.example.notes	Example Dev	Example Notes	1.2	1F	12	0	10/24/2026	10/24/2026	USD	US	USD	1000000001	0					Productivity		iPhone	iOS				
+APPLE	US	com.example.notes	Example Dev	Example Notes	1.2	1F	5	0	10/24/2026	10/24/2026	EUR	DE	EUR	1000000001	0					Productivity		iPhone	iOS				
+APPLE	US	com.example.notes	Example Dev	Example Notes	1.2	7F	30	0	10/24/2026	10/24/2026	USD	US	USD	1000000001	0					Productivity		iPhone	iOS				
+APPLE	US	com.example.notes	Example Dev	Example Notes	1.2	3F	4	0	10/24/2026	10/24/2026	JPY	JP	JPY	1000000001	0					Productivity		iPhone	iOS				
+APPLE	US	notes.pro	Example Dev	Notes Pro Unlock		IA1	3	0.70	10/24/2026	10/24/2026	USD	US	USD	1000000099	0.99		com.example.notes			Productivity		iPhone	iOS				
+APPLE	US	notes.pro	Example Dev	Notes Pro Unlock		IA1	2	0.69	10/24/2026	10/24/2026	EUR	DE	EUR	1000000099	0.99		com.example.notes			Productivity		iPhone	iOS				
+APPLE	US	notes.monthly	Example Dev	Notes Monthly		IAY	7	2.79	10/24/2026	10/24/2026	USD	US	USD	1000000099	3.99		com.example.notes	Renewal	1 Month	Productivity		iPhone	iOS				
+APPLE	US	notes.monthly	Example Dev	Notes Monthly		IAY	1	420	10/24/2026	10/24/2026	JPY	JP	JPY	1000000099	600		com.example.notes	New	1 Month	Productivity		iPhone	iOS				
+APPLE	US	notes.monthly	Example Dev	Notes Monthly		IAY	-1	2.79	10/24/2026	10/24/2026	USD	US	USD	1000000099	3.99		com.example.notes	Renewal	1 Month	Productivity		iPhone	iOS				
