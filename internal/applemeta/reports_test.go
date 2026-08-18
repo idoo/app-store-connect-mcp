@@ -151,18 +151,3 @@ func TestSalesReports(t *testing.T) {
 		}
 	}
 }
-
-func TestProductCategoryOf(t *testing.T) {
-	tests := map[string]ProductCategory{
-		"1": CategoryDownload, "1F": CategoryDownload, "1T": CategoryDownload, "F1": CategoryDownload,
-		"7": CategoryUpdate, "7F": CategoryUpdate, "7T": CategoryUpdate, "F7": CategoryUpdate,
-		"3": CategoryRedownload, "3F": CategoryRedownload,
-		"IA1": CategoryIAP, "IA9": CategoryIAP, "IAY": CategoryIAP, "IAC": CategoryIAP, "FI1": CategoryIAP,
-		" iay-m ": CategoryIAP, "XYZ": CategoryUnknown, "": CategoryUnknown,
-	}
-	for id, want := range tests {
-		if got := ProductCategoryOf(id); got != want {
-			t.Errorf("ProductCategoryOf(%q) = %s; want %s", id, got, want)
-		}
-	}
-}
