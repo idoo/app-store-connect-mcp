@@ -68,11 +68,6 @@ func init() {
 	}, salesReport))
 }
 
-// salesCategory maps rows with applemeta's Product Type Identifier table.
-func salesCategory(id string) reports.Category {
-	return reports.Category(applemeta.ProductCategoryOf(id))
-}
-
 // salesWindow is the resolved set of report dates to fetch.
 type salesWindow struct {
 	Freq    applemeta.Frequency
@@ -345,7 +340,7 @@ func salesAggregate(out *salesOut, tables []dayTable, app *tool.App, groupBy []s
 	for _, g := range groupBy {
 		dims = append(dims, reports.Dim(g))
 	}
-	agg := reports.AggregateSales(rows, dims, topN, salesCategory)
+	agg := reports.AggregateSales(rows, dims, topN, reports.DefaultCategory)
 	out.Rows = len(rows)
 	out.Units = agg.Totals.Units
 	out.Proceeds = sortedAmounts(agg.Totals.Proceeds)

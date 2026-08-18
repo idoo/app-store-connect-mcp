@@ -103,7 +103,7 @@ func TestSalesReportThisWeek(t *testing.T) {
 	if s := tooltest.JSON(t, got["pending_days"]); s != `["2026-10-21","2026-10-22"]` {
 		t.Errorf("pending_days = %s (404 day and today must be pending)", s)
 	}
-	if s := tooltest.JSON(t, got["units"]); s != `{"download":120,"iap":15,"redownload":4,"update":30}` {
+	if s := tooltest.JSON(t, got["units"]); s != `{"download":120,"iap":8,"redownload":4,"subscription":7,"update":30}` {
 		t.Errorf("units = %s", s)
 	}
 	// Exact per-currency sums, largest first, never summed across currencies.
@@ -140,7 +140,7 @@ func TestSalesReportAppFilterAndUSDEstimate(t *testing.T) {
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env,
 		`{"period":"this_week","app":"Example Notes","with_usd_estimate":true}`))
 	got := tooltest.Decode[map[string]any](t, res)
-	if s := tooltest.JSON(t, got["units"]); s != `{"download":20,"iap":15,"redownload":4,"update":30}` {
+	if s := tooltest.JSON(t, got["units"]); s != `{"download":20,"iap":8,"redownload":4,"subscription":7,"update":30}` {
 		t.Errorf("units = %s (other app must be filtered out, IAPs kept via parent SKU)", s)
 	}
 	if id := got["app"].(map[string]any)["id"]; id != "1000000001" {
