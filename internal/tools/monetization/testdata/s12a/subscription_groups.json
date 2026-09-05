@@ -1,0 +1,10 @@
+{"data":[
+ {"type":"subscriptionGroups","id":"g1","attributes":{"referenceName":"Hjul Plus"},
+  "relationships":{"subscriptionGroupLocalizations":{"data":[{"type":"subscriptionGroupLocalizations","id":"gl1"}]}}},
+ {"type":"subscriptionGroups","id":"g2","attributes":{"referenceName":"Legacy"},
+  "relationships":{"subscriptionGroupLocalizations":{"data":[]}}}
+],
+"included":[
+ {"type":"subscriptionGroupLocalizations","id":"gl1","attributes":{"locale":"en-US","name":"Hjul Plus","customAppName":"Hjul"}}
+],
+"links":{},"meta":{"paging":{"total":2,"limit":200}}}

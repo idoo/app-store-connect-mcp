@@ -1,0 +1,19 @@
+{"data":[
+ {"type":"inAppPurchases","id":"iap1","attributes":{"name":"Coins 100","productId":"se.jvcr.hjul.coins100","inAppPurchaseType":"CONSUMABLE","state":"APPROVED","familySharable":false},
+  "relationships":{"inAppPurchaseLocalizations":{"data":[{"type":"inAppPurchaseLocalizations","id":"l1"},{"type":"inAppPurchaseLocalizations","id":"l2"}]},
+   "versions":{"data":[{"type":"inAppPurchaseVersions","id":"v1a"},{"type":"inAppPurchaseVersions","id":"v1b"}]}}},
+ {"type":"inAppPurchases","id":"iap2","attributes":{"name":"Pro unlock","productId":"se.jvcr.hjul.pro","inAppPurchaseType":"NON_CONSUMABLE","state":"READY_TO_SUBMIT","familySharable":true},
+  "relationships":{"inAppPurchaseLocalizations":{"data":[{"type":"inAppPurchaseLocalizations","id":"l3"}]},
+   "versions":{"data":[{"type":"inAppPurchaseVersions","id":"v2a"}]}}},
+ {"type":"inAppPurchases","id":"iap3","attributes":{"name":"Coins 500","productId":"se.jvcr.hjul.coins500","inAppPurchaseType":"CONSUMABLE","state":"APPROVED"},
+  "relationships":{"inAppPurchaseLocalizations":{"data":[]},"versions":{"data":[]}}}
+],
+"included":[
+ {"type":"inAppPurchaseLocalizations","id":"l1","attributes":{"locale":"sv","name":"100 mynt","description":"En påse mynt"}},
+ {"type":"inAppPurchaseLocalizations","id":"l2","attributes":{"locale":"en-US","name":"100 coins","description":"A bag of coins"}},
+ {"type":"inAppPurchaseLocalizations","id":"l3","attributes":{"locale":"en-US","name":"Hjul Pro"}},
+ {"type":"inAppPurchaseVersions","id":"v1a","attributes":{"version":1,"state":"APPROVED"}},
+ {"type":"inAppPurchaseVersions","id":"v1b","attributes":{"version":2,"state":"PREPARE_FOR_SUBMISSION"}},
+ {"type":"inAppPurchaseVersions","id":"v2a","attributes":{"version":1,"state":"READY_FOR_REVIEW"}}
+],
+"links":{},"meta":{"paging":{"total":3,"limit":200}}}
