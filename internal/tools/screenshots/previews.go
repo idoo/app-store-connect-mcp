@@ -151,7 +151,7 @@ func previewsUpload(ctx context.Context, env *tool.Env, in previewIn) (*tool.Res
 		CreatePath: "/v1/appPreviews", Type: "appPreviews",
 		Parent:   upload.Relationship{Name: "appPreviewSet", Type: "appPreviewSets", ID: out.SetID},
 		FileName: filepath.Base(in.File), FileSize: st.Size(), File: fh, Attributes: attrs,
-		Poll: upload.PollOptions{MaxWait: time.Duration(wait) * time.Second},
+		Poll: upload.PollOptions{MaxWait: time.Duration(wait) * time.Second}, StateField: "videoDeliveryState",
 	})
 	out.Preview = res
 	if err != nil {

@@ -155,11 +155,15 @@ func (f *fakeSet) res() jres {
 }
 
 func (s *fakeShot) res(typ string) jres {
-	return jres{Type: typ, ID: s.id, Attrs: map[string]any{
+	attrs := map[string]any{
 		"fileName": s.fileName, "sourceFileChecksum": s.checksum,
 		"assetDeliveryState": map[string]any{"state": s.state},
 		"imageAsset":         map[string]any{"templateUrl": "https://is1-ssl.mzstatic.com/image/" + s.id + "/{w}x{h}bb.{f}", "width": 1290, "height": 2796},
-	}}
+	}
+	if typ == "appPreviews" {
+		attrs["videoDeliveryState"] = map[string]any{"state": s.state}
+	}
+	return jres{Type: typ, ID: s.id, Attrs: attrs}
 }
 
 func newKit(t *testing.T) (*tooltest.Kit, *fake) {

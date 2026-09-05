@@ -218,6 +218,43 @@ func TestUploadAssetPreviewAttributes(t *testing.T) {
 	}
 }
 
+func TestUploadAssetStateField(t *testing.T) {
+	k := tooltest.New(t)
+	data := []byte("moov-video-bytes")
+	ops := splitOps(int64(len(data)), 1)
+	k.ASC.Handle("POST", "/v1/appPreviews", http.StatusCreated, resourceJSON(t, "appPreviews", "pv-1", map[string]any{"uploadOperations": ops}))
+	// The deprecated assetDeliveryState reports COMPLETE right after commit
+	// while the video is still being transcoded.
+	k.ASC.Handle("PATCH", "/v1/appPreviews/{id}", http.StatusOK, resourceJSON(t, "appPreviews", "pv-1", map[string]any{
+		"assetDeliveryState": map[string]any{"state": "COMPLETE"},
+		"videoDeliveryState": map[string]any{"state": "UPLOAD_COMPLETE"},
+	}))
+	k.ASC.Handle("GET", "/v1/appPreviews/{id}", http.StatusOK, resourceJSON(t, "appPreviews", "pv-1", map[string]any{
+		"assetDeliveryState": map[string]any{"state": "COMPLETE"},
+		"videoDeliveryState": map[string]any{"state": "PROCESSING"},
+	}))
+	k.ASC.Handle("GET", "/v1/appPreviews/{id}", http.StatusOK, resourceJSON(t, "appPreviews", "pv-1", map[string]any{
+		"assetDeliveryState": map[string]any{"state": "COMPLETE"},
+		"videoDeliveryState": map[string]any{"state": "COMPLETE", "warnings": []map[string]string{{"code": "W", "description": "short"}}},
+	}))
+	k.Fetch.Handle("PUT", partURL(0), http.StatusOK, nil)
+	res, err := Asset(writeCtx(t), DepsFromEnv(k.Env), AssetSpec{
+		CreatePath: "/v1/appPreviews", Type: "appPreviews",
+		Parent:   Relationship{Name: "appPreviewSet", Type: "appPreviewSets", ID: "ps-1"},
+		FileName: "preview.mov", FileSize: int64(len(data)), File: bytes.NewReader(data),
+		StateField: "videoDeliveryState",
+	})
+	if err != nil || res.State != StateComplete || len(res.Warnings) != 1 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if n := len(k.ASC.RequestsTo("GET", "/v1/appPreviews/{id}")); n != 2 {
+		t.Errorf("polls = %d, want 2 (until videoDeliveryState COMPLETE)", n)
+	}
+	if (AssetSpec{}).stateField() != DefaultStateField || DefaultStateField != "assetDeliveryState" {
+		t.Error("default state field")
+	}
+}
+
 func TestUploadAssetFailedSurfacesErrors(t *testing.T) {
 	k := tooltest.New(t)
 	data := []byte("not really a png")

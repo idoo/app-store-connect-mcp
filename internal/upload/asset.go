@@ -27,6 +27,10 @@ const (
 	StateFailed         = "FAILED"
 )
 
+// DefaultStateField is the delivery-state attribute of most media assets
+// (AppMediaAssetState).
+const DefaultStateField = "assetDeliveryState"
+
 // ErrUploadFailed is wrapped by every [*DeliveryError].
 var ErrUploadFailed = &tool.Error{
 	Code:    "upload_failed",
@@ -131,7 +135,7 @@ func (e *DeliveryError) Unwrap() error { return ErrUploadFailed }
 // appScreenshots, appPreviews, inAppPurchaseAppStoreReviewScreenshots,
 // subscriptionAppStoreReviewScreenshots and the v2 inAppPurchaseImages and
 // subscriptionImages: reserve, PUT parts, commit with sourceFileChecksum,
-// then poll assetDeliveryState.
+// then poll StateField (assetDeliveryState unless set).
 type AssetSpec struct {
 	// CreatePath is the collection the reservation is POSTed to, e.g.
 	// "/v1/appScreenshots"; the asset itself lives at CreatePath/{id}.
@@ -148,7 +152,11 @@ type AssetSpec struct {
 	Attributes map[string]any
 	// CommitAttributes adds commit attributes (e.g. previewFrameTimeCode).
 	CommitAttributes map[string]any
-	Poll             PollOptions
+	// StateField is the delivery-state attribute polled after commit
+	// (default [DefaultStateField]); appPreviews use "videoDeliveryState",
+	// whose state also passes through PROCESSING.
+	StateField string
+	Poll       PollOptions
 }
 
 // AssetResult is the outcome of an asset upload.
@@ -223,7 +231,7 @@ func Asset(ctx context.Context, d Deps, s AssetSpec) (*AssetResult, error) {
 		res = r
 	}
 	still, err := poll(ctx, d, itemPath, s.Poll, res, func(r tool.Resource) (bool, error) {
-		st, err := assetState(r)
+		st, err := assetState(r, s.stateField())
 		if err != nil {
 			return false, err
 		}
@@ -256,9 +264,17 @@ func (s AssetSpec) check() error {
 	return nil
 }
 
-func assetState(r tool.Resource) (mediaState, error) {
+// stateField returns the polled delivery-state attribute.
+func (s AssetSpec) stateField() string {
+	if s.StateField == "" {
+		return DefaultStateField
+	}
+	return s.StateField
+}
+
+func assetState(r tool.Resource, field string) (mediaState, error) {
 	var st mediaState
-	if err := decodeAttr(r, "assetDeliveryState", &st); err != nil {
+	if err := decodeAttr(r, field, &st); err != nil {
 		return st, err
 	}
 	if st.State == "" {
