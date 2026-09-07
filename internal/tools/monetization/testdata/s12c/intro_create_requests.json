@@ -1,0 +1,36 @@
+[
+  {
+    "body": {
+      "data": {
+        "attributes": {
+          "duration": "ONE_MONTH",
+          "numberOfPeriods": 3,
+          "offerMode": "PAY_AS_YOU_GO",
+          "startDate": "2026-11-01"
+        },
+        "relationships": {
+          "subscription": {
+            "data": {
+              "id": "s1",
+              "type": "subscriptions"
+            }
+          },
+          "subscriptionPricePoint": {
+            "data": {
+              "id": "ppUSA099",
+              "type": "subscriptionPricePoints"
+            }
+          },
+          "territory": {
+            "data": {
+              "id": "USA",
+              "type": "territories"
+            }
+          }
+        },
+        "type": "subscriptionIntroductoryOffers"
+      }
+    },
+    "request": "POST /v1/subscriptionIntroductoryOffers"
+  }
+]
