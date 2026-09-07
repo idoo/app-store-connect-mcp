@@ -1,0 +1,104 @@
+[
+  {
+    "body": {
+      "data": {
+        "attributes": {
+          "customerEligibilityPaidSubscriptionDurationInMonths": 3,
+          "customerEligibilityTimeSinceLastSubscribedInMonths": {
+            "maximum": 6,
+            "minimum": 1
+          },
+          "duration": "ONE_MONTH",
+          "offerId": "comeback",
+          "offerMode": "PAY_AS_YOU_GO",
+          "periodCount": 2,
+          "priority": "NORMAL",
+          "referenceName": "Come back",
+          "startDate": "2026-11-01"
+        },
+        "relationships": {
+          "prices": {
+            "data": [
+              {
+                "id": "${price-0}",
+                "type": "winBackOfferPrices"
+              },
+              {
+                "id": "${price-1}",
+                "type": "winBackOfferPrices"
+              },
+              {
+                "id": "${price-2}",
+                "type": "winBackOfferPrices"
+              }
+            ]
+          },
+          "subscription": {
+            "data": {
+              "id": "s1",
+              "type": "subscriptions"
+            }
+          }
+        },
+        "type": "winBackOffers"
+      },
+      "included": [
+        {
+          "id": "${price-0}",
+          "relationships": {
+            "subscriptionPricePoint": {
+              "data": {
+                "id": "ppUSA",
+                "type": "subscriptionPricePoints"
+              }
+            },
+            "territory": {
+              "data": {
+                "id": "USA",
+                "type": "territories"
+              }
+            }
+          },
+          "type": "winBackOfferPrices"
+        },
+        {
+          "id": "${price-1}",
+          "relationships": {
+            "subscriptionPricePoint": {
+              "data": {
+                "id": "ppDEU",
+                "type": "subscriptionPricePoints"
+              }
+            },
+            "territory": {
+              "data": {
+                "id": "DEU",
+                "type": "territories"
+              }
+            }
+          },
+          "type": "winBackOfferPrices"
+        },
+        {
+          "id": "${price-2}",
+          "relationships": {
+            "subscriptionPricePoint": {
+              "data": {
+                "id": "ppGBR",
+                "type": "subscriptionPricePoints"
+              }
+            },
+            "territory": {
+              "data": {
+                "id": "GBR",
+                "type": "territories"
+              }
+            }
+          },
+          "type": "winBackOfferPrices"
+        }
+      ]
+    },
+    "request": "POST /v1/winBackOffers"
+  }
+]

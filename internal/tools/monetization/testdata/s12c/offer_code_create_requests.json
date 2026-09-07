@@ -1,0 +1,83 @@
+[
+  {
+    "body": {
+      "data": {
+        "attributes": {
+          "customerEligibilities": [
+            "NEW",
+            "EXPIRED"
+          ],
+          "duration": "ONE_MONTH",
+          "name": "Spring",
+          "numberOfPeriods": 1,
+          "offerEligibility": "STACK_WITH_INTRO_OFFERS",
+          "offerMode": "FREE_TRIAL"
+        },
+        "relationships": {
+          "prices": {
+            "data": [
+              {
+                "id": "${price-0}",
+                "type": "subscriptionOfferCodePrices"
+              },
+              {
+                "id": "${price-1}",
+                "type": "subscriptionOfferCodePrices"
+              },
+              {
+                "id": "${price-2}",
+                "type": "subscriptionOfferCodePrices"
+              }
+            ]
+          },
+          "subscription": {
+            "data": {
+              "id": "s1",
+              "type": "subscriptions"
+            }
+          }
+        },
+        "type": "subscriptionOfferCodes"
+      },
+      "included": [
+        {
+          "id": "${price-0}",
+          "relationships": {
+            "territory": {
+              "data": {
+                "id": "USA",
+                "type": "territories"
+              }
+            }
+          },
+          "type": "subscriptionOfferCodePrices"
+        },
+        {
+          "id": "${price-1}",
+          "relationships": {
+            "territory": {
+              "data": {
+                "id": "GBR",
+                "type": "territories"
+              }
+            }
+          },
+          "type": "subscriptionOfferCodePrices"
+        },
+        {
+          "id": "${price-2}",
+          "relationships": {
+            "territory": {
+              "data": {
+                "id": "SWE",
+                "type": "territories"
+              }
+            }
+          },
+          "type": "subscriptionOfferCodePrices"
+        }
+      ]
+    },
+    "request": "POST /v1/subscriptionOfferCodes"
+  }
+]

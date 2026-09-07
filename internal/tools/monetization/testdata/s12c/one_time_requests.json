@@ -1,0 +1,22 @@
+[
+  {
+    "body": {
+      "data": {
+        "attributes": {
+          "expirationDate": "2026-12-31",
+          "numberOfCodes": 25
+        },
+        "relationships": {
+          "offerCode": {
+            "data": {
+              "id": "oc1",
+              "type": "subscriptionOfferCodes"
+            }
+          }
+        },
+        "type": "subscriptionOfferCodeOneTimeUseCodes"
+      }
+    },
+    "request": "POST /v1/subscriptionOfferCodeOneTimeUseCodes"
+  }
+]
