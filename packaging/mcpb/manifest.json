@@ -1,0 +1,93 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-latest.schema.json",
+  "manifest_version": "0.3",
+  "name": "hamn",
+  "display_name": "hamn: App Store Connect",
+  "version": "0.0.0",
+  "description": "Ship iOS & macOS apps by asking your agent: App Store Connect workflows plus the complete API, read-only by default.",
+  "long_description": "hamn is an App Store Connect MCP server: releases, TestFlight, metadata, reviews, sales and finance reports, plus every App Store Connect API operation via a spec-validated generic layer. Writes are off unless you enable them, and every destructive or public action needs an explicit plan/confirm step.",
+  "author": {
+    "name": "Ivan Dyachenko",
+    "url": "https://github.com/idoo"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/idoo/hamn"
+  },
+  "homepage": "https://github.com/idoo/hamn",
+  "documentation": "https://github.com/idoo/hamn#readme",
+  "support": "https://github.com/idoo/hamn/issues",
+  "icon": "icon.png",
+  "license": "MIT",
+  "keywords": ["app-store-connect", "ios", "macos", "testflight", "release", "apple"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/hamn-darwin",
+    "mcp_config": {
+      "command": "${__dirname}/server/hamn-darwin",
+      "args": ["serve"],
+      "env": {
+        "ASC_KEY_ID": "${user_config.asc_key_id}",
+        "ASC_ISSUER_ID": "${user_config.asc_issuer_id}",
+        "ASC_PRIVATE_KEY_PATH": "${user_config.asc_private_key_path}",
+        "ASC_VENDOR_NUMBER": "${user_config.asc_vendor_number}",
+        "HAMN_ALLOW_WRITES": "${user_config.allow_writes}",
+        "HAMN_TOOLSETS": "${user_config.toolsets}"
+      },
+      "platform_overrides": {
+        "win32": {
+          "command": "${__dirname}/server/hamn-windows-amd64.exe"
+        },
+        "linux": {
+          "command": "${__dirname}/server/hamn-linux-amd64"
+        }
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"]
+  },
+  "user_config": {
+    "asc_key_id": {
+      "type": "string",
+      "title": "API key ID",
+      "description": "App Store Connect API key ID (Users and Access > Integrations).",
+      "required": true
+    },
+    "asc_issuer_id": {
+      "type": "string",
+      "title": "Issuer ID",
+      "description": "Team key issuer ID. Leave empty for an Individual API key.",
+      "required": false,
+      "default": ""
+    },
+    "asc_private_key_path": {
+      "type": "file",
+      "title": "Private key (.p8)",
+      "description": "The AuthKey_XXXX.p8 file downloaded from App Store Connect.",
+      "required": true,
+      "sensitive": true
+    },
+    "asc_vendor_number": {
+      "type": "string",
+      "title": "Vendor number",
+      "description": "Needed only for sales and finance reports (Payments and Financial Reports).",
+      "required": false,
+      "default": ""
+    },
+    "allow_writes": {
+      "type": "boolean",
+      "title": "Allow writes",
+      "description": "Expose write and destructive tools. Destructive actions still require plan/confirm.",
+      "required": false,
+      "default": false
+    },
+    "toolsets": {
+      "type": "string",
+      "title": "Toolsets",
+      "description": "Empty for the defaults, 'all', or e.g. '+signing,+monetization'.",
+      "required": false,
+      "default": ""
+    }
+  }
+}

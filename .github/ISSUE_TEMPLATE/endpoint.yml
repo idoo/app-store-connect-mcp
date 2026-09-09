@@ -1,0 +1,28 @@
+name: Missing or wrong API endpoint
+description: An App Store Connect operation hamn does not know, or the spec index gets wrong
+labels: [spec]
+body:
+  - type: input
+    id: op
+    attributes:
+      label: Method and path
+      placeholder: POST /v1/reviewSubmissionItems
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Apple documentation link
+      placeholder: https://developer.apple.com/documentation/appstoreconnectapi/...
+  - type: textarea
+    id: what
+    attributes:
+      label: What goes wrong
+      description: Output of `asc_api_search` / `asc_api_describe`, or the validation error from `asc_api_request`.
+    validations:
+      required: true
+  - type: input
+    id: spec
+    attributes:
+      label: Spec version
+      description: Shown by `hamn doctor`

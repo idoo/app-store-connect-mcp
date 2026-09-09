@@ -1,0 +1,21 @@
+name: Feature request
+description: A workflow or tool behaviour you want
+labels: [enhancement]
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: What are you trying to get done?
+      description: The release, TestFlight, metadata or reporting job, in your own words.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: Including any `asc_api_request` calls that already work.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed tool or change
+      description: Name, arguments, and whether it reads, writes or is destructive/public.

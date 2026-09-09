@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # go-sdk pins jsonschema-go; a split bump can change schema inference
+      # (required-ness) for every tool, so they move together and the
+      # compat check sees one diff.
+      mcp-sdk:
+        patterns:
+          - github.com/modelcontextprotocol/go-sdk
+          - github.com/google/jsonschema-go
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions:
+        patterns: ["*"]

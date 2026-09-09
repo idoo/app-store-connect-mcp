@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Release pipeline: see .github/workflows/release.yml. Local dry run:
+#   goreleaser release --snapshot --clean --skip=publish,sign
+version: 2
+
+project_name: hamn
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: hamn
+    main: ./cmd/hamn
+    binary: hamn
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    # No build date: two builds of the same tag must be byte-identical so the
+    # provenance attestation can be reproduced.
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# Fat darwin binary for the .mcpb bundle only (mcpb platform overrides are
+# per-OS, not per-arch). Archives below take only the per-arch `hamn` builds.
+universal_binaries:
+  - id: hamn-universal
+    ids: [hamn]
+    name_template: hamn
+    replace: false
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: hamn
+    ids: [hamn]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.spdx.json"
+
+# HTTP-mode image (`hamn serve --http`), distroless static, multi-arch.
+dockers_v2:
+  - id: hamn
+    ids: [hamn]
+    images:
+      - ghcr.io/idoo/hamn
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    dockerfile: packaging/docker/Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: hamn
+      org.opencontainers.image.description: App Store Connect MCP server
+      org.opencontainers.image.source: https://github.com/idoo/hamn
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: MIT
+      io.modelcontextprotocol.server.name: io.github.idoo/hamn
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^chore\\(deps\\)"
+      - "^Merge "
+  groups:
+    - title: Breaking changes
+      regexp: '^.*?(\([^)]+\))?!:.+$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\([^)]+\))?:.+$'
+      order: 1
+    - title: Fixes
+      regexp: '^.*?fix(\([^)]+\))?:.+$'
+      order: 2
+    - title: Security
+      regexp: '^.*?sec(urity)?(\([^)]+\))?:.+$'
+      order: 3
+    - title: Documentation
+      regexp: '^.*?docs(\([^)]+\))?:.+$'
+      order: 4
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: idoo
+    name: hamn
+  prerelease: auto
+  mode: replace
+  footer: |
+    **Install:** `brew install idoo/tap/hamn`, `curl -fsSL https://raw.githubusercontent.com/idoo/hamn/main/install.sh | sh`,
+    `go install github.com/idoo/hamn/cmd/hamn@{{ .Tag }}`, `docker pull ghcr.io/idoo/hamn:{{ .Version }}`,
+    or `hamn-{{ .Version }}.mcpb` for Claude Desktop.
+
+    **Verify:** `gh attestation verify hamn_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/hamn`
