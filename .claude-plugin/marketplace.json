@@ -1,0 +1,18 @@
+{
+  "name": "hamn",
+  "owner": {
+    "name": "Ivan Verevkin"
+  },
+  "metadata": {
+    "description": "hamn: the secure App Store Connect MCP server and its agent skills."
+  },
+  "plugins": [
+    {
+      "name": "hamn",
+      "source": "./",
+      "description": "App Store Connect MCP server (hamn binary on PATH required) plus release, TestFlight, reviews, metadata, screenshots and sales skills.",
+      "version": "0.1.0",
+      "license": "MIT"
+    }
+  ]
+}

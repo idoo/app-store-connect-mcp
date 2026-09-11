@@ -23,6 +23,7 @@ Usage:
   hamn doctor [--profile NAME]  check config, key, Apple reachability
   hamn config snippet <client>  print client config (claude-code, claude-desktop, codex, cursor, vscode, windsurf)
   hamn config install <client>  write it into the client's config (with backup)
+  hamn skills <list|install>    install agent skills (--client claude-code|codex|cursor|omp, --dir, --force)
   hamn version
 `
 
@@ -64,6 +65,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runDoctor(ctx, rest, stdout, stderr)
 	case "config":
 		return runConfig(rest, stdout, stderr)
+	case "skills":
+		return runSkills(rest, stdout, stderr)
 	case "version", "--version":
 		_, err := fmt.Fprintln(stdout, "hamn", buildVersion())
 		return err

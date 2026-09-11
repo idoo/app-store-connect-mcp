@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "hamn": {
+      "command": "hamn",
+      "args": []
+    }
+  }
+}
