@@ -67,10 +67,17 @@ func (r *Resource) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Str returns a string attribute, or "".
+// Str returns a string attribute, or "". Values wrapped as [Untrusted] by the
+// client are unwrapped: callers that echo third-party text back to the agent
+// must re-wrap it with Untrusted themselves.
 func (r Resource) Str(key string) string {
-	s, _ := r.Attributes[key].(string)
-	return s
+	switch v := r.Attributes[key].(type) {
+	case string:
+		return v
+	case Untrusted:
+		return string(v)
+	}
+	return ""
 }
 
 // Bool returns a boolean attribute and whether it was present as a bool.
