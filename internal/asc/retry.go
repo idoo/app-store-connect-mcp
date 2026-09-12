@@ -19,26 +19,7 @@ const (
 	maxRetryAfter = 30 * time.Second
 	// jitterFraction is the maximum backoff jitter (25%).
 	jitterFraction = 0.25
-	// consistencyRetries and consistencyWait bound the eventual-consistency
-	// 404 retries of GETs flagged with [WithEventualConsistency].
-	consistencyRetries = 3
-	consistencyWait    = time.Second
 )
-
-type consistencyKey struct{}
-
-// WithEventualConsistency marks ctx so GETs answered 404 are retried
-// (3 times, 1 s apart): use it to read an object right after creating it
-// (new versions, buildUploads), which Apple may not serve immediately.
-func WithEventualConsistency(ctx context.Context) context.Context {
-	return context.WithValue(ctx, consistencyKey{}, true)
-}
-
-// eventualConsistency reports whether ctx carries [WithEventualConsistency].
-func eventualConsistency(ctx context.Context) bool {
-	v, _ := ctx.Value(consistencyKey{}).(bool)
-	return v
-}
 
 // retryPolicy is the pure retry table of the client.
 type retryPolicy struct {

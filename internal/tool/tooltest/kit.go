@@ -12,8 +12,10 @@ package tooltest
 
 import (
 	"context"
+	"sync"
 	"testing"
 
+	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 )
 
@@ -21,6 +23,7 @@ import (
 type Kit struct {
 	Env      *tool.Env
 	ASC      *FakeASC
+	Spec     tool.Spec
 	Plans    *FakePlanner
 	State    *FakeStore
 	Files    *FakeFiles
@@ -30,13 +33,31 @@ type Kit struct {
 	Resolve  *FakeResolver
 }
 
-// New returns a Kit whose Env uses fresh fakes and the profile
-// {Name:"test", KeyKind:team, AllowWrites:true, VendorNumber:"12345678"}.
-// Env.Spec is nil; tests needing the spec set it to the real index.
+var (
+	specOnce sync.Once
+	specIdx  *spec.Index
+	specErr  error
+)
+
+// pinnedSpec loads the embedded spec index once per test binary.
+func pinnedSpec(t testing.TB) *spec.Index {
+	t.Helper()
+	specOnce.Do(func() { specIdx, specErr = spec.Load() })
+	if specErr != nil {
+		t.Fatalf("tooltest: load spec: %v", specErr)
+	}
+	return specIdx
+}
+
+// New returns a Kit whose Env uses fresh fakes, the pinned spec index and
+// the profile {Name:"test", KeyKind:team, AllowWrites:true,
+// VendorNumber:"12345678"}. Its FakeASC validates every request against the
+// spec; set k.ASC.SkipSpecCheck for deliberately invalid requests.
 func New(t testing.TB) *Kit {
 	t.Helper()
 	k := &Kit{
 		ASC:      NewFakeASC(t),
+		Spec:     pinnedSpec(t),
 		Plans:    NewFakePlanner(),
 		State:    NewFakeStore(),
 		Files:    NewFakeFiles(t),
@@ -45,8 +66,10 @@ func New(t testing.TB) *Kit {
 		Clock:    NewFakeClock(),
 		Resolve:  &FakeResolver{},
 	}
+	k.ASC.Spec = k.Spec
 	k.Env = &tool.Env{
 		ASC:      k.ASC,
+		Spec:     k.Spec,
 		Resolve:  k.Resolve,
 		Plans:    k.Plans,
 		State:    k.State,

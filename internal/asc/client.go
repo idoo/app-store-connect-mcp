@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/idoo/hamn/internal/ascrules"
 	"github.com/idoo/hamn/internal/tool"
 )
 
@@ -312,9 +313,9 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 			continue
 		}
 		if status == http.StatusNotFound && method == http.MethodGet &&
-			consistency < consistencyRetries && eventualConsistency(ctx) {
+			consistency < ascrules.ConsistencyRetries && ascrules.IsEventualConsistency(ctx) {
 			consistency++
-			if err := c.sleep(ctx, consistencyWait); err != nil {
+			if err := c.sleep(ctx, ascrules.ConsistencyWait); err != nil {
 				return nil, fmt.Errorf("asc: %s: %w", label, err)
 			}
 			continue

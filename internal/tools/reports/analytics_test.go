@@ -69,7 +69,6 @@ func TestAnalyticsSetupAlready(t *testing.T) {
 	if len(r.Next) != 1 || r.Next[0].Tool != "analytics_report" {
 		t.Errorf("next = %+v", r.Next)
 	}
-	assertSpec(t, k)
 }
 
 func TestAnalyticsSetupCreates(t *testing.T) {
@@ -99,7 +98,6 @@ func TestAnalyticsSetupCreates(t *testing.T) {
 	if !strings.Contains(body, `"app":{"data":{"id":"1000000001","type":"apps"}}`) || !strings.Contains(body, `"accessType":"ONGOING"`) {
 		t.Errorf("body = %s", body)
 	}
-	assertSpec(t, k)
 }
 
 func TestAnalyticsSetupWithheldReadOnly(t *testing.T) {
@@ -157,7 +155,6 @@ func TestAnalyticsReportList(t *testing.T) {
 	if len(reqs) != 1 || reqs[0].Query.Get("filter[category]") != "APP_STORE_ENGAGEMENT" {
 		t.Errorf("reports requests = %+v", reqs)
 	}
-	assertSpec(t, k)
 }
 
 func TestAnalyticsReportFlow(t *testing.T) {
@@ -194,7 +191,6 @@ func TestAnalyticsReportFlow(t *testing.T) {
 	if n := len(k.ASC.RequestsTo(http.MethodGet, "/v1/analyticsReportInstances/inst-1/segments")); n != 0 {
 		t.Error("out-of-range instance fetched")
 	}
-	assertSpec(t, k)
 
 	// Unknown column → invalid arguments listing the columns.
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "analytics_report"), k.Env,

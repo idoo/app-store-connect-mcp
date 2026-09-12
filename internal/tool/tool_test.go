@@ -46,6 +46,7 @@ func exampleHandler(ctx context.Context, env *tool.Env, in exampleIn) (*tool.Res
 
 func newKit(t *testing.T) *tooltest.Kit {
 	k := tooltest.New(t)
+	k.ASC.SkipSpecCheck = true // /v1/things is a deliberately fake operation
 	k.ASC.Handle("DELETE", "/v1/things/{id}", 204, "")
 	return k
 }
@@ -122,6 +123,7 @@ type planIn struct {
 
 func TestPlanRoundTrip(t *testing.T) {
 	k := tooltest.New(t)
+	k.ASC.SkipSpecCheck = true // /v1/things is a deliberately fake operation
 	k.ASC.Handle("PATCH", "/v1/things/1", 200, `{"data":{"type":"things","id":"1","attributes":{"text":"new"}}}`)
 	remote := "old"
 	tl := tool.New(tool.Meta{
@@ -243,6 +245,7 @@ func TestReadOnlyEnums(t *testing.T) {
 func TestReadOnlyTransportGuard(t *testing.T) {
 	// A ConfirmNone write tool gets write capability; a read tool does not.
 	k := tooltest.New(t)
+	k.ASC.SkipSpecCheck = true // /v1/things is a deliberately fake operation
 	k.ASC.Handle("POST", "/v1/things", 201, `{"data":{"type":"things","id":"9"}}`)
 	type noIn struct{}
 	post := func(ctx context.Context, env *tool.Env, _ noIn) (*tool.Result, error) {

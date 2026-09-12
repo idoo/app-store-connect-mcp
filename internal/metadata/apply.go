@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/idoo/hamn/internal/asc"
+	"github.com/idoo/hamn/internal/ascrules"
 	"github.com/idoo/hamn/internal/tool"
 )
 
@@ -157,7 +157,7 @@ func create(ctx context.Context, client tool.ASC, api levelAPI, locale, parent s
 		r, _ := res.First()
 		return r.ID, OutcomeOK, nil
 	}
-	if !asc.IsAlready(req, err) {
+	if !ascrules.IsAlready(req, err) {
 		return "", OutcomeError, err
 	}
 	// Read back the existing localization and bring it to the desired state.

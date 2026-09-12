@@ -8,40 +8,23 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
 var testApp = tool.App{ID: "app1", BundleID: "se.jvcr.hjul", Name: "Hjul", Platforms: []tool.Platform{tool.IOS}}
 
-// kit returns a tooltest kit with the real spec index, an app with a live
-// and an editable version, and every request checked against the spec.
+// kit returns a tooltest kit with an app with a live and an editable version
+// (its FakeASC checks every request against the spec).
 func kit(t *testing.T) *tooltest.Kit {
 	t.Helper()
 	k := tooltest.New(t)
-	idx, err := spec.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	k.Env.Spec = idx
 	k.Resolve.Apps = []tool.App{testApp}
 	k.Resolve.AppLocales = []string{"de-DE", "en-US", "sv"}
 	k.Resolve.Versions = map[tool.VersionRef]tool.Version{
 		tool.VersionEditable: {ID: "v2", String: "1.1", Platform: tool.IOS, State: "PREPARE_FOR_SUBMISSION"},
 		tool.VersionLive:     {ID: "v1", String: "1.0", Platform: tool.IOS, State: "READY_FOR_DISTRIBUTION"},
 	}
-	t.Cleanup(func() {
-		for _, r := range k.ASC.Requests() {
-			if _, ok := idx.Match(r.Method, r.Path); !ok {
-				t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-				continue
-			}
-			if err := idx.Validate(r); err != nil {
-				t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-			}
-		}
-	})
 	return k
 }
 

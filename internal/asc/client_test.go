@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/idoo/hamn/internal/ascrules"
 	"github.com/idoo/hamn/internal/tool"
 )
 
@@ -414,7 +415,7 @@ func TestEventualConsistency404(t *testing.T) {
 		t.Fatalf("unflagged: err = %v, requests = %d; want 404 after 1", err, hs.hits.Load())
 	}
 	n.Store(0)
-	if _, err := hs.c.Get(WithEventualConsistency(context.Background()), "/v1/buildUploads/b", nil); err != nil {
+	if _, err := hs.c.Get(ascrules.WithEventualConsistency(context.Background()), "/v1/buildUploads/b", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := hs.clock.slept(); len(got) != 2 || got[0] != time.Second {

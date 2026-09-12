@@ -14,16 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 	"github.com/idoo/hamn/internal/upload"
-)
-
-var (
-	specOnce sync.Once
-	specIdx  tool.Spec
-	specErr  error
 )
 
 const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -34,31 +27,12 @@ const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
 <key>CFBundleVersion</key><string>417</string>
 </dict></plist>`
 
-// newKit returns a Kit with one app and the spec index, and checks every
-// recorded ASC request against the spec when the test ends.
+// newKit returns a Kit with one app; its FakeASC checks every request
+// against the spec.
 func newKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
-	specOnce.Do(func() {
-		idx, err := spec.Load()
-		specIdx, specErr = idx, err
-	})
-	if specErr != nil {
-		t.Fatal(specErr)
-	}
 	k := tooltest.New(t)
-	k.Env.Spec = specIdx
 	k.Resolve.Apps = []tool.App{{ID: "app-1", BundleID: "se.jvcr.hjul", Name: "Hjul", Platforms: []tool.Platform{tool.IOS}}}
-	t.Cleanup(func() {
-		for _, r := range k.ASC.Requests() {
-			if _, ok := specIdx.Match(r.Method, r.Path); !ok {
-				t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-				continue
-			}
-			if err := specIdx.Validate(r); err != nil {
-				t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-			}
-		}
-	})
 	return k
 }
 

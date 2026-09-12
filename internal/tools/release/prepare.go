@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/idoo/hamn/internal/ascrules"
 	"github.com/idoo/hamn/internal/metadata"
 	"github.com/idoo/hamn/internal/tool"
 )
@@ -219,7 +220,7 @@ func (p *preparer) ensureVersion(ctx context.Context) error {
 		}
 		p.out.Version.ID, p.out.Version.Created, p.created = v.ID, true, true
 		p.step("create_version", stepDone, "")
-	case hasAPICode(err, http.StatusConflict, "ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE"):
+	case ascrules.IsAlready(tool.Request{Method: http.MethodPost, Path: "/v1/appStoreVersions"}, err):
 		id, found, rerr := p.findVersion(ctx)
 		if rerr != nil {
 			return rerr

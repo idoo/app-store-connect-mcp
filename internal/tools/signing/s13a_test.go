@@ -4,42 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
-var (
-	s13aSpecOnce sync.Once
-	s13aSpecIdx  *spec.Index
-	s13aSpecErr  error
-)
-
-// s13aKit returns a kit with the real spec index; every request is checked
-// against the spec (operation, query and body) on cleanup.
+// s13aKit returns a kit whose FakeASC checks every request against the spec.
 func s13aKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
-	s13aSpecOnce.Do(func() { s13aSpecIdx, s13aSpecErr = spec.Load() })
-	if s13aSpecErr != nil {
-		t.Fatal(s13aSpecErr)
-	}
-	k := tooltest.New(t)
-	k.Env.Spec = s13aSpecIdx
-	t.Cleanup(func() {
-		for _, r := range k.ASC.Requests() {
-			if _, ok := s13aSpecIdx.Match(r.Method, r.Path); !ok {
-				t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-				continue
-			}
-			if err := s13aSpecIdx.Validate(r); err != nil {
-				t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-			}
-		}
-	})
-	return k
+	return tooltest.New(t)
 }
 
 func s13aTool(t *testing.T, name string) tool.Tool {

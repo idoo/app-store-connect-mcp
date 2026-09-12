@@ -5,42 +5,18 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
-var (
-	specOnce sync.Once
-	specIdx  *spec.Index
-	specErr  error
-)
-
-// kit returns a kit with the real spec index and one app; every request is
-// checked against the spec on cleanup.
+// kit returns a kit with one app; its FakeASC checks every request against
+// the spec.
 func kit(t *testing.T) *tooltest.Kit {
 	t.Helper()
-	specOnce.Do(func() { specIdx, specErr = spec.Load() })
-	if specErr != nil {
-		t.Fatal(specErr)
-	}
 	k := tooltest.New(t)
-	k.Env.Spec = specIdx
 	k.Resolve.Apps = []tool.App{{ID: "A1", BundleID: "se.jvcr.hjul", Name: "Hjul"}}
-	t.Cleanup(func() {
-		for _, r := range k.ASC.Requests() {
-			if _, ok := specIdx.Match(r.Method, r.Path); !ok {
-				t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-				continue
-			}
-			if err := specIdx.Validate(r); err != nil {
-				t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-			}
-		}
-	})
 	return k
 }
 

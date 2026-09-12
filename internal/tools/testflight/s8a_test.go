@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/idoo/hamn/internal/resolve"
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
@@ -28,33 +27,16 @@ func (r s8aResolver) Group(ctx context.Context, appID string, ref tool.GroupRef)
 	return r.real.Group(ctx, appID, ref)
 }
 
-// s8aKit returns a kit using the real spec index whose request log is
-// checked against the spec on cleanup.
+// s8aKit returns a kit whose FakeASC checks every request against the spec.
 func s8aKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
 	k := tooltest.New(t)
-	idx, err := spec.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	k.Env.Spec = idx
 	k.Resolve.Apps = []tool.App{s8aApp}
 	k.Env.Resolve = s8aResolver{FakeResolver: k.Resolve, real: resolve.New(k.ASC, resolve.Options{})}
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaGroups", http.StatusOK, `{"data":[
 		{"type":"betaGroups","id":"g-int","attributes":{"name":"Team","isInternalGroup":true}},
 		{"type":"betaGroups","id":"g-ext","attributes":{"name":"External Testers","isInternalGroup":false}}
 	],"links":{}}`)
-	t.Cleanup(func() {
-		for _, r := range k.ASC.Requests() {
-			if _, ok := idx.Match(r.Method, r.Path); !ok {
-				t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-				continue
-			}
-			if err := idx.Validate(r); err != nil {
-				t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-			}
-		}
-	})
 	return k
 }
 
