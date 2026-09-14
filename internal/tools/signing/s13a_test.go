@@ -124,7 +124,7 @@ func TestBundleIDCreateExistingIsAlready(t *testing.T) {
 		t.Fatalf("mutations = %v", s13aLog(k.ASC.Mutations()))
 	}
 	out := tooltest.Decode[map[string]any](t, res)
-	if out["already"] != true || out["result"].(map[string]any)["bundle_id"].(map[string]any)["id"] != "B1" {
+	if out["already"] != true || out["bundle_id"].(map[string]any)["id"] != "B1" {
 		t.Fatalf("out = %v", out)
 	}
 	if len(res.Meta.Warnings) != 1 || !strings.Contains(res.Meta.Warnings[0], "platform IOS") {

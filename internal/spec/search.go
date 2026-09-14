@@ -2,6 +2,7 @@ package spec
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -88,6 +89,8 @@ func (x *Index) Search(query string, limit int) []tool.SearchHit {
 	if len(terms) == 0 {
 		return nil
 	}
+	compounds := resourceCompounds(query)
+	readQuery := !slices.ContainsFunc(terms, func(t string) bool { return t == "create" || t == "update" || t == "delete" })
 	n := float64(len(x.search.docs))
 	var hits []tool.SearchHit
 	for i, d := range x.search.docs {
@@ -102,6 +105,9 @@ func (x *Index) Search(query string, limit int) []tool.SearchHit {
 			score += idf * tf * (bm25K + 1) / (tf + bm25K*(1-bm25B+bm25B*d.len/x.search.avgLen))
 		}
 		op := &x.file.Ops[i]
+		if score > 0 {
+			score *= boost(op, compounds, readQuery)
+		}
 		if strings.EqualFold(strings.TrimSpace(query), op.ID) {
 			score += 1000
 		}
@@ -119,6 +125,45 @@ func (x *Index) Search(query string, limit int) []tool.SearchHit {
 		hits = hits[:limit]
 	}
 	return hits
+}
+
+// Ranking multipliers applied on top of BM25.
+const (
+	boostResource   = 1.5 // the operation returns exactly the resource the query names
+	boostRead       = 1.1 // GET when the query has no write verb
+	boostCollection = 1.1 // list operations when the query has no write verb
+)
+
+// boost favours operations whose target resource is named by the query
+// ("app events" → appEvents_getInstance, apps_appEvents_getToManyRelated)
+// and, for read queries, GETs and collections.
+func boost(op *Op, compounds map[string]bool, readQuery bool) float64 {
+	b := 1.0
+	parts := strings.Split(op.ID, "_")
+	if compounds[stem(strings.ToLower(targetType(op.ID)))] {
+		b *= boostResource
+	}
+	if readQuery && op.Method == "GET" {
+		b *= boostRead
+		if v := parts[len(parts)-1]; v == "getCollection" || v == "getToManyRelated" {
+			b *= boostCollection
+		}
+	}
+	return b
+}
+
+// resourceCompounds returns every run of consecutive query words joined,
+// lowercased and stemmed ("app events" → appevent, app, event), to compare
+// with stemmed resource names.
+func resourceCompounds(q string) map[string]bool {
+	words := strings.FieldsFunc(strings.ToLower(q), notAlnum)
+	out := map[string]bool{}
+	for i := range words {
+		for j := i + 1; j <= len(words) && j-i <= 4; j++ {
+			out[stem(strings.Join(words[i:j], ""))] = true
+		}
+	}
+	return out
 }
 
 // queryTerms tokenizes a query, adding whole-word compounds and synonyms.

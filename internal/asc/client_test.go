@@ -359,6 +359,31 @@ func TestWriteGuard(t *testing.T) {
 	}
 }
 
+func TestSetAllowWritesTogglesGuard(t *testing.T) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"type":"apps","id":"1"}}`))
+	}, func(o *Options) { o.AllowWrites = false })
+	post := func() error {
+		_, err := hs.c.Do(writeCtx(t), tool.Request{Method: http.MethodPost, Path: "/v1/apps", Body: map[string]any{}, Write: true})
+		return err
+	}
+	if err := post(); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("read-only client with write ctx: err = %v, want writes_disabled", err)
+	}
+	hs.c.SetAllowWrites(true)
+	if err := post(); err != nil {
+		t.Fatalf("after SetAllowWrites(true): %v", err)
+	}
+	hs.c.SetAllowWrites(false)
+	if err := post(); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("after SetAllowWrites(false): err = %v", err)
+	}
+	if hs.hits.Load() != 1 {
+		t.Fatalf("requests = %d, want 1", hs.hits.Load())
+	}
+}
+
 func TestMutationServerErrorIsOutcomeUnknown(t *testing.T) {
 	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "try later", "")

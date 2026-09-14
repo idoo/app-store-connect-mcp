@@ -67,17 +67,19 @@ func New(t testing.TB) *Kit {
 		Resolve:  &FakeResolver{},
 	}
 	k.ASC.Spec = k.Spec
+	k.ASC.FreeText = pinnedSpec(t).FreeTextAttributes
 	k.Env = &tool.Env{
-		ASC:      k.ASC,
-		Spec:     k.Spec,
-		Resolve:  k.Resolve,
-		Plans:    k.Plans,
-		State:    k.State,
-		Toolsets: k.Toolsets,
-		Fetch:    k.Fetch,
-		Files:    k.Files,
-		Clock:    k.Clock,
-		Version:  "test",
+		ASC:       k.ASC,
+		Spec:      k.Spec,
+		Resolve:   k.Resolve,
+		Plans:     k.Plans,
+		State:     k.State,
+		Toolsets:  k.Toolsets,
+		Fetch:     k.Fetch,
+		Files:     k.Files,
+		Clock:     k.Clock,
+		SetWrites: k.ASC.SetAllowWrites,
+		Version:   "test",
 		Profile: tool.ProfileInfo{
 			Name:         "test",
 			KeyKind:      tool.KeyTeam,
@@ -88,9 +90,11 @@ func New(t testing.TB) *Kit {
 	return k
 }
 
-// ReadOnly switches the Kit's profile to read-only mode and returns k.
+// ReadOnly switches the Kit's profile and its FakeASC guard to read-only
+// mode and returns k.
 func (k *Kit) ReadOnly() *Kit {
 	k.Env.Profile.AllowWrites = false
+	k.ASC.SetAllowWrites(false)
 	return k
 }
 

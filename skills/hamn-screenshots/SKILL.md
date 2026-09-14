@@ -35,7 +35,7 @@ up by the human). The tools live in the optional `screenshots` toolset.
    `<display>` subfolder) and plan again until it is clean.
 6. Show the plan. Deletes are the risky part: list them explicitly and ask.
 7. `screenshots_sync` with the same `app`, `version`, `dir`, `mode` and
-   `locales` plus `confirm` set to the `plan_id`. Long syncs report progress;
+   `locales` plus `plan_id` set to the plan's `plan_id`. Long syncs report progress;
    pass `wait_seconds` to wait for Apple's processing.
 8. `screenshots_list` again to confirm every asset is COMPLETE, then
    `release_status` to see the screenshot check pass.

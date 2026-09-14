@@ -35,7 +35,7 @@ the human with `hamn auth add`).
    for `release_submit`. Show the user the preview (current → intended).
 5. `release_prepare` with the same `app`, `version`, `build`, `whats_new`,
    `release_type`, `phased` and `uses_non_exempt_encryption` as the plan, plus
-   `confirm` set to its `plan_id`.
+   `plan_id` set to its `plan_id`.
    - A step with `needs_input` (for example export compliance): ask the user the
      exact question from the result, then re-plan with the answer.
    - A step with `still_processing`: go back to step 3.

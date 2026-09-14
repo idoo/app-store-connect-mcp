@@ -36,6 +36,6 @@ func metadataPlan(ctx context.Context, env *tool.Env, in sourceIn) (*tool.Result
 	}
 	out.PlanID = id
 	args := p.nextArgs(in)
-	args["confirm"] = id
+	args["plan_id"] = id
 	return tool.OK(out).Then(tool.NextStep{Tool: "metadata_apply", Args: args}), nil
 }

@@ -46,7 +46,7 @@ type replyOutcome struct {
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "reviews_reply", Toolset: tool.Reviews, Class: tool.Destructive, Confirm: tool.ConfirmByHuman,
+		Name: "reviews_reply", Toolset: tool.Reviews, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Reply to customer reviews",
 		Description: "Publish public replies to up to 20 reviews (review_id from reviews_list). An existing response is " +
 			"deleted and replaced. Without confirm:true returns a preview; the human approves every reply text.",

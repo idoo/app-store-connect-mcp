@@ -340,7 +340,7 @@ func flattenRun(r tool.Resource) runOut {
 	}
 	run.Number, _ = r.Int("number")
 	run.PullRequest, _ = r.Bool("isPullRequestBuild")
-	if c, ok := r.Attributes["sourceCommit"].(map[string]any); ok {
+	if c, ok := tool.Unwrap(r.Attributes["sourceCommit"]).(map[string]any); ok {
 		run.CommitSHA, _ = c["commitSha"].(string)
 		if msg, _ := c["message"].(string); msg != "" {
 			run.CommitMessage = tool.Untrusted(msg)

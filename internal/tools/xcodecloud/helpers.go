@@ -89,7 +89,7 @@ func flattenWorkflow(r tool.Resource, inc map[string]tool.Resource) workflowOut 
 			w.Repository.Name = strings.Trim(repo.Str("ownerName")+"/"+repo.Str("repositoryName"), "/")
 		}
 	}
-	acts, _ := r.Attributes["actions"].([]any)
+	acts, _ := tool.Unwrap(r.Attributes["actions"]).([]any)
 	for _, a := range acts {
 		am, _ := a.(map[string]any)
 		typ, _ := am["actionType"].(string)
@@ -104,7 +104,7 @@ func flattenWorkflow(r tool.Resource, inc map[string]tool.Resource) workflowOut 
 func startConditions(r tool.Resource) []string {
 	out := []string{}
 	add := func(attr, label string) {
-		c, ok := r.Attributes[attr].(map[string]any)
+		c, ok := tool.Unwrap(r.Attributes[attr]).(map[string]any)
 		if !ok {
 			return
 		}

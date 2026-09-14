@@ -35,7 +35,7 @@ func init() {
 		Confirm: tool.ConfirmByPlan,
 		Title:   "Submit a version for App Review",
 		Description: "Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. " +
-			"First call previews and returns plan_id; call again with confirm.",
+			"First call previews and returns plan_id; call again with plan_id.",
 		Enums: map[string][]any{"platform": platforms},
 	}, releaseSubmit))
 	tool.Register(tool.New(tool.Meta{
@@ -156,7 +156,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	if err != nil {
 		return nil, err
 	}
-	wctx, res := tool.Preview(ctx, env, in.Confirm, key, fp, tool.PlanPreview{
+	wctx, res := tool.Preview(ctx, env, in.PlanID, key, fp, tool.PlanPreview{
 		Summary:      fmt.Sprintf("submit %s %s %s for App Review", app.Name, platform, out.Version.String),
 		Current:      out.Submission,
 		Intended:     intended,

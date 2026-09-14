@@ -38,7 +38,7 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "pricing_apply", Toolset: tool.Monetization, Class: tool.Destructive, Confirm: tool.ConfirmByPlan,
 		Title: "Apply a pricing plan",
-		Description: "Apply a pricing_plan: same arguments plus confirm=plan_id; refused if prices changed since. App/IAP: one " +
+		Description: "Apply a pricing_plan: same arguments plus plan_id; refused if prices changed since. App/IAP: one " +
 			"schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.",
 		Enums: map[string][]any{"kind": prcKinds, "plan_type": prcPlanTypes},
 	}, pricingApply))
@@ -525,7 +525,7 @@ func pricingPlan(ctx context.Context, env *tool.Env, in pricingPlanIn) (*tool.Re
 	}
 	if out.PlanID != "" {
 		args := prcArgs(in)
-		args["confirm"] = out.PlanID
+		args["plan_id"] = out.PlanID
 		res.Then(tool.NextStep{Tool: "pricing_apply", Args: args})
 	}
 	return res, nil
@@ -575,7 +575,7 @@ func pricingApply(ctx context.Context, env *tool.Env, in pricingApplyIn) (*tool.
 	if err != nil {
 		return nil, err
 	}
-	wctx, res := tool.Preview(ctx, env, in.Confirm, p.key, fp, p.preview())
+	wctx, res := tool.Preview(ctx, env, in.PlanID, p.key, fp, p.preview())
 	if res != nil {
 		return res, nil
 	}

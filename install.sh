@@ -77,12 +77,14 @@ fi
 [ "$want" = "$got" ] || die "checksum mismatch for $archive (want $want, got $got)"
 say "sha256 verified"
 
-if command -v gh >/dev/null 2>&1; then
-	if gh attestation verify "$tmp/$archive" --repo "$repo" >/dev/null 2>&1; then
-		say "build provenance verified (gh attestation)"
-	else
-		say "warning: gh attestation verify failed or unavailable (not logged in?); continuing on the sha256 check"
-	fi
+if ! command -v gh >/dev/null 2>&1; then
+	say "warning: gh not installed; skipping build provenance check, relying on the sha256 check"
+elif ! gh auth status >/dev/null 2>&1; then
+	say "warning: gh not authenticated; skipping build provenance check, relying on the sha256 check"
+elif gh attestation verify "$tmp/$archive" --repo "$repo" >/dev/null; then
+	say "build provenance verified (gh attestation)"
+else
+	die "gh attestation verify failed for $archive; refusing to install"
 fi
 
 tar -xzf "$tmp/$archive" -C "$tmp" hamn

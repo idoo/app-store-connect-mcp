@@ -206,8 +206,8 @@ func TestJobReleaseWithNotesInThreeLocales(t *testing.T) {
 	if n := len(k.ASC.Mutations()); n != 0 {
 		t.Fatalf("release_status sent %d mutations", n)
 	}
-	j.call("release_prepare", fmt.Sprintf(`{"app":"Hjul","version":"1.4","build":"latest","whats_new":%s,"confirm":%q}`, wn, prepareID))
-	sub := j.call("release_submit", fmt.Sprintf(`{"app":"Hjul","version":"1.4","confirm":%q}`, submitID))
+	j.call("release_prepare", fmt.Sprintf(`{"app":"Hjul","version":"1.4","build":"latest","whats_new":%s,"plan_id":%q}`, wn, prepareID))
+	sub := j.call("release_submit", fmt.Sprintf(`{"app":"Hjul","version":"1.4","plan_id":%q}`, submitID))
 	j.done(4)
 	if j.calls[0].class != tool.Read {
 		t.Errorf("first call %s is class %v, want Read", j.calls[0].name, j.calls[0].class)

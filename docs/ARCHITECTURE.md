@@ -49,7 +49,7 @@ sequenceDiagram
     alt write / destructive
         H->>T: Preview(args, state fingerprint)
         T-->>C: preview (+ plan_id), nothing changed
-        C->>S: same call with confirm
+        C->>S: same call with confirm:true or plan_id
         S->>T: verify plan (args, session, fingerprint, single use)
         T->>C: elicitation for human-approval tools
         T->>H: write-capable context

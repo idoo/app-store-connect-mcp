@@ -75,6 +75,8 @@ func TestSearchRanking(t *testing.T) {
 		{"list beta groups", "betaGroups_getCollection", 1},
 		{"delete beta tester", "betaTesters_deleteInstance", 3},
 		{"sales reports", "salesReports_getCollection", 3},
+		{"app events", "apps_appEvents_getToManyRelated", 3},
+		{"app events", "appEvents_getInstance", 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
@@ -172,6 +174,10 @@ func TestDescribeFieldsIncludesAndErrors(t *testing.T) {
 	}
 	if d, _ := x.Describe("betaGroups_betaTesters_createToManyRelationship"); d == nil || d.BodySkeleton == nil {
 		t.Error("linkage op has no skeleton")
+	}
+	ex, _ := x.describe(x.byID["apps_appEvents_getToManyRelated"]).Example.(map[string]any)
+	if ex["path"] != "/v1/apps/<id>/appEvents" || ex["fields"] == nil || ex["query"] == nil || ex["method"] != nil {
+		t.Errorf("GET example = %v, want concrete path with fields and limit", ex)
 	}
 }
 

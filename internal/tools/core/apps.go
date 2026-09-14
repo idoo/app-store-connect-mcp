@@ -27,16 +27,30 @@ var platformEnum = []any{string(tool.IOS), string(tool.MacOS), string(tool.TVOS)
 type appsListIn struct {
 	Query    string `json:"query,omitempty" jsonschema:"fuzzy match on name, bundle id, SKU or id; empty lists every app"`
 	Platform string `json:"platform,omitempty" jsonschema:"only apps with App Store versions for this platform"`
+	State    string `json:"state,omitempty" jsonschema:"only apps with an in-flight version in this appVersionState, e.g. WAITING_FOR_REVIEW"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"max apps returned (default 50, max 200)"`
 }
 
 type appSummary struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
-	BundleID      string   `json:"bundleId"`
+	BundleID      string   `json:"bundle_id"`
 	SKU           string   `json:"sku,omitempty"`
-	PrimaryLocale string   `json:"primaryLocale,omitempty"`
+	PrimaryLocale string   `json:"primary_locale,omitempty"`
 	Platforms     []string `json:"platforms"`
+}
+
+// listedApp is an apps_list row: the summary plus versions still moving
+// through preparation, review or release.
+type listedApp struct {
+	appSummary
+	InFlight []inFlightVersion `json:"in_flight,omitempty"`
+}
+
+type inFlightVersion struct {
+	Version  string `json:"version"`
+	Platform string `json:"platform"`
+	State    string `json:"app_version_state"`
 }
 
 type appsGetIn struct {
@@ -47,9 +61,9 @@ type versionSummary struct {
 	ID       string `json:"id"`
 	Platform string `json:"platform"`
 	Version  string `json:"version"`
-	State    string `json:"appVersionState"`
-	Release  string `json:"releaseType,omitempty"`
-	Created  string `json:"createdDate,omitempty"`
+	State    string `json:"app_version_state"`
+	Release  string `json:"release_type,omitempty"`
+	Created  string `json:"created_date,omitempty"`
 }
 
 type buildSummary struct {
@@ -57,10 +71,10 @@ type buildSummary struct {
 	Number   string `json:"build"`
 	Version  string `json:"version,omitempty"`
 	Platform string `json:"platform,omitempty"`
-	State    string `json:"processingState"`
+	State    string `json:"processing_state"`
 	Expired  bool   `json:"expired"`
-	Uploaded string `json:"uploadedDate,omitempty"`
-	MinOS    string `json:"minOsVersion,omitempty"`
+	Uploaded string `json:"uploaded_date,omitempty"`
+	MinOS    string `json:"min_os_version,omitempty"`
 }
 
 type appOverview struct {
@@ -76,14 +90,14 @@ func init() {
 		Name: "apps_list", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "List apps",
 		Description: "List or find apps in the account. query fuzzy-matches name, bundle id, SKU or id (best first). " +
-			"Returns id, name, bundleId, sku, primaryLocale and platforms. Other tools accept any of these as the app argument.",
+			"Returns id, name, bundle_id, sku, primary_locale, platforms and in_flight versions; state filters by in-flight state.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, appsList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "apps_get", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "App overview",
-		Description: "One app at a glance: live version per platform, in-flight versions with appVersionState, " +
-			"the 5 latest builds with processingState, and listing locales. Use before release or TestFlight work.",
+		Description: "One app at a glance: live version per platform, in-flight versions with app_version_state, " +
+			"the 5 latest builds with processing_state, and listing locales. Use before release or TestFlight work.",
 	}, appsGet))
 }
 
@@ -98,7 +112,7 @@ func appsList(ctx context.Context, env *tool.Env, in appsListIn) (*tool.Result, 
 	res, err := env.ASC.List(ctx, "/v1/apps", tool.ListOptions{
 		Query: url.Values{
 			"fields[apps]":             {appListFields},
-			"fields[appStoreVersions]": {"platform"},
+			"fields[appStoreVersions]": {versionFields},
 			"limit[appStoreVersions]":  {"10"},
 		},
 		Include:  []string{"appStoreVersions"},
@@ -109,26 +123,50 @@ func appsList(ctx context.Context, env *tool.Env, in appsListIn) (*tool.Result, 
 		return nil, fmt.Errorf("list apps: %w", err)
 	}
 	platformOf := map[string]string{}
+	versionOf := map[string]versionSummary{}
 	for _, r := range res.Included {
 		if r.Type == "appStoreVersions" {
 			platformOf[r.ID] = r.Str("platform")
+			versionOf[r.ID] = summarizeVersion(r)
 		}
 	}
 	type scored struct {
-		app   appSummary
+		app   listedApp
 		score int
 	}
 	var hits []scored
+	best := 0
 	for _, r := range res.Data {
-		a := summarizeApp(r, platformOf)
+		a := listedApp{appSummary: summarizeApp(r, platformOf)}
 		if in.Platform != "" && !slices.Contains(a.Platforms, in.Platform) {
 			continue
 		}
-		s := fuzzyScore(in.Query, a)
+		var vs []versionSummary
+		for _, id := range r.RelIDs("appStoreVersions") {
+			if v, ok := versionOf[id]; ok {
+				vs = append(vs, v)
+			}
+		}
+		_, inFlight := splitVersions(vs)
+		for _, v := range inFlight {
+			if in.State == "" || strings.EqualFold(v.State, in.State) {
+				a.InFlight = append(a.InFlight, inFlightVersion{Version: v.Version, Platform: v.Platform, State: v.State})
+			}
+		}
+		if in.State != "" && len(a.InFlight) == 0 {
+			continue
+		}
+		s := fuzzyScore(in.Query, a.appSummary)
 		if s == 0 {
 			continue
 		}
+		best = max(best, s)
 		hits = append(hits, scored{a, s})
+	}
+	// Letters-in-order matches are a last resort: drop them when any app
+	// matched a stronger tier, so "hjul" does not also list unrelated apps.
+	if best > scoreSubsequence {
+		hits = slices.DeleteFunc(hits, func(h scored) bool { return h.score == scoreSubsequence })
 	}
 	slices.SortStableFunc(hits, func(x, y scored) int {
 		if c := cmp.Compare(y.score, x.score); c != 0 {
@@ -137,7 +175,7 @@ func appsList(ctx context.Context, env *tool.Env, in appsListIn) (*tool.Result, 
 		return cmp.Compare(strings.ToLower(x.app.Name), strings.ToLower(y.app.Name))
 	})
 	matched := len(hits)
-	apps := make([]appSummary, 0, min(matched, limit))
+	apps := make([]listedApp, 0, min(matched, limit))
 	for _, h := range hits[:min(matched, limit)] {
 		apps = append(apps, h.app)
 	}
@@ -148,6 +186,21 @@ func appsList(ctx context.Context, env *tool.Env, in appsListIn) (*tool.Result, 
 	}
 	return r, nil
 }
+
+// summarizeVersion reads an included appStoreVersions resource.
+func summarizeVersion(r tool.Resource) versionSummary {
+	state := r.Str("appVersionState")
+	if state == "" {
+		state = r.Str("appStoreState")
+	}
+	return versionSummary{
+		ID: r.ID, Platform: r.Str("platform"), Version: r.Str("versionString"),
+		State: state, Release: r.Str("releaseType"), Created: r.Str("createdDate"),
+	}
+}
+
+// scoreSubsequence is the fuzzyScore of the weakest (letters-in-order) tier.
+const scoreSubsequence = 20
 
 func summarizeApp(r tool.Resource, platformOf map[string]string) appSummary {
 	a := appSummary{
@@ -192,7 +245,7 @@ func fuzzyScore(query string, a appSummary) int {
 		return 40
 	}
 	if isSubsequence(strings.ReplaceAll(q, " ", ""), name) {
-		return 20
+		return scoreSubsequence
 	}
 	return 0
 }
@@ -266,14 +319,7 @@ func appsGet(ctx context.Context, env *tool.Env, in appsGetIn) (*tool.Result, er
 			continue
 		}
 		platformOf[inc.ID] = inc.Str("platform")
-		state := inc.Str("appVersionState")
-		if state == "" {
-			state = inc.Str("appStoreState")
-		}
-		versions = append(versions, versionSummary{
-			ID: inc.ID, Platform: inc.Str("platform"), Version: inc.Str("versionString"),
-			State: state, Release: inc.Str("releaseType"), Created: inc.Str("createdDate"),
-		})
+		versions = append(versions, summarizeVersion(inc))
 	}
 	out := appOverview{
 		appSummary: summarizeApp(r, platformOf),

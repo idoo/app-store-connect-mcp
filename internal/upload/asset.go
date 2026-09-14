@@ -344,7 +344,7 @@ func decodeAttr(r tool.Resource, key string, v any) error {
 	if !ok || raw == nil {
 		return nil
 	}
-	b, err := json.Marshal(raw)
+	b, err := json.Marshal(tool.Unwrap(raw))
 	if err != nil {
 		return fmt.Errorf("%s %s: encode %s: %w", r.Type, r.ID, key, err)
 	}

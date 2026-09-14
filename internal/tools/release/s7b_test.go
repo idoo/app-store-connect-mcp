@@ -60,6 +60,7 @@ func argsJSON(t *testing.T, a map[string]any) string {
 // writable enables writes (setup returns a read-only kit for release_status).
 func writable(k *tooltest.Kit) *tooltest.Kit {
 	k.Env.Profile.AllowWrites = true
+	k.ASC.SetAllowWrites(true)
 	return k
 }
 
@@ -230,7 +231,7 @@ func submitTwice(t *testing.T, k *tooltest.Kit, args string) *tool.Result {
 	if err := json.Unmarshal([]byte(args), &a); err != nil {
 		t.Fatal(err)
 	}
-	a["confirm"] = id
+	a["plan_id"] = id
 	return tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, argsJSON(t, a)))
 }
 

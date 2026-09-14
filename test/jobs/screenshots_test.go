@@ -234,7 +234,7 @@ func TestJobReplaceScreenshotsFromFastlaneDir(t *testing.T) {
 	if n := len(k.ASC.Mutations()); n != 0 {
 		t.Fatalf("screenshots_plan sent %d mutations", n)
 	}
-	out := j.call("screenshots_sync", fmt.Sprintf(`{"app":"Hjul","dir":"fastlane/screenshots","confirm":%q}`, planID))
+	out := j.call("screenshots_sync", fmt.Sprintf(`{"app":"Hjul","dir":"fastlane/screenshots","plan_id":%q}`, planID))
 	j.done(3)
 	if j.calls[0].class != tool.Read {
 		t.Errorf("first call %s is class %v, want Read", j.calls[0].name, j.calls[0].class)

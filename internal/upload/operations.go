@@ -41,7 +41,7 @@ func ParseOperations(r tool.Resource) ([]Operation, error) {
 	if !ok || raw == nil {
 		return nil, fmt.Errorf("%s %s: response has no uploadOperations", r.Type, r.ID)
 	}
-	b, err := json.Marshal(raw)
+	b, err := json.Marshal(tool.Unwrap(raw))
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: encode uploadOperations: %w", r.Type, r.ID, err)
 	}

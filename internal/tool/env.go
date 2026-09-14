@@ -28,8 +28,8 @@ type ProfileInfo struct {
 	AllowWrites bool   `json:"allow_writes"`
 	// PinSource is the path of the .hamn.toml pin that selected the profile, if any.
 	PinSource string `json:"pin_source,omitempty"`
-	// AllowNoElicit lets ConfirmByHuman tools proceed on confirm:true when the
-	// client cannot elicit (config opt-in).
+	// AllowNoElicit lets RequireHuman tools proceed on an agent confirmation
+	// when the client cannot elicit (config opt-in).
 	AllowNoElicit bool `json:"allow_no_elicit,omitempty"`
 }
 
@@ -152,8 +152,12 @@ type Env struct {
 	// Version is the hamn build version.
 	Version string
 	// NoConfirm skips the preview step (CI only: --no-confirm with HAMN_CI=1).
-	// ConfirmByHuman tools still require approval.
+	// RequireHuman tools still require approval.
 	NoConfirm bool
+	// SetWrites flips the session's write capability below the tool layer
+	// (the ASC client's read-only guard). The server calls it when toolsets
+	// enable_writes succeeds; nil is a no-op.
+	SetWrites func(bool)
 	// Progress reports progress to the client.
 	Progress func(done, total float64, msg string)
 	// Elicit asks the human a yes/no question. It returns false when the human
@@ -191,6 +195,9 @@ func (e *Env) complete() *Env {
 	}
 	if c.Clock == nil {
 		c.Clock = SystemClock{}
+	}
+	if c.SetWrites == nil {
+		c.SetWrites = func(bool) {}
 	}
 	if c.Progress == nil {
 		c.Progress = func(float64, float64, string) {}

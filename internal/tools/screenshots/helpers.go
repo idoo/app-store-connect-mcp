@@ -183,7 +183,7 @@ func screenshotSets(ctx context.Context, env *tool.Env, locID string) ([]remoteS
 		for i, id := range set.RelIDs("appScreenshots") {
 			r := shots[id]
 			s := remoteShot{ID: id, FileName: r.Str("fileName"), Order: i + 1, Checksum: r.Str("sourceFileChecksum"), State: deliveryState(r, "assetDeliveryState")}
-			if a, ok := r.Attributes["imageAsset"].(map[string]any); ok {
+			if a, ok := tool.Unwrap(r.Attributes["imageAsset"]).(map[string]any); ok {
 				s.template, _ = a["templateUrl"].(string)
 				s.Width = intOf(a["width"])
 				s.Height = intOf(a["height"])
@@ -258,7 +258,7 @@ func previewSets(ctx context.Context, env *tool.Env, locID, previewType string) 
 
 // deliveryState reads {state} from an AppMediaAssetState-like attribute.
 func deliveryState(r tool.Resource, key string) string {
-	m, _ := r.Attributes[key].(map[string]any)
+	m, _ := tool.Unwrap(r.Attributes[key]).(map[string]any)
 	s, _ := m["state"].(string)
 	return s
 }

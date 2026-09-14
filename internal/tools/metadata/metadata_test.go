@@ -153,7 +153,7 @@ func TestPlanFromFastlane(t *testing.T) {
 	if counts["updates"] != 1.0 || counts["creates"] != 2.0 || counts["deletes"] != 0.0 {
 		t.Errorf("counts = %v", counts)
 	}
-	if len(res.Next) != 1 || res.Next[0].Tool != "metadata_apply" || res.Next[0].Args["confirm"] != out["plan_id"] {
+	if len(res.Next) != 1 || res.Next[0].Tool != "metadata_apply" || res.Next[0].Args["plan_id"] != out["plan_id"] {
 		t.Errorf("next = %+v", res.Next)
 	}
 }
@@ -174,7 +174,7 @@ func TestPlanApplyRoundTripNeverDeletesByOmission(t *testing.T) {
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatal("plan mutated")
 	}
-	confirmed := strings.TrimSuffix(args, "}") + `,"confirm":"` + id + `"}`
+	confirmed := strings.TrimSuffix(args, "}") + `,"plan_id":"` + id + `"}`
 	out := decode(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_apply"), k.Env, confirmed)))
 	if out["status"] != "applied" || out["applied"] != 2.0 {
 		t.Fatalf("apply = %v", out)
@@ -201,7 +201,7 @@ func TestApplyStaleFingerprint(t *testing.T) {
 	listing(k, "Ride", "Ride (edited in ASC)")
 	args := `{"listing":{"en-US":{"keywords":"cycle"}}}`
 	plan := decode(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_plan"), k.Env, args)))
-	confirmed := `{"listing":{"en-US":{"keywords":"cycle"}},"confirm":"` + plan["plan_id"].(string) + `"}`
+	confirmed := `{"listing":{"en-US":{"keywords":"cycle"}},"plan_id":"` + plan["plan_id"].(string) + `"}`
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "metadata_apply"), k.Env, confirmed), "stale_plan")
 	if len(k.ASC.Mutations()) != 0 {
 		t.Error("stale plan mutated")
@@ -213,7 +213,7 @@ func TestApplyDifferentArgsRefused(t *testing.T) {
 	listing(k)
 	plan := decode(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_plan"), k.Env, `{"listing":{"en-US":{"keywords":"cycle"}}}`)))
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "metadata_apply"), k.Env,
-		`{"listing":{"en-US":{"keywords":"other"}},"confirm":"`+plan["plan_id"].(string)+`"}`), "stale_plan")
+		`{"listing":{"en-US":{"keywords":"other"}},"plan_id":"`+plan["plan_id"].(string)+`"}`), "stale_plan")
 	if len(k.ASC.Mutations()) != 0 {
 		t.Error("mutated")
 	}

@@ -4,17 +4,24 @@
       {
         "id": "200",
         "name": "Sikt",
-        "bundleId": "se.jvcr.sift",
+        "bundle_id": "se.jvcr.sift",
         "sku": "SIFT",
-        "primaryLocale": "sv",
+        "primary_locale": "sv",
         "platforms": [
           "IOS",
           "MAC_OS"
+        ],
+        "in_flight": [
+          {
+            "version": "1.2",
+            "platform": "MAC_OS",
+            "app_version_state": "WAITING_FOR_REVIEW"
+          }
         ]
       }
     ],
     "matched": 1,
     "returned": 1,
-    "total": 3
+    "total": 4
   }
 }

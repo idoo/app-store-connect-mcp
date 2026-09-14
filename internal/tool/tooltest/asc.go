@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,8 +42,10 @@ type route struct {
 // "?k=v" suffix requires those query values. Several responses registered
 // for the same route are served in order, the last one repeating.
 // Unmatched requests fail the test. Like the real client, it refuses any
-// non-GET request lacking Request.Write and the context write capability,
-// and it retries a 404 GET flagged with [ascrules.WithEventualConsistency].
+// non-GET request lacking Request.Write, the context write capability or
+// writes enabled ([FakeASC.SetAllowWrites]; on by default), it wraps
+// third-party text with [tool.WrapUntrusted], and it retries a 404 GET
+// flagged with [ascrules.WithEventualConsistency].
 // When Spec is set (as [New] does), every request must validate against it
 // (method, path, query and body) or the test fails.
 type FakeASC struct {
@@ -59,10 +62,19 @@ type FakeASC struct {
 	// SkipSpecCheck disables the Spec validation for tests that send
 	// deliberately invalid or unlisted requests.
 	SkipSpecCheck bool
+	// FreeText is passed to [tool.WrapUntrusted], like asc.Options.FreeText
+	// ([New] sets it from the pinned spec).
+	FreeText func(resourceType string) []string
+	// writesOff mirrors the asc.Client read-only guard (inverted so the
+	// zero value allows writes).
+	writesOff atomic.Bool
 }
 
 // NewFakeASC returns an empty FakeASC that does not validate requests.
 func NewFakeASC(t testing.TB) *FakeASC { return &FakeASC{t: t} }
+
+// SetAllowWrites switches the read-only guard, like asc.Client.SetAllowWrites.
+func (f *FakeASC) SetAllowWrites(on bool) { f.writesOff.Store(!on) }
 
 // Handle registers an inline response body (JSON or raw).
 func (f *FakeASC) Handle(method, pattern string, status int, body string) *FakeASC {
@@ -214,7 +226,7 @@ func (f *FakeASC) serveOnce(ctx context.Context, req tool.Request) (Fixture, err
 	}
 	f.mu.Unlock()
 
-	if req.Method != http.MethodGet && (!req.Write || !tool.IsWrite(ctx)) {
+	if req.Method != http.MethodGet && (!req.Write || f.writesOff.Load() || !tool.IsWrite(ctx)) {
 		return Fixture{}, fmt.Errorf("%s %s: %w", req.Method, req.Path, tool.ErrWritesDisabled)
 	}
 	if hit == nil {
@@ -252,6 +264,8 @@ func (f *FakeASC) Do(ctx context.Context, req tool.Request) (*tool.Response, err
 	if err != nil {
 		return nil, err
 	}
+	tool.WrapUntrusted(doc.Data, f.FreeText)
+	tool.WrapUntrusted(doc.Included, f.FreeText)
 	return &tool.Response{
 		Status: fx.Status, Header: fx.Header, Data: doc.Data, Collection: doc.Collection,
 		Included: doc.Included, Meta: doc.Meta, Links: doc.Links, Body: fx.Body,

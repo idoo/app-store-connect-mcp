@@ -308,7 +308,7 @@ func TestReleaseStatusDesiredPlans(t *testing.T) {
 	if !slices.Equal(p.SkippedLocales, []string{"fr-FR"}) {
 		t.Errorf("skipped = %v", p.SkippedLocales)
 	}
-	if len(res.Next) != 2 || res.Next[0].Tool != "release_prepare" || res.Next[0].Args["confirm"] != p.PreparePlanID || res.Next[1].Tool != "release_submit" {
+	if len(res.Next) != 2 || res.Next[0].Tool != "release_prepare" || res.Next[0].Args["plan_id"] != p.PreparePlanID || res.Next[1].Tool != "release_submit" {
 		t.Errorf("next = %+v", res.Next)
 	}
 

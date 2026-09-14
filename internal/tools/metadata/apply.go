@@ -28,7 +28,7 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "metadata_apply", Toolset: tool.Metadata, Class: tool.Write, Confirm: tool.ConfirmByPlan,
 		Title: "Apply store listing changes",
-		Description: "Applies a metadata_plan: pass the same arguments plus confirm=plan_id. Refused if the listing changed " +
+		Description: "Applies a metadata_plan: pass the same arguments plus plan_id. Refused if the listing changed " +
 			"since planning. Creates missing locales; deletes only locales in remove. For release notes only, use release_prepare.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, metadataApply))
@@ -48,7 +48,7 @@ func metadataApply(ctx context.Context, env *tool.Env, in applyIn) (*tool.Result
 	case statusNoChanges:
 		return tool.Already(out), nil
 	}
-	wctx, res := tool.Preview(ctx, env, in.Confirm, p.key, p.plan.Fingerprint(), p.preview())
+	wctx, res := tool.Preview(ctx, env, in.PlanID, p.key, p.plan.Fingerprint(), p.preview())
 	if res != nil {
 		return res, nil
 	}

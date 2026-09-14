@@ -94,13 +94,6 @@ func (s *Server) Handle(method, pattern string, status int, body string) *Server
 	return s.HandleResponse(method, pattern, Response{Status: status, Body: []byte(body)})
 }
 
-// HandleFile queues a response whose body is the fixture at path (see
-// [Fixture] for path resolution).
-func (s *Server) HandleFile(method, pattern string, status int, path string) *Server {
-	s.t.Helper()
-	return s.HandleResponse(method, pattern, Response{Status: status, Body: Fixture(s.t, path)})
-}
-
 // HandleResponse queues a full response for method+pattern.
 func (s *Server) HandleResponse(method, pattern string, resp Response) *Server {
 	s.t.Helper()

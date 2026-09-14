@@ -105,6 +105,7 @@ func canElicit(ss *mcp.ServerSession) bool {
 // {data, next, _meta:{hamn}}, the text content is its compact JSON (or
 // Result.Text), images follow, and everything is capped and redacted.
 func (s *session) render(r *tool.Result) *mcp.CallToolResult {
+	s.markLocked(r)
 	data, trunc, err := asc.CapResult(r.Data, s.deps.MaxResultBytes)
 	if err != nil {
 		r = tool.Fail(fmt.Errorf("%w: render result: %v", tool.ErrInternal, err))

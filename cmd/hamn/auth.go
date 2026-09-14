@@ -343,10 +343,11 @@ func authList(stdout, stderr io.Writer) error {
 
 // probeApple calls GET /v1/apps?limit=1 with the resolved profile.
 func probeApple(ctx context.Context, r *config.Resolved) (*asc.Client, *tool.Response, error) {
-	c, err := app.NewClient(ctx, r, buildVersion(), nil, true)
+	c, err := app.NewClient(ctx, r, buildVersion(), nil)
 	if err != nil {
 		return nil, nil, err
 	}
+	c.SetAllowWrites(false) // the probe only reads
 	resp, err := c.Get(ctx, "/v1/apps", url.Values{"limit": {"1"}})
 	if err != nil {
 		return c, nil, fmt.Errorf("GET /v1/apps: %w", err)
