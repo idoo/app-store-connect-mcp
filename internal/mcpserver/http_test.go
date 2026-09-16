@@ -163,3 +163,42 @@ func TestSessionFactoryServesInitialize(t *testing.T) {
 		t.Errorf("initialize = %d %q", rec.Code, rec.Body.String())
 	}
 }
+
+// countingASC records Do calls; other methods are unused.
+type countingASC struct {
+	tool.ASC
+	calls int
+}
+
+func (c *countingASC) Do(context.Context, tool.Request) (*tool.Response, error) {
+	c.calls++
+	return &tool.Response{}, nil
+}
+
+func TestSessionWritesAreSessionScoped(t *testing.T) {
+	base := &countingASC{}
+	var shared []bool
+	deps := Deps{Profile: tool.ProfileInfo{Name: "p"}}
+	deps.Env.ASC = base
+	deps.Env.SetWrites = func(on bool) { shared = append(shared, on) }
+
+	a, b := sessionDeps(deps), sessionDeps(deps)
+	post := tool.Request{Method: http.MethodPost, Path: "/v1/things", Write: true}
+	a.Env.SetWrites(true)
+	if _, err := a.Env.ASC.Do(context.Background(), post); err != nil {
+		t.Fatalf("session A after enable_writes: %v", err)
+	}
+	if _, err := b.Env.ASC.Do(context.Background(), post); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("session B write err = %v, want ErrWritesDisabled", err)
+	}
+	if _, err := b.Env.ASC.Do(context.Background(), tool.Request{Path: "/v1/apps"}); err != nil {
+		t.Fatalf("session B read: %v", err)
+	}
+	a.Env.SetWrites(false)
+	if _, err := a.Env.ASC.Do(context.Background(), post); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("session A after disable err = %v", err)
+	}
+	if base.calls != 2 || len(shared) != 1 || !shared[0] {
+		t.Fatalf("base calls = %d, shared SetWrites = %v", base.calls, shared)
+	}
+}

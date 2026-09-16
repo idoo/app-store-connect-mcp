@@ -2,11 +2,10 @@ package screenshots
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
+	"hash/crc32"
 	"net/http"
 	"path"
 	"slices"
@@ -89,35 +88,28 @@ func doc(t *testing.T, data any, included ...jres) []byte {
 	return b
 }
 
-// pngCache memoizes generated PNGs: full-size images are slow to encode
-// under -race.
-var pngCache sync.Map
+// pngChunk encodes one PNG chunk with its CRC.
+func pngChunk(typ string, data []byte) []byte {
+	b := binary.BigEndian.AppendUint32(nil, uint32(len(data)))
+	b = append(append(b, typ...), data...)
+	return binary.BigEndian.AppendUint32(b, crc32.ChecksumIEEE(b[4:]))
+}
 
-// pngImage encodes a w×h PNG; alpha makes it transparent (RGBA color type),
-// seed varies the content (and checksum).
+// pngImage builds a header-only w×h PNG (IHDR, tEXt, IEND): validation
+// reads only the header, so no pixels are encoded. alpha selects the RGBA
+// color type; seed varies the content (and checksum).
 func pngImage(t *testing.T, w, h int, alpha bool, seed uint8) []byte {
 	t.Helper()
-	key := fmt.Sprintf("%dx%d/%t/%d", w, h, alpha, seed)
-	if b, ok := pngCache.Load(key); ok {
-		return b.([]byte)
-	}
-	var img image.Image
+	colorType := byte(0) // gray
 	if alpha {
-		a := image.NewAlpha(image.Rect(0, 0, w, h))
-		a.SetAlpha(0, 0, color.Alpha{A: seed})
-		img = a
-	} else {
-		g := image.NewGray(image.Rect(0, 0, w, h))
-		g.SetGray(0, 0, color.Gray{Y: seed})
-		img = g
+		colorType = 6 // RGBA
 	}
-	var buf bytes.Buffer
-	enc := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err := enc.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	pngCache.Store(key, buf.Bytes())
-	return buf.Bytes()
+	ihdr := binary.BigEndian.AppendUint32(nil, uint32(w))
+	ihdr = binary.BigEndian.AppendUint32(ihdr, uint32(h))
+	ihdr = append(ihdr, 8, colorType, 0, 0, 0)
+	b := append([]byte("\x89PNG\r\n\x1a\n"), pngChunk("IHDR", ihdr)...)
+	b = append(b, pngChunk("tEXt", []byte{'s', 'e', 'e', 'd', 0, '0' + seed%10, 'a' + seed/10%26})...)
+	return append(b, pngChunk("IEND", nil)...)
 }
 
 // fake is a stateful App Store Connect fake for screenshot sets.

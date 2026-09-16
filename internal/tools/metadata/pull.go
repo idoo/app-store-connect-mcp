@@ -5,7 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
+	"net/url"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/idoo/hamn/internal/metadata"
 	"github.com/idoo/hamn/internal/tool"
@@ -20,13 +24,19 @@ type pullIn struct {
 }
 
 type pullOut struct {
-	App       appOut                            `json:"app"`
-	Platform  tool.Platform                     `json:"platform"`
-	Version   versionOut                        `json:"version"`
-	AppInfo   *appInfoOut                       `json:"app_info,omitempty"`
-	Locales   map[string]*metadata.LocaleFields `json:"locales"`
-	ExportDir string                            `json:"export_dir,omitempty"`
-	Written   []string                          `json:"written,omitempty"`
+	App      appOut        `json:"app"`
+	Platform tool.Platform `json:"platform"`
+	Version  versionOut    `json:"version"`
+	// Source is "editable" or "live"; Reason explains a live fallback.
+	Source           string                            `json:"source"`
+	Reason           string                            `json:"reason,omitempty"`
+	InFlight         *versionOut                       `json:"in_flight,omitempty"`
+	AppInfo          *appInfoOut                       `json:"app_info,omitempty"`
+	Locales          map[string]*metadata.LocaleFields `json:"locales"`
+	MissingLocales   []string                          `json:"missing_locales,omitempty"`
+	AvailableLocales []string                          `json:"available_locales,omitempty"`
+	ExportDir        string                            `json:"export_dir,omitempty"`
+	Written          []string                          `json:"written,omitempty"`
 }
 
 func init() {
@@ -55,7 +65,22 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 		}
 	}
 	infoID := ""
-	out := pullOut{App: t.appOut(), Platform: t.Platform, Version: t.versionOut()}
+	out := pullOut{App: t.appOut(), Platform: t.Platform, Version: t.versionOut(), Source: "editable"}
+	switch {
+	case t.Version.State == versionStateLive:
+		out.Source = "live"
+	case slices.Contains(inFlightLocked, t.Version.State):
+		out.Source = "in_flight"
+	}
+	if t.FellBack {
+		if out.InFlight, err = inFlightVersion(ctx, env, t.App.ID, t.Platform); err != nil {
+			return nil, err
+		}
+		out.Reason = "no editable version"
+		if out.InFlight != nil {
+			out.Reason = fmt.Sprintf("version %s is %s and not editable", out.InFlight.Version, out.InFlight.State)
+		}
+	}
 	if info != nil {
 		infoID = info.ID
 		out.AppInfo = &appInfoOut{ID: info.ID, State: info.Str("state")}
@@ -73,13 +98,25 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 		for _, code := range want {
 			if lf, ok := listing.Locales[code]; ok {
 				kept[code] = lf
+			} else {
+				out.MissingLocales = append(out.MissingLocales, code)
 			}
+		}
+		if len(out.MissingLocales) > 0 {
+			out.AvailableLocales = slices.Sorted(maps.Keys(listing.Locales))
 		}
 		listing.Locales = kept
 	}
 	out.Locales = listing.Locales
 
 	res := tool.OK(&out)
+	if len(out.MissingLocales) > 0 {
+		res.Warn(fmt.Sprintf("version %s has no listing for %s (available: %s); add one via metadata_plan with listing.locales.<locale>",
+			t.Version.String, strings.Join(out.MissingLocales, ", "), strings.Join(out.AvailableLocales, ", ")))
+	}
+	if out.Reason != "" {
+		res.Warn("showing the live version " + t.Version.String + ": " + out.Reason)
+	}
 	if in.ExportDir != "" {
 		if err := checkExportDir(env.Files, in.ExportDir); err != nil {
 			return nil, err
@@ -92,7 +129,35 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 		}
 		res.Warn("wrote local files only; nothing changed in App Store Connect")
 	}
+	if out.InFlight != nil || out.Source == "in_flight" {
+		return res.Then(tool.NextStep{Tool: "release_review_status", Args: map[string]any{"app": t.App.ID, "platform": string(t.Platform)}}), nil
+	}
+	if t.FellBack {
+		return res.Then(tool.NextStep{Tool: "release_prepare", Args: map[string]any{"app": t.App.ID, "platform": string(t.Platform)}}), nil
+	}
 	return res.Then(tool.NextStep{Tool: "metadata_plan", Args: map[string]any{"app": t.App.ID, "version": t.Version.String}}), nil
+}
+
+// inFlightLocked are submitted-but-unreleased version states (not editable).
+var inFlightLocked = []string{"WAITING_FOR_REVIEW", "IN_REVIEW", "ACCEPTED", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_DISTRIBUTION"}
+
+// inFlightVersion returns the app's newest submitted-but-unreleased version
+// of platform, or nil.
+func inFlightVersion(ctx context.Context, env *tool.Env, appID string, platform tool.Platform) (*versionOut, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/apps/"+appID+"/appStoreVersions", url.Values{
+		"filter[platform]":         {string(platform)},
+		"filter[appVersionState]":  {strings.Join(inFlightLocked, ",")},
+		"fields[appStoreVersions]": {"versionString,appVersionState"},
+		"limit":                    {"1"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list in-flight versions: %w", err)
+	}
+	v, ok := resp.First()
+	if !ok {
+		return nil, nil
+	}
+	return &versionOut{ID: v.ID, Version: v.Str("versionString"), State: v.Str("appVersionState")}, nil
 }
 
 // checkExportDir refuses to write into an existing non-empty directory unless

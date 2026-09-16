@@ -2,8 +2,9 @@ package spec
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -111,11 +112,11 @@ func paramType(p Param) string {
 // optional attribute without a skeleton that would overwrite them.
 func bodyParams(b *Body) []tool.Param {
 	var out []tool.Param
-	for _, name := range sortedKeys(b.Attrs) {
+	for _, name := range slices.Sorted(maps.Keys(b.Attrs)) {
 		a := b.Attrs[name]
 		out = append(out, tool.Param{Name: "data.attributes." + name, In: "body", Required: a.Required, Type: a.Type, Enum: a.Enum})
 	}
-	for _, name := range sortedKeys(b.Rels) {
+	for _, name := range slices.Sorted(maps.Keys(b.Rels)) {
 		r := b.Rels[name]
 		t := "relationship"
 		if r.Many {
@@ -184,16 +185,6 @@ func placeholder(a Attr) any {
 		return "<" + a.Format + ">"
 	}
 	return placeholderString
-}
-
-// sortedKeys returns the keys of m in ascending order.
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 // joinLimited joins up to n values, noting how many were omitted.

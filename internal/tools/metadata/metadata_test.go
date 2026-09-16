@@ -360,6 +360,44 @@ func TestAppinfoUnknownCategoryAndAgeAttr(t *testing.T) {
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "appinfo_update"), k.Env, `{"age_rating":{"colour":"red"}}`), "invalid_arguments")
 }
 
+func TestPullReportsMissingLocales(t *testing.T) {
+	k := kit(t)
+	listing(k)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_pull"), k.Env, `{"app":"Hjul","locales":["sv","en"]}`))
+	out := decode(t, res)
+	if got := mustJSON(t, out["missing_locales"]); got != `["sv"]` {
+		t.Errorf("missing_locales = %s", got)
+	}
+	if got := mustJSON(t, out["available_locales"]); got != `["de-DE","en-US"]` {
+		t.Errorf("available_locales = %s", got)
+	}
+	if len(res.Meta.Warnings) == 0 || !strings.Contains(res.Meta.Warnings[0], "no listing for sv") {
+		t.Errorf("warnings = %v", res.Meta.Warnings)
+	}
+	if out["source"] != "editable" || len(res.Next) != 1 || res.Next[0].Tool != "metadata_plan" {
+		t.Errorf("source = %v next = %+v", out["source"], res.Next)
+	}
+}
+
+func TestPullLiveFallbackNamesInFlightVersion(t *testing.T) {
+	k := kit(t)
+	delete(k.Resolve.Versions, tool.VersionEditable)
+	listing(k)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions", http.StatusOK,
+		`{"data":[{"type":"appStoreVersions","id":"v2","attributes":{"versionString":"1.1","appVersionState":"WAITING_FOR_REVIEW"}}]}`)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_pull"), k.Env, `{"app":"Hjul"}`))
+	out := decode(t, res)
+	if out["source"] != "live" || out["reason"] != "version 1.1 is WAITING_FOR_REVIEW and not editable" {
+		t.Errorf("source = %v reason = %v", out["source"], out["reason"])
+	}
+	if len(res.Next) != 1 || res.Next[0].Tool != "release_review_status" {
+		t.Errorf("next = %+v", res.Next)
+	}
+	if q := k.ASC.RequestsTo(http.MethodGet, "/v1/apps/{id}/appStoreVersions"); len(q) != 1 || !strings.Contains(q[0].Query.Get("filter[appVersionState]"), "WAITING_FOR_REVIEW") {
+		t.Errorf("in-flight lookup = %+v", q)
+	}
+}
+
 func mustJSON(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)

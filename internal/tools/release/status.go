@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/idoo/hamn/internal/applemeta"
@@ -35,10 +36,27 @@ func init() {
 type statusVersion struct {
 	ID              string        `json:"id,omitempty"`
 	String          string        `json:"string"`
-	AppVersionState string        `json:"appVersionState,omitempty"`
+	AppVersionState string        `json:"app_version_state,omitempty"`
 	Platform        tool.Platform `json:"platform"`
 	ReleaseType     string        `json:"release_type,omitempty"`
 	Exists          bool          `json:"exists"`
+}
+
+// statusOption is an optional follow-up the user may choose; it is never a
+// fix and never a `next` step.
+type statusOption struct {
+	Tool   string         `json:"tool"`
+	Args   map[string]any `json:"args,omitempty"`
+	Reason string         `json:"reason"`
+}
+
+// statusInFlight is a submitted-but-unreleased version reported when no
+// editable version exists.
+type statusInFlight struct {
+	ID              string         `json:"id"`
+	String          string         `json:"string"`
+	AppVersionState string         `json:"app_version_state"`
+	Options         []statusOption `json:"options,omitempty"`
 }
 
 type statusBuild struct {
@@ -49,11 +67,24 @@ type statusBuild struct {
 	UsesNonExemptEncryption *bool  `json:"uses_non_exempt_encryption"`
 }
 
+// Release phases (statusSummary.Phase).
+const (
+	phasePreparing      = "preparing"
+	phaseMissing        = "no_version"
+	phaseInReview       = "in_review"
+	phasePendingRelease = "pending_release"
+	phaseReleased       = "released"
+)
+
 type statusSummary struct {
-	OK    int  `json:"ok"`
-	Warn  int  `json:"warn"`
-	Block int  `json:"block"`
-	Ready bool `json:"ready"`
+	OK     int    `json:"ok"`
+	Warn   int    `json:"warn"`
+	Block  int    `json:"block"`
+	Info   int    `json:"info,omitempty"`
+	Manual int    `json:"manual,omitempty"`
+	Phase  string `json:"phase"`
+	// Ready (no blocks) is reported only while a version is being prepared.
+	Ready *bool `json:"ready,omitempty"`
 }
 
 type statusPlan struct {
@@ -65,15 +96,16 @@ type statusPlan struct {
 }
 
 type statusOut struct {
-	App          tool.App       `json:"app"`
-	Version      statusVersion  `json:"version"`
-	Build        *statusBuild   `json:"build,omitempty"`
-	Checks       []check        `json:"checks"`
-	Submission   map[string]any `json:"submission,omitempty"`
-	PhasedState  string         `json:"phased_release,omitempty"`
-	Summary      statusSummary  `json:"summary"`
-	Plan         *statusPlan    `json:"plan,omitempty"`
-	AppStoreLink string         `json:"app_store_connect"`
+	App          tool.App        `json:"app"`
+	Version      statusVersion   `json:"version"`
+	InFlight     *statusInFlight `json:"in_flight,omitempty"`
+	Build        *statusBuild    `json:"build,omitempty"`
+	Checks       []check         `json:"checks"`
+	Submission   map[string]any  `json:"submission,omitempty"`
+	PhasedState  string          `json:"phased_release,omitempty"`
+	Summary      statusSummary   `json:"summary"`
+	Plan         *statusPlan     `json:"plan,omitempty"`
+	AppStoreLink string          `json:"app_store_connect"`
 }
 
 func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Result, error) {
@@ -115,12 +147,34 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 			out.Summary.OK++
 		case statusWarn:
 			out.Summary.Warn++
+		case statusInfo:
+			out.Summary.Info++
+		case statusManual:
+			out.Summary.Manual++
 		default:
 			out.Summary.Block++
 		}
 	}
-	out.Summary.Ready = out.Summary.Block == 0
+	out.Summary.Phase = releasePhase(s)
+	if out.Summary.Phase == phasePreparing {
+		ready := out.Summary.Block == 0
+		out.Summary.Ready = &ready
+	}
 	res := tool.OK(&out)
+	reviewNext := tool.NextStep{Tool: "release_review_status", Args: map[string]any{"app": app.ID, "platform": string(platform)}}
+	if s.Version == nil && !concreteVersion(ref) && s.InFlight != nil {
+		f := s.InFlight
+		out.InFlight = &statusInFlight{ID: f.ID, String: f.Str("versionString"), AppVersionState: f.Str("appVersionState")}
+		if slices.Contains([]string{"WAITING_FOR_REVIEW", "IN_REVIEW"}, out.InFlight.AppVersionState) {
+			out.InFlight.Options = []statusOption{{
+				Tool: "release_cancel", Args: map[string]any{"app": app.ID, "platform": string(platform)},
+				Reason: "only if the user wants to change " + out.InFlight.String + " before review; withdrawing loses its place in the review queue",
+			}}
+		}
+		res.Then(reviewNext)
+	} else if out.Summary.Phase == phaseInReview {
+		res.Then(reviewNext)
+	}
 	if in.Desired != nil {
 		plan, next, err := planRelease(ctx, env, s, in)
 		if err != nil {
@@ -130,12 +184,36 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 		res.Then(next...)
 	}
 	for _, c := range out.Checks {
-		if c.Status != statusOK && c.FixVia != nil && c.FixVia.Tool != "" && in.Desired == nil {
+		if (c.Status == statusWarn || c.Status == statusBlock) && c.FixVia != nil && c.FixVia.Tool != "" && in.Desired == nil {
 			res.Then(tool.NextStep{Tool: c.FixVia.Tool, Args: map[string]any{"app": app.ID, "platform": string(platform)}})
 			break
 		}
 	}
 	return res, nil
+}
+
+// releasePhase classifies where the inspected version is in its lifecycle.
+func releasePhase(s *statusSnapshot) string {
+	if s.Version == nil {
+		if !concreteVersion(s.VersionRef) && s.InFlight != nil {
+			return phaseFor(s.InFlight.Str("appVersionState"))
+		}
+		return phaseMissing
+	}
+	return phaseFor(s.Version.Version.Str("appVersionState"))
+}
+
+func phaseFor(state string) string {
+	switch {
+	case state == "WAITING_FOR_REVIEW" || state == "IN_REVIEW":
+		return phaseInReview
+	case slices.Contains(lockedStates, state):
+		return phasePendingRelease
+	case slices.Contains(releasedStates, state):
+		return phaseReleased
+	default:
+		return phasePreparing
+	}
 }
 
 // loadStatusSnapshot reads everything the preflight needs: 8 GETs plus one
@@ -154,8 +232,15 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 	}
 	s.AppAttrs, _ = appResp.First()
 	for _, v := range appResp.Included {
-		if v.Type == "appStoreVersions" && v.Str("platform") == string(platform) && slices.Contains(releasedStates, v.Str("appVersionState")) {
+		if v.Type != "appStoreVersions" || v.Str("platform") != string(platform) {
+			continue
+		}
+		st := v.Str("appVersionState")
+		if slices.Contains(releasedStates, st) {
 			s.PriorReleased = true
+		}
+		if slices.Contains(lockedStates, st) && (s.InFlight == nil || newerVersion(v.Str("versionString"), s.InFlight.Str("versionString"))) {
+			s.InFlight = &v
 		}
 	}
 
@@ -182,8 +267,15 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 	if s.PriceSet, err = exists(ctx, env, "/v1/apps/"+app.ID+"/appPriceSchedule", url.Values{"include": {"baseTerritory"}}); err != nil {
 		return nil, err
 	}
-	if s.AvailabilitySet, err = exists(ctx, env, "/v1/apps/"+app.ID+"/appAvailabilityV2", nil); err != nil {
+	availID, err := availabilityID(ctx, env, app.ID)
+	if err != nil {
 		return nil, err
+	}
+	s.AvailabilitySet = availID != ""
+	if availID != "" && len(unansweredKorea(s.AgeRating)) > 0 {
+		if s.KoreaAvailable, err = koreaAvailable(ctx, env, availID); err != nil {
+			return nil, err
+		}
 	}
 	if sub, ok, err := fetchOpenSubmission(ctx, env, app.ID, platform); err != nil {
 		return nil, err
@@ -271,6 +363,59 @@ func exists(ctx context.Context, env *tool.Env, path string, q url.Values) (bool
 	default:
 		return false, fmt.Errorf("get %s: %w", path, err)
 	}
+}
+
+// availabilityID returns the app's appAvailabilities (v2) id, "" when none.
+func availabilityID(ctx context.Context, env *tool.Env, appID string) (string, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/apps/"+appID+"/appAvailabilityV2", nil)
+	switch {
+	case err == nil:
+		if r, ok := resp.First(); ok {
+			return r.ID, nil
+		}
+		return "", nil
+	case isNotFound(err):
+		return "", nil
+	default:
+		return "", fmt.Errorf("get app availability: %w", err)
+	}
+}
+
+// koreaAvailable reports whether the app is available in South Korea (KOR).
+func koreaAvailable(ctx context.Context, env *tool.Env, availID string) (*bool, error) {
+	res, err := env.ASC.List(ctx, "/v2/appAvailabilities/"+availID+"/territoryAvailabilities", tool.ListOptions{
+		Fields:   map[string][]string{"territoryAvailabilities": {"available", "territory"}},
+		MaxItems: 500,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list territory availabilities: %w", err)
+	}
+	no := false
+	for _, t := range res.Data {
+		if t.RelID("territory") == "KOR" {
+			yes, _ := t.Bool("available")
+			return &yes, nil
+		}
+	}
+	return &no, nil
+}
+
+// newerVersion reports a > b for dotted numeric version strings.
+func newerVersion(a, b string) bool {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := range max(len(as), len(bs)) {
+		var x, y int
+		if i < len(as) {
+			x, _ = strconv.Atoi(as[i])
+		}
+		if i < len(bs) {
+			y, _ = strconv.Atoi(bs[i])
+		}
+		if x != y {
+			return x > y
+		}
+	}
+	return false
 }
 
 func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {

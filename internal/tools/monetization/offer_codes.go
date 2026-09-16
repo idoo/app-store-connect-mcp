@@ -17,17 +17,18 @@ import (
 const (
 	offerCodeOneTime = "one_time"
 	offerCodeCustom  = "custom"
-	// offerShowCodes is how many one-time code values a result echoes.
-	offerShowCodes = 20
+	// offerCodesDir is where one-time code values are written (confined files).
+	offerCodesDir = "offer-codes"
 )
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "offer_codes_generate", Toolset: tool.Monetization, Class: tool.Write,
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Generate subscription offer codes",
-		Description: "Generate one-time codes (returns the first 20 values + count; batch_id re-fetches values) or a custom " +
-			"code for an offer-code campaign (offers_create kind offer_code). Code values are redeemable secrets: do not " +
-			"post them publicly.",
+		Description: "Generate one-time codes or a custom code for an offer-code campaign (offers_create kind offer_code); " +
+			"needs confirm:true and human approval. One-time code values are written to offer-codes/<batch_id>.csv " +
+			"(path + count returned, never the values); batch_id re-downloads them.",
 		Enums: map[string][]any{"type": {offerCodeOneTime, offerCodeCustom}, "environment": {"PRODUCTION", "SANDBOX"}},
 	}, offerCodesGenerate))
 }
@@ -42,21 +43,22 @@ type offerCodesIn struct {
 	ExpirationDate string      `json:"expiration_date,omitempty" jsonschema:"YYYY-MM-DD; required for one_time"`
 	CustomCode     string      `json:"custom_code,omitempty" jsonschema:"custom: the code customers type"`
 	Environment    string      `json:"environment,omitempty" jsonschema:"one_time: default PRODUCTION"`
-	BatchID        string      `json:"batch_id,omitempty" jsonschema:"existing one-time batch id: only download its values"`
+	BatchID        string      `json:"batch_id,omitempty" jsonschema:"existing one-time batch id: only download its values to a file"`
+	tool.ConfirmFlag
 }
 
 type offerCodesResultOut struct {
-	OfferCodeID    string   `json:"offer_code_id,omitempty"`
-	Type           string   `json:"type"`
-	ID             string   `json:"id"`
-	NumberOfCodes  int      `json:"number_of_codes,omitempty"`
-	ExpirationDate string   `json:"expiration_date,omitempty"`
-	CustomCode     string   `json:"custom_code,omitempty"`
-	Active         *bool    `json:"active,omitempty"`
-	Count          int      `json:"count,omitempty"`
-	Codes          []string `json:"codes,omitempty"`
-	ValuesPending  bool     `json:"values_pending,omitempty"`
-	Sensitive      string   `json:"sensitive,omitempty"`
+	OfferCodeID    string `json:"offer_code_id,omitempty"`
+	Type           string `json:"type"`
+	ID             string `json:"id"`
+	NumberOfCodes  int    `json:"number_of_codes,omitempty"`
+	ExpirationDate string `json:"expiration_date,omitempty"`
+	CustomCode     string `json:"custom_code,omitempty"`
+	Active         *bool  `json:"active,omitempty"`
+	Count          int    `json:"count,omitempty"`
+	File           string `json:"file,omitempty"`
+	ValuesPending  bool   `json:"values_pending,omitempty"`
+	Sensitive      string `json:"sensitive,omitempty"`
 }
 
 func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*tool.Result, error) {
@@ -73,6 +75,14 @@ func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*t
 	}
 	out := offerCodesResultOut{OfferCodeID: codeID, Type: in.Type, NumberOfCodes: in.NumberOfCodes, ExpirationDate: in.ExpirationDate}
 	rel := map[string]any{"offerCode": offerOne("subscriptionOfferCodes", codeID)}
+	preview := func(kind string, attrs map[string]any) tool.PlanPreview {
+		return tool.PlanPreview{
+			Summary:      fmt.Sprintf("generate %s offer code(s) on campaign %s", kind, codeID),
+			Affected:     []string{"POST /v1/" + kind, "subscriptionOfferCodes " + codeID},
+			Intended:     attrs,
+			Irreversible: []string{"generated codes are redeemable by anyone who obtains them until they expire"},
+		}
+	}
 	if in.Type == offerCodeCustom {
 		out.CustomCode = in.CustomCode
 		if r, ok, err := offerFindCustom(ctx, env, codeID, in.CustomCode); err != nil || ok {
@@ -86,7 +96,11 @@ func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*t
 		if in.ExpirationDate != "" {
 			attrs["expirationDate"] = in.ExpirationDate
 		}
-		r, err := offerPostDoc(ctx, env, "/v1/subscriptionOfferCodeCustomCodes", "subscriptionOfferCodeCustomCodes",
+		wctx, gres := tool.RequireConfirm(ctx, env, in.Confirm, preview("subscriptionOfferCodeCustomCodes", attrs))
+		if gres != nil {
+			return gres, nil
+		}
+		r, err := offerPostDoc(wctx, env, "/v1/subscriptionOfferCodeCustomCodes", "subscriptionOfferCodeCustomCodes",
 			offerDoc("subscriptionOfferCodeCustomCodes", attrs, rel, nil))
 		if err != nil {
 			if s12aConflict(err) {
@@ -104,7 +118,11 @@ func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*t
 	if in.Environment != "" {
 		attrs["environment"] = in.Environment
 	}
-	r, err := offerPostDoc(ctx, env, "/v1/subscriptionOfferCodeOneTimeUseCodes", "subscriptionOfferCodeOneTimeUseCodes",
+	wctx, gres := tool.RequireConfirm(ctx, env, in.Confirm, preview("subscriptionOfferCodeOneTimeUseCodes", attrs))
+	if gres != nil {
+		return gres, nil
+	}
+	r, err := offerPostDoc(wctx, env, "/v1/subscriptionOfferCodeOneTimeUseCodes", "subscriptionOfferCodeOneTimeUseCodes",
 		offerDoc("subscriptionOfferCodeOneTimeUseCodes", attrs, rel, nil))
 	if err != nil {
 		return nil, tool.WithNext(fmt.Errorf("create one-time codes: %w", err),
@@ -210,8 +228,9 @@ func offerFillCustom(out *offerCodesResultOut, r tool.Resource) {
 	}
 }
 
-// offerCodeValues downloads a one-time batch's code values (CSV). Apple
-// generates them asynchronously; a 404 or empty file means "not yet".
+// offerCodeValues downloads a one-time batch's code values (CSV) into the
+// confined file offer-codes/<batch_id>.csv; the values never reach the agent.
+// Apple generates them asynchronously; a 404 or empty file means "not yet".
 func offerCodeValues(ctx context.Context, env *tool.Env, out *offerCodesResultOut) (*tool.Result, error) {
 	body, _, err := env.ASC.Download(ctx, tool.Request{
 		Path: "/v1/subscriptionOfferCodeOneTimeUseCodes/" + url.PathEscape(out.ID) + "/values", Accept: "text/csv",
@@ -228,9 +247,26 @@ func offerCodeValues(ctx context.Context, env *tool.Env, out *offerCodesResultOu
 		out.ValuesPending = true
 		return tool.OK(out).Then(tool.NextStep{Tool: "offer_codes_generate", Args: map[string]any{"batch_id": out.ID}}), nil
 	}
+	if strings.ContainsAny(out.ID, `/\`) || out.ID == "." || out.ID == ".." {
+		return nil, s12aInvalid("batch id %q is not a valid file name", out.ID)
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{"code"})
+	for _, c := range codes {
+		_ = w.Write([]string{c})
+	}
+	w.Flush()
+	name := offerCodesDir + "/" + out.ID + ".csv"
+	if err := env.Files.WriteFile(name, buf.Bytes(), 0o600); err != nil {
+		return nil, fmt.Errorf("write code values: %w", err)
+	}
+	if abs, err := env.Files.Resolve(name); err == nil {
+		name = abs
+	}
 	out.Count = len(codes)
-	out.Codes = codes[:min(len(codes), offerShowCodes)]
-	out.Sensitive = "codes are redeemable secrets; share only with intended recipients"
+	out.File = name
+	out.Sensitive = "the file holds redeemable codes; share it only with intended recipients and never paste the values into chat"
 	return tool.OK(out), nil
 }
 

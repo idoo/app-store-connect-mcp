@@ -16,9 +16,12 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/idoo/hamn/internal/tool"
 )
 
 // EnvHTTPToken is the environment variable holding the HTTP bearer token.
@@ -171,19 +174,59 @@ func isLoopbackHost(host string) bool {
 // SessionFactory returns an [HTTPOptions.NewServer] that builds one server
 // per HTTP session from deps, so toolset and write-mode state stay per
 // session. Build failures are logged and answered with 400 by the SDK.
+//
+// All sessions share deps.Env.ASC (one token cache and rate limit per
+// profile), so each session wraps it in its own write guard: enable_writes in
+// one session opens the shared client but only that session's guard.
 func SessionFactory(deps Deps) func(*http.Request) *mcp.Server {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
 	return func(req *http.Request) *mcp.Server {
-		srv, err := Build(req.Context(), deps)
+		srv, err := Build(req.Context(), sessionDeps(deps))
 		if err != nil {
 			logger.Error("build session server", "err", err)
 			return nil
 		}
 		return srv
 	}
+}
+
+// sessionDeps returns deps for one HTTP session: its ASC client is wrapped in
+// a session write guard that starts at the profile's mode, and SetWrites
+// flips only that guard (opening the shared client when enabling).
+func sessionDeps(deps Deps) Deps {
+	if deps.Env.ASC == nil {
+		return deps
+	}
+	g := &sessionASC{ASC: deps.Env.ASC}
+	g.writes.Store(deps.Profile.AllowWrites)
+	shared := deps.Env.SetWrites
+	deps.Env.ASC = g
+	deps.Env.SetWrites = func(on bool) {
+		g.writes.Store(on)
+		if on && shared != nil {
+			shared(true) // other sessions stay closed by their own guards
+		}
+	}
+	return deps
+}
+
+// sessionASC is one HTTP session's view of the shared ASC client: non-GET
+// requests fail with tool.ErrWritesDisabled unless this session enabled
+// writes. The shared client's own guard still applies.
+type sessionASC struct {
+	tool.ASC
+	writes atomic.Bool
+}
+
+// Do implements [tool.ASC].
+func (s *sessionASC) Do(ctx context.Context, req tool.Request) (*tool.Response, error) {
+	if m := strings.ToUpper(req.Method); m != "" && m != http.MethodGet && !s.writes.Load() {
+		return nil, fmt.Errorf("session: %s %s: %w", m, req.Path, tool.ErrWritesDisabled)
+	}
+	return s.ASC.Do(ctx, req)
 }
 
 func generateToken(opts HTTPOptions) (string, error) {

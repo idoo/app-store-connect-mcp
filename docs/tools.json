@@ -576,7 +576,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "flag"
+    "confirm": "human"
   },
   {
     "name": "builds_list",
@@ -1169,7 +1169,7 @@
     "toolset": "monetization",
     "class": "W",
     "title": "Generate subscription offer codes",
-    "description": "Generate one-time codes (returns the first 20 values + count; batch_id re-fetches values) or a custom code for an offer-code campaign (offers_create kind offer_code). Code values are redeemable secrets: do not post them publicly.",
+    "description": "Generate one-time codes or a custom code for an offer-code campaign (offers_create kind offer_code); needs confirm:true and human approval. One-time code values are written to offer-codes/<batch_id>.csv (path + count returned, never the values); batch_id re-downloads them.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
@@ -1185,12 +1185,16 @@
           "type": "string"
         },
         "batch_id": {
-          "description": "existing one-time batch id: only download its values",
+          "description": "existing one-time batch id: only download its values to a file",
           "type": "string"
         },
         "campaign": {
           "description": "offer-code campaign name",
           "type": "string"
+        },
+        "confirm": {
+          "description": "set true only after reviewing the preview of this exact call",
+          "type": "boolean"
         },
         "custom_code": {
           "description": "custom: the code customers type",
@@ -1233,14 +1237,14 @@
     },
     "default_toolset": false,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "human"
   },
   {
     "name": "offers_create",
     "toolset": "monetization",
     "class": "W",
     "title": "Create a subscription offer",
-    "description": "Create an intro (one per territory), promotional, win-back or offer-code offer on a subscription. Prices by customer price or price_point_id; equalize:true expands one price to all territories. An offer with the same name/identifier (intro: territory) is reported as already.",
+    "description": "Create an intro (per territory), promotional, win-back or offer-code offer on a subscription. Prices by customer price or price_point_id; equalize:true expands one price to all territories. Needs confirm:true and human approval; a same-name offer is already.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -1261,6 +1265,10 @@
             "null",
             "boolean"
           ]
+        },
+        "confirm": {
+          "description": "set true only after reviewing the preview of this exact call",
+          "type": "boolean"
         },
         "customer_eligibilities": {
           "description": "offer code: who may redeem",
@@ -1411,7 +1419,7 @@
     },
     "default_toolset": false,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "human"
   },
   {
     "name": "offers_list",
@@ -1628,14 +1636,14 @@
     },
     "default_toolset": false,
     "needs_team_key": false,
-    "confirm": "plan"
+    "confirm": "human"
   },
   {
     "name": "pricing_get",
     "toolset": "monetization",
     "class": "R",
     "title": "Get current prices",
-    "description": "Current price schedule of an app, IAP or subscription: base territory, manual prices, prices in effect per territory (requested territories or top 20, with total count), scheduled changes; app availability summary.",
+    "description": "Current prices of an app, IAP or subscription: base territory, prices in effect per territory (requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids or product ids) returns each one's base price and territory count.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -1649,6 +1657,10 @@
           "description": "app id, bundle id, SKU or name; default: pinned app",
           "type": "string"
         },
+        "for_plan": {
+          "description": "include price_point_id per row",
+          "type": "boolean"
+        },
         "kind": {
           "description": "default app",
           "enum": [
@@ -1659,8 +1671,18 @@
           "type": "string"
         },
         "product_id": {
-          "description": "product id of the IAP or subscription",
+          "description": "IAP or subscription: product id or the id from iap_list/subscriptions_list",
           "type": "string"
+        },
+        "products": {
+          "description": "up to 10 product ids or ids of kind iap/subscription; compact summary per product",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "territories": {
           "description": "3-letter codes to show; default: top 20 storefronts",
@@ -1845,7 +1867,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "flag"
+    "confirm": "human"
   },
   {
     "name": "release_phased",
@@ -2031,7 +2053,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "flag"
+    "confirm": "human"
   },
   {
     "name": "release_review_status",
@@ -2227,7 +2249,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "plan"
+    "confirm": "human"
   },
   {
     "name": "reviews_list",
@@ -3431,7 +3453,7 @@
     "toolset": "testflight",
     "class": "W",
     "title": "Distribute a TestFlight build",
-    "description": "Give a build (default latest) to beta groups: answers export compliance, sets What to Test per locale (* = all), beta review contact and beta app info, adds it to groups, submits external beta review. Processing builds or unanswered compliance return without writing.",
+    "description": "Give a build (default latest) to beta groups: answers export compliance, sets What to Test per locale (* = all), beta review info, adds it to groups, submits external beta review. External or public distribution and compliance answers need confirm:true and human approval.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -3509,6 +3531,10 @@
           "description": "build number, id, latest (default) or latest-valid",
           "type": "string"
         },
+        "confirm": {
+          "description": "set true only after reviewing the preview of this exact call",
+          "type": "boolean"
+        },
         "groups": {
           "description": "1-20 beta group names or ids",
           "items": {
@@ -3551,7 +3577,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "flag"
   },
   {
     "name": "testflight_feedback_list",
@@ -3662,7 +3688,7 @@
     "toolset": "testflight",
     "class": "W",
     "title": "Add TestFlight testers",
-    "description": "Add or invite up to 100 testers (email, optional names) to a beta group. New emails are invited; existing testers are linked; members are reported as already. Returns added|already|error per email. External groups need a beta-approved build before invites go out.",
+    "description": "Add or invite up to 100 testers (email, optional names) to a beta group. New emails are invited; existing testers are linked; members are reported as already. External groups need confirm:true and human approval after a preview.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -3676,6 +3702,10 @@
         "app": {
           "description": "app id, bundle id, SKU or name; default: pinned app",
           "type": "string"
+        },
+        "confirm": {
+          "description": "set true only after reviewing the preview of this exact call",
+          "type": "boolean"
         },
         "group": {
           "description": "beta group name or id",
@@ -3715,7 +3745,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "flag"
   },
   {
     "name": "testflight_testers_list",
@@ -3831,7 +3861,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "flag"
+    "confirm": "human"
   },
   {
     "name": "toolsets",

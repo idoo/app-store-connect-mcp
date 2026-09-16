@@ -21,11 +21,16 @@ env:
 
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    name: test (${{ matrix.os }}, go ${{ matrix.go }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        go: ["1.26.x"]
+        include:
+          # go.mod's minimum toolchain, so newer-only APIs fail CI.
+          - os: ubuntu-latest
+            go: "1.25.x"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,7 +38,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: ${{ matrix.go }}
           check-latest: true
       - run: go vet ./...
       - run: go test -race ./...
@@ -75,12 +80,7 @@ jobs:
       # The spec index is regenerated only by spec-drift.yml (needs Apple's
       # zip via HAMN_SPEC); here only the docs generator runs.
       - name: Regenerate docs/TOOLS.md and docs/tools.json
-        run: |
-          if [ -d internal/tools/docsgen ]; then
-            go run ./internal/tools/docsgen
-          else
-            echo "internal/tools/docsgen not present yet; skipping"
-          fi
+        run: go run ./internal/tools/docsgen
       - run: git diff --exit-code
 
   compat:

@@ -27,8 +27,8 @@ type phasedIn struct {
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_publish", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
-		Confirm: tool.ConfirmByFlag,
-		Title:   "Release an approved version",
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
+		Title: "Release an approved version",
 		Description: "Release an approved version in PENDING_DEVELOPER_RELEASE (manual release) to the App Store; any other state is refused with the current state. " +
 			"Without confirm:true returns a preview.",
 		Enums: map[string][]any{"platform": platformEnum},

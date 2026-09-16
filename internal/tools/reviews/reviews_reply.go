@@ -25,13 +25,13 @@ type replyItem struct {
 	Body     string `json:"body" jsonschema:"public reply text"`
 }
 
-// replyPreview is one entry of the approval preview.
+// replyPreview is one entry of the approval preview: the reply text comes
+// first; the customer's review is shown separately as untrusted text.
 type replyPreview struct {
-	ReviewID string         `json:"review_id"`
-	Rating   int            `json:"rating"`
-	Review   tool.Untrusted `json:"review"`
-	Reply    string         `json:"reply"`
-	Replaces string         `json:"replaces_existing_response,omitempty"`
+	ReviewID string `json:"review_id"`
+	Reply    string `json:"reply"`
+	Rating   int    `json:"rating"`
+	Replaces string `json:"replaces_existing_response,omitempty"`
 }
 
 // replyOutcome is the per-review result.
@@ -96,6 +96,7 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 
 	reviews := make([]reviewOut, len(in.Replies))
 	previews := make([]replyPreview, len(in.Replies))
+	untrusted := make([]string, len(in.Replies))
 	affected := make([]string, len(in.Replies))
 	replacing := 0
 	for i, r := range in.Replies {
@@ -105,10 +106,9 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 			return nil, err
 		}
 		reviews[i] = rv
-		previews[i] = replyPreview{
-			ReviewID: id, Rating: rv.Rating, Reply: r.Body,
-			Review: tool.Untrusted(excerpt(strings.TrimSpace(string(rv.Title) + " — " + string(rv.Body)))),
-		}
+		previews[i] = replyPreview{ReviewID: id, Rating: rv.Rating, Reply: r.Body}
+		untrusted[i] = fmt.Sprintf("review %s (%d★): %s", id, rv.Rating,
+			excerpt(strings.TrimSpace(string(rv.Title)+" — "+string(rv.Body))))
 		affected[i] = "review " + id
 		if rv.Response != nil {
 			previews[i].Replaces = excerpt(rv.Response.Body)
@@ -123,7 +123,7 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 		irreversible = append(irreversible, "replaced responses are deleted first and cannot be restored")
 	}
 	wctx, gate := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
-		Summary: summary, Intended: previews, Affected: affected, Irreversible: irreversible,
+		Summary: summary, Intended: previews, Affected: affected, Irreversible: irreversible, Untrusted: untrusted,
 	})
 	if gate != nil {
 		return gate, nil

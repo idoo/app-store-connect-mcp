@@ -23,25 +23,25 @@
 |---|---|---|---|
 |[`builds_list`](#builds_list)|R|none|Builds newest first with number, version, processing state, upload/expiry dates, export compliance, TestFlight internal/external state and beta groups. Expired builds are hidden unless include_expired.|
 |[`builds_wait`](#builds_wait)|R|none|Poll a build until processing ends (VALID, INVALID or FAILED) with progress notifications. At the timeout (default 45 s, max 300 s) returns still_processing; call again with the same args to keep waiting.|
-|[`release_cancel`](#release_cancel)|D|flag|Cancel the open review submission: WAITING_FOR_REVIEW/IN_REVIEW/UNRESOLVED_ISSUES are canceled (state CANCELING); an unsent READY_FOR_REVIEW draft is emptied by deleting its items. Without confirm:true returns a preview.|
+|[`release_cancel`](#release_cancel)|D|human|Cancel the open review submission: WAITING_FOR_REVIEW/IN_REVIEW/UNRESOLVED_ISSUES are canceled (state CANCELING); an unsent READY_FOR_REVIEW draft is emptied by deleting its items. Without confirm:true returns a preview.|
 |[`release_phased`](#release_phased)|D|flag|Pause, resume or complete a 7-day phased release, or remove one not yet started (INACTIVE); shows day and % of users. Phasing must be enabled before release (release_prepare phased:true). Without confirm:true returns a preview.|
 |[`release_prepare`](#release_prepare)|W|plan|Apply a release_status plan: create the version, attach the build, answer export compliance, set release type, opt in to phased release, set What's New on existing locales. Needs plan_id from release_status desired. Never waits for build processing.|
-|[`release_publish`](#release_publish)|D|flag|Release an approved version in PENDING_DEVELOPER_RELEASE (manual release) to the App Store; any other state is refused with the current state. Without confirm:true returns a preview.|
+|[`release_publish`](#release_publish)|D|human|Release an approved version in PENDING_DEVELOPER_RELEASE (manual release) to the App Store; any other state is refused with the current state. Without confirm:true returns a preview.|
 |[`release_review_status`](#release_review_status)|R|none|Current and recent App Review submissions with items, states, submitted dates and the version's state. The API does not expose reviewer messages: on rejection read them in the Resolution Center link, fix, then release_submit.|
 |[`release_status`](#release_status)|R|none|Preflight an App Store version: build, export compliance, What's New, listing limits, screenshots, review contact, age rating, pricing, products, in-flight submission. Pass desired to preview release_prepare/release_submit and get their plan_ids.|
-|[`release_submit`](#release_submit)|D|plan|Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. First call previews and returns plan_id; call again with plan_id.|
+|[`release_submit`](#release_submit)|D|human|Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. First call previews and returns plan_id; call again with plan_id.|
 
 ## testflight ★
 
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
-|[`builds_expire`](#builds_expire)|D|flag|Expire up to 50 builds (numbers, ids or latest) so testers can no longer install them. Without confirm:true returns a preview listing build numbers and versions; nothing changes. Already expired builds are skipped. Irreversible.|
-|[`testflight_distribute`](#testflight_distribute)|W|none|Give a build (default latest) to beta groups: answers export compliance, sets What to Test per locale (* = all), beta review contact and beta app info, adds it to groups, submits external beta review. Processing builds or unanswered compliance return without writing.|
+|[`builds_expire`](#builds_expire)|D|human|Expire up to 50 builds (numbers, ids or latest) so testers can no longer install them. Without confirm:true returns a preview listing build numbers and versions; nothing changes. Already expired builds are skipped. Irreversible.|
+|[`testflight_distribute`](#testflight_distribute)|W|flag|Give a build (default latest) to beta groups: answers export compliance, sets What to Test per locale (* = all), beta review info, adds it to groups, submits external beta review. External or public distribution and compliance answers need confirm:true and human approval.|
 |[`testflight_feedback_list`](#testflight_feedback_list)|R|none|Tester screenshot and crash feedback, newest first, optionally since last_seen or a date and by build/platform/device. Returns up to 4 screenshots as images and, on request, crash logs. Comments are tester data. mark_seen:true advances last_seen.|
 |[`testflight_groups_list`](#testflight_groups_list)|R|none|Beta groups of an app: internal/external, tester and build counts, public link and feedback settings, in one call. Pass a group's name or id as `group` to testflight_testers_* and testflight_distribute.|
-|[`testflight_testers_add`](#testflight_testers_add)|W|none|Add or invite up to 100 testers (email, optional names) to a beta group. New emails are invited; existing testers are linked; members are reported as already. Returns added\|already\|error per email. External groups need a beta-approved build before invites go out.|
+|[`testflight_testers_add`](#testflight_testers_add)|W|flag|Add or invite up to 100 testers (email, optional names) to a beta group. New emails are invited; existing testers are linked; members are reported as already. External groups need confirm:true and human approval after a preview.|
 |[`testflight_testers_list`](#testflight_testers_list)|R|none|Beta testers of an app or one group (name or id), optionally by exact email, state or invite type. Returns email, name, state, invite type and the app's groups per tester. Names/emails are tester-provided data.|
-|[`testflight_testers_remove`](#testflight_testers_remove)|D|flag|Remove up to 100 testers (emails or ids) from a beta group, or with scope app from every group and build of the app. Without confirm:true returns a preview listing the matched testers; nothing changes.|
+|[`testflight_testers_remove`](#testflight_testers_remove)|D|human|Remove up to 100 testers (emails or ids) from a beta group, or with scope app from every group and build of the app. Without confirm:true returns a preview listing the matched testers; nothing changes.|
 
 ## metadata ★
 
@@ -90,11 +90,11 @@
 |---|---|---|---|
 |[`iap_list`](#iap_list)|R|none|In-app purchases (v2) of an app in one request: product id, type, state, latest version state and localizations. Filter by state or type. Prices: use pricing_get. Subscriptions: subscriptions_list.|
 |[`iap_upsert`](#iap_upsert)|W|none|Create an IAP by product_id or PATCH only changed fields; never re-creates an existing product id (Apple burns ids). Writes localizations on the open IAP version and uploads a review screenshot. Never deletes locales.|
-|[`offer_codes_generate`](#offer_codes_generate)|W|none|Generate one-time codes (returns the first 20 values + count; batch_id re-fetches values) or a custom code for an offer-code campaign (offers_create kind offer_code). Code values are redeemable secrets: do not post them publicly.|
-|[`offers_create`](#offers_create)|W|none|Create an intro (one per territory), promotional, win-back or offer-code offer on a subscription. Prices by customer price or price_point_id; equalize:true expands one price to all territories. An offer with the same name/identifier (intro: territory) is reported as already.|
+|[`offer_codes_generate`](#offer_codes_generate)|W|human|Generate one-time codes or a custom code for an offer-code campaign (offers_create kind offer_code); needs confirm:true and human approval. One-time code values are written to offer-codes/<batch_id>.csv (path + count returned, never the values); batch_id re-downloads them.|
+|[`offers_create`](#offers_create)|W|human|Create an intro (per territory), promotional, win-back or offer-code offer on a subscription. Prices by customer price or price_point_id; equalize:true expands one price to all territories. Needs confirm:true and human approval; a same-name offer is already.|
 |[`offers_list`](#offers_list)|R|none|Introductory (grouped by terms), promotional, win-back and offer-code offers of one subscription (product_id) or every subscription of the app: mode, duration, periods, eligibility, territory counts, code counts. An IAP product_id lists its offer codes.|
-|[`pricing_apply`](#pricing_apply)|D|plan|Apply a pricing_plan: same arguments plus plan_id; refused if prices changed since. App/IAP: one schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.|
-|[`pricing_get`](#pricing_get)|R|none|Current price schedule of an app, IAP or subscription: base territory, manual prices, prices in effect per territory (requested territories or top 20, with total count), scheduled changes; app availability summary.|
+|[`pricing_apply`](#pricing_apply)|D|human|Apply a pricing_plan: same arguments plus plan_id; refused if prices changed since. App/IAP: one schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.|
+|[`pricing_get`](#pricing_get)|R|none|Current prices of an app, IAP or subscription: base territory, prices in effect per territory (requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids or product ids) returns each one's base price and territory count.|
 |[`pricing_plan`](#pricing_plan)|R|none|Preview a price change (base price matched to Apple's price points, Apple equalization elsewhere, optional overrides) and app availability changes: old→new per territory, call count, rate-limit check. Returns plan_id for pricing_apply.|
 |[`subscriptions_list`](#subscriptions_list)|R|none|Subscription groups with localizations, and each group's subscriptions: product id, period, level, state, latest version state and offer counts. One request per group. Prices: pricing_get.|
 |[`subscriptions_upsert`](#subscriptions_upsert)|W|none|Find or create a subscription group by reference name, then a subscription by product_id (PATCH only changed fields; never re-creates a product id). Writes localizations on the open versions and a review screenshot. Never deletes.|
@@ -360,8 +360,9 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||app id, bundle id, SKU or name; default: pinned app|
-|`batch_id`|string|||existing one-time batch id: only download its values|
+|`batch_id`|string|||existing one-time batch id: only download its values to a file|
 |`campaign`|string|||offer-code campaign name|
+|`confirm`|boolean|||set true only after reviewing the preview of this exact call|
 |`custom_code`|string|||custom: the code customers type|
 |`environment`|string||`PRODUCTION`, `SANDBOX`|one_time: default PRODUCTION|
 |`expiration_date`|string|||YYYY-MM-DD; required for one_time|
@@ -376,6 +377,7 @@ No arguments.
 |---|---|---|---|---|
 |`app`|string|||app id, bundle id, SKU or name; default: pinned app|
 |`auto_renew`|boolean|||offer code: renew after the offer|
+|`confirm`|boolean|||set true only after reviewing the preview of this exact call|
 |`customer_eligibilities`|string[]||`NEW`, `EXISTING`, `EXPIRED`|offer code: who may redeem|
 |`duration`|string|yes|`THREE_DAYS`, `ONE_WEEK`, `TWO_WEEKS`, `ONE_MONTH`, `TWO_MONTHS`, `THREE_MONTHS`, `SIX_MONTHS`, `ONE_YEAR`|length of one offer period|
 |`end_date`|string|||YYYY-MM-DD|
@@ -437,8 +439,10 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||app id, bundle id, SKU or name; default: pinned app|
+|`for_plan`|boolean|||include price_point_id per row|
 |`kind`|string||`app`, `iap`, `subscription`|default app|
-|`product_id`|string|||product id of the IAP or subscription|
+|`product_id`|string|||IAP or subscription: product id or the id from iap_list/subscriptions_list|
+|`products`|string[]|||up to 10 product ids or ids of kind iap/subscription; compact summary per product|
 |`territories`|string[]|||3-letter codes to show; default: top 20 storefronts|
 
 ### pricing_plan
@@ -711,6 +715,7 @@ No arguments.
 |`beta_app_localizations`|object|||beta app info by locale code; key * = every existing localization (else the primary locale)|
 |`beta_review`|object|||beta App Review contact, demo account and notes (used for external groups)|
 |`build`|string|||build number, id, latest (default) or latest-valid|
+|`confirm`|boolean|||set true only after reviewing the preview of this exact call|
 |`groups`|string[]|yes||1-20 beta group names or ids|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`|default: inferred from the app|
 |`uses_non_exempt_encryption`|boolean|||export compliance answer; required when the build has none (ask the user, never guess)|
@@ -742,6 +747,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||app id, bundle id, SKU or name; default: pinned app|
+|`confirm`|boolean|||set true only after reviewing the preview of this exact call|
 |`group`|string|yes||beta group name or id|
 |`testers`|object[]|yes||1-100 testers to add or invite|
 

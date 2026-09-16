@@ -32,16 +32,16 @@ func init() {
 	platforms := []any{"IOS", "MAC_OS", "TV_OS", "VISION_OS"}
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_submit", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
-		Confirm: tool.ConfirmByPlan,
-		Title:   "Submit a version for App Review",
+		Confirm: tool.ConfirmByPlan, RequireHuman: true,
+		Title: "Submit a version for App Review",
 		Description: "Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. " +
 			"First call previews and returns plan_id; call again with plan_id.",
 		Enums: map[string][]any{"platform": platforms},
 	}, releaseSubmit))
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_cancel", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
-		Confirm: tool.ConfirmByFlag,
-		Title:   "Cancel an App Review submission",
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
+		Title: "Cancel an App Review submission",
 		Description: "Cancel the open review submission: WAITING_FOR_REVIEW/IN_REVIEW/UNRESOLVED_ISSUES are canceled (state CANCELING); an unsent READY_FOR_REVIEW draft is emptied by deleting its items. " +
 			"Without confirm:true returns a preview.",
 		Enums: map[string][]any{"platform": platforms},

@@ -177,6 +177,33 @@ func TestHumanConfirmNeedsElicitation(t *testing.T) {
 	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`))
 }
 
+func TestRequireHumanConfirmForcesHuman(t *testing.T) {
+	k := newKit(t)
+	m := exampleMeta
+	m.Name = "example_forced"
+	tl := tool.New(m, func(ctx context.Context, env *tool.Env, in exampleIn) (*tool.Result, error) {
+		wctx, res := tool.RequireHumanConfirm(ctx, env, in.Confirm, tool.PlanPreview{Summary: "delete " + in.App})
+		if res != nil {
+			return res, nil
+		}
+		if _, err := env.ASC.Do(wctx, tool.Request{Method: "DELETE", Path: "/v1/things/" + in.App, Write: true}); err != nil {
+			return nil, err
+		}
+		return tool.OK(in), nil
+	})
+	// Meta.RequireHuman is false, yet the agent's confirm alone is refused.
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`), "human_approval_required")
+	k.Elicit(false)
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`), "declined")
+	k.Elicit(true)
+	if res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`)); res.Meta.ApprovedBy != tool.ApprovedHuman {
+		t.Errorf("approved_by = %q, want human", res.Meta.ApprovedBy)
+	}
+	k.Env.Elicit = nil
+	k.Env.Profile.AllowNoElicit = true
+	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`))
+}
+
 type planIn struct {
 	tool.ConfirmPlan
 	Text string `json:"text"`

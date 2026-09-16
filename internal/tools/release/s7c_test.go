@@ -109,6 +109,7 @@ func TestReleasePublishPosts(t *testing.T) {
 	versionsFixture(t, k, "PENDING_DEVELOPER_RELEASE", "INACTIVE", 0)
 	k.ASC.Handle("POST", "/v1/appStoreVersionReleaseRequests", 201, doc(t, jres{Type: "appStoreVersionReleaseRequests", ID: "rr1", Attrs: map[string]any{}}))
 	preview(t, k, "release_publish", `{"app":"Hjul"}`)
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_publish"), k.Env, `{"app":"Hjul","confirm":true}`))
 	out := tooltest.Decode[publishOut](t, res)
 	if out.Action != "release_requested" || out.Version.ID != "v1" || out.Phased == nil || out.Phased.State != "INACTIVE" {

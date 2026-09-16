@@ -92,6 +92,17 @@ type cursorOut struct {
 	Returned   int    `json:"returned"`
 	More       bool   `json:"more,omitempty"`
 	AdvancedTo string `json:"advanced_to,omitempty"`
+	// NewestAvailable is the newest item at or before since, set when none
+	// is newer, so an empty result still says where the feedback ends.
+	NewestAvailable string `json:"newest_available,omitempty"`
+}
+
+// emptyOut explains an empty feedback result.
+type emptyOut struct {
+	Window  string   `json:"window"`
+	Builds  string   `json:"builds"`
+	Filters []string `json:"filters,omitempty"`
+	Note    string   `json:"note"`
 }
 
 type feedbackListOut struct {
@@ -100,6 +111,7 @@ type feedbackListOut struct {
 	Items   []feedbackOut        `json:"items"`
 	Cursors map[string]cursorOut `json:"cursors"`
 	Hint    string               `json:"hint,omitempty"`
+	Empty   *emptyOut            `json:"empty,omitempty"`
 }
 
 func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.Result, error) {
@@ -165,11 +177,14 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 				}
 			}
 		}
-		items, builds, more, err := scanFeedback(ctx, env, app.ID, k, filters, kSince, limit)
+		items, builds, more, older, err := scanFeedback(ctx, env, app.ID, k, filters, kSince, limit)
 		if err != nil {
 			return nil, err
 		}
 		cur := cursorOut{Since: sinceLabel, Returned: len(items), More: more}
+		if len(items) == 0 {
+			cur.NewestAvailable = older
+		}
 		newest := ""
 		for _, r := range items {
 			out.Items = append(out.Items, feedbackFromResource(r, k, builds))
@@ -197,6 +212,9 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 	if !in.MarkSeen && len(out.Items) > 0 {
 		out.Hint = "last_seen was not changed; repeat with mark_seen:true once these are handled"
 	}
+	if len(out.Items) == 0 {
+		out.Empty = emptyContext(in, out)
+	}
 
 	res := tool.OK(out)
 	attachScreenshots(ctx, env, out, res)
@@ -204,6 +222,41 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 		attachCrashLogs(ctx, env, out)
 	}
 	return res, nil
+}
+
+// emptyContext describes the window, builds and filters of an empty result.
+func emptyContext(in feedbackListIn, out *feedbackListOut) *emptyOut {
+	e := &emptyOut{Window: "all time", Builds: "all builds"}
+	switch {
+	case in.Since == sinceLastSeen:
+		e.Window = "after last_seen (per kind, see cursors)"
+	case in.Since != "":
+		e.Window = "after " + in.Since
+	}
+	if out.Build != nil {
+		e.Builds = "build " + out.Build.Number + " (" + out.Build.ID + ")"
+	}
+	if in.Platform != "" {
+		e.Filters = append(e.Filters, "platform="+string(in.Platform))
+	}
+	if in.DeviceModel != "" {
+		e.Filters = append(e.Filters, "device_model="+in.DeviceModel)
+	}
+	newest := ""
+	for _, c := range out.Cursors {
+		if c.NewestAvailable != "" && (newest == "" || laterThan(c.NewestAvailable, newest)) {
+			newest = c.NewestAvailable
+		}
+	}
+	switch {
+	case newest != "":
+		e.Note = "no feedback in this window; the newest matching item is from " + newest + ": pass an earlier since to see it"
+	case in.Since != "":
+		e.Note = "no feedback in this window, and none older matches the filters either"
+	default:
+		e.Note = "no tester feedback matches these filters"
+	}
+	return e
 }
 
 // parseSince accepts YYYY-MM-DD (UTC midnight) or an RFC 3339 time.
@@ -233,7 +286,7 @@ func laterThan(a, b string) bool {
 // order. builds maps build ids to build numbers.
 func scanFeedback(ctx context.Context, env *tool.Env, appID string, k feedbackKind, filters url.Values,
 	since time.Time, limit int,
-) (items []tool.Resource, builds map[string]string, more bool, err error) {
+) (items []tool.Resource, builds map[string]string, more bool, older string, err error) {
 	fields := []string{"createdDate", "comment", "email", "deviceModel", "osVersion", "locale", "appPlatform", "build"}
 	if k == kindScreenshots {
 		fields = append(fields, "screenshots")
@@ -251,7 +304,7 @@ func scanFeedback(ctx context.Context, env *tool.Env, appID string, k feedbackKi
 	for scanned := 0; ; {
 		page, err := env.ASC.List(ctx, "/v1/apps/"+appID+"/"+k.resource, opts)
 		if err != nil {
-			return nil, nil, false, fmt.Errorf("list %s feedback: %w", k.name, err)
+			return nil, nil, false, "", fmt.Errorf("list %s feedback: %w", k.name, err)
 		}
 		for _, b := range page.Included {
 			if b.Type == "builds" {
@@ -262,7 +315,7 @@ func scanFeedback(ctx context.Context, env *tool.Env, appID string, k feedbackKi
 			if !since.IsZero() {
 				t, perr := time.Parse(time.RFC3339Nano, r.Str("createdDate"))
 				if perr == nil && !t.After(since) {
-					stopped = true
+					stopped, older = true, r.Str("createdDate")
 					break
 				}
 			}
@@ -289,7 +342,7 @@ func scanFeedback(ctx context.Context, env *tool.Env, appID string, k feedbackKi
 			unseen = unseen[len(unseen)-limit:]
 		}
 	}
-	return unseen, builds, more, nil
+	return unseen, builds, more, older, nil
 }
 
 func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]string) feedbackOut {

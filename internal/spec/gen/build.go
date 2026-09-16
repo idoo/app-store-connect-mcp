@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -37,7 +38,7 @@ func Build(raw []byte) (*spec.File, error) {
 	}
 	f := &spec.File{Version: version, Paths: len(paths), Fields: map[string][]string{}}
 	fields := map[string]map[string]bool{}
-	for _, p := range sortedKeys(paths) {
+	for _, p := range slices.Sorted(maps.Keys(paths)) {
 		item := r.deref(paths[p])
 		shared := r.params(item["parameters"])
 		for _, m := range methods {
@@ -53,7 +54,7 @@ func Build(raw []byte) (*spec.File, error) {
 		}
 	}
 	for t, set := range fields {
-		f.Fields[t] = sortedKeys(set)
+		f.Fields[t] = slices.Sorted(maps.Keys(set))
 	}
 	f.FreeText = r.freeText()
 	return f, nil
@@ -256,7 +257,7 @@ func (r resolver) freeText() map[string][]string {
 	comps, _ := r.root["components"].(node)
 	schemas, _ := comps["schemas"].(node)
 	out := map[string]map[string]bool{}
-	for _, name := range sortedKeys(schemas) {
+	for _, name := range slices.Sorted(maps.Keys(schemas)) {
 		s := r.deref(schemas[name])
 		props, _ := s["properties"].(node)
 		typ := r.resourceType(s)
@@ -278,7 +279,7 @@ func (r resolver) freeText() map[string][]string {
 	}
 	res := make(map[string][]string, len(out))
 	for t, set := range out {
-		res[t] = sortedKeys(set)
+		res[t] = slices.Sorted(maps.Keys(set))
 	}
 	return res
 }
@@ -354,14 +355,4 @@ func words(s string) string {
 		b.WriteRune(unicode.ToLower(c))
 	}
 	return b.String()
-}
-
-// sortedKeys returns the keys of m in ascending order.
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

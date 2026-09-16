@@ -134,7 +134,21 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 			}
 		}
 	}
-	res.Data = map[string]any{"apps": sortGroups(groups), "returned": total, "mark_seen": in.MarkSeen}
+	data := map[string]any{"returned": total, "mark_seen": in.MarkSeen}
+	if len(groups) > 1 {
+		// A fan-out lists only apps with reviews, an error or more pages,
+		// keeping the result small; the counts say how many were scanned.
+		withReviews := 0
+		for _, g := range groups {
+			if len(g.Reviews) > 0 {
+				withReviews++
+			}
+		}
+		groups = slices.DeleteFunc(groups, func(g appReviews) bool { return len(g.Reviews) == 0 && g.Error == nil && !g.More })
+		data["apps_scanned"], data["apps_with_reviews"] = len(apps), withReviews
+	}
+	data["apps"] = sortGroups(groups)
+	res.Data = data
 	if unanswered > 0 {
 		res.Then(tool.NextStep{Tool: "reviews_reply", Args: map[string]any{"replies": []map[string]any{{"review_id": "<id>", "body": "<reply>"}}}})
 	}

@@ -5,18 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
-	"image/color"
-	"image/gif"
-	"image/jpeg"
-	"image/png"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/applemeta"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
@@ -515,60 +509,4 @@ func TestUploadBuildFailedAndArgs(t *testing.T) {
 	s.BuildNumber = "999"
 	_, err = Build(writeCtx(t), DepsFromEnv(k.Env), s)
 	mustContain(t, err, "contains 2.3.1 (417)")
-}
-
-func encodePNG(t *testing.T, img image.Image) []byte {
-	t.Helper()
-	var buf bytes.Buffer
-	if err := (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
-}
-
-func TestValidateImage(t *testing.T) {
-	opaque := image.NewRGBA(image.Rect(0, 0, 1280, 800))
-	for i := range opaque.Pix {
-		opaque.Pix[i] = 0xFF
-	}
-	alpha := image.NewNRGBA(image.Rect(0, 0, 1280, 800))
-	pal := image.NewPaletted(image.Rect(0, 0, 1280, 800), color.Palette{color.NRGBA{0, 0, 0, 0}, color.White})
-	var jpg, gf bytes.Buffer
-	if err := jpeg.Encode(&jpg, opaque, nil); err != nil {
-		t.Fatal(err)
-	}
-	opaquePNG := encodePNG(t, opaque)
-	if err := gif.Encode(&gf, image.NewPaletted(image.Rect(0, 0, 4, 4), color.Palette{color.White}), nil); err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name    string
-		data    []byte
-		display applemeta.DisplayType
-		want    string
-	}{
-		{"opaque png", opaquePNG, applemeta.AppDesktop, ""},
-		{"jpeg", jpg.Bytes(), applemeta.AppDesktop, ""},
-		{"alpha png", encodePNG(t, alpha), applemeta.AppDesktop, "alpha channel"},
-		{"trns png", encodePNG(t, pal), applemeta.AppDesktop, "tRNS"},
-		{"wrong size", opaquePNG, applemeta.AppIPhone65, "not an accepted size"},
-		{"gif", gf.Bytes(), applemeta.AppDesktop, "PNG or JPEG"},
-		{"unknown display", opaquePNG, "APP_FRIDGE", "unknown display"},
-		{"truncated", opaquePNG[:20], applemeta.AppDesktop, "png header"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := ValidateImage(bytes.NewReader(c.data), c.display)
-			if c.want == "" {
-				if err != nil {
-					t.Fatal(err)
-				}
-				return
-			}
-			mustContain(t, err, c.want)
-			if !errors.Is(err, tool.ErrInvalidArgs) {
-				t.Errorf("not invalid_arguments: %v", err)
-			}
-		})
-	}
 }

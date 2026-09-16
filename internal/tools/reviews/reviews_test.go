@@ -81,7 +81,9 @@ type listOut struct {
 			Response    *responseOut      `json:"response"`
 		} `json:"reviews"`
 	} `json:"apps"`
-	Returned int `json:"returned"`
+	Returned        int `json:"returned"`
+	AppsScanned     int `json:"apps_scanned"`
+	AppsWithReviews int `json:"apps_with_reviews"`
 }
 
 func ids(o listOut) []string {
@@ -173,6 +175,20 @@ func TestListFanOutOverAllApps(t *testing.T) {
 	}
 }
 
+func TestListFanOutOmitsAppsWithoutReviews(t *testing.T) {
+	k := listKit(t)
+	k.ASC.Handle("GET", "/v1/apps", 200,
+		`{"data":[{"type":"apps","id":"a1","attributes":{"name":"Alpha"}},{"type":"apps","id":"a2","attributes":{"name":"Beta"}},`+
+			`{"type":"apps","id":"a3","attributes":{"name":"Gamma"}}]}`)
+	k.ASC.Handle("GET", "/v1/apps/a1/customerReviews", 200, page("", nil))
+	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews", 200, page("", nil, review("b1", 1, d14, "SWE", "")))
+	k.ASC.Handle("GET", "/v1/apps/a3/customerReviews", 200, page("", nil))
+	o := tooltest.Decode[listOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"app":"all","rating":[1]}`)))
+	if len(o.Apps) != 1 || o.Apps[0].App.ID != "a2" || o.AppsScanned != 3 || o.AppsWithReviews != 1 {
+		t.Fatalf("out = %+v", o)
+	}
+}
+
 func TestListUnansweredFilterQuery(t *testing.T) {
 	k := listKit(t)
 	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews?exists[publishedResponse]=false", 200, page("", nil, review("b1", 1, d14, "SWE", "")))
@@ -246,6 +262,15 @@ func TestReplyPreviewWithoutConfirmChangesNothing(t *testing.T) {
 	}
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatal("preview mutated")
+	}
+	// Customer text sits only in Untrusted; Intended holds reply texts first.
+	p := tooltest.Decode[struct {
+		Preview tool.PlanPreview `json:"preview"`
+	}](t, res).Preview
+	intended := tooltest.JSON(t, p.Intended)
+	if len(p.Untrusted) == 0 || !strings.HasPrefix(p.Untrusted[0], "review ") ||
+		strings.Contains(intended, `"review"`) || !strings.Contains(intended, `"reply"`) {
+		t.Fatalf("preview intended = %s, untrusted = %q", intended, p.Untrusted)
 	}
 }
 
