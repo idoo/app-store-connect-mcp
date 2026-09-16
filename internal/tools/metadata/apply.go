@@ -28,8 +28,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "metadata_apply", Toolset: tool.Metadata, Class: tool.Write, Confirm: tool.ConfirmByPlan,
 		Title: "Apply store listing changes",
-		Description: "Applies a metadata_plan: pass the same arguments plus plan_id. Refused if the listing changed " +
-			"since planning. Creates missing locales; deletes only locales in remove. For release notes only, use release_prepare.",
+		Description: "Apply a metadata_plan: same arguments plus plan_id; refused if the listing changed since. Creates " +
+			"missing locales; deletes only locales in remove.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, metadataApply))
 }

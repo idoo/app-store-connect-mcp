@@ -46,13 +46,13 @@ const (
 // it as its `desired` object; release_prepare embeds it (flat) in its input so
 // both tools speak the same argument names.
 type releaseDesired struct {
-	Build       tool.BuildRef     `json:"build,omitempty" jsonschema:"build to attach: latest, latest-valid, build number or id"`
-	WhatsNew    map[string]string `json:"whats_new,omitempty" jsonschema:"What's New per locale; key * means every existing locale"`
+	Build       tool.BuildRef     `json:"build,omitempty" jsonschema:"latest, latest-valid, build number or id"`
+	WhatsNew    map[string]string `json:"whats_new,omitempty" jsonschema:"What's New per locale; * = all existing"`
 	ReleaseType string            `json:"release_type,omitempty"`
 	// EarliestReleaseDate is RFC 3339, used with release_type SCHEDULED.
-	EarliestReleaseDate     string `json:"earliest_release_date,omitempty" jsonschema:"RFC 3339 time for SCHEDULED releases"`
-	Phased                  *bool  `json:"phased,omitempty" jsonschema:"opt in to a 7-day phased release"`
-	UsesNonExemptEncryption *bool  `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer for the build"`
+	EarliestReleaseDate     string `json:"earliest_release_date,omitempty" jsonschema:"RFC 3339, for SCHEDULED"`
+	Phased                  *bool  `json:"phased,omitempty" jsonschema:"7-day phased release"`
+	UsesNonExemptEncryption *bool  `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer"`
 	Submit                  bool   `json:"submit,omitempty" jsonschema:"also plan release_submit"`
 }
 

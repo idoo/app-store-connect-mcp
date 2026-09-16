@@ -157,13 +157,13 @@ func truncate(s string) string {
 // sourceIn is the desired-listing source shared by metadata_plan and
 // metadata_apply.
 type sourceIn struct {
-	App         tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform    tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
+	App         tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform    tool.Platform   `json:"platform,omitempty"`
 	Version     tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default), live or a version string"`
-	Listing     map[string]any  `json:"listing,omitempty" jsonschema:"inline desired listing: {\"locales\":{\"en-US\":{\"description\":\"…\",\"keywords\":\"a,b\"}}}; keys name, subtitle, privacyPolicyUrl, privacyChoicesUrl, privacyPolicyText, description, keywords, marketingUrl, promotionalText, supportUrl, whatsNew; omitted keys stay unchanged, \"\" clears"`
-	FastlaneDir string          `json:"fastlane_dir,omitempty" jsonschema:"fastlane deliver metadata directory (<dir>/<locale>/description.txt …), inside the project"`
-	ExpoConfig  string          `json:"expo_config,omitempty" jsonschema:"path to EAS Metadata store.config.json, inside the project"`
-	Remove      []string        `json:"remove,omitempty" jsonschema:"locales to delete; nothing else is ever deleted"`
+	Listing     map[string]any  `json:"listing,omitempty" jsonschema:"{\"locales\":{\"en-US\":{...}}} with name subtitle description keywords whatsNew promotionalText supportUrl marketingUrl privacyPolicyUrl privacyChoicesUrl privacyPolicyText; omitted: unchanged, \"\" clears"`
+	FastlaneDir string          `json:"fastlane_dir,omitempty" jsonschema:"fastlane metadata dir in the project"`
+	ExpoConfig  string          `json:"expo_config,omitempty" jsonschema:"EAS store.config.json path in the project"`
+	Remove      []string        `json:"remove,omitempty" jsonschema:"locales to delete; nothing else is deleted"`
 }
 
 // desired reads the desired listing from exactly one source.

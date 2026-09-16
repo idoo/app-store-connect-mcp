@@ -35,7 +35,7 @@ func init() {
 }
 
 type subsListIn struct {
-	App tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 }
 
 type subsGroupLocOut struct {
@@ -179,7 +179,7 @@ type subsGroupLocIn struct {
 }
 
 type subsUpsertIn struct {
-	App                tool.AppRef               `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App                tool.AppRef               `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Group              string                    `json:"group" jsonschema:"subscription group reference name (max 64); created if missing"`
 	GroupLocalizations map[string]subsGroupLocIn `json:"group_localizations,omitempty" jsonschema:"group display names by locale"`
 	ProductID          string                    `json:"product_id,omitempty" jsonschema:"subscription product id; omit to upsert only the group"`

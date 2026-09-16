@@ -13,17 +13,17 @@ import (
 )
 
 type submitIn struct {
-	App                  tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform             tool.Platform   `json:"platform,omitempty" jsonschema:"default: the app's platform"`
+	App                  tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform             tool.Platform   `json:"platform,omitempty"`
 	Version              tool.VersionRef `json:"version,omitempty" jsonschema:"version string; default: editable"`
-	IncludeIAPs          []string        `json:"include_iaps,omitempty" jsonschema:"in-app purchases to submit with the version: product id, name or id"`
-	IncludeSubscriptions []string        `json:"include_subscriptions,omitempty" jsonschema:"subscriptions to submit with the version: product id, name or id"`
+	IncludeIAPs          []string        `json:"include_iaps,omitempty" jsonschema:"IAPs to submit with it: product id, name or id"`
+	IncludeSubscriptions []string        `json:"include_subscriptions,omitempty" jsonschema:"subscriptions to submit with it: product id, name or id"`
 	tool.ConfirmPlan
 }
 
 type cancelIn struct {
-	App      tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform `json:"platform,omitempty" jsonschema:"default: the app's platform"`
+	App      tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform `json:"platform,omitempty"`
 	Items    []string      `json:"items,omitempty" jsonschema:"draft only: item ids to remove; default: all"`
 	tool.ConfirmFlag
 }
@@ -34,15 +34,15 @@ func init() {
 		Name: "release_submit", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByPlan, RequireHuman: true,
 		Title: "Submit a version for App Review",
-		Description: "Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. " +
-			"First call previews and returns plan_id; call again with plan_id.",
+		Description: "Submit the version (plus IAPs/subscriptions) for App Review; reuses a draft, resubmits after " +
+			"rejection. First call previews and returns plan_id; call again with it.",
 		Enums: map[string][]any{"platform": platforms},
 	}, releaseSubmit))
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_cancel", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Cancel an App Review submission",
-		Description: "Cancel the open review submission: WAITING_FOR_REVIEW/IN_REVIEW/UNRESOLVED_ISSUES are canceled (state CANCELING); an unsent READY_FOR_REVIEW draft is emptied by deleting its items. " +
+		Description: "Cancel the open review submission (state CANCELING), or empty an unsent draft by deleting its items. " +
 			"Without confirm:true returns a preview.",
 		Enums: map[string][]any{"platform": platforms},
 	}, releaseCancel))

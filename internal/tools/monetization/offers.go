@@ -46,7 +46,7 @@ func init() {
 }
 
 type offersListIn struct {
-	App       tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App       tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	ProductID string      `json:"product_id,omitempty" jsonschema:"subscription (or IAP) product id; default: every subscription of the app"`
 }
 
@@ -358,7 +358,7 @@ func offerGroupIntros(rows []offerOut) []offerOut {
 }
 
 type offersCreateIn struct {
-	App       tool.AppRef    `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App       tool.AppRef    `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	ProductID string         `json:"product_id" jsonschema:"subscription product id"`
 	Kind      string         `json:"kind"`
 	Mode      string         `json:"mode"`

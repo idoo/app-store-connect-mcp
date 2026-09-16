@@ -25,9 +25,9 @@ const (
 var platformEnum = []any{string(tool.IOS), string(tool.MacOS), string(tool.TVOS), string(tool.VisionOS)}
 
 type appsListIn struct {
-	Query    string `json:"query,omitempty" jsonschema:"fuzzy match on name, bundle id, SKU or id; empty lists every app"`
-	Platform string `json:"platform,omitempty" jsonschema:"only apps with App Store versions for this platform"`
-	State    string `json:"state,omitempty" jsonschema:"only apps with an in-flight version in this appVersionState, e.g. WAITING_FOR_REVIEW"`
+	Query    string `json:"query,omitempty" jsonschema:"fuzzy name, bundle id, SKU or id; empty lists all"`
+	Platform string `json:"platform,omitempty" jsonschema:"only apps on this platform"`
+	State    string `json:"state,omitempty" jsonschema:"only apps with an in-flight version in this state"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"max apps returned (default 50, max 200)"`
 }
 
@@ -54,7 +54,7 @@ type inFlightVersion struct {
 }
 
 type appsGetIn struct {
-	App tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 }
 
 type versionSummary struct {
@@ -89,15 +89,15 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "apps_list", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "List apps",
-		Description: "List or find apps in the account. query fuzzy-matches name, bundle id, SKU or id (best first). " +
-			"Returns id, name, bundle_id, sku, primary_locale, platforms and in_flight versions; state filters by in-flight state.",
+		Description: "List or fuzzy-find apps (name, bundle id, SKU or id; best first) with platforms and in-flight " +
+			"versions.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, appsList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "apps_get", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "App overview",
-		Description: "One app at a glance: live version per platform, in-flight versions with app_version_state, " +
-			"the 5 latest builds with processing_state, and listing locales. Use before release or TestFlight work.",
+		Description: "One app at a glance: live version per platform, in-flight versions with state, 5 latest builds, " +
+			"listing locales. Use before release or TestFlight work.",
 	}, appsGet))
 }
 

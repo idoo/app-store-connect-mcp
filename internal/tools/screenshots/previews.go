@@ -23,8 +23,8 @@ var previewMIME = map[string]string{
 }
 
 type previewIn struct {
-	App                  tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform             tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
+	App                  tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform             tool.Platform   `json:"platform,omitempty"`
 	Version              tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or a version string of an editable version"`
 	Locale               string          `json:"locale" jsonschema:"locale of the listing, e.g. en-US"`
 	File                 string          `json:"file" jsonschema:".mov, .mp4 or .m4v video inside the project"`

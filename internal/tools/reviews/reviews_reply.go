@@ -16,8 +16,8 @@ const maxReplies = 20
 
 type replyIn struct {
 	tool.ConfirmFlag
-	App     tool.AppRef `json:"app,omitempty" jsonschema:"app the reviews belong to (advances its reviews cursor); default: pinned app"`
-	Replies []replyItem `json:"replies" jsonschema:"1-20 replies; a review that already has a response gets it replaced"`
+	App     tool.AppRef `json:"app,omitempty" jsonschema:"the reviews' app (advances its cursor); default: pinned"`
+	Replies []replyItem `json:"replies" jsonschema:"1-20 replies; an existing response is replaced"`
 }
 
 type replyItem struct {
@@ -48,8 +48,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "reviews_reply", Toolset: tool.Reviews, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Reply to customer reviews",
-		Description: "Publish public replies to up to 20 reviews (review_id from reviews_list). An existing response is " +
-			"deleted and replaced. Without confirm:true returns a preview; the human approves every reply text.",
+		Description: "Publish public replies to up to 20 reviews (from reviews_list); an existing response is replaced. " +
+			"Without confirm:true previews; the human approves every reply text.",
 	}, reviewsReply))
 }
 

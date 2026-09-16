@@ -11,17 +11,17 @@ import (
 )
 
 type reviewStatusIn struct {
-	App      tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform `json:"platform,omitempty" jsonschema:"default: the app's platform"`
-	Limit    int           `json:"limit,omitempty" jsonschema:"past submissions to return (1-20, default 5)"`
+	App      tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform `json:"platform,omitempty"`
+	Limit    int           `json:"limit,omitempty" jsonschema:"past submissions, 1-20, default 5"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_review_status", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "App Review submission status",
-		Description: "Current and recent App Review submissions with items, states, submitted dates and the version's state. " +
-			"The API does not expose reviewer messages: on rejection read them in the Resolution Center link, fix, then release_submit.",
+		Description: "Current and recent App Review submissions with items and states. Reviewer messages aren't in the " +
+			"API: read the Resolution Center link, fix, then release_submit.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, releaseReviewStatus))
 }

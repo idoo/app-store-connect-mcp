@@ -28,22 +28,22 @@ const (
 var analyticsCategories = []any{"APP_USAGE", "APP_STORE_ENGAGEMENT", "COMMERCE", "FRAMEWORK_USAGE", "PERFORMANCE"}
 
 type analyticsSetupIn struct {
-	App             tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned/default app"`
-	OneTimeSnapshot bool        `json:"one_time_snapshot,omitempty" jsonschema:"also request a ONE_TIME_SNAPSHOT with available history"`
+	App             tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	OneTimeSnapshot bool        `json:"one_time_snapshot,omitempty" jsonschema:"also request a ONE_TIME_SNAPSHOT (history)"`
 }
 
 type analyticsReportIn struct {
-	App         tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned/default app"`
-	AccessType  string      `json:"access_type,omitempty" jsonschema:"which request's reports to read; default ONGOING, falling back to ONE_TIME_SNAPSHOT"`
+	App         tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	AccessType  string      `json:"access_type,omitempty" jsonschema:"default ONGOING, else ONE_TIME_SNAPSHOT"`
 	Category    string      `json:"category,omitempty" jsonschema:"only reports of this category"`
-	Report      string      `json:"report,omitempty" jsonschema:"report id or name (exact or unique substring); omit to list reports"`
-	Granularity string      `json:"granularity,omitempty" jsonschema:"instance granularity; default DAILY"`
+	Report      string      `json:"report,omitempty" jsonschema:"report id or name (unique substring); omit to list"`
+	Granularity string      `json:"granularity,omitempty" jsonschema:"default DAILY"`
 	From        string      `json:"from,omitempty" jsonschema:"first processing date YYYY-MM-DD"`
 	To          string      `json:"to,omitempty" jsonschema:"last processing date YYYY-MM-DD"`
-	Dimensions  []string    `json:"dimensions,omitempty" jsonschema:"columns to group by (see columns in the result)"`
-	Metrics     []string    `json:"metrics,omitempty" jsonschema:"numeric columns to sum; default: every numeric column"`
+	Dimensions  []string    `json:"dimensions,omitempty" jsonschema:"columns to group by (see result columns)"`
+	Metrics     []string    `json:"metrics,omitempty" jsonschema:"columns to sum; default all numeric"`
 	TopN        int         `json:"top_n,omitempty" jsonschema:"groups kept, default 20, max 200"`
-	MaxSegments int         `json:"max_segments,omitempty" jsonschema:"segments downloaded, newest instances first; default 3, max 10"`
+	MaxSegments int         `json:"max_segments,omitempty" jsonschema:"newest segments to download; default 3, max 10"`
 	RawRows     int         `json:"raw_rows,omitempty" jsonschema:"also return up to this many raw rows (max 500)"`
 }
 
@@ -51,14 +51,14 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "analytics_setup", Toolset: tool.Reports, Class: tool.Write, Idempotent: true,
 		Title: "Enable App Analytics reports",
-		Description: "Makes sure an ONGOING analytics report request exists for an app (optionally a ONE_TIME_SNAPSHOT for history). " +
-			"Idempotent: existing requests are reported as already. First data arrives 24–48 h later; read it with analytics_report.",
+		Description: "Ensures an ONGOING analytics report request exists (optional ONE_TIME_SNAPSHOT for history); " +
+			"existing ones report already. Data arrives 24–48 h later via analytics_report.",
 	}, analyticsSetup))
 	tool.Register(tool.New(tool.Meta{
 		Name: "analytics_report", Toolset: tool.Reports, Class: tool.Read, Idempotent: true,
 		Title: "App Analytics report",
-		Description: "Without report: lists an app's analytics reports (engagement, commerce, usage, performance). With report: " +
-			"downloads its newest instances' segments and sums metrics by dimensions. Needs analytics_setup first; data lags 24–48 h.",
+		Description: "Without report: lists the app's analytics reports. With report: sums metrics of its newest segments " +
+			"by dimensions. Needs analytics_setup; data lags 24–48 h.",
 		Enums: map[string][]any{
 			"access_type": {accessOngoing, accessSnapshot},
 			"category":    analyticsCategories,

@@ -18,9 +18,9 @@ const (
 )
 
 type listIn struct {
-	App        tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform   tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
-	Version    tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, falls back to live), live or a version string"`
+	App        tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform   tool.Platform   `json:"platform,omitempty"`
+	Version    tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, else live), live or a version string"`
 	Locales    tool.LocaleSet  `json:"locales,omitempty" jsonschema:"locales to show, or [\"all\"] (default)"`
 	Display    string          `json:"display,omitempty" jsonschema:"only this display type, e.g. APP_IPHONE_67, 6.9, ipad-13, mac"`
 	Thumbnails bool            `json:"thumbnails,omitempty" jsonschema:"attach up to 4 small screenshot images"`

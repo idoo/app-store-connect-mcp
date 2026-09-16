@@ -22,25 +22,25 @@ const (
 )
 
 type searchIn struct {
-	Query         string `json:"query" jsonschema:"keywords, resource type, tag or operation id, e.g. \"list builds of app\""`
+	Query         string `json:"query" jsonschema:"keywords, resource type, tag or operation id"`
 	Limit         int    `json:"limit,omitempty" jsonschema:"max hits (default 10, max 50)"`
-	IncludeWrites bool   `json:"include_writes,omitempty" jsonschema:"in read-only mode, also list POST/PATCH/DELETE operations"`
+	IncludeWrites bool   `json:"include_writes,omitempty" jsonschema:"in read-only mode, also list mutations"`
 }
 
 type describeIn struct {
-	OperationID string `json:"operation_id,omitempty" jsonschema:"operation id from asc_api_search, e.g. apps_getCollection"`
+	OperationID string `json:"operation_id,omitempty" jsonschema:"from asc_api_search, e.g. apps_getCollection"`
 	Method      string `json:"method,omitempty" jsonschema:"with path, instead of operation_id"`
 	Path        string `json:"path,omitempty" jsonschema:"concrete or template path, e.g. /v1/apps/123"`
 }
 
 type getIn struct {
-	Path           string            `json:"path" jsonschema:"concrete path, e.g. /v1/apps/123/appStoreVersions; may carry a query string"`
-	Query          map[string]string `json:"query,omitempty" jsonschema:"query params, e.g. {\"filter[platform]\":\"IOS\",\"sort\":\"-createdDate\"}"`
-	Fields         map[string]string `json:"fields,omitempty" jsonschema:"sparse fieldsets: resource type to comma-separated fields"`
+	Path           string            `json:"path" jsonschema:"concrete path, e.g. /v1/apps/123/builds"`
+	Query          map[string]string `json:"query,omitempty" jsonschema:"query params, e.g. {\"sort\":\"-createdDate\"}"`
+	Fields         map[string]string `json:"fields,omitempty" jsonschema:"sparse fieldsets: type → comma-separated fields"`
 	Include        []string          `json:"include,omitempty" jsonschema:"relationships to include"`
-	MaxItems       int               `json:"max_items,omitempty" jsonschema:"collection items to fetch across pages (default 200, max 5000)"`
-	Cursor         string            `json:"cursor,omitempty" jsonschema:"next_cursor from a previous call with the same path"`
-	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow a path missing from the pinned spec (Apple added it later)"`
+	MaxItems       int               `json:"max_items,omitempty" jsonschema:"items across pages (default 200, max 5000)"`
+	Cursor         string            `json:"cursor,omitempty" jsonschema:"next_cursor from a previous call (same path)"`
+	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow a path missing from the pinned spec"`
 }
 
 type requestIn struct {
@@ -48,34 +48,34 @@ type requestIn struct {
 	Method         string            `json:"method" jsonschema:"POST, PATCH or DELETE (reads: asc_api_get)"`
 	Path           string            `json:"path" jsonschema:"concrete path, e.g. /v1/appStoreVersions/123"`
 	Query          map[string]string `json:"query,omitempty" jsonschema:"query params"`
-	Body           map[string]any    `json:"body,omitempty" jsonschema:"JSON:API document {data:{type,attributes,relationships}}; see asc_api_describe"`
-	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow an operation missing from the pinned spec; always needs confirm"`
+	Body           map[string]any    `json:"body,omitempty" jsonschema:"JSON:API {data:{type,attributes,relationships}}"`
+	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow an op missing from the pinned spec; always confirms"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "asc_api_search", Toolset: tool.Core, Class: tool.Read, Idempotent: true, Local: true,
 		Title: "Search App Store Connect API",
-		Description: "Find App Store Connect API operations by keywords, resource type or tag when no workflow tool fits. " +
-			"Returns ranked operation ids with method, path and summary; follow with asc_api_describe.",
+		Description: "Find API operations by keywords, resource type or tag when no workflow tool fits; returns ranked " +
+			"operation ids, method, path, summary. Then asc_api_describe.",
 	}, apiSearch))
 	tool.Register(tool.New(tool.Meta{
 		Name: "asc_api_describe", Toolset: tool.Core, Class: tool.Read, Idempotent: true, Local: true,
 		Title: "Describe API operation",
-		Description: "Describe one App Store Connect API operation (by operation_id, or method+path): params with enums, " +
-			"fields[] names, includes, body skeleton and a ready example for asc_api_get / asc_api_request.",
+		Description: "Describe one API operation (operation_id or method+path): params, enums, fields[] names, includes, " +
+			"body skeleton and a ready example call.",
 	}, apiDescribe))
 	tool.Register(tool.New(tool.Meta{
 		Name: "asc_api_get", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "GET any API resource",
-		Description: "Call any App Store Connect GET operation, validated against the pinned spec first (a mismatch returns " +
-			"problems and the skeleton, Apple is not called). Collections auto-paginate to max_items and return next_cursor.",
+		Description: "GET any App Store Connect operation, validated against the pinned spec first (a mismatch returns the " +
+			"skeleton, no call). Collections auto-paginate to max_items with next_cursor.",
 	}, apiGet))
 	tool.Register(tool.New(tool.Meta{
 		Name: "asc_api_request", Toolset: tool.Core, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Call any API mutation",
-		Description: "POST/PATCH/DELETE any App Store Connect operation, validated against the spec. Every call " +
-			"previews first and needs confirm:true plus human approval. Prefer workflow tools; reads go to asc_api_get.",
+		Description: "POST/PATCH/DELETE any App Store Connect operation, spec-validated. Every call previews first and " +
+			"needs confirm:true plus human approval. Prefer workflow tools; reads: asc_api_get.",
 	}, apiRequest))
 }
 

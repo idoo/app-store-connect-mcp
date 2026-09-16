@@ -170,7 +170,7 @@ func find(hooks []hook, ref string) (hook, error) {
 }
 
 type listIn struct {
-	App tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 }
 
 type listOut struct {
@@ -212,7 +212,7 @@ func list(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, error) {
 
 type upsertIn struct {
 	tool.ConfirmFlag
-	App        tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App        tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Webhook    string      `json:"webhook,omitempty" jsonschema:"id or name of an existing webhook to update; default: match by name, else create"`
 	Name       string      `json:"name,omitempty" jsonschema:"webhook name (required to create)"`
 	URL        string      `json:"url,omitempty" jsonschema:"https endpoint (required to create)"`
@@ -417,7 +417,7 @@ func ping(wctx context.Context, env *tool.Env, want bool, out *upsertOut) {
 
 type deleteIn struct {
 	tool.ConfirmFlag
-	App     tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App     tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Webhook string      `json:"webhook" jsonschema:"webhook id or name"`
 }
 

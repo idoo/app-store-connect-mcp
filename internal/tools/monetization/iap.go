@@ -40,7 +40,7 @@ func init() {
 }
 
 type iapListIn struct {
-	App      tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App      tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	State    string      `json:"state,omitempty"`
 	Type     string      `json:"type,omitempty"`
 	MaxItems int         `json:"max_items,omitempty" jsonschema:"default 200, max 5000"`
@@ -138,7 +138,7 @@ func iapLocs(rs []tool.Resource) []iapLocOut {
 }
 
 type iapUpsertIn struct {
-	App              tool.AppRef          `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App              tool.AppRef          `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	ProductID        string               `json:"product_id" jsonschema:"product identifier; the lookup key"`
 	Type             string               `json:"type,omitempty" jsonschema:"required to create; cannot change later"`
 	ReferenceName    string               `json:"reference_name,omitempty" jsonschema:"internal name (max 64); required to create"`
