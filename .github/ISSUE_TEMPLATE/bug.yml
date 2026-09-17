@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in hamn does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste API keys, .p8 contents, JWTs or signed URLs. `hamn doctor` output is safe to share (it is redacted).
+        Security issues: use private vulnerability reporting (Security tab), not this form.
+  - type: input
+    id: version
+    attributes:
+      label: hamn version
+      description: Output of `hamn version`
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options: [Claude Code, Claude Desktop, Cursor, Codex, VS Code, Windsurf, Other]
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or subcommand
+      placeholder: release_status, hamn auth add, ...
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Tool call arguments and result
+      description: The JSON arguments and the (redacted) result or error, including `_meta.hamn` if present.
+      render: json
+  - type: textarea
+    id: doctor
+    attributes:
+      label: hamn doctor output
+      render: text

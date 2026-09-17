@@ -1,0 +1,138 @@
+name: Spec drift
+
+# Weekly: download Apple's App Store Connect OpenAPI zip, compare its sha256
+# with internal/spec/PROVENANCE.json, and on drift open a regeneration PR.
+# internal/spec/gen fails on unclassified new non-GET ops, so a drift PR stays
+# red until a human classifies them.
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spec-drift
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.cmp.outputs.changed }}
+      sha: ${{ steps.cmp.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download and compare
+        id: cmp
+        run: |
+          url=$(jq -r .source_url internal/spec/PROVENANCE.json)
+          want=$(jq -r .zip_sha256 internal/spec/PROVENANCE.json)
+          mkdir -p spec-zip
+          curl -fsSL --proto '=https' -o spec-zip/spec.zip "$url"
+          got=$(sha256sum spec-zip/spec.zip | awk '{print $1}')
+          echo "sha=$got" >> "$GITHUB_OUTPUT"
+          if [ "$got" = "$want" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Spec unchanged ($got)."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Spec changed: $want -> $got"
+          fi
+      - if: steps.cmp.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: spec-zip
+          path: spec-zip/spec.zip
+          retention-days: 7
+
+  regenerate:
+    needs: detect
+    if: needs.detect.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SPEC_SHA: ${{ needs.detect.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: spec-zip
+          path: spec-zip
+      - name: Snapshot old operations
+        run: gunzip -c internal/spec/index.json.gz | jq -r '.ops[] | "\(.m) \(.p) \(.id)"' | sort > /tmp/ops-old.txt
+      - name: Regenerate index
+        id: gen
+        run: |
+          unzip -o -j spec-zip/spec.zip 'openapi.oas*.json' -d spec-zip
+          spec=$(find spec-zip -maxdepth 1 -name 'openapi.oas*.json' | head -n 1)
+          test -n "$spec"
+          url=$(jq -r .source_url internal/spec/PROVENANCE.json)
+          go run ./internal/spec/gen -in "$spec" -zip-sha256 "$SPEC_SHA" -source-url "$url" 2>&1 | tee /tmp/gen.log
+        continue-on-error: true
+      - name: Regenerate docs
+        if: steps.gen.outcome == 'success'
+        run: |
+          if [ -d internal/tools/docsgen ]; then go run ./internal/tools/docsgen; fi
+      - name: Test
+        id: test
+        if: steps.gen.outcome == 'success'
+        run: go test ./... 2>&1 | tee /tmp/test.log
+        continue-on-error: true
+      - name: Open PR
+        run: |
+          branch="spec-drift/${SPEC_SHA:0:12}"
+          if gh pr list --head "$branch" --state open --json number --jq '.[0].number' | grep -q .; then
+            echo "PR for $branch already open"; exit 0
+          fi
+          gunzip -c internal/spec/index.json.gz | jq -r '.ops[] | "\(.m) \(.p) \(.id)"' | sort > /tmp/ops-new.txt || true
+          added=$(comm -13 <(sort /tmp/ops-old.txt) <(sort /tmp/ops-new.txt) || true)
+          removed=$(comm -23 <(sort /tmp/ops-old.txt) <(sort /tmp/ops-new.txt) || true)
+          {
+            echo "Apple's App Store Connect OpenAPI spec changed (zip sha256 \`$SPEC_SHA\`)."
+            echo
+            echo "- generator: **${{ steps.gen.outcome }}**"
+            echo "- tests: **${{ steps.test.outcome || 'skipped' }}**"
+            echo
+            echo "Classify any new non-GET operation in \`internal/spec/ops_class.json\` before merging."
+            echo
+            echo "<details><summary>Added operations ($(printf '%s' "$added" | grep -c . || true))</summary>"
+            echo; echo '```'; printf '%s\n' "$added"; echo '```'; echo "</details>"
+            echo
+            echo "<details><summary>Removed operations ($(printf '%s' "$removed" | grep -c . || true))</summary>"
+            echo; echo '```'; printf '%s\n' "$removed"; echo '```'; echo "</details>"
+            echo
+            echo "<details><summary>Generator log</summary>"
+            echo; echo '```'; tail -n 80 /tmp/gen.log; echo '```'; echo "</details>"
+          } > /tmp/body.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          rm -rf spec-zip
+          git add -A .
+          git commit -m "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" --allow-empty
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" \
+            --body-file /tmp/body.md
+          # PRs created with GITHUB_TOKEN do not trigger pull_request runs.
+          gh workflow run ci.yml --ref "$branch"
+      - name: Fail when regeneration or tests failed
+        if: steps.gen.outcome != 'success' || steps.test.outcome == 'failure'
+        run: |
+          echo "::error::spec drift needs attention: generator=${{ steps.gen.outcome }} tests=${{ steps.test.outcome }}"
+          exit 1
