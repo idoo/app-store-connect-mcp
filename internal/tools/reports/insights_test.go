@@ -9,10 +9,10 @@ import (
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
-// insightsKit serves last_7_days at s10bNow (Thu 2026-10-22): current
+// insightsKit serves last_7_days at fixedNow (Thu 2026-10-22): current
 // 2026-10-15..21 (21 not published yet), previous 2026-10-08..14.
 func insightsKit(t *testing.T) *tooltest.Kit {
-	k := s10bKit(t).ReadOnly()
+	k := reportsKit(t).ReadOnly()
 	day1, day2 := gz(t, "sales_day1.tsv"), gz(t, "sales_day2.tsv")
 	k.ASC.HandleFunc(http.MethodGet, "/v1/salesReports", func(req tool.Request) tooltest.Fixture {
 		d := req.Query.Get("filter[reportDate]")

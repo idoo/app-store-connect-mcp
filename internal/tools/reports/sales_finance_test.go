@@ -14,15 +14,15 @@ import (
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
-// s10bNow is Thursday 2026-10-22 12:00 Pacific: this_week = Mon 19 … Thu 22.
-var s10bNow = time.Date(2026, 10, 22, 19, 0, 0, 0, time.UTC)
+// fixedNow is Thursday 2026-10-22 12:00 Pacific: this_week = Mon 19 … Thu 22.
+var fixedNow = time.Date(2026, 10, 22, 19, 0, 0, 0, time.UTC)
 
 const notFound = `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There were no sales for the date specified."}]}`
 
-func s10bKit(t *testing.T) *tooltest.Kit {
+func reportsKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
 	k := tooltest.New(t)
-	k.Clock.Set(s10bNow)
+	k.Clock.Set(fixedNow)
 	k.Resolve.Apps = []tool.App{
 		{ID: "1000000001", BundleID: "com.example.notes", Name: "Example Notes", SKU: "com.example.notes"},
 		{ID: "2000000001", BundleID: "com.other.app", Name: "Other App", SKU: "com.other.app"},
@@ -30,10 +30,10 @@ func s10bKit(t *testing.T) *tooltest.Kit {
 	return k
 }
 
-// gz returns the gzip bytes of a testdata/s10b fixture.
+// gz returns the gzip bytes of a testdata/sales fixture.
 func gz(t *testing.T, name string) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "s10b", name))
+	raw, err := os.ReadFile(filepath.Join("testdata", "sales", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func mustTool(t *testing.T, name string) tool.Tool {
 }
 
 func thisWeekKit(t *testing.T) *tooltest.Kit {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-19", "sales_day1.tsv")
 	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-20", "sales_day2.tsv")
 	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-21", http.StatusNotFound, notFound)
@@ -149,7 +149,7 @@ func TestSalesReportUSDEstimateMissingRate(t *testing.T) {
 }
 
 func TestSalesReportVendorMissing(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	k.Env.Profile.VendorNumber = ""
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_missing")
 	if !strings.Contains(body.Hint, "hamn auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
@@ -162,7 +162,7 @@ func TestSalesReportVendorMissing(t *testing.T) {
 }
 
 func TestReportsWithheldForIndividualKey(t *testing.T) {
-	k := s10bKit(t).Individual()
+	k := reportsKit(t).Individual()
 	for _, name := range []string{"sales_report", "finance_report"} {
 		tl := mustTool(t, name)
 		if tl.ListedIn(k.Env.Profile) {
@@ -176,7 +176,7 @@ func TestReportsWithheldForIndividualKey(t *testing.T) {
 }
 
 func TestSalesReportExplicitFrequency(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	handleGz(t, k, "/v1/salesReports?filter[frequency]=WEEKLY", "sales_day1.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"frequency":"WEEKLY","report_date":"2026-10-18"}`))
 	got := tooltest.Decode[map[string]any](t, res)
@@ -194,14 +194,14 @@ func TestSalesReportExplicitFrequency(t *testing.T) {
 }
 
 func TestSalesReportNon404IsError(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/salesReports", http.StatusBadRequest,
 		`{"errors":[{"status":"400","code":"PARAMETER_ERROR.INVALID","title":"bad vendor"}]}`)
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "api_error")
 }
 
 func TestFinanceReportWithFX(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-09", "finance_detail_fx.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"report_type":"FINANCE_DETAIL"}`))
 	got := tooltest.Decode[map[string]any](t, res)
@@ -219,7 +219,7 @@ func TestFinanceReportWithFX(t *testing.T) {
 }
 
 func TestFinanceReportWithoutFX(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial_no_fx.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`))
 	got := tooltest.Decode[map[string]any](t, res)
@@ -238,7 +238,7 @@ func TestFinanceReportWithoutFX(t *testing.T) {
 }
 
 func TestFinanceReportPending(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/financeReports", http.StatusNotFound, notFound)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, ``))
 	got := tooltest.Decode[map[string]any](t, res)

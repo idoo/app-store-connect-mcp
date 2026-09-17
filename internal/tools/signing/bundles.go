@@ -18,14 +18,14 @@ func init() {
 		Title: "List bundle IDs",
 		Description: "Registered bundle IDs (identifier, name, platform, seed id) with their enabled capabilities and settings. " +
 			"Filter by identifier, platform or a name/identifier substring. Use before signing_capabilities_set or signing_profile_create.",
-		Enums: map[string][]any{"platform": s13aPlatforms},
+		Enums: map[string][]any{"platform": platforms},
 	}, bundleIDsList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "signing_bundle_id_create", Toolset: tool.Signing, Class: tool.Write, Idempotent: true, NeedsTeamKey: true,
 		Title: "Register a bundle ID",
 		Description: "Register a bundle identifier (explicit or wildcard com.example.*) for IOS, MAC_OS or UNIVERSAL. " +
 			"Idempotent: an already registered identifier returns already:true with the existing bundle ID; nothing is changed.",
-		Enums: map[string][]any{"platform": s13aPlatforms},
+		Enums: map[string][]any{"platform": platforms},
 	}, bundleIDCreate))
 	tool.Register(tool.New(tool.Meta{
 		Name: "signing_capabilities_set", Toolset: tool.Signing, Class: tool.Destructive, NeedsTeamKey: true,
@@ -34,10 +34,10 @@ func init() {
 		Description: "Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; " +
 			"already enabled ones are skipped. Disabling or changing settings returns a preview and needs confirm:true; it invalidates profiles.",
 		Enums: map[string][]any{
-			"enable.type":                 s13aCapabilityTypes,
-			"enable.settings.key":         s13aSettingKeys,
-			"enable.settings.options.key": s13aOptionKeys,
-			"disable":                     s13aCapabilityTypes,
+			"enable.type":                 capabilityTypes,
+			"enable.settings.key":         settingKeys,
+			"enable.settings.options.key": optionKeys,
+			"disable":                     capabilityTypes,
 		},
 	}, capabilitiesSet))
 }
@@ -53,17 +53,17 @@ type bundleIDsListIn struct {
 }
 
 type bundleIDsListOut struct {
-	BundleIDs  []s13aBundleOut `json:"bundle_ids"`
-	Returned   int             `json:"returned"`
-	Total      int             `json:"total,omitempty"`
-	NextCursor string          `json:"next_cursor,omitempty"`
+	BundleIDs  []bundleOut `json:"bundle_ids"`
+	Returned   int         `json:"returned"`
+	Total      int         `json:"total,omitempty"`
+	NextCursor string      `json:"next_cursor,omitempty"`
 }
 
 func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*tool.Result, error) {
 	if in.MaxItems < 0 || in.MaxItems > 1000 {
-		return nil, s13aInvalid("max_items must be between 1 and 1000")
+		return nil, invalidArgs("max_items must be between 1 and 1000")
 	}
-	q := s13aBundleQuery()
+	q := bundleQuery()
 	q.Set("sort", "identifier")
 	if in.Identifier != "" {
 		q.Set("filter[identifier]", in.Identifier)
@@ -75,11 +75,11 @@ func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*too
 	if err != nil {
 		return nil, fmt.Errorf("list bundle IDs: %w", err)
 	}
-	inc := s13aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	needle := strings.ToLower(strings.TrimSpace(in.Query))
-	out := bundleIDsListOut{BundleIDs: []s13aBundleOut{}, Total: res.Total, NextCursor: res.NextCursor}
+	out := bundleIDsListOut{BundleIDs: []bundleOut{}, Total: res.Total, NextCursor: res.NextCursor}
 	for _, r := range res.Data {
-		b := s13aBundle(r, inc)
+		b := flattenBundle(r, inc)
 		if needle != "" && !strings.Contains(strings.ToLower(b.Identifier), needle) && !strings.Contains(strings.ToLower(b.Name), needle) {
 			continue
 		}
@@ -98,34 +98,34 @@ type bundleIDCreateIn struct {
 }
 
 type bundleIDCreateOut struct {
-	BundleID s13aBundleOut `json:"bundle_id"`
-	Created  bool          `json:"created"`
+	BundleID bundleOut `json:"bundle_id"`
+	Created  bool      `json:"created"`
 }
 
-// s13aIdentifierRE is Apple's bundle identifier alphabet, optionally a
+// identifierRE is Apple's bundle identifier alphabet, optionally a
 // trailing wildcard.
-var s13aIdentifierRE = regexp.MustCompile(`^(\*|[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*(\.\*)?)$`)
+var identifierRE = regexp.MustCompile(`^(\*|[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*(\.\*)?)$`)
 
 func bundleIDCreate(ctx context.Context, env *tool.Env, in bundleIDCreateIn) (*tool.Result, error) {
 	in.Identifier = strings.TrimSpace(in.Identifier)
 	in.Name = strings.TrimSpace(in.Name)
-	if !s13aIdentifierRE.MatchString(in.Identifier) || len(in.Identifier) > 155 {
-		return nil, s13aInvalid("identifier %q is not a valid bundle identifier", in.Identifier)
+	if !identifierRE.MatchString(in.Identifier) || len(in.Identifier) > 155 {
+		return nil, invalidArgs("identifier %q is not a valid bundle identifier", in.Identifier)
 	}
 	if in.Name == "" {
-		return nil, s13aInvalid("name is required")
+		return nil, invalidArgs("name is required")
 	}
-	next := func(b s13aBundleOut) tool.NextStep {
+	next := func(b bundleOut) tool.NextStep {
 		return tool.NextStep{Tool: "signing_capabilities_set", Args: map[string]any{"bundle_id": b.Identifier}}
 	}
-	already := func(b s13aBundleOut) *tool.Result {
+	already := func(b bundleOut) *tool.Result {
 		res := tool.Already(bundleIDCreateOut{BundleID: b}).Then(next(b))
 		if b.Platform != in.Platform {
 			res.Warn(fmt.Sprintf("%s is already registered for platform %s, not %s", b.Identifier, b.Platform, in.Platform))
 		}
 		return res
 	}
-	if b, ok, err := s13aFindIdentifier(ctx, env, in.Identifier); err != nil {
+	if b, ok, err := findIdentifier(ctx, env, in.Identifier); err != nil {
 		return nil, err
 	} else if ok {
 		return already(b), nil
@@ -135,9 +135,9 @@ func bundleIDCreate(ctx context.Context, env *tool.Env, in bundleIDCreateIn) (*t
 		"attributes": map[string]any{"identifier": in.Identifier, "name": in.Name, "platform": in.Platform},
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/bundleIds", Body: body, Write: true})
-	if s13aStatus(err) == http.StatusConflict {
+	if apiStatus(err) == http.StatusConflict {
 		// Registered concurrently or under another team member: read back.
-		b, ok, rerr := s13aFindIdentifier(ctx, env, in.Identifier)
+		b, ok, rerr := findIdentifier(ctx, env, in.Identifier)
 		if rerr == nil && ok {
 			return already(b), nil
 		}
@@ -149,7 +149,7 @@ func bundleIDCreate(ctx context.Context, env *tool.Env, in bundleIDCreateIn) (*t
 	if !ok || r.ID == "" {
 		return nil, fmt.Errorf("register bundle ID %s: response has no resource: %w", in.Identifier, tool.ErrOutcomeUnknown)
 	}
-	b := s13aBundle(r, s13aIncluded(resp.Included))
+	b := flattenBundle(r, indexIncluded(resp.Included))
 	return tool.OK(bundleIDCreateOut{BundleID: b, Created: true}).Then(next(b)), nil
 }
 
@@ -204,8 +204,8 @@ type capsSetOut struct {
 // capChange is one planned mutation.
 type capChange struct {
 	enable capEnableIn
-	cur    s13aCapOut // zero for a new capability
-	action string     // capEnabled, capUpdated or capDisabled
+	cur    capOut // zero for a new capability
+	action string // capEnabled, capUpdated or capDisabled
 }
 
 // capSettingsBody renders settings as CapabilitySetting objects.
@@ -223,7 +223,7 @@ func capSettingsBody(in []capSettingIn) []map[string]any {
 
 // capSettingsSatisfied reports whether every wanted option already has the
 // wanted enabled state on the remote capability.
-func capSettingsSatisfied(cur s13aCapOut, want []capSettingIn) bool {
+func capSettingsSatisfied(cur capOut, want []capSettingIn) bool {
 	have := map[string][]string{}
 	for _, s := range cur.Settings {
 		have[s.Key] = s.Enabled
@@ -245,29 +245,29 @@ func capSettingsSatisfied(cur s13aCapOut, want []capSettingIn) bool {
 // capValidate rejects empty, duplicate and contradictory capability lists.
 func capValidate(in capsSetIn) error {
 	if len(in.Enable) == 0 && len(in.Disable) == 0 {
-		return s13aInvalid("pass at least one capability in enable or disable")
+		return invalidArgs("pass at least one capability in enable or disable")
 	}
 	seen := map[string]string{}
 	for _, e := range in.Enable {
-		if err := s13aCheckEnum("enable.type", e.Type, s13aCapabilityTypes); err != nil {
+		if err := checkEnum("enable.type", e.Type, capabilityTypes); err != nil {
 			return err
 		}
 		if seen[e.Type] != "" {
-			return s13aInvalid("capability %s is listed twice", e.Type)
+			return invalidArgs("capability %s is listed twice", e.Type)
 		}
 		seen[e.Type] = "enable"
 		for _, s := range e.Settings {
 			if len(s.Options) == 0 {
-				return s13aInvalid("setting %s of %s needs at least one option", s.Key, e.Type)
+				return invalidArgs("setting %s of %s needs at least one option", s.Key, e.Type)
 			}
 		}
 	}
 	for _, d := range in.Disable {
-		if err := s13aCheckEnum("disable", d, s13aCapabilityTypes); err != nil {
+		if err := checkEnum("disable", d, capabilityTypes); err != nil {
 			return err
 		}
 		if prev := seen[d]; prev != "" {
-			return s13aInvalid("capability %s is listed in both enable and disable, or twice", d)
+			return invalidArgs("capability %s is listed in both enable and disable, or twice", d)
 		}
 		seen[d] = "disable"
 	}
@@ -278,11 +278,11 @@ func capabilitiesSet(ctx context.Context, env *tool.Env, in capsSetIn) (*tool.Re
 	if err := capValidate(in); err != nil {
 		return nil, err
 	}
-	b, err := s13aLookupBundle(ctx, env, in.BundleID)
+	b, err := lookupBundle(ctx, env, in.BundleID)
 	if err != nil {
 		return nil, err
 	}
-	current := map[string]s13aCapOut{}
+	current := map[string]capOut{}
 	for _, c := range b.Capabilities {
 		current[c.Type] = c
 	}
@@ -340,7 +340,7 @@ func capabilitiesSet(ctx context.Context, env *tool.Env, in capsSetIn) (*tool.Re
 }
 
 // capPreview describes the gated changes for the approval prompt.
-func capPreview(b s13aBundleOut, changes []capChange) tool.PlanPreview {
+func capPreview(b bundleOut, changes []capChange) tool.PlanPreview {
 	cur := make([]string, 0, len(b.Capabilities))
 	for _, c := range b.Capabilities {
 		cur = append(cur, c.Type)
@@ -397,7 +397,7 @@ func capApply(ctx context.Context, env *tool.Env, bundleID string, ch capChange)
 		})
 	case capDisabled:
 		_, err = env.ASC.Do(ctx, tool.Request{Method: http.MethodDelete, Path: "/v1/bundleIdCapabilities/" + url.PathEscape(ch.cur.ID), Write: true})
-		if s13aStatus(err) == http.StatusNotFound {
+		if apiStatus(err) == http.StatusNotFound {
 			return capItem{Type: ch.enable.Type, Action: capAlreadyDisabled}
 		}
 	}

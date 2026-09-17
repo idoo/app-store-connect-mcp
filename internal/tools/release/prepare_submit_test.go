@@ -125,7 +125,7 @@ func TestReleasePrepareAppliesStatusPlan(t *testing.T) {
 	if len(res.Next) == 0 || res.Next[0].Tool != "release_status" {
 		t.Errorf("next = %+v", res.Next)
 	}
-	tooltest.AssertGolden(t, "testdata/s7b/prepare_full.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+	tooltest.AssertGolden(t, "testdata/prepare_submit/prepare_full.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 	if got := len(k.ASC.Requests()) - before; got > 14 {
 		t.Errorf("prepare made %d requests", got)
 	}
@@ -186,7 +186,7 @@ func TestReleasePrepareCreatesVersion(t *testing.T) {
 	if !out.Version.Created || out.Version.ID != "v2" {
 		t.Errorf("version = %+v", out.Version)
 	}
-	tooltest.AssertGolden(t, "testdata/s7b/prepare_create.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+	tooltest.AssertGolden(t, "testdata/prepare_submit/prepare_create.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 }
 
 // submissionFixture registers an open submission (state "" = none).
@@ -244,7 +244,7 @@ func TestReleaseSubmitNewSubmission(t *testing.T) {
 	if !out.Created || out.Submission.ID != "rs9" || out.Submission.State != "WAITING_FOR_REVIEW" {
 		t.Errorf("out = %+v", out)
 	}
-	tooltest.AssertGolden(t, "testdata/s7b/submit_new.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+	tooltest.AssertGolden(t, "testdata/prepare_submit/submit_new.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 }
 
 func TestReleaseSubmitReusesDraft(t *testing.T) {
@@ -267,7 +267,7 @@ func TestReleaseSubmitAfterRejectionResolvesItems(t *testing.T) {
 		jres{Type: "reviewSubmissionItems", ID: "it1", Attrs: map[string]any{"state": "REJECTED"}, Rels: map[string]any{"appStoreVersion": "appStoreVersions:v1"}})
 	submitHandlers(t, k)
 	res := submitTwice(t, k, `{"app":"Hjul"}`)
-	tooltest.AssertGolden(t, "testdata/s7b/submit_resubmit.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+	tooltest.AssertGolden(t, "testdata/prepare_submit/submit_resubmit.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 }
 
 func TestReleaseSubmitAlreadySubmitted(t *testing.T) {
@@ -293,7 +293,7 @@ func TestReleaseSubmitAttachesIAPVersion(t *testing.T) {
 	k.ASC.Handle("GET", "/v2/inAppPurchases/{id}/versions", 200, `{"data":[]}`)
 	k.ASC.Handle("POST", "/v1/inAppPurchaseVersions", 201, doc(t, jres{Type: "inAppPurchaseVersions", ID: "iv9", Attrs: map[string]any{"state": "PREPARE_FOR_SUBMISSION"}}))
 	res := submitTwice(t, k, `{"app":"Hjul","include_iaps":["Pro"]}`)
-	tooltest.AssertGolden(t, "testdata/s7b/submit_iap.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+	tooltest.AssertGolden(t, "testdata/prepare_submit/submit_iap.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 }
 
 func TestReleaseCancelInReview(t *testing.T) {
@@ -312,7 +312,7 @@ func TestReleaseCancelInReview(t *testing.T) {
 	if out.Action != "cancel" || out.Submission.State != "CANCELING" {
 		t.Errorf("out = %+v", out)
 	}
-	tooltest.AssertGolden(t, "testdata/s7b/cancel_in_review.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+	tooltest.AssertGolden(t, "testdata/prepare_submit/cancel_in_review.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 }
 
 func TestReleaseCancelDraftDeletesItems(t *testing.T) {

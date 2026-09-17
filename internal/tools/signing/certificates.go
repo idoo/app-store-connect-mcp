@@ -18,7 +18,7 @@ func init() {
 		Title: "List signing certificates",
 		Description: "Signing certificates by type, sorted by expiration, with days_left. expiring_within_days keeps only certificates " +
 			"expiring (or expired) within N days. Certificate content (base64 DER) is returned only with include_content.",
-		Enums: map[string][]any{"type": s13aCertificateTypes},
+		Enums: map[string][]any{"type": certificateTypes},
 	}, certificatesList))
 }
 
@@ -52,18 +52,18 @@ type certificatesListOut struct {
 	NextCursor   string           `json:"next_cursor,omitempty"`
 }
 
-// s13aCertFields is the sparse fieldset; certificateContent is added only on
+// certFields is the sparse fieldset; certificateContent is added only on
 // request (it is large and rarely needed).
-var s13aCertFields = []string{"name", "certificateType", "displayName", "serialNumber", "platform", "expirationDate", "activated"}
+var certFields = []string{"name", "certificateType", "displayName", "serialNumber", "platform", "expirationDate", "activated"}
 
 func certificatesList(ctx context.Context, env *tool.Env, in certificatesListIn) (*tool.Result, error) {
 	if in.ExpiringWithinDays < 0 {
-		return nil, s13aInvalid("expiring_within_days must not be negative")
+		return nil, invalidArgs("expiring_within_days must not be negative")
 	}
 	if in.MaxItems < 0 || in.MaxItems > 1000 {
-		return nil, s13aInvalid("max_items must be between 1 and 1000")
+		return nil, invalidArgs("max_items must be between 1 and 1000")
 	}
-	fields := slices.Clone(s13aCertFields)
+	fields := slices.Clone(certFields)
 	if in.IncludeContent {
 		fields = append(fields, "certificateContent")
 	}

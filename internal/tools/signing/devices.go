@@ -16,12 +16,12 @@ func init() {
 		Title: "Register devices",
 		Description: "Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices " +
 			"are reported as already (with their status) and not re-posted. Per-device results; one failure does not stop the batch.",
-		Enums: map[string][]any{"devices.platform": s13aPlatforms},
+		Enums: map[string][]any{"devices.platform": platforms},
 	}, devicesRegister))
 }
 
-// s13bMaxDevices caps one batch.
-const s13bMaxDevices = 100
+// maxDevices caps one batch.
+const maxDevices = 100
 
 type deviceIn struct {
 	Name     string `json:"name" jsonschema:"device name shown in the developer portal"`
@@ -58,8 +58,8 @@ type devicesRegisterOut struct {
 }
 
 func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (*tool.Result, error) {
-	if len(in.Devices) == 0 || len(in.Devices) > s13bMaxDevices {
-		return nil, s13aInvalid("devices must hold 1 to %d entries", s13bMaxDevices)
+	if len(in.Devices) == 0 || len(in.Devices) > maxDevices {
+		return nil, invalidArgs("devices must hold 1 to %d entries", maxDevices)
 	}
 	seen := map[string]bool{}
 	udids := make([]string, 0, len(in.Devices))
@@ -70,28 +70,28 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 			d.Platform = "IOS"
 		}
 		if d.Name == "" || d.UDID == "" {
-			return nil, s13aInvalid("devices[%d]: name and udid are required", i)
+			return nil, invalidArgs("devices[%d]: name and udid are required", i)
 		}
 		if strings.ContainsAny(d.UDID, ", ") {
-			return nil, s13aInvalid("devices[%d]: udid %q is malformed", i, d.UDID)
+			return nil, invalidArgs("devices[%d]: udid %q is malformed", i, d.UDID)
 		}
-		if err := s13aCheckEnum(fmt.Sprintf("devices[%d].platform", i), d.Platform, s13aPlatforms); err != nil {
+		if err := checkEnum(fmt.Sprintf("devices[%d].platform", i), d.Platform, platforms); err != nil {
 			return nil, err
 		}
 		key := strings.ToLower(d.UDID)
 		if seen[key] {
-			return nil, s13aInvalid("udid %s is listed twice", d.UDID)
+			return nil, invalidArgs("udid %s is listed twice", d.UDID)
 		}
 		seen[key] = true
 		udids = append(udids, d.UDID)
 	}
-	existing, err := s13bDevicesByUDID(ctx, env, udids)
+	existing, err := devicesByUDID(ctx, env, udids)
 	if err != nil {
 		return nil, err
 	}
 	out := devicesRegisterOut{Items: make([]deviceResult, 0, len(in.Devices))}
 	for _, d := range in.Devices {
-		item := s13bRegisterOne(ctx, env, d, existing)
+		item := registerOne(ctx, env, d, existing)
 		switch item.Action {
 		case devRegistered:
 			out.Registered++
@@ -117,8 +117,8 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 	return res, nil
 }
 
-// s13bRegisterOne registers one device unless its UDID is already known.
-func s13bRegisterOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[string]tool.Resource) deviceResult {
+// registerOne registers one device unless its UDID is already known.
+func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[string]tool.Resource) deviceResult {
 	item := deviceResult{UDID: d.UDID, Name: d.Name, Platform: d.Platform}
 	already := func(r tool.Resource) deviceResult {
 		item.Action, item.ID, item.Status, item.Platform = devAlready, r.ID, r.Str("status"), r.Str("platform")
@@ -135,9 +135,9 @@ func s13bRegisterOne(ctx context.Context, env *tool.Env, d deviceIn, existing ma
 		"attributes": map[string]any{"name": d.Name, "udid": d.UDID, "platform": d.Platform},
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/devices", Body: body, Write: true})
-	if s13aStatus(err) == http.StatusConflict {
+	if apiStatus(err) == http.StatusConflict {
 		// Registered meanwhile (or the UDID differs only in case): read back.
-		if found, rerr := s13bDevicesByUDID(ctx, env, []string{d.UDID}); rerr == nil {
+		if found, rerr := devicesByUDID(ctx, env, []string{d.UDID}); rerr == nil {
 			if r, ok := found[strings.ToLower(d.UDID)]; ok {
 				return already(r)
 			}
@@ -157,8 +157,8 @@ func s13bRegisterOne(ctx context.Context, env *tool.Env, d deviceIn, existing ma
 	return item
 }
 
-// s13bDevicesByUDID returns registered devices keyed by lower-case UDID.
-func s13bDevicesByUDID(ctx context.Context, env *tool.Env, udids []string) (map[string]tool.Resource, error) {
+// devicesByUDID returns registered devices keyed by lower-case UDID.
+func devicesByUDID(ctx context.Context, env *tool.Env, udids []string) (map[string]tool.Resource, error) {
 	q := url.Values{
 		"fields[devices]": {"name,platform,udid,status"},
 		"filter[udid]":    {strings.Join(udids, ",")},

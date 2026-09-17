@@ -10,8 +10,8 @@ import (
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
-// s7cKit is a writable kit with one iOS app.
-func s7cKit(t *testing.T) *tooltest.Kit {
+// writableKit is a writable kit with one iOS app.
+func writableKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
 	k := tooltest.New(t)
 	k.Resolve.Apps = []tool.App{{ID: "100", Name: "Hjul", BundleID: "se.jvcr.hjul", Platforms: []tool.Platform{tool.IOS}}}
@@ -41,7 +41,7 @@ func preview(t *testing.T, k *tooltest.Kit, name, args string) {
 }
 
 func TestReleaseReviewStatusWithItems(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, doc(t, []jres{
 		{
 			Type: "reviewSubmissions", ID: "rs0", Attrs: map[string]any{"platform": "IOS", "state": "COMPLETE", "submittedDate": "2025-06-01T00:00:00Z"},
@@ -83,7 +83,7 @@ func TestReleaseReviewStatusWithItems(t *testing.T) {
 }
 
 func TestReleaseReviewStatusNone(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, `{"data":[]}`)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_review_status"), k.Env, `{}`))
 	if out := tooltest.Decode[reviewStatusOut](t, res); out.Current != nil || out.Rejection != nil {
@@ -92,7 +92,7 @@ func TestReleaseReviewStatusNone(t *testing.T) {
 }
 
 func TestReleasePublishWrongStateRefused(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	versionsFixture(t, k, "PREPARE_FOR_SUBMISSION", "", 0)
 	res := tooltest.Call(t, mustTool(t, "release_publish"), k.Env, `{"app":"Hjul","confirm":true}`)
 	body := tooltest.MustFail(t, res, "invalid_state")
@@ -105,7 +105,7 @@ func TestReleasePublishWrongStateRefused(t *testing.T) {
 }
 
 func TestReleasePublishPosts(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	versionsFixture(t, k, "PENDING_DEVELOPER_RELEASE", "INACTIVE", 0)
 	k.ASC.Handle("POST", "/v1/appStoreVersionReleaseRequests", 201, doc(t, jres{Type: "appStoreVersionReleaseRequests", ID: "rr1", Attrs: map[string]any{}}))
 	preview(t, k, "release_publish", `{"app":"Hjul"}`)
@@ -126,7 +126,7 @@ func TestReleasePublishPosts(t *testing.T) {
 }
 
 func TestReleasePublishAlreadyReleased(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "", 0)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_publish"), k.Env, `{"app":"Hjul","confirm":true}`))
 	if got := tooltest.Decode[map[string]any](t, res); got["already"] != true {
@@ -135,7 +135,7 @@ func TestReleasePublishAlreadyReleased(t *testing.T) {
 }
 
 func TestReleasePublishExplicitVersion(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	k.Resolve.Versions = map[tool.VersionRef]tool.Version{"1.4": {ID: "v1", String: "1.4", Platform: tool.IOS, State: "WAITING_FOR_REVIEW"}}
 	k.ASC.Handle("GET", "/v1/appStoreVersions/{id}", 200, doc(t, jres{Type: "appStoreVersions", ID: "v1", Attrs: map[string]any{"versionString": "1.4", "appVersionState": "WAITING_FOR_REVIEW"}}))
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "release_publish"), k.Env, `{"version":"1.4","confirm":true}`), "invalid_state")
@@ -154,7 +154,7 @@ func TestReleasePhasedTransitions(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.action, func(t *testing.T) {
-			k := s7cKit(t)
+			k := writableKit(t)
 			versionsFixture(t, k, "READY_FOR_DISTRIBUTION", c.from, 4)
 			k.ASC.Handle("PATCH", "/v1/appStoreVersionPhasedReleases/{id}", 200, doc(t, jres{Type: "appStoreVersionPhasedReleases", ID: "pr1", Attrs: map[string]any{"phasedReleaseState": c.to, "currentDayNumber": 4, "totalPauseDuration": 0}}))
 			args := `{"app":"Hjul","action":"` + c.action + `"`
@@ -176,7 +176,7 @@ func TestReleasePhasedTransitions(t *testing.T) {
 }
 
 func TestReleasePhasedAlready(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "PAUSED", 3)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"pause","confirm":true}`))
 	if got := tooltest.Decode[map[string]any](t, res); got["already"] != true || len(k.ASC.Mutations()) != 0 {
@@ -185,14 +185,14 @@ func TestReleasePhasedAlready(t *testing.T) {
 }
 
 func TestReleasePhasedRemoveOnlyInactive(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "ACTIVE", 2)
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"remove","confirm":true}`), "invalid_state")
 	if n := len(k.ASC.Mutations()); n != 0 {
 		t.Fatalf("%d mutations", n)
 	}
 
-	k = s7cKit(t)
+	k = writableKit(t)
 	versionsFixture(t, k, "PENDING_DEVELOPER_RELEASE", "INACTIVE", 0)
 	k.ASC.Handle("DELETE", "/v1/appStoreVersionPhasedReleases/{id}", 204, "")
 	preview(t, k, "release_phased", `{"action":"remove"}`)
@@ -204,7 +204,7 @@ func TestReleasePhasedRemoveOnlyInactive(t *testing.T) {
 }
 
 func TestReleasePhasedStartOnLiveIsManual(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "", 0)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"start"}`))
 	out := tooltest.Decode[phasedOut](t, res)
@@ -214,7 +214,7 @@ func TestReleasePhasedStartOnLiveIsManual(t *testing.T) {
 }
 
 func TestBuildsList(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	k.ASC.Handle("GET", "/v1/builds", 200, `{"data":[`+
 		`{"type":"builds","id":"b3","attributes":{"version":"44","processingState":"PROCESSING","uploadedDate":"2026-01-02T00:00:00Z","expired":false,"usesNonExemptEncryption":null},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"p1"}},"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bd3"}},"betaGroups":{"data":[]}}},`+
 		`{"type":"builds","id":"b2","attributes":{"version":"43","processingState":"VALID","uploadedDate":"2026-01-01T00:00:00Z","expirationDate":"2026-04-01T00:00:00Z","expired":false,"usesNonExemptEncryption":false},"relationships":{"preReleaseVersion":{"data":{"type":"preReleaseVersions","id":"p1"}},"buildBetaDetail":{"data":{"type":"buildBetaDetails","id":"bd2"}},"betaGroups":{"data":[{"type":"betaGroups","id":"g1"},{"type":"betaGroups","id":"g2"}]}}}],`+
@@ -271,7 +271,7 @@ func recordProgress(k *tooltest.Kit) *[]progressCall {
 }
 
 func TestBuildsWaitValid(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	clock := tooltest.NewFakeClock()
 	k.Env.Clock = clock
 	calls := recordProgress(k)
@@ -293,7 +293,7 @@ func TestBuildsWaitValid(t *testing.T) {
 }
 
 func TestBuildsWaitTimeout(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	clock := tooltest.NewFakeClock()
 	k.Env.Clock = clock
 	calls := recordProgress(k)
@@ -312,7 +312,7 @@ func TestBuildsWaitTimeout(t *testing.T) {
 }
 
 func TestBuildsWaitTimeoutCapped(t *testing.T) {
-	k := s7cKit(t)
+	k := writableKit(t)
 	clock := tooltest.NewFakeClock()
 	k.Env.Clock = clock
 	buildFixture(t, k, "PROCESSING")

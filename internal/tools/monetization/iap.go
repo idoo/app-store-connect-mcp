@@ -108,7 +108,7 @@ func iapList(ctx context.Context, env *tool.Env, in iapListIn) (*tool.Result, er
 	if err != nil {
 		return nil, fmt.Errorf("list in-app purchases: %w", err)
 	}
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	out := iapListOut{App: app, Total: res.Total, Returned: res.Returned, ByState: map[string]int{}, Items: []iapOut{}, NextCursor: res.NextCursor}
 	for _, r := range res.Data {
 		fam, _ := r.Bool("familySharable")
@@ -116,11 +116,11 @@ func iapList(ctx context.Context, env *tool.Env, in iapListIn) (*tool.Result, er
 			ID: r.ID, ProductID: r.Str("productId"), ReferenceName: r.Str("name"),
 			Type: r.Str("inAppPurchaseType"), State: r.Str("state"), FamilySharable: fam,
 		}
-		if v, ok := s12aLatestVersion(s12aRelated(r, "versions", "inAppPurchaseVersions", inc)); ok {
+		if v, ok := latestVersion(related(r, "versions", "inAppPurchaseVersions", inc)); ok {
 			n, _ := v.Int("version")
 			it.Version = &iapVersionOut{ID: v.ID, Version: n, State: v.Str("state")}
 		}
-		it.Localizations = iapLocs(s12aRelated(r, "inAppPurchaseLocalizations", "inAppPurchaseLocalizations", inc))
+		it.Localizations = iapLocs(related(r, "inAppPurchaseLocalizations", "inAppPurchaseLocalizations", inc))
 		out.ByState[it.State]++
 		out.Items = append(out.Items, it)
 	}
@@ -138,43 +138,43 @@ func iapLocs(rs []tool.Resource) []iapLocOut {
 }
 
 type iapUpsertIn struct {
-	App              tool.AppRef          `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
-	ProductID        string               `json:"product_id" jsonschema:"product identifier; the lookup key"`
-	Type             string               `json:"type,omitempty" jsonschema:"required to create; cannot change later"`
-	ReferenceName    string               `json:"reference_name,omitempty" jsonschema:"internal name (max 64); required to create"`
-	ReviewNote       *string              `json:"review_note,omitempty"`
-	FamilySharable   *bool                `json:"family_sharable,omitempty" jsonschema:"cannot be turned off once on"`
-	Localizations    map[string]s12aLocIn `json:"localizations,omitempty" jsonschema:"by locale: display name (max 30) and description (max 45)"`
-	ReviewScreenshot string               `json:"review_screenshot,omitempty" jsonschema:"path to a PNG/JPEG screenshot for App Review"`
+	App              tool.AppRef      `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	ProductID        string           `json:"product_id" jsonschema:"product identifier; the lookup key"`
+	Type             string           `json:"type,omitempty" jsonschema:"required to create; cannot change later"`
+	ReferenceName    string           `json:"reference_name,omitempty" jsonschema:"internal name (max 64); required to create"`
+	ReviewNote       *string          `json:"review_note,omitempty"`
+	FamilySharable   *bool            `json:"family_sharable,omitempty" jsonschema:"cannot be turned off once on"`
+	Localizations    map[string]locIn `json:"localizations,omitempty" jsonschema:"by locale: display name (max 30) and description (max 45)"`
+	ReviewScreenshot string           `json:"review_screenshot,omitempty" jsonschema:"path to a PNG/JPEG screenshot for App Review"`
 }
 
 type iapUpsertOut struct {
-	App              tool.App        `json:"app"`
-	Product          s12aItem        `json:"product"`
-	ProductID        string          `json:"product_id"`
-	Version          *s12aVersionOut `json:"version,omitempty"`
-	Localizations    []s12aItem      `json:"localizations,omitempty"`
-	ReviewScreenshot *s12aItem       `json:"review_screenshot,omitempty"`
-	Failed           int             `json:"failed,omitempty"`
+	App              tool.App     `json:"app"`
+	Product          upsertItem   `json:"product"`
+	ProductID        string       `json:"product_id"`
+	Version          *versionOut  `json:"version,omitempty"`
+	Localizations    []upsertItem `json:"localizations,omitempty"`
+	ReviewScreenshot *upsertItem  `json:"review_screenshot,omitempty"`
+	Failed           int          `json:"failed,omitempty"`
 }
 
 // iapProductFields are the sparse product fields upserts read back.
 var iapProductFields = "name,productId,inAppPurchaseType,state,reviewNote,familySharable,appStoreReviewScreenshot"
 
 func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result, error) {
-	if err := s12aCheckProductID(in.ProductID); err != nil {
+	if err := checkProductID(in.ProductID); err != nil {
 		return nil, err
 	}
 	if in.ReferenceName != "" {
-		if err := s12aCheckLimit("reference_name", applemeta.FieldIAPReferenceName, in.ReferenceName); err != nil {
+		if err := checkLimit("reference_name", applemeta.FieldIAPReferenceName, in.ReferenceName); err != nil {
 			return nil, err
 		}
 	}
-	locs, err := s12aNormLocs("localizations", in.Localizations)
+	locs, err := normLocs("localizations", in.Localizations)
 	if err != nil {
 		return nil, err
 	}
-	if err := s12aCheckScreenshot(env, in.ReviewScreenshot); err != nil {
+	if err := checkScreenshot(env, in.ReviewScreenshot); err != nil {
 		return nil, err
 	}
 	app, err := env.Resolve.App(ctx, in.App)
@@ -200,17 +200,17 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 	}
 	if !found {
 		if in.Type == "" || in.ReferenceName == "" {
-			return nil, s12aInvalid("product %q does not exist; type and reference_name are required to create it", in.ProductID)
+			return nil, invalidArgs("product %q does not exist; type and reference_name are required to create it", in.ProductID)
 		}
 		attrs := map[string]any{"productId": in.ProductID, "inAppPurchaseType": in.Type}
 		for k, v := range want {
 			attrs[k] = v
 		}
-		created, err := s12aPost(ctx, env, "/v2/inAppPurchases", "inAppPurchases", attrs, map[string][2]string{"app": {"apps", app.ID}})
+		created, err := postResource(ctx, env, "/v2/inAppPurchases", "inAppPurchases", attrs, map[string][2]string{"app": {"apps", app.ID}})
 		switch {
 		case err == nil:
-			cur, out.Product = created, s12aItem{Kind: "inAppPurchases", ID: created.ID, Action: s12aCreated}
-		case s12aConflict(err):
+			cur, out.Product = created, upsertItem{Kind: "inAppPurchases", ID: created.ID, Action: actionCreated}
+		case isConflict(err):
 			// Read back: the product exists (maybe created by a racing call).
 			cur, shot, found, err = iapFind(ctx, env, app.ID, in.ProductID)
 			if err != nil {
@@ -219,50 +219,50 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 			if !found {
 				return nil, fmt.Errorf("create in-app purchase %s: Apple reports a conflict but the product is not in this app; product ids are unique per account and cannot be reused: %w", in.ProductID, tool.ErrInvalidArgs)
 			}
-			out.Product = s12aItem{Kind: "inAppPurchases", ID: cur.ID, Action: s12aAlready}
+			out.Product = upsertItem{Kind: "inAppPurchases", ID: cur.ID, Action: actionAlready}
 		default:
 			return nil, fmt.Errorf("create in-app purchase %s: %w", in.ProductID, err)
 		}
 	}
-	if out.Product.Action != s12aCreated {
+	if out.Product.Action != actionCreated {
 		if out.Product.Action == "" {
-			out.Product = s12aItem{Kind: "inAppPurchases", ID: cur.ID, Action: s12aUnchanged}
+			out.Product = upsertItem{Kind: "inAppPurchases", ID: cur.ID, Action: actionUnchanged}
 		}
 		if in.Type != "" && cur.Str("inAppPurchaseType") != "" && in.Type != cur.Str("inAppPurchaseType") {
-			return nil, s12aInvalid("product %s is %s; the type of an in-app purchase cannot change", in.ProductID, cur.Str("inAppPurchaseType"))
+			return nil, invalidArgs("product %s is %s; the type of an in-app purchase cannot change", in.ProductID, cur.Str("inAppPurchaseType"))
 		}
-		changed, names, err := s12aDiff(cur, want)
+		changed, names, err := attrDiff(cur, want)
 		if err != nil {
 			return nil, err
 		}
 		if len(changed) > 0 {
-			if err := s12aPatch(ctx, env, "/v2/inAppPurchases/"+url.PathEscape(cur.ID), "inAppPurchases", cur.ID, changed); err != nil {
+			if err := patch(ctx, env, "/v2/inAppPurchases/"+url.PathEscape(cur.ID), "inAppPurchases", cur.ID, changed); err != nil {
 				return nil, fmt.Errorf("update in-app purchase %s: %w", in.ProductID, err)
 			}
-			out.Product.Action, out.Product.Changed = s12aUpdated, names
+			out.Product.Action, out.Product.Changed = actionUpdated, names
 		}
 	}
 
-	items := []s12aItem{out.Product}
+	items := []upsertItem{out.Product}
 	if len(locs) > 0 {
-		v, existing, err := s12aOpenVersion(ctx, env, s12aIAPVersions, cur.ID)
+		v, existing, err := openVersion(ctx, env, iapVersions, cur.ID)
 		if err != nil {
 			return nil, err
 		}
 		out.Version = &v
-		out.Localizations = s12aUpsertLocs(ctx, env, s12aIAPVersions, v.ID, existing, locs)
+		out.Localizations = upsertLocs(ctx, env, iapVersions, v.ID, existing, locs)
 		items = append(items, out.Localizations...)
 		if v.Created {
-			items = append(items, s12aItem{Kind: "inAppPurchaseVersions", Action: s12aCreated})
+			items = append(items, upsertItem{Kind: "inAppPurchaseVersions", Action: actionCreated})
 		}
 	}
 	if in.ReviewScreenshot != "" {
-		it := s12aScreenshot(ctx, env, s12aIAPShot, cur.ID, in.ReviewScreenshot, shot)
+		it := uploadScreenshot(ctx, env, iapShot, cur.ID, in.ReviewScreenshot, shot)
 		out.ReviewScreenshot = &it
 		items = append(items, it)
 	}
-	out.Failed = s12aFailures(items)
-	if s12aAllUnchanged(items) {
+	out.Failed = failures(items)
+	if allUnchanged(items) {
 		return tool.Already(out), nil
 	}
 	res := tool.OK(out).Then(
@@ -281,13 +281,13 @@ func iapFind(ctx context.Context, env *tool.Env, appID, productID string) (produ
 		"filter[productId]":      {productID},
 		"include":                {"appStoreReviewScreenshot"},
 		"fields[inAppPurchases]": {iapProductFields},
-		"fields[inAppPurchaseAppStoreReviewScreenshots]": {s12aShotFields},
+		"fields[inAppPurchaseAppStoreReviewScreenshots]": {shotFields},
 		"limit": {"200"},
 	})
 	if err != nil {
 		return product, shot, false, fmt.Errorf("look up in-app purchase %s: %w", productID, err)
 	}
-	inc := s12aIncluded(resp.Included)
+	inc := indexIncluded(resp.Included)
 	for _, r := range resp.Data {
 		if r.Str("productId") == productID {
 			if id := r.RelID("appStoreReviewScreenshot"); id != "" {

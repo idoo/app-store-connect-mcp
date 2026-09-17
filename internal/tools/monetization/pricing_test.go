@@ -41,16 +41,16 @@ func prcAppRow(id, point, terr string, manual bool) string {
 func prcAppFixture(k *tooltest.Kit) {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appPriceSchedule", http.StatusOK,
 		`{"data":{"type":"appPriceSchedules","id":"sched1","relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}},"included":[`+prcTerr("USA", "USD")+`]}`)
-	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/manualPrices", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/manualPrices", http.StatusOK, jsonapiDoc(
 		`[`+prcAppRow("mp1", "pUSA099", "USA", true)+`,`+prcAppRow("mp2", "pSWE10", "SWE", true)+`]`,
 		prcPt("appPricePoints", "pUSA099", "USA", "0.99"), prcPt("appPricePoints", "pSWE10", "SWE", "10.00"),
 		prcTerr("USA", "USD"), prcTerr("SWE", "SEK")))
-	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/automaticPrices", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/automaticPrices", http.StatusOK, jsonapiDoc(
 		`[`+prcAppRow("ap1", "pGBR099", "GBR", false)+`]`, prcPt("appPricePoints", "pGBR099", "GBR", "0.99"), prcTerr("GBR", "GBP")))
-	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appPricePoints", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appPricePoints", http.StatusOK, jsonapiDoc(
 		`[`+prcPt("appPricePoints", "pUSA099", "USA", "0.99")+`,`+prcPt("appPricePoints", "pUSA499", "USA", "4.99")+`,`+
 			prcPt("appPricePoints", "pUSA599", "USA", "5.99")+`]`, prcTerr("USA", "USD")))
-	k.ASC.Handle(http.MethodGet, "/v3/appPricePoints/{id}/equalizations", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v3/appPricePoints/{id}/equalizations", http.StatusOK, jsonapiDoc(
 		`[`+prcPt("appPricePoints", "pGBR499", "GBR", "4.99")+`,`+prcPt("appPricePoints", "pSWE55", "SWE", "55.00")+`]`,
 		prcTerr("GBR", "GBP"), prcTerr("SWE", "SEK")))
 }
@@ -73,7 +73,7 @@ type prcPlanResult struct {
 func prcPlanThenApply(t *testing.T, k *tooltest.Kit, args string) (prcPlanResult, *tool.Result) {
 	t.Helper()
 	before := len(k.ASC.Mutations())
-	plan := tooltest.Decode[prcPlanResult](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_plan"), k.Env, args)))
+	plan := tooltest.Decode[prcPlanResult](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_plan"), k.Env, args)))
 	if plan.Status != "planned" || plan.PlanID == "" {
 		t.Fatalf("plan = %+v", plan)
 	}
@@ -82,13 +82,13 @@ func prcPlanThenApply(t *testing.T, k *tooltest.Kit, args string) (prcPlanResult
 	}
 	confirmed := strings.TrimSuffix(strings.TrimSpace(args), "}") + `,"plan_id":"` + plan.PlanID + `"}`
 	k.Elicit(true) // pricing_apply requires a human accept
-	return plan, tooltest.Call(t, s12aTool(t, "pricing_apply"), k.Env, confirmed)
+	return plan, tooltest.Call(t, mustTool(t, "pricing_apply"), k.Env, confirmed)
 }
 
 // prcIncluded returns the included array of a request body.
 func prcIncluded(t *testing.T, r tool.Request) []map[string]any {
 	t.Helper()
-	raw, _ := s12aBodyOf(t, r)["included"].([]any)
+	raw, _ := bodyOf(t, r)["included"].([]any)
 	out := make([]map[string]any, 0, len(raw))
 	for _, x := range raw {
 		out = append(out, x.(map[string]any))
@@ -107,13 +107,13 @@ func prcRelOf(m map[string]any, name string) string {
 // ---- tests ----
 
 func TestPricingGetApp(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	prcAppFixture(k)
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appAvailabilityV2", http.StatusOK,
 		`{"data":{"type":"appAvailabilities","id":"av1","attributes":{"availableInNewTerritories":true}}}`)
-	k.ASC.Handle(http.MethodGet, "/v2/appAvailabilities/{id}/territoryAvailabilities", http.StatusOK, s12aDoc(`[`+
+	k.ASC.Handle(http.MethodGet, "/v2/appAvailabilities/{id}/territoryAvailabilities", http.StatusOK, jsonapiDoc(`[`+
 		prcTADoc("ta-usa", "USA", true)+`,`+prcTADoc("ta-gbr", "GBR", true)+`,`+prcTADoc("ta-swe", "SWE", false)+`]`))
-	out := tooltest.Decode[pricingGetOut](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env, `{}`)))
+	out := tooltest.Decode[pricingGetOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_get"), k.Env, `{}`)))
 	if out.BaseTerritory != "USA" || out.TerritoryCount != 3 || len(out.Prices) != 3 || out.Prices[0].Territory != "USA" {
 		t.Fatalf("out = %+v", out)
 	}
@@ -127,23 +127,23 @@ func TestPricingGetApp(t *testing.T) {
 
 // prcIAPCatalog registers two IAPs and their IAP schedules (base USA).
 func prcIAPCatalog(k *tooltest.Kit) {
-	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, jsonapiDoc(
 		`[{"type":"inAppPurchases","id":"6826637877","attributes":{"productId":"ivan.Sift.tip.bulle"}},
 		  {"type":"inAppPurchases","id":"6826637878","attributes":{"productId":"ivan.Sift.tip.big"}}]`))
 	k.ASC.Handle(http.MethodGet, "/v2/inAppPurchases/{id}/iapPriceSchedule", http.StatusOK,
 		`{"data":{"type":"inAppPurchasePriceSchedules","id":"is1","relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}},"included":[`+prcTerr("USA", "USD")+`]}`)
-	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePriceSchedules/{id}/manualPrices", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePriceSchedules/{id}/manualPrices", http.StatusOK, jsonapiDoc(
 		`[`+prcRow("inAppPurchasePrices", "m1", "inAppPurchasePricePoint", "inAppPurchasePricePoints", "iUSA099", "USA", "", true)+`]`,
 		prcPt("inAppPurchasePricePoints", "iUSA099", "USA", "0.99"), prcTerr("USA", "USD")))
-	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePriceSchedules/{id}/automaticPrices", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePriceSchedules/{id}/automaticPrices", http.StatusOK, jsonapiDoc(
 		`[`+prcRow("inAppPurchasePrices", "a1", "inAppPurchasePricePoint", "inAppPurchasePricePoints", "iGBR099", "GBR", "", false)+`]`,
 		prcPt("inAppPurchasePricePoints", "iGBR099", "GBR", "0.99"), prcTerr("GBR", "GBP")))
 }
 
 func TestPricingGetIAPByResourceID(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	prcIAPCatalog(k)
-	out := tooltest.Decode[pricingGetOut](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env,
+	out := tooltest.Decode[pricingGetOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_get"), k.Env,
 		`{"kind":"iap","product_id":"6826637877","for_plan":true}`)))
 	if out.Target.ID != "6826637877" || out.Target.ProductID != "ivan.Sift.tip.bulle" || out.TerritoryCount != 2 {
 		t.Fatalf("out = %+v", out)
@@ -154,9 +154,9 @@ func TestPricingGetIAPByResourceID(t *testing.T) {
 }
 
 func TestPricingGetProducts(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	prcIAPCatalog(k)
-	out := tooltest.Decode[pricingGetProductsOut](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env,
+	out := tooltest.Decode[pricingGetProductsOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_get"), k.Env,
 		`{"kind":"iap","products":["6826637877","ivan.Sift.tip.big","nope"]}`)))
 	if len(out.Products) != 3 {
 		t.Fatalf("out = %+v", out)
@@ -170,17 +170,17 @@ func TestPricingGetProducts(t *testing.T) {
 	if out.Products[2].Error == "" || out.Products[2].Ref != "nope" {
 		t.Fatalf("unknown = %+v", out.Products[2])
 	}
-	if n := strings.Count(strings.Join(s12aLog(k.ASC.Requests()), "\n"), "inAppPurchasesV2"); n != 1 {
+	if n := strings.Count(strings.Join(requestLog(k.ASC.Requests()), "\n"), "inAppPurchasesV2"); n != 1 {
 		t.Fatalf("catalog listed %d times", n)
 	}
-	res := tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env, `{"kind":"iap","products":["a","b","c","d","e","f","g","h","i","j","k"]}`)
+	res := tooltest.Call(t, mustTool(t, "pricing_get"), k.Env, `{"kind":"iap","products":["a","b","c","d","e","f","g","h","i","j","k"]}`)
 	if !res.IsError {
 		t.Fatal("11 products accepted")
 	}
 }
 
 func TestPricingAppPlanApplySinglePost(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	prcAppFixture(k)
 	k.ASC.Handle(http.MethodPost, "/v1/appPriceSchedules", http.StatusCreated, `{"data":{"type":"appPriceSchedules","id":"sched2"}}`)
 	plan, res := prcPlanThenApply(t, k, `{"price":"4.99"}`)
@@ -194,32 +194,32 @@ func TestPricingAppPlanApplySinglePost(t *testing.T) {
 	tooltest.MustOK(t, res)
 	muts := k.ASC.Mutations()
 	if len(muts) != 1 || muts[0].Path != "/v1/appPriceSchedules" {
-		t.Fatalf("mutations = %v", s12aLog(muts))
+		t.Fatalf("mutations = %v", requestLog(muts))
 	}
 	post := muts[0]
-	if s12aRel(t, post, "app") != "apps/app1" || s12aRel(t, post, "baseTerritory") != "territories/USA" {
-		t.Fatalf("rels = %v", s12aBodyOf(t, post))
+	if reqRel(t, post, "app") != "apps/app1" || reqRel(t, post, "baseTerritory") != "territories/USA" {
+		t.Fatalf("rels = %v", bodyOf(t, post))
 	}
 	inc := prcIncluded(t, post)
 	if len(inc) != 2 || inc[0]["type"] != "appPrices" || prcRelOf(inc[0], "appPricePoint") != "appPricePoints/pUSA499" ||
 		prcRelOf(inc[1], "appPricePoint") != "appPricePoints/pSWE10" {
 		t.Fatalf("included = %v", inc)
 	}
-	mp := s12aBodyOf(t, post)["data"].(map[string]any)["relationships"].(map[string]any)["manualPrices"].(map[string]any)["data"].([]any)
+	mp := bodyOf(t, post)["data"].(map[string]any)["relationships"].(map[string]any)["manualPrices"].(map[string]any)["data"].([]any)
 	if len(mp) != 2 || mp[0].(map[string]any)["id"] != inc[0]["id"] {
 		t.Fatalf("manualPrices = %v", mp)
 	}
 }
 
 func TestPricingIAPSchedule(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, iapProductDoc("iap1", "Coins", "", false))
 	k.ASC.Handle(http.MethodGet, "/v2/inAppPurchases/{id}/iapPriceSchedule", http.StatusNotFound,
 		`{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found"}]}`)
-	k.ASC.Handle(http.MethodGet, "/v2/inAppPurchases/{id}/pricePoints", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v2/inAppPurchases/{id}/pricePoints", http.StatusOK, jsonapiDoc(
 		`[`+prcPt("inAppPurchasePricePoints", "iUSA199", "USA", "1.99")+`,`+prcPt("inAppPurchasePricePoints", "iUSA299", "USA", "2.99")+`]`,
 		prcTerr("USA", "USD")))
-	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePricePoints/{id}/equalizations", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePricePoints/{id}/equalizations", http.StatusOK, jsonapiDoc(
 		`[`+prcPt("inAppPurchasePricePoints", "iGBR199", "GBR", "1.99")+`]`, prcTerr("GBR", "GBP")))
 	k.ASC.Handle(http.MethodPost, "/v1/inAppPurchasePriceSchedules", http.StatusCreated, `{"data":{"type":"inAppPurchasePriceSchedules","id":"is1"}}`)
 	plan, res := prcPlanThenApply(t, k, `{"kind":"iap","product_id":"`+iapTestProduct+`","price":"2.00"}`)
@@ -228,8 +228,8 @@ func TestPricingIAPSchedule(t *testing.T) {
 	}
 	tooltest.MustOK(t, res)
 	muts := k.ASC.Mutations()
-	if len(muts) != 1 || muts[0].Path != "/v1/inAppPurchasePriceSchedules" || s12aRel(t, muts[0], "inAppPurchase") != "inAppPurchases/iap1" {
-		t.Fatalf("mutations = %v", s12aLog(muts))
+	if len(muts) != 1 || muts[0].Path != "/v1/inAppPurchasePriceSchedules" || reqRel(t, muts[0], "inAppPurchase") != "inAppPurchases/iap1" {
+		t.Fatalf("mutations = %v", requestLog(muts))
 	}
 	inc := prcIncluded(t, muts[0])
 	if len(inc) != 1 || prcRelOf(inc[0], "inAppPurchasePricePoint") != "inAppPurchasePricePoints/iUSA199" ||
@@ -248,7 +248,7 @@ type prcSubFake struct {
 }
 
 func (f *prcSubFake) register(t *testing.T, k *tooltest.Kit) {
-	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, jsonapiDoc(
 		`[{"type":"subscriptionGroups","id":"g1","relationships":{"subscriptions":{"data":[{"type":"subscriptions","id":"sub1"}]}}}]`,
 		`{"type":"subscriptions","id":"sub1","attributes":{"productId":"se.jvcr.hjul.pro"}}`))
 	k.ASC.HandleFunc(http.MethodGet, "/v1/subscriptions/{id}/prices", func(tool.Request) tooltest.Fixture {
@@ -259,11 +259,11 @@ func (f *prcSubFake) register(t *testing.T, k *tooltest.Kit) {
 			rows = append(rows, prcRow("subscriptionPrices", "sp-"+terr, "subscriptionPricePoint", "subscriptionPricePoints", pt, terr, "2026-01-01", false))
 			inc = append(inc, prcPt("subscriptionPricePoints", pt, terr, "9.99"))
 		}
-		return tooltest.Fixture{Body: []byte(s12aDoc("["+strings.Join(rows, ",")+"]", inc...))}
+		return tooltest.Fixture{Body: []byte(jsonapiDoc("["+strings.Join(rows, ",")+"]", inc...))}
 	})
-	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/pricePoints", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/pricePoints", http.StatusOK, jsonapiDoc(
 		`[`+prcPt("subscriptionPricePoints", "sUSA999", "USA", "9.99")+`]`, prcTerr("USA", "USD")))
-	k.ASC.Handle(http.MethodGet, "/v1/subscriptionPricePoints/{id}/equalizations", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptionPricePoints/{id}/equalizations", http.StatusOK, jsonapiDoc(
 		`[`+prcPt("subscriptionPricePoints", "sDEU999", "DEU", "9.99")+`,`+prcPt("subscriptionPricePoints", "sGBR899", "GBR", "8.99")+`]`,
 		prcTerr("DEU", "EUR"), prcTerr("GBR", "GBP")))
 	k.ASC.HandleFunc(http.MethodPost, "/v1/subscriptionPrices", func(r tool.Request) tooltest.Fixture {
@@ -291,7 +291,7 @@ func (f *prcSubFake) register(t *testing.T, k *tooltest.Kit) {
 }
 
 func TestPricingSubscriptionResumeSkipsApplied(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	f := &prcSubFake{applied: map[string]string{}, failAt: 2}
 	f.register(t, k)
 	args := `{"kind":"subscription","product_id":"se.jvcr.hjul.pro","price":"9.99","preserve_current_price":true}`
@@ -316,8 +316,8 @@ func TestPricingSubscriptionResumeSkipsApplied(t *testing.T) {
 		t.Fatalf("next = %+v", res.Next)
 	}
 	sub := k.ASC.RequestsTo(http.MethodPost, "/v1/subscriptionPrices")[0]
-	if a := s12aAttrs(t, sub); a["preserveCurrentPrice"] != true || s12aRel(t, sub, "subscription") != "subscriptions/sub1" {
-		t.Fatalf("first post = %v", s12aBodyOf(t, sub))
+	if a := reqAttrs(t, sub); a["preserveCurrentPrice"] != true || reqRel(t, sub, "subscription") != "subscriptions/sub1" {
+		t.Fatalf("first post = %v", bodyOf(t, sub))
 	}
 
 	// Re-diff: USA is already applied and must not be POSTed again.
@@ -335,16 +335,16 @@ func TestPricingSubscriptionResumeSkipsApplied(t *testing.T) {
 }
 
 func TestPricingRateLimitBlocks(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	f := &prcSubFake{applied: map[string]string{}}
 	f.register(t, k)
 	k.ASC.Limit = tool.RateLimit{Limit: 3600, Remaining: 202, Known: true}
-	out := tooltest.Decode[prcPlanResult](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_plan"), k.Env,
+	out := tooltest.Decode[prcPlanResult](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_plan"), k.Env,
 		`{"kind":"subscription","product_id":"se.jvcr.hjul.pro","price":"9.99"}`)))
 	if out.Status != "blocked" || out.PlanID != "" || len(out.Blockers) != 1 || len(k.Plans.Proposed) != 0 {
 		t.Fatalf("out = %+v", out)
 	}
-	res := tooltest.Call(t, s12aTool(t, "pricing_apply"), k.Env, `{"kind":"subscription","product_id":"se.jvcr.hjul.pro","price":"9.99","plan_id":"x"}`)
+	res := tooltest.Call(t, mustTool(t, "pricing_apply"), k.Env, `{"kind":"subscription","product_id":"se.jvcr.hjul.pro","price":"9.99","plan_id":"x"}`)
 	tooltest.MustFail(t, res, "rate_limited")
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatal("mutated despite rate limit")
@@ -357,10 +357,10 @@ func prcTADoc(id, terr string, avail bool) string {
 }
 
 func TestPricingAvailabilityExistingPatches(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appAvailabilityV2", http.StatusOK,
 		`{"data":{"type":"appAvailabilities","id":"av1","attributes":{"availableInNewTerritories":true}}}`)
-	k.ASC.Handle(http.MethodGet, "/v2/appAvailabilities/{id}/territoryAvailabilities", http.StatusOK, s12aDoc(`[`+
+	k.ASC.Handle(http.MethodGet, "/v2/appAvailabilities/{id}/territoryAvailabilities", http.StatusOK, jsonapiDoc(`[`+
 		prcTADoc("ta-usa", "USA", true)+`,`+prcTADoc("ta-gbr", "GBR", true)+`,`+prcTADoc("ta-swe", "SWE", false)+`]`))
 	k.ASC.Handle(http.MethodPatch, "/v1/territoryAvailabilities/{id}", http.StatusOK, `{"data":{"type":"territoryAvailabilities","id":"x"}}`)
 	plan, res := prcPlanThenApply(t, k, `{"availability":{"add":["swe","USA"],"remove":["GBR"]}}`)
@@ -371,23 +371,23 @@ func TestPricingAvailabilityExistingPatches(t *testing.T) {
 	if out.AvailabilityCalls != 2 {
 		t.Fatalf("out = %+v", out)
 	}
-	s12aEqual(t, s12aLog(k.ASC.Mutations()), []string{
+	equalLines(t, requestLog(k.ASC.Mutations()), []string{
 		"PATCH /v1/territoryAvailabilities/ta-gbr",
 		"PATCH /v1/territoryAvailabilities/ta-swe",
 	})
-	if a := s12aAttrs(t, k.ASC.Mutations()[0]); a["available"] != false {
+	if a := reqAttrs(t, k.ASC.Mutations()[0]); a["available"] != false {
 		t.Fatalf("GBR attrs = %v", a)
 	}
-	if a := s12aAttrs(t, k.ASC.Mutations()[1]); a["available"] != true {
+	if a := reqAttrs(t, k.ASC.Mutations()[1]); a["available"] != true {
 		t.Fatalf("SWE attrs = %v", a)
 	}
 }
 
 func TestPricingAvailabilityMissingSinglePost(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appAvailabilityV2", http.StatusNotFound,
 		`{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found"}]}`)
-	k.ASC.Handle(http.MethodGet, "/v1/territories", http.StatusOK, s12aDoc(`[`+prcTerr("USA", "USD")+`,`+prcTerr("GBR", "GBP")+`,`+prcTerr("SWE", "SEK")+`]`))
+	k.ASC.Handle(http.MethodGet, "/v1/territories", http.StatusOK, jsonapiDoc(`[`+prcTerr("USA", "USD")+`,`+prcTerr("GBR", "GBP")+`,`+prcTerr("SWE", "SEK")+`]`))
 	k.ASC.Handle(http.MethodPost, "/v2/appAvailabilities", http.StatusCreated, `{"data":{"type":"appAvailabilities","id":"av1"}}`)
 	plan, res := prcPlanThenApply(t, k, `{"availability":{"remove":["GBR"]}}`)
 	if plan.Calls != 1 || plan.Avail == nil || !plan.Avail.Create {
@@ -395,10 +395,10 @@ func TestPricingAvailabilityMissingSinglePost(t *testing.T) {
 	}
 	tooltest.MustOK(t, res)
 	muts := k.ASC.Mutations()
-	if len(muts) != 1 || muts[0].Path != "/v2/appAvailabilities" || s12aRel(t, muts[0], "app") != "apps/app1" {
-		t.Fatalf("mutations = %v", s12aLog(muts))
+	if len(muts) != 1 || muts[0].Path != "/v2/appAvailabilities" || reqRel(t, muts[0], "app") != "apps/app1" {
+		t.Fatalf("mutations = %v", requestLog(muts))
 	}
-	if a := s12aAttrs(t, muts[0]); a["availableInNewTerritories"] != true {
+	if a := reqAttrs(t, muts[0]); a["availableInNewTerritories"] != true {
 		t.Fatalf("attrs = %v", a)
 	}
 	got := map[string]any{}
@@ -411,10 +411,10 @@ func TestPricingAvailabilityMissingSinglePost(t *testing.T) {
 }
 
 func TestPricingStalePlanRefused(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	prcAppFixture(k)
 	// The second read (during apply) shows a price changed since planning.
-	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/manualPrices", http.StatusOK, s12aDoc(
+	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/manualPrices", http.StatusOK, jsonapiDoc(
 		`[`+prcAppRow("mp1", "pUSA599", "USA", true)+`]`, prcPt("appPricePoints", "pUSA599", "USA", "5.99"), prcTerr("USA", "USD")))
 	_, res := prcPlanThenApply(t, k, `{"price":"4.99"}`)
 	tooltest.MustFail(t, res, "stale_plan")
@@ -424,7 +424,7 @@ func TestPricingStalePlanRefused(t *testing.T) {
 }
 
 func TestPricingPlanValidation(t *testing.T) {
-	k := s12aKit(t)
+	k := newKit(t)
 	for _, args := range []string{
 		`{}`,
 		`{"overrides":{"SWE":"10"}}`,
@@ -433,9 +433,9 @@ func TestPricingPlanValidation(t *testing.T) {
 		`{"price":"1","start_date":"2020-01-01"}`,
 		`{"availability":{"add":["US"]}}`,
 	} {
-		tooltest.MustFail(t, tooltest.Call(t, s12aTool(t, "pricing_plan"), k.Env, args), "invalid_arguments")
+		tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "pricing_plan"), k.Env, args), "invalid_arguments")
 	}
 	if len(k.ASC.Requests()) != 0 {
-		t.Fatalf("requests before validation: %v", s12aLog(k.ASC.Requests()))
+		t.Fatalf("requests before validation: %v", requestLog(k.ASC.Requests()))
 	}
 }

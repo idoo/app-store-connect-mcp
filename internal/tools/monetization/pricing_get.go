@@ -133,13 +133,13 @@ func pricingGet(ctx context.Context, env *tool.Env, in pricingGetIn) (*tool.Resu
 // pricingGetProducts summarizes up to prcGetMaxProducts products of one kind.
 func pricingGetProducts(ctx context.Context, env *tool.Env, in pricingGetIn, k *prcKind, terrs []string) (*tool.Result, error) {
 	if k == prcApp {
-		return nil, s12aInvalid("products needs kind iap or subscription")
+		return nil, invalidArgs("products needs kind iap or subscription")
 	}
 	if in.ProductID != "" {
-		return nil, s12aInvalid("pass product_id or products, not both")
+		return nil, invalidArgs("pass product_id or products, not both")
 	}
 	if len(in.Products) > prcGetMaxProducts {
-		return nil, s12aInvalid("products: at most %d per call, got %d", prcGetMaxProducts, len(in.Products))
+		return nil, invalidArgs("products: at most %d per call, got %d", prcGetMaxProducts, len(in.Products))
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
@@ -240,7 +240,7 @@ func prcGetResolve(ctx context.Context, env *tool.Env, appRef tool.AppRef, k *pr
 	}
 	t := prcTarget{Kind: k.name, AppID: app.ID, AppName: app.Name}
 	if ref == "" {
-		return t, s12aInvalid("product_id is required for kind %s", k.name)
+		return t, invalidArgs("product_id is required for kind %s", k.name)
 	}
 	catalog, err := prcGetCatalog(ctx, env, app.ID, k)
 	if err != nil {
@@ -294,10 +294,10 @@ func prcGetCatalog(ctx context.Context, env *tool.Env, appID string, k *prcKind)
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions: %w", err)
 	}
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	var out []prcProductRef
 	for _, g := range res.Data {
-		for _, s := range s12aRelated(g, "subscriptions", "subscriptions", inc) {
+		for _, s := range related(g, "subscriptions", "subscriptions", inc) {
 			out = append(out, prcProductRef{ID: s.ID, ProductID: s.Str("productId")})
 		}
 	}

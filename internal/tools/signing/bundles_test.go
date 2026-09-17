@@ -10,13 +10,13 @@ import (
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
-// s13aKit returns a kit whose FakeASC checks every request against the spec.
-func s13aKit(t *testing.T) *tooltest.Kit {
+// newKit returns a kit whose FakeASC checks every request against the spec.
+func newKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
 	return tooltest.New(t)
 }
 
-func s13aTool(t *testing.T, name string) tool.Tool {
+func mustTool(t *testing.T, name string) tool.Tool {
 	t.Helper()
 	tl, ok := tool.Lookup(name)
 	if !ok {
@@ -25,7 +25,7 @@ func s13aTool(t *testing.T, name string) tool.Tool {
 	return tl
 }
 
-func s13aLog(reqs []tool.Request) string {
+func requestLog(reqs []tool.Request) string {
 	out := make([]string, len(reqs))
 	for i, r := range reqs {
 		out[i] = r.Method + " " + r.Path
@@ -33,14 +33,14 @@ func s13aLog(reqs []tool.Request) string {
 	return strings.Join(out, "\n")
 }
 
-func s13aWantLog(t *testing.T, k *tooltest.Kit, want ...string) {
+func wantLog(t *testing.T, k *tooltest.Kit, want ...string) {
 	t.Helper()
-	if got := s13aLog(k.ASC.Requests()); got != strings.Join(want, "\n") {
+	if got := requestLog(k.ASC.Requests()); got != strings.Join(want, "\n") {
 		t.Fatalf("requests:\n%s\nwant:\n%s", got, strings.Join(want, "\n"))
 	}
 }
 
-func s13aBodyOf(t *testing.T, r tool.Request) map[string]any {
+func bodyOf(t *testing.T, r tool.Request) map[string]any {
 	t.Helper()
 	b, err := json.Marshal(r.Body)
 	if err != nil {
@@ -53,7 +53,7 @@ func s13aBodyOf(t *testing.T, r tool.Request) map[string]any {
 	return m
 }
 
-const s13aBundleDoc = `{"data":[
+const bundleDoc = `{"data":[
  {"type":"bundleIds","id":"B1","attributes":{"identifier":"se.jvcr.hjul","name":"Hjul","platform":"IOS","seedId":"TEAM1"},
   "relationships":{"bundleIdCapabilities":{"data":[{"type":"bundleIdCapabilities","id":"B1_PUSH"},{"type":"bundleIdCapabilities","id":"B1_ICLOUD"}]}}},
  {"type":"bundleIds","id":"B2","attributes":{"identifier":"se.jvcr.hjul.widget","name":"Hjul Widget","platform":"IOS","seedId":"TEAM1"},
@@ -63,13 +63,13 @@ const s13aBundleDoc = `{"data":[
  {"type":"bundleIdCapabilities","id":"B1_ICLOUD","attributes":{"capabilityType":"ICLOUD","settings":[
    {"key":"ICLOUD_VERSION","options":[{"key":"XCODE_5","enabled":false},{"key":"XCODE_6","enabled":true}]}]}}]}`
 
-const s13aEmptyDoc = `{"data":[]}`
+const emptyDoc = `{"data":[]}`
 
 func TestBundleIDsListWithCapabilities(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_bundle_ids_list"), k.Env, `{"platform":"IOS","query":"WIDGET"}`))
-	s13aWantLog(t, k, "GET /v1/bundleIds")
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_ids_list"), k.Env, `{"platform":"IOS","query":"WIDGET"}`))
+	wantLog(t, k, "GET /v1/bundleIds")
 	q := k.ASC.Requests()[0].Query
 	if q.Get("include") != "bundleIdCapabilities" || q.Get("filter[platform]") != "IOS" || q.Get("limit[bundleIdCapabilities]") != "50" {
 		t.Fatalf("query = %s", q.Encode())
@@ -79,9 +79,9 @@ func TestBundleIDsListWithCapabilities(t *testing.T) {
 		t.Fatalf("query filter: %+v", out)
 	}
 
-	k2 := s13aKit(t)
-	k2.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
-	out = tooltest.Decode[bundleIDsListOut](t, tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_bundle_ids_list"), k2.Env, ``)))
+	k2 := newKit(t)
+	k2.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
+	out = tooltest.Decode[bundleIDsListOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_ids_list"), k2.Env, ``)))
 	if out.Returned != 2 {
 		t.Fatalf("returned = %d", out.Returned)
 	}
@@ -95,17 +95,17 @@ func TestBundleIDsListWithCapabilities(t *testing.T) {
 }
 
 func TestBundleIDCreateNew(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc) // prefix match, no exact hit
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc) // prefix match, no exact hit
 	k.ASC.Handle(http.MethodPost, "/v1/bundleIds", http.StatusCreated,
 		`{"data":{"type":"bundleIds","id":"B9","attributes":{"identifier":"se.jvcr.hjul.watch","name":"Hjul Watch","platform":"IOS","seedId":"TEAM1"}}}`)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_bundle_id_create"), k.Env,
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_id_create"), k.Env,
 		`{"identifier":"se.jvcr.hjul.watch","name":"Hjul Watch","platform":"IOS"}`))
-	s13aWantLog(t, k, "GET /v1/bundleIds", "POST /v1/bundleIds")
+	wantLog(t, k, "GET /v1/bundleIds", "POST /v1/bundleIds")
 	if f := k.ASC.Requests()[0].Query.Get("filter[identifier]"); f != "se.jvcr.hjul.watch" {
 		t.Fatalf("filter = %q", f)
 	}
-	attrs := s13aBodyOf(t, k.ASC.Requests()[1])["data"].(map[string]any)["attributes"].(map[string]any)
+	attrs := bodyOf(t, k.ASC.Requests()[1])["data"].(map[string]any)["attributes"].(map[string]any)
 	if attrs["identifier"] != "se.jvcr.hjul.watch" || attrs["platform"] != "IOS" || attrs["name"] != "Hjul Watch" {
 		t.Fatalf("attrs = %v", attrs)
 	}
@@ -116,12 +116,12 @@ func TestBundleIDCreateNew(t *testing.T) {
 }
 
 func TestBundleIDCreateExistingIsAlready(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_bundle_id_create"), k.Env,
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_id_create"), k.Env,
 		`{"identifier":"se.jvcr.hjul","name":"Hjul","platform":"MAC_OS"}`))
 	if len(k.ASC.Mutations()) != 0 {
-		t.Fatalf("mutations = %v", s13aLog(k.ASC.Mutations()))
+		t.Fatalf("mutations = %v", requestLog(k.ASC.Mutations()))
 	}
 	out := tooltest.Decode[map[string]any](t, res)
 	if out["already"] != true || out["bundle_id"].(map[string]any)["id"] != "B1" {
@@ -133,22 +133,22 @@ func TestBundleIDCreateExistingIsAlready(t *testing.T) {
 }
 
 func TestBundleIDCreateConflictReadsBack(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aEmptyDoc)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, emptyDoc)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
 	k.ASC.Handle(http.MethodPost, "/v1/bundleIds", http.StatusConflict,
 		`{"errors":[{"status":"409","code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"An attribute value is invalid.","detail":"An App ID with Identifier 'se.jvcr.hjul' is not available."}]}`)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_bundle_id_create"), k.Env,
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_id_create"), k.Env,
 		`{"identifier":"se.jvcr.hjul","name":"Hjul","platform":"IOS"}`))
-	s13aWantLog(t, k, "GET /v1/bundleIds", "POST /v1/bundleIds", "GET /v1/bundleIds")
+	wantLog(t, k, "GET /v1/bundleIds", "POST /v1/bundleIds", "GET /v1/bundleIds")
 	if out := tooltest.Decode[map[string]any](t, res); out["already"] != true {
 		t.Fatalf("out = %v", out)
 	}
 }
 
 func TestBundleIDCreateRejectsBadIdentifier(t *testing.T) {
-	k := s13aKit(t)
-	tooltest.MustFail(t, tooltest.Call(t, s13aTool(t, "signing_bundle_id_create"), k.Env,
+	k := newKit(t)
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_bundle_id_create"), k.Env,
 		`{"identifier":"se jvcr/hjul","name":"x","platform":"IOS"}`), tool.ErrInvalidArgs.Code)
 	if len(k.ASC.Requests()) != 0 {
 		t.Fatal("no request expected")
@@ -156,15 +156,15 @@ func TestBundleIDCreateRejectsBadIdentifier(t *testing.T) {
 }
 
 func TestCapabilitiesEnableIdempotentAndAdditive(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
 	k.ASC.Handle(http.MethodPost, "/v1/bundleIdCapabilities", http.StatusCreated,
 		`{"data":{"type":"bundleIdCapabilities","id":"B1_GROUPS","attributes":{"capabilityType":"APP_GROUPS"}}}`)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k.Env, `{"bundle_id":"se.jvcr.hjul",
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, `{"bundle_id":"se.jvcr.hjul",
 		"enable":[{"type":"PUSH_NOTIFICATIONS"},{"type":"APP_GROUPS"},
 		{"type":"ICLOUD","settings":[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_6"}]}]}]}`))
-	s13aWantLog(t, k, "GET /v1/bundleIds", "POST /v1/bundleIdCapabilities")
-	data := s13aBodyOf(t, k.ASC.Requests()[1])["data"].(map[string]any)
+	wantLog(t, k, "GET /v1/bundleIds", "POST /v1/bundleIdCapabilities")
+	data := bodyOf(t, k.ASC.Requests()[1])["data"].(map[string]any)
 	if data["attributes"].(map[string]any)["capabilityType"] != "APP_GROUPS" {
 		t.Fatalf("body = %v", data)
 	}
@@ -181,25 +181,25 @@ func TestCapabilitiesEnableIdempotentAndAdditive(t *testing.T) {
 	}
 
 	// Everything already enabled: no write at all.
-	k2 := s13aKit(t)
+	k2 := newKit(t)
 	k2.ASC.Handle(http.MethodGet, "/v1/bundleIds/{id}", http.StatusOK,
 		`{"data":{"type":"bundleIds","id":"B1","attributes":{"identifier":"se.jvcr.hjul","name":"Hjul","platform":"IOS"},
 		"relationships":{"bundleIdCapabilities":{"data":[{"type":"bundleIdCapabilities","id":"B1_PUSH"}]}}},
 		"included":[{"type":"bundleIdCapabilities","id":"B1_PUSH","attributes":{"capabilityType":"PUSH_NOTIFICATIONS"}}]}`)
-	res = tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k2.Env, `{"bundle_id":"B1","enable":[{"type":"PUSH_NOTIFICATIONS"}],"disable":["MAPS"]}`))
-	s13aWantLog(t, k2, "GET /v1/bundleIds/B1")
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k2.Env, `{"bundle_id":"B1","enable":[{"type":"PUSH_NOTIFICATIONS"}],"disable":["MAPS"]}`))
+	wantLog(t, k2, "GET /v1/bundleIds/B1")
 	if out := tooltest.Decode[map[string]any](t, res); out["already"] != true {
 		t.Fatalf("out = %v", out)
 	}
 }
 
 func TestCapabilitiesDisableRequiresConfirm(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
 	args := `{"bundle_id":"se.jvcr.hjul","enable":[{"type":"MAPS"}],"disable":["PUSH_NOTIFICATIONS"]}`
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k.Env, args))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, args))
 	if len(k.ASC.Mutations()) != 0 {
-		t.Fatalf("preview mutated: %s", s13aLog(k.ASC.Mutations()))
+		t.Fatalf("preview mutated: %s", requestLog(k.ASC.Mutations()))
 	}
 	if out := tooltest.Decode[map[string]any](t, res); out["status"] != tool.ErrNeedsConfirm.Code {
 		t.Fatalf("preview = %v", out)
@@ -208,9 +208,9 @@ func TestCapabilitiesDisableRequiresConfirm(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/bundleIdCapabilities", http.StatusCreated,
 		`{"data":{"type":"bundleIdCapabilities","id":"B1_MAPS","attributes":{"capabilityType":"MAPS"}}}`)
 	k.ASC.Handle(http.MethodDelete, "/v1/bundleIdCapabilities/{id}", http.StatusNoContent, ``)
-	res = tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k.Env,
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env,
 		strings.Replace(args, "{", `{"confirm":true,`, 1)))
-	s13aWantLog(t, k, "GET /v1/bundleIds", "GET /v1/bundleIds", "POST /v1/bundleIdCapabilities", "DELETE /v1/bundleIdCapabilities/B1_PUSH")
+	wantLog(t, k, "GET /v1/bundleIds", "GET /v1/bundleIds", "POST /v1/bundleIdCapabilities", "DELETE /v1/bundleIdCapabilities/B1_PUSH")
 	out := tooltest.Decode[capsSetOut](t, res)
 	if out.Failed != 0 || len(out.Items) != 2 || out.Items[0].Action != capEnabled || out.Items[1].Action != capDisabled {
 		t.Fatalf("items = %+v", out.Items)
@@ -218,25 +218,25 @@ func TestCapabilitiesDisableRequiresConfirm(t *testing.T) {
 }
 
 func TestCapabilitiesSettingsChangeRequiresConfirm(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aBundleDoc)
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
 	k.ASC.Handle(http.MethodPatch, "/v1/bundleIdCapabilities/{id}", http.StatusOK,
 		`{"data":{"type":"bundleIdCapabilities","id":"B1_ICLOUD","attributes":{"capabilityType":"ICLOUD"}}}`)
 	args := `{"bundle_id":"se.jvcr.hjul","enable":[{"type":"ICLOUD","settings":[{"key":"ICLOUD_VERSION","options":[{"key":"XCODE_5"}]}]}]}`
-	tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k.Env, args))
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, args))
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatal("settings overwrite must preview first")
 	}
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k.Env, strings.Replace(args, "{", `{"confirm":true,`, 1)))
-	s13aWantLog(t, k, "GET /v1/bundleIds", "GET /v1/bundleIds", "PATCH /v1/bundleIdCapabilities/B1_ICLOUD")
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, strings.Replace(args, "{", `{"confirm":true,`, 1)))
+	wantLog(t, k, "GET /v1/bundleIds", "GET /v1/bundleIds", "PATCH /v1/bundleIdCapabilities/B1_ICLOUD")
 	if out := tooltest.Decode[capsSetOut](t, res); out.Items[0].Action != capUpdated {
 		t.Fatalf("items = %+v", out.Items)
 	}
 }
 
 func TestCapabilitiesValidation(t *testing.T) {
-	k := s13aKit(t)
-	tl := s13aTool(t, "signing_capabilities_set")
+	k := newKit(t)
+	tl := mustTool(t, "signing_capabilities_set")
 	for _, args := range []string{
 		`{"bundle_id":"se.jvcr.hjul"}`,
 		`{"bundle_id":"se.jvcr.hjul","enable":[{"type":"MAPS"}],"disable":["MAPS"]}`,
@@ -249,23 +249,23 @@ func TestCapabilitiesValidation(t *testing.T) {
 }
 
 func TestCapabilitiesUnknownBundle(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, s13aEmptyDoc)
-	res := tooltest.Call(t, s13aTool(t, "signing_capabilities_set"), k.Env, `{"bundle_id":"se.jvcr.nope","enable":[{"type":"MAPS"}]}`)
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, emptyDoc)
+	res := tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, `{"bundle_id":"se.jvcr.nope","enable":[{"type":"MAPS"}]}`)
 	if !res.IsError || len(res.Next) == 0 || res.Next[0].Tool != "signing_bundle_ids_list" {
 		t.Fatalf("res = %s", tooltest.JSON(t, res.Data))
 	}
 }
 
-const s13aCertDoc = `{"data":[
+const certDoc = `{"data":[
  {"type":"certificates","id":"C3","attributes":{"name":"Apple Distribution","certificateType":"DISTRIBUTION","displayName":"Ivan","serialNumber":"S3","platform":"IOS","expirationDate":"2027-06-01T00:00:00.000+00:00","activated":true,"certificateContent":"MIIC3"}},
  {"type":"certificates","id":"C1","attributes":{"name":"Apple Development","certificateType":"DEVELOPMENT","serialNumber":"S1","expirationDate":"2025-12-20T00:00:00.000+00:00","certificateContent":"MIIC1"}},
  {"type":"certificates","id":"C2","attributes":{"name":"Developer ID","certificateType":"DEVELOPER_ID_APPLICATION","serialNumber":"S2","expirationDate":"2026-01-20T12:00:00.000+02:00","certificateContent":"MIIC2"}}]}`
 
 func TestCertificatesExpiringFilterAndContentOmitted(t *testing.T) {
-	k := s13aKit(t) // clock: 2026-01-02T03:04:05Z
-	k.ASC.Handle(http.MethodGet, "/v1/certificates", http.StatusOK, s13aCertDoc)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_certificates_list"), k.Env, `{"expiring_within_days":30}`))
+	k := newKit(t) // clock: 2026-01-02T03:04:05Z
+	k.ASC.Handle(http.MethodGet, "/v1/certificates", http.StatusOK, certDoc)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_certificates_list"), k.Env, `{"expiring_within_days":30}`))
 	q := k.ASC.Requests()[0].Query
 	if strings.Contains(q.Get("fields[certificates]"), "certificateContent") {
 		t.Fatalf("content requested: %s", q.Encode())
@@ -283,9 +283,9 @@ func TestCertificatesExpiringFilterAndContentOmitted(t *testing.T) {
 }
 
 func TestCertificatesTypeFilterAndContent(t *testing.T) {
-	k := s13aKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/certificates", http.StatusOK, s13aCertDoc)
-	res := tooltest.MustOK(t, tooltest.Call(t, s13aTool(t, "signing_certificates_list"), k.Env, `{"type":"DISTRIBUTION","include_content":true}`))
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/certificates", http.StatusOK, certDoc)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_certificates_list"), k.Env, `{"type":"DISTRIBUTION","include_content":true}`))
 	q := k.ASC.Requests()[0].Query
 	if q.Get("filter[certificateType]") != "DISTRIBUTION" || !strings.Contains(q.Get("fields[certificates]"), "certificateContent") {
 		t.Fatalf("query = %s", q.Encode())
@@ -297,9 +297,9 @@ func TestCertificatesTypeFilterAndContent(t *testing.T) {
 }
 
 func TestSigningToolsNeedTeamKey(t *testing.T) {
-	k := s13aKit(t).Individual()
+	k := newKit(t).Individual()
 	for _, name := range []string{"signing_bundle_ids_list", "signing_bundle_id_create", "signing_capabilities_set", "signing_certificates_list"} {
-		tl := s13aTool(t, name)
+		tl := mustTool(t, name)
 		if tl.ListedIn(k.Env.Profile) {
 			t.Errorf("%s listed for an individual key", name)
 		}

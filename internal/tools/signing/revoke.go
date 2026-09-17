@@ -22,8 +22,8 @@ func init() {
 	}, signingRevoke))
 }
 
-// s13bMaxAffectedNames caps the profile names listed in a revoke preview.
-const s13bMaxAffectedNames = 20
+// maxAffectedNames caps the profile names listed in a revoke preview.
+const maxAffectedNames = 20
 
 type revokeIn struct {
 	tool.ConfirmFlag
@@ -50,7 +50,7 @@ type revokeOut struct {
 func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Result, error) {
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
-		return nil, s13aInvalid("id is required")
+		return nil, invalidArgs("id is required")
 	}
 	var (
 		target revokeTarget
@@ -60,27 +60,27 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 	irreversible := []string{}
 	switch in.Kind {
 	case "certificate":
-		target, err = s13bCertTarget(ctx, env, in.ID)
+		target, err = certTarget(ctx, env, in.ID)
 		path = "/v1/certificates/" + url.PathEscape(in.ID)
 		irreversible = append(irreversible,
 			"the certificate is revoked at once and cannot be restored",
 			"profiles using it become INVALID; apps signed with it keep running until their profile expires")
 	case "profile":
-		var p s13bProfileOut
-		p, err = s13bReadProfile(ctx, env, in.ID, false)
+		var p profileOut
+		p, err = readProfile(ctx, env, in.ID, false)
 		target = revokeTarget{
 			Kind: "profile", ID: p.ID, Name: p.Name, Type: p.Type, ExpirationDate: p.ExpirationDate, BundleID: p.BundleID,
 		}
 		path = "/v1/profiles/" + url.PathEscape(in.ID)
 		irreversible = append(irreversible, "the profile is deleted; builds still need a new profile to be signed")
 	default:
-		return nil, s13aInvalid("kind must be certificate or profile")
+		return nil, invalidArgs("kind must be certificate or profile")
 	}
 	if err != nil {
 		return nil, err
 	}
 	summary := fmt.Sprintf("%s %s %q (%s, expires %s)", map[string]string{"certificate": "revoke certificate", "profile": "delete profile"}[in.Kind],
-		target.ID, target.Name, target.Type, s13bOr(target.ExpirationDate, "unknown"))
+		target.ID, target.Name, target.Type, orDefault(target.ExpirationDate, "unknown"))
 	affected := []string{in.Kind + " " + target.ID}
 	if target.AffectedCount != nil {
 		summary += fmt.Sprintf("; invalidates %d profile(s)", *target.AffectedCount)
@@ -101,13 +101,13 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 	return tool.OK(revokeOut{Revoked: target}).Then(next), nil
 }
 
-// s13bCertTarget reads a certificate and the profiles that use it.
-func s13bCertTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, error) {
+// certTarget reads a certificate and the profiles that use it.
+func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, error) {
 	resp, err := env.ASC.Get(ctx, "/v1/certificates/"+url.PathEscape(id), url.Values{
 		"fields[certificates]": {"name,certificateType,displayName,serialNumber,expirationDate"},
 	})
 	notFound := &tool.ErrNotFound{Kind: "certificate", Ref: id, Next: []tool.NextStep{{Tool: "signing_certificates_list"}}}
-	if s13aStatus(err) == http.StatusNotFound {
+	if apiStatus(err) == http.StatusNotFound {
 		return revokeTarget{}, notFound
 	}
 	if err != nil {
@@ -118,7 +118,7 @@ func s13bCertTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget
 		return revokeTarget{}, notFound
 	}
 	t := revokeTarget{
-		Kind: "certificate", ID: r.ID, Name: s13bOr(r.Str("displayName"), r.Str("name")), Type: r.Str("certificateType"),
+		Kind: "certificate", ID: r.ID, Name: orDefault(r.Str("displayName"), r.Str("name")), Type: r.Str("certificateType"),
 		ExpirationDate: r.Str("expirationDate"), SerialNumber: r.Str("serialNumber"),
 	}
 	// Profiles have no certificate filter: read them with certificate ids.
@@ -138,7 +138,7 @@ func s13bCertTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget
 			continue
 		}
 		n++
-		if len(t.AffectedNames) < s13bMaxAffectedNames {
+		if len(t.AffectedNames) < maxAffectedNames {
 			t.AffectedNames = append(t.AffectedNames, p.Str("name"))
 		}
 	}
@@ -146,8 +146,8 @@ func s13bCertTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget
 	return t, nil
 }
 
-// s13bOr returns s, or def when s is empty.
-func s13bOr(s, def string) string {
+// orDefault returns s, or def when s is empty.
+func orDefault(s, def string) string {
 	if s == "" {
 		return def
 	}

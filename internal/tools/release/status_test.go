@@ -248,7 +248,7 @@ func TestReleaseStatusReady(t *testing.T) {
 	if got := checkByID(t, out, "in_app_products"); !slices.Contains(got.Items, "iap Pro") {
 		t.Errorf("ready IAP not listed: %+v", got)
 	}
-	tooltest.AssertGolden(t, "testdata/s7a/ready.json", res)
+	tooltest.AssertGolden(t, "testdata/status/ready.json", res)
 }
 
 func TestReleaseStatusBlocked(t *testing.T) {

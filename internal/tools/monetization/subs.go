@@ -94,12 +94,12 @@ func subsList(ctx context.Context, env *tool.Env, in subsListIn) (*tool.Result, 
 	if err != nil {
 		return nil, fmt.Errorf("list subscription groups: %w", err)
 	}
-	ginc := s12aIncluded(groups.Included)
+	ginc := indexIncluded(groups.Included)
 	out := subsListOut{App: app, Groups: []subsGroupOut{}, ByState: map[string]int{}}
 	res := tool.OK(&out)
 	for i, g := range groups.Data {
 		gout := subsGroupOut{ID: g.ID, ReferenceName: g.Str("referenceName"), Subscriptions: []subsOut{}}
-		for _, l := range s12aRelated(g, "subscriptionGroupLocalizations", "subscriptionGroupLocalizations", ginc) {
+		for _, l := range related(g, "subscriptionGroupLocalizations", "subscriptionGroupLocalizations", ginc) {
 			gout.Localizations = append(gout.Localizations, subsGroupLocOut{Locale: l.Str("locale"), Name: l.Str("name"), CustomAppName: l.Str("customAppName")})
 		}
 		slices.SortFunc(gout.Localizations, func(a, b subsGroupLocOut) int { return strings.Compare(a.Locale, b.Locale) })
@@ -150,7 +150,7 @@ func subsOfGroup(ctx context.Context, env *tool.Env, groupID string) ([]subsOut,
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions of group %s: %w", groupID, err)
 	}
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	out := make([]subsOut, 0, len(res.Data))
 	for _, s := range res.Data {
 		lvl, _ := s.Int("groupLevel")
@@ -163,7 +163,7 @@ func subsOfGroup(ctx context.Context, env *tool.Env, groupID string) ([]subsOut,
 				OfferCodes: len(s.RelIDs("offerCodes")), WinBack: len(s.RelIDs("winBackOffers")),
 			},
 		}
-		if v, ok := s12aLatestVersion(s12aRelated(s, "versions", "subscriptionVersions", inc)); ok {
+		if v, ok := latestVersion(related(s, "versions", "subscriptionVersions", inc)); ok {
 			n, _ := v.Int("version")
 			it.Version = &iapVersionOut{ID: v.ID, Version: n, State: v.Str("state")}
 		}
@@ -188,21 +188,21 @@ type subsUpsertIn struct {
 	GroupLevel         *int                      `json:"group_level,omitempty" jsonschema:"rank in the group, 1 = highest"`
 	ReviewNote         *string                   `json:"review_note,omitempty"`
 	FamilySharable     *bool                     `json:"family_sharable,omitempty" jsonschema:"cannot be turned off once on"`
-	Localizations      map[string]s12aLocIn      `json:"localizations,omitempty" jsonschema:"by locale: display name (max 30) and description (max 45)"`
+	Localizations      map[string]locIn          `json:"localizations,omitempty" jsonschema:"by locale: display name (max 30) and description (max 45)"`
 	ReviewScreenshot   string                    `json:"review_screenshot,omitempty" jsonschema:"path to a PNG/JPEG screenshot for App Review"`
 }
 
 type subsUpsertOut struct {
-	App                tool.App        `json:"app"`
-	Group              s12aItem        `json:"group"`
-	GroupVersion       *s12aVersionOut `json:"group_version,omitempty"`
-	GroupLocalizations []s12aItem      `json:"group_localizations,omitempty"`
-	Subscription       *s12aItem       `json:"subscription,omitempty"`
-	ProductID          string          `json:"product_id,omitempty"`
-	Version            *s12aVersionOut `json:"version,omitempty"`
-	Localizations      []s12aItem      `json:"localizations,omitempty"`
-	ReviewScreenshot   *s12aItem       `json:"review_screenshot,omitempty"`
-	Failed             int             `json:"failed,omitempty"`
+	App                tool.App     `json:"app"`
+	Group              upsertItem   `json:"group"`
+	GroupVersion       *versionOut  `json:"group_version,omitempty"`
+	GroupLocalizations []upsertItem `json:"group_localizations,omitempty"`
+	Subscription       *upsertItem  `json:"subscription,omitempty"`
+	ProductID          string       `json:"product_id,omitempty"`
+	Version            *versionOut  `json:"version,omitempty"`
+	Localizations      []upsertItem `json:"localizations,omitempty"`
+	ReviewScreenshot   *upsertItem  `json:"review_screenshot,omitempty"`
+	Failed             int          `json:"failed,omitempty"`
 }
 
 // subsFields are the sparse subscription fields upserts read back.
@@ -210,22 +210,22 @@ const subsFields = "name,productId,state,subscriptionPeriod,groupLevel,reviewNot
 
 func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[string]any, err error) {
 	if strings.TrimSpace(in.Group) == "" {
-		return nil, nil, s12aInvalid("group is required")
+		return nil, nil, invalidArgs("group is required")
 	}
-	if err := s12aCheckLimit("group", applemeta.FieldIAPReferenceName, in.Group); err != nil {
+	if err := checkLimit("group", applemeta.FieldIAPReferenceName, in.Group); err != nil {
 		return nil, nil, err
 	}
 	glocs = make(map[string]map[string]any, len(in.GroupLocalizations))
 	for k, l := range in.GroupLocalizations {
 		loc, err := applemeta.NormalizeLocale(k)
 		if err != nil {
-			return nil, nil, s12aInvalid("group_localizations: %v", err)
+			return nil, nil, invalidArgs("group_localizations: %v", err)
 		}
 		if _, dup := glocs[loc]; dup {
-			return nil, nil, s12aInvalid("group_localizations: locale %s given twice", loc)
+			return nil, nil, invalidArgs("group_localizations: locale %s given twice", loc)
 		}
 		if strings.TrimSpace(l.Name) == "" {
-			return nil, nil, s12aInvalid("group_localizations[%s].name is required", loc)
+			return nil, nil, invalidArgs("group_localizations[%s].name is required", loc)
 		}
 		a := map[string]any{"name": l.Name}
 		if l.CustomAppName != "" {
@@ -236,25 +236,25 @@ func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[st
 	if in.ProductID == "" {
 		if in.Name != "" || in.Period != "" || in.GroupLevel != nil || in.ReviewNote != nil || in.FamilySharable != nil ||
 			len(in.Localizations) > 0 || in.ReviewScreenshot != "" {
-			return nil, nil, s12aInvalid("subscription fields need product_id")
+			return nil, nil, invalidArgs("subscription fields need product_id")
 		}
 		return glocs, nil, nil
 	}
-	if err := s12aCheckProductID(in.ProductID); err != nil {
+	if err := checkProductID(in.ProductID); err != nil {
 		return nil, nil, err
 	}
 	if in.Name != "" {
-		if err := s12aCheckLimit("name", applemeta.FieldIAPReferenceName, in.Name); err != nil {
+		if err := checkLimit("name", applemeta.FieldIAPReferenceName, in.Name); err != nil {
 			return nil, nil, err
 		}
 	}
 	if in.GroupLevel != nil && *in.GroupLevel < 1 {
-		return nil, nil, s12aInvalid("group_level must be >= 1")
+		return nil, nil, invalidArgs("group_level must be >= 1")
 	}
-	if locs, err = s12aNormLocs("localizations", in.Localizations); err != nil {
+	if locs, err = normLocs("localizations", in.Localizations); err != nil {
 		return nil, nil, err
 	}
-	if err := s12aCheckScreenshot(env, in.ReviewScreenshot); err != nil {
+	if err := checkScreenshot(env, in.ReviewScreenshot); err != nil {
 		return nil, nil, err
 	}
 	return glocs, locs, nil
@@ -276,37 +276,37 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 		return nil, err
 	}
 	if found {
-		out.Group = s12aItem{Kind: "subscriptionGroups", ID: group.ID, Action: s12aUnchanged}
+		out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionUnchanged}
 	} else {
-		group, err = s12aPost(ctx, env, "/v1/subscriptionGroups", "subscriptionGroups",
+		group, err = postResource(ctx, env, "/v1/subscriptionGroups", "subscriptionGroups",
 			map[string]any{"referenceName": in.Group}, map[string][2]string{"app": {"apps", app.ID}})
 		switch {
 		case err == nil:
-			out.Group = s12aItem{Kind: "subscriptionGroups", ID: group.ID, Action: s12aCreated}
-		case s12aConflict(err):
+			out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionCreated}
+		case isConflict(err):
 			if group, found, err = subsFindGroup(ctx, env, app.ID, in.Group); err != nil {
 				return nil, err
 			}
 			if !found {
 				return nil, fmt.Errorf("create subscription group %q: Apple reports a conflict but no such group is readable: %w", in.Group, tool.ErrOutcomeUnknown)
 			}
-			out.Group = s12aItem{Kind: "subscriptionGroups", ID: group.ID, Action: s12aAlready}
+			out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionAlready}
 		default:
 			return nil, fmt.Errorf("create subscription group %q: %w", in.Group, err)
 		}
 	}
-	items := []s12aItem{out.Group}
+	items := []upsertItem{out.Group}
 
 	if len(glocs) > 0 {
-		v, existing, err := s12aOpenVersion(ctx, env, s12aGroupVersions, group.ID)
+		v, existing, err := openVersion(ctx, env, groupVersions, group.ID)
 		if err != nil {
 			return nil, err
 		}
 		out.GroupVersion = &v
-		out.GroupLocalizations = s12aUpsertLocs(ctx, env, s12aGroupVersions, v.ID, existing, glocs)
+		out.GroupLocalizations = upsertLocs(ctx, env, groupVersions, v.ID, existing, glocs)
 		items = append(items, out.GroupLocalizations...)
 		if v.Created {
-			items = append(items, s12aItem{Kind: "subscriptionGroupVersions", Action: s12aCreated})
+			items = append(items, upsertItem{Kind: "subscriptionGroupVersions", Action: actionCreated})
 		}
 	}
 
@@ -318,26 +318,26 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 		out.Subscription = &it
 		items = append(items, it)
 		if len(locs) > 0 {
-			v, existing, err := s12aOpenVersion(ctx, env, s12aSubVersions, sub.ID)
+			v, existing, err := openVersion(ctx, env, subVersions, sub.ID)
 			if err != nil {
 				return nil, err
 			}
 			out.Version = &v
-			out.Localizations = s12aUpsertLocs(ctx, env, s12aSubVersions, v.ID, existing, locs)
+			out.Localizations = upsertLocs(ctx, env, subVersions, v.ID, existing, locs)
 			items = append(items, out.Localizations...)
 			if v.Created {
-				items = append(items, s12aItem{Kind: "subscriptionVersions", Action: s12aCreated})
+				items = append(items, upsertItem{Kind: "subscriptionVersions", Action: actionCreated})
 			}
 		}
 		if in.ReviewScreenshot != "" {
-			it := s12aScreenshot(ctx, env, s12aSubShot, sub.ID, in.ReviewScreenshot, shot)
+			it := uploadScreenshot(ctx, env, subShot, sub.ID, in.ReviewScreenshot, shot)
 			out.ReviewScreenshot = &it
 			items = append(items, it)
 		}
 	}
 
-	out.Failed = s12aFailures(items)
-	if s12aAllUnchanged(items) {
+	out.Failed = failures(items)
+	if allUnchanged(items) {
 		return tool.Already(out), nil
 	}
 	res := tool.OK(out).Then(
@@ -353,7 +353,7 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 // subsUpsertProduct finds the subscription by product id in the group (skipped
 // for a just-created group) and PATCHes its changed fields, or creates it.
 // A 409 on create triggers a read-back across all of the app's groups.
-func subsUpsertProduct(ctx context.Context, env *tool.Env, appID string, group s12aItem, in subsUpsertIn) (sub, shot tool.Resource, it s12aItem, err error) {
+func subsUpsertProduct(ctx context.Context, env *tool.Env, appID string, group upsertItem, in subsUpsertIn) (sub, shot tool.Resource, it upsertItem, err error) {
 	want := map[string]any{}
 	if in.Name != "" {
 		want["name"] = in.Name
@@ -370,27 +370,27 @@ func subsUpsertProduct(ctx context.Context, env *tool.Env, appID string, group s
 	if in.FamilySharable != nil {
 		want["familySharable"] = *in.FamilySharable
 	}
-	it = s12aItem{Kind: "subscriptions"}
+	it = upsertItem{Kind: "subscriptions"}
 	found := false
-	if group.Action != s12aCreated {
+	if group.Action != actionCreated {
 		if sub, shot, found, err = subsFind(ctx, env, group.ID, in.ProductID); err != nil {
 			return sub, shot, it, err
 		}
 	}
 	if !found {
 		if in.Name == "" {
-			return sub, shot, it, s12aInvalid("subscription %q does not exist; name is required to create it", in.ProductID)
+			return sub, shot, it, invalidArgs("subscription %q does not exist; name is required to create it", in.ProductID)
 		}
 		attrs := map[string]any{"productId": in.ProductID}
 		for k, v := range want {
 			attrs[k] = v
 		}
-		created, cerr := s12aPost(ctx, env, "/v1/subscriptions", "subscriptions", attrs, map[string][2]string{"group": {"subscriptionGroups", group.ID}})
+		created, cerr := postResource(ctx, env, "/v1/subscriptions", "subscriptions", attrs, map[string][2]string{"group": {"subscriptionGroups", group.ID}})
 		switch {
 		case cerr == nil:
-			it.ID, it.Action = created.ID, s12aCreated
+			it.ID, it.Action = created.ID, actionCreated
 			return created, shot, it, nil
-		case s12aConflict(cerr):
+		case isConflict(cerr):
 			gid, rerr := subsFindAnywhere(ctx, env, appID, in.ProductID)
 			if rerr != nil {
 				return sub, shot, it, rerr
@@ -400,7 +400,7 @@ func subsUpsertProduct(ctx context.Context, env *tool.Env, appID string, group s
 				return sub, shot, it, fmt.Errorf("create subscription %s: Apple reports a conflict but the product is not in this app; product ids are unique per account and cannot be reused: %w", in.ProductID, tool.ErrInvalidArgs)
 			case group.ID:
 			default:
-				return sub, shot, it, s12aInvalid("subscription %s already exists in another group (%s); subscriptions cannot move between groups", in.ProductID, gid)
+				return sub, shot, it, invalidArgs("subscription %s already exists in another group (%s); subscriptions cannot move between groups", in.ProductID, gid)
 			}
 			if sub, shot, found, err = subsFind(ctx, env, group.ID, in.ProductID); err != nil {
 				return sub, shot, it, err
@@ -408,24 +408,24 @@ func subsUpsertProduct(ctx context.Context, env *tool.Env, appID string, group s
 			if !found {
 				return sub, shot, it, fmt.Errorf("subscription %s: conflict but not readable: %w", in.ProductID, tool.ErrOutcomeUnknown)
 			}
-			it.Action = s12aAlready
+			it.Action = actionAlready
 		default:
 			return sub, shot, it, fmt.Errorf("create subscription %s: %w", in.ProductID, cerr)
 		}
 	}
 	it.ID = sub.ID
 	if it.Action == "" {
-		it.Action = s12aUnchanged
+		it.Action = actionUnchanged
 	}
-	changed, names, err := s12aDiff(sub, want)
+	changed, names, err := attrDiff(sub, want)
 	if err != nil {
 		return sub, shot, it, err
 	}
 	if len(changed) > 0 {
-		if err := s12aPatch(ctx, env, "/v1/subscriptions/"+url.PathEscape(sub.ID), "subscriptions", sub.ID, changed); err != nil {
+		if err := patch(ctx, env, "/v1/subscriptions/"+url.PathEscape(sub.ID), "subscriptions", sub.ID, changed); err != nil {
 			return sub, shot, it, fmt.Errorf("update subscription %s: %w", in.ProductID, err)
 		}
-		it.Action, it.Changed = s12aUpdated, names
+		it.Action, it.Changed = actionUpdated, names
 	}
 	return sub, shot, it, nil
 }
@@ -455,13 +455,13 @@ func subsFind(ctx context.Context, env *tool.Env, groupID, productID string) (su
 		"filter[productId]":     {productID},
 		"include":               {"appStoreReviewScreenshot"},
 		"fields[subscriptions]": {subsFields},
-		"fields[subscriptionAppStoreReviewScreenshots]": {s12aShotFields},
+		"fields[subscriptionAppStoreReviewScreenshots]": {shotFields},
 		"limit": {"200"},
 	})
 	if err != nil {
 		return sub, shot, false, fmt.Errorf("look up subscription %s: %w", productID, err)
 	}
-	inc := s12aIncluded(resp.Included)
+	inc := indexIncluded(resp.Included)
 	for _, r := range resp.Data {
 		if r.Str("productId") == productID {
 			if id := r.RelID("appStoreReviewScreenshot"); id != "" {
@@ -486,9 +486,9 @@ func subsFindAnywhere(ctx context.Context, env *tool.Env, appID, productID strin
 	if err != nil {
 		return "", fmt.Errorf("read back subscription %s: %w", productID, err)
 	}
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	for _, g := range res.Data {
-		for _, s := range s12aRelated(g, "subscriptions", "subscriptions", inc) {
+		for _, s := range related(g, "subscriptions", "subscriptions", inc) {
 			if s.Str("productId") == productID {
 				return g.ID, nil
 			}

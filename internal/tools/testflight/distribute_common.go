@@ -16,7 +16,7 @@ import (
 	"github.com/idoo/hamn/internal/tool"
 )
 
-// Per-item outcomes reported by the S8b tools, in addition to outcomeAdded,
+// Per-item outcomes reported by the distribute and feedback tools, in addition to outcomeAdded,
 // outcomeAlready and outcomeError (testers.go).
 const (
 	outcomeCreated   = "created"
