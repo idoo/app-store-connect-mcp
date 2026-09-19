@@ -1,0 +1,33 @@
+name: Publish to MCP Registry
+
+# Re-publish an existing release to the MCP Registry (e.g. after a registry
+# validation fix). The release workflow publishes automatically on tags.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # MCP Registry OIDC login
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          version="${TAG#v}"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "hamn-${version}.mcpb" --dir /tmp/mcpb
+          sha=$(sha256sum "/tmp/mcpb/hamn-${version}.mcpb" | awk '{print $1}')
+          scripts/publish-registry.sh "$TAG" "$sha"

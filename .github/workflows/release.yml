@@ -101,21 +101,4 @@ jobs:
         continue-on-error: true
         env:
           MCPB_SHA256: ${{ steps.mcpb.outputs.sha256 }}
-          PUBLISHER_VERSION: "1.8.4"
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          jq --arg v "$version" --arg sha "$MCPB_SHA256" '
-            .version = $v
-            | .packages |= map(
-                if .registryType == "mcpb" then
-                  .version = $v
-                  | .identifier = "https://github.com/idoo/hamn/releases/download/v\($v)/hamn-\($v).mcpb"
-                  | .fileSha256 = $sha
-                elif .registryType == "oci" then
-                  .identifier = "ghcr.io/idoo/hamn:\($v)"
-                else . end)' server.json > /tmp/server.json
-          mv /tmp/server.json server.json
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
-            | tar -xz -C /tmp mcp-publisher
-          /tmp/mcp-publisher login github-oidc
-          /tmp/mcp-publisher publish
+        run: scripts/publish-registry.sh "$GITHUB_REF_NAME" "$MCPB_SHA256"
