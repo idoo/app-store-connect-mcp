@@ -83,6 +83,14 @@ func doctor(ctx context.Context, rep *report, profile string) {
 		line += " selected by " + p.PinSource
 	}
 	rep.ok("%s", line)
+	if p.Key.Source == config.KeyFromFile {
+		if id, bad := keyIDMismatch(p.KeyID, p.Key.Path); bad {
+			rep.warn("key id %s doesn't match the file name AuthKey_%s.p8; one of them is wrong", p.KeyID, id)
+		}
+	}
+	if p.IssuerID != "" && !uuidRe.MatchString(p.IssuerID) {
+		rep.warn("issuer id %q doesn't look like Apple's UUID (%s)", p.IssuerID, issuerHelp)
+	}
 	switch p.KeyKind {
 	case tool.KeyTeam:
 		rep.ok("key kind: team")
@@ -99,7 +107,7 @@ func doctor(ctx context.Context, rep *report, profile string) {
 	}
 	c, resp, err := probeApple(ctx, r)
 	if err != nil {
-		rep.fail("Apple API: %v", err)
+		rep.fail("Apple API: %v%s", err, authChecklist(err, p))
 	} else {
 		rep.ok("Apple API reachable (GET /v1/apps: %d)", resp.Status)
 	}

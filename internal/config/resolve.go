@@ -194,6 +194,10 @@ func (r *Resolved) resolveProfile(f Flags, getenv func(string) string, cfg *Conf
 		if !hasEnv {
 			return fmt.Errorf("profile %q selected but %s is not set", EnvProfileName, EnvKeyID)
 		}
+		if s := cfg.Env; s != nil {
+			fill(&env.Profile.VendorNumber, s.VendorNumber)
+			fill(&env.Profile.DefaultApp, s.DefaultApp)
+		}
 		r.setProfile(EnvProfileName, env.Profile, env.Key)
 		p.Problems = append(p.Problems, env.Problems...)
 	default:
@@ -201,7 +205,7 @@ func (r *Resolved) resolveProfile(f Flags, getenv func(string) string, cfg *Conf
 		if !ok {
 			return fmt.Errorf("profile %q is not defined (known: %s)", name, strings.Join(cfg.ProfileNames(), ", "))
 		}
-		key := KeyRef{Source: KeyFromFile, Path: prof.KeyPath, KeyID: prof.KeyID}
+		key := KeyRef{Source: KeyFromFile, Path: ExpandHome(prof.KeyPath, getenv), KeyID: prof.KeyID}
 		if prof.KeySource == KeySourceKeychain {
 			key = KeyRef{Source: KeyFromKeychain, KeyID: prof.KeyID}
 		}

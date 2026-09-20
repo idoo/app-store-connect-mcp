@@ -63,6 +63,7 @@ func envCredentials(getenv func(string) string) (c envCreds, ok bool, err error)
 		VendorNumber: strings.TrimSpace(getenv(EnvVendorNumber)),
 	}
 	path, _ := first(getenv, EnvKeyPath, FastlaneKeyPath)
+	path = ExpandHome(path, getenv)
 	_, inlineVar := first(getenv, EnvKey, FastlaneKey)
 	switch {
 	case path != "":

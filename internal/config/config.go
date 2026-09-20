@@ -29,6 +29,15 @@ type Config struct {
 	AllowProfileSwitch bool `toml:"allow_profile_switch,omitempty"`
 	// Profiles maps profile names to credentials references.
 	Profiles map[string]Profile `toml:"profiles,omitempty"`
+	// Env holds settings for the "env" profile built from ASC_* variables,
+	// used when the matching variable is unset (`hamn auth set env ...`).
+	Env *EnvSettings `toml:"env,omitempty"`
+}
+
+// EnvSettings are the non-secret settings of the "env" profile.
+type EnvSettings struct {
+	VendorNumber string `toml:"vendor_number,omitempty"`
+	DefaultApp   string `toml:"default_app,omitempty"`
 }
 
 // Profile is one named set of App Store Connect credentials references.
@@ -120,10 +129,13 @@ func Load(path string) (*Config, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := checkDir(filepath.Dir(path)); err != nil {
+		return nil, nil, err
+	}
 	warnings := permWarnings(path, info)
 	cfg, err := Parse(data)
 	if err != nil {
-		return nil, nil, fmt.Errorf("config %s: %w", path, err)
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return cfg, warnings, nil
 }
@@ -152,6 +164,11 @@ func decodeStrict(data []byte, v any) error {
 			keys = append(keys, strings.Join(e.Key(), "."))
 		}
 		return fmt.Errorf("unknown keys: %s", strings.Join(keys, ", "))
+	}
+	var de *toml.DecodeError
+	if errors.As(err, &de) {
+		row, col := de.Position()
+		return fmt.Errorf("line %d, column %d: %s", row, col, de.Error())
 	}
 	return err
 }
@@ -263,6 +280,22 @@ func checkWritable(path string, info fs.FileInfo) error {
 	}
 	if info.Mode().Perm()&0o022 != 0 {
 		return fmt.Errorf("refusing %s: writable by group or others (mode %04o); run chmod 600 %s", path, info.Mode().Perm(), path)
+	}
+	return nil
+}
+
+// checkDir refuses a config directory other users can write to, since they
+// could replace config.toml (unix only; sticky directories are exempt).
+func checkDir(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", dir, err)
+	}
+	if info.Mode().Perm()&0o022 != 0 && info.Mode()&fs.ModeSticky == 0 {
+		return fmt.Errorf("refusing %s: writable by group or others (mode %04o); run chmod 700 %s", dir, info.Mode().Perm(), dir)
 	}
 	return nil
 }
