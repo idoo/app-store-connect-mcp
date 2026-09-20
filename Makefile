@@ -2,7 +2,7 @@ GO ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: build test vet lint generate smoke tidy tidy-check vuln docs
+.PHONY: build test vet lint generate smoke tidy tidy-check vuln docs snapshot mcpb
 
 build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/hamn ./cmd/hamn
@@ -30,7 +30,14 @@ tidy-check:
 	$(GO) mod tidy -diff
 
 vuln:
-	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+# Local release dry run (no publish, no signing, no image): dist/ + .mcpb.
+snapshot:
+	goreleaser release --snapshot --clean --skip=publish,sign,docker
+
+mcpb: snapshot
+	scripts/build-mcpb.sh
 
 # Regenerates docs/TOOLS.md and docs/tools.json and fails if they changed.
 docs:

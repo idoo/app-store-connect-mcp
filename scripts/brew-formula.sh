@@ -1,7 +1,7 @@
 #!/bin/sh
 # Print a Homebrew formula that installs the prebuilt release archives
-# (formulae are not quarantined, unlike casks). Copy the output to
-# idoo/homebrew-tap/Formula/hamn.rb.
+# (formulae are not quarantined, unlike casks). release.yml pushes the
+# output to idoo/homebrew-tap/Formula/hamn.rb after the release is published.
 #
 # Usage: scripts/brew-formula.sh <version> <checksums.txt>
 set -eu
@@ -29,6 +29,11 @@ class Hamn < Formula
   homepage "https://github.com/idoo/hamn"
   version "$version"
   license "MIT"
+
+  livecheck do
+    url :stable
+    strategy :github_latest
+  end
 
   on_macos do
     on_arm do

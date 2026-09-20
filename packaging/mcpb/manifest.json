@@ -39,11 +39,21 @@
           "command": "${__dirname}/server/hamn-windows-amd64.exe"
         },
         "linux": {
-          "command": "${__dirname}/server/hamn-linux-amd64"
+          "command": "${__dirname}/server/hamn-linux"
         }
       }
     }
   },
+  "tools_generated": true,
+  "prompts_generated": false,
+  "prompts": [
+    {"name": "release_checklist", "description": "Walk an app version to App Review.", "arguments": ["app", "version"], "text": "Prepare ${arguments.app} version ${arguments.version} for App Review."},
+    {"name": "rejection_triage", "description": "Explain an App Review rejection and plan fixes.", "arguments": ["app"], "text": "${arguments.app} was rejected. Explain why and plan the fixes."},
+    {"name": "translate_metadata", "description": "Translate store metadata into other locales.", "arguments": ["app", "from_locale", "to_locales"], "text": "Translate the App Store metadata of ${arguments.app} from ${arguments.from_locale} into ${arguments.to_locales}."},
+    {"name": "reply_to_reviews", "description": "Draft replies to customer reviews.", "arguments": ["app", "since"], "text": "Draft replies to reviews of ${arguments.app} since ${arguments.since}."},
+    {"name": "weekly_report", "description": "Summarize how an app did this week.", "arguments": ["app"], "text": "Give me a weekly report for ${arguments.app}."},
+    {"name": "testflight_feedback_digest", "description": "Digest new TestFlight feedback.", "arguments": ["app"], "text": "Summarize new TestFlight feedback for ${arguments.app}."}
+  ],
   "compatibility": {
     "platforms": ["darwin", "win32", "linux"]
   },

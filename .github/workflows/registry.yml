@@ -1,8 +1,14 @@
 name: Publish to MCP Registry
 
-# Re-publish an existing release to the MCP Registry (e.g. after a registry
-# validation fix). The release workflow publishes automatically on tags.
+# Called by release.yml after the release is published; run by hand to
+# re-publish an existing release (e.g. after a registry validation fix).
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.1.0)
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -28,6 +34,9 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           version="${TAG#v}"
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "hamn-${version}.mcpb" --dir /tmp/mcpb
-          sha=$(sha256sum "/tmp/mcpb/hamn-${version}.mcpb" | awk '{print $1}')
+          dir="$RUNNER_TEMP/mcpb"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$dir" \
+            --pattern "hamn-${version}.mcpb" --pattern "hamn-${version}.mcpb.sha256"
+          (cd "$dir" && sha256sum -c "hamn-${version}.mcpb.sha256")
+          sha=$(awk '{print $1}' "$dir/hamn-${version}.mcpb.sha256")
           scripts/publish-registry.sh "$TAG" "$sha"
