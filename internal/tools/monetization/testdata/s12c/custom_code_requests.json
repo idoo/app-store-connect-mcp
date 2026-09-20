@@ -1,0 +1,23 @@
+[
+  {
+    "body": {
+      "data": {
+        "attributes": {
+          "customCode": "HJULSPRING",
+          "expirationDate": "2027-03-31",
+          "numberOfCodes": 500
+        },
+        "relationships": {
+          "offerCode": {
+            "data": {
+              "id": "oc1",
+              "type": "subscriptionOfferCodes"
+            }
+          }
+        },
+        "type": "subscriptionOfferCodeCustomCodes"
+      }
+    },
+    "request": "POST /v1/subscriptionOfferCodeCustomCodes"
+  }
+]

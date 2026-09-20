@@ -1,0 +1,110 @@
+{
+  "data": {
+    "app": {
+      "id": "app1",
+      "bundle_id": "se.jvcr.hjul",
+      "name": "Hjul",
+      "platforms": [
+        "IOS"
+      ]
+    },
+    "subscriptions": [
+      {
+        "id": "s1",
+        "product_id": "se.jvcr.hjul.plus.year",
+        "name": "Yearly",
+        "counts": {
+          "intro": 3,
+          "offer_code": 1,
+          "promotional": 1,
+          "win_back": 1
+        },
+        "offers": [
+          {
+            "kind": "intro",
+            "ids": [
+              "io1",
+              "io2"
+            ],
+            "mode": "FREE_TRIAL",
+            "duration": "ONE_WEEK",
+            "periods": 1,
+            "territories": 2,
+            "territory_ids": [
+              "GBR",
+              "USA"
+            ]
+          },
+          {
+            "kind": "intro",
+            "id": "io3",
+            "mode": "PAY_AS_YOU_GO",
+            "duration": "ONE_MONTH",
+            "periods": 3,
+            "territories": 1,
+            "territory_ids": [
+              "SWE"
+            ],
+            "prices": [
+              "SWE 19.0"
+            ]
+          },
+          {
+            "kind": "promotional",
+            "id": "po1",
+            "name": "Winter",
+            "identifier": "winter",
+            "mode": "PAY_UP_FRONT",
+            "duration": "THREE_MONTHS",
+            "periods": 1,
+            "territories": 2
+          },
+          {
+            "kind": "win_back",
+            "id": "wb1",
+            "name": "Come back",
+            "identifier": "comeback",
+            "mode": "PAY_AS_YOU_GO",
+            "duration": "ONE_MONTH",
+            "periods": 2,
+            "start_date": "2026-11-01",
+            "territories": 1,
+            "eligibility": {
+              "lapsed_months": {
+                "maximum": 6,
+                "minimum": 1
+              },
+              "paid_months": 3
+            },
+            "priority": "HIGH"
+          },
+          {
+            "kind": "offer_code",
+            "id": "oc1",
+            "name": "Spring",
+            "mode": "FREE_TRIAL",
+            "duration": "ONE_MONTH",
+            "periods": 1,
+            "territories": 0,
+            "eligibility": {
+              "customers": [
+                "NEW"
+              ],
+              "offer": "STACK_WITH_INTRO_OFFERS"
+            },
+            "active": true,
+            "codes": {
+              "total": 110,
+              "production": 100,
+              "sandbox": 10,
+              "one_time_batches": 1,
+              "custom_codes": [
+                "HJULSPRING"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
