@@ -264,11 +264,17 @@ func TestEnableWrites(t *testing.T) {
 			t.Fatalf("fallback = %v", body)
 		}
 	})
-	t.Run("multi round-trip client fails closed", func(t *testing.T) {
+	t.Run("2026-07-28 client is capped and can approve", func(t *testing.T) {
 		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", accept(true), mrtrProtocol)
+		if got := h.cs.InitializeResult().ProtocolVersion; got != "2025-11-25" {
+			t.Fatalf("negotiated %q, want 2025-11-25", got)
+		}
 		res, body := h.call(t, "toolsets", args)
-		if res.IsError || dataOf(body)["writes"] != false || dataOf(body)["instructions"] == nil {
-			t.Fatalf("mrtr fallback = %v", body)
+		if res.IsError || dataOf(body)["instructions"] != nil {
+			t.Fatalf("enable_writes on a 2026-07-28 client = %v", body)
+		}
+		if got := h.names(t); !slices.Contains(got, "release_submit") {
+			t.Fatalf("write tools not listed after approval: %v", got)
 		}
 	})
 	t.Run("locked", func(t *testing.T) {
@@ -429,5 +435,33 @@ func TestResourcesAndPrompts(t *testing.T) {
 	gp, err := h.cs.GetPrompt(ctx, &mcp.GetPromptParams{Name: "release_checklist", Arguments: map[string]string{"app": "Hjul", "version": "2.0"}})
 	if err != nil || !strings.Contains(gp.Messages[0].Content.(*mcp.TextContent).Text, "Hjul version 2.0") {
 		t.Fatalf("get prompt: %v", err)
+	}
+}
+
+func TestWritesDisabledErrorPointsToEnableWrites(t *testing.T) {
+	render := func(deps Deps) map[string]any {
+		s, err := newSession(deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := s.render(tool.Fail(fmt.Errorf("analytics_setup: %w", tool.ErrWritesDisabled)))
+		var body map[string]any
+		if err := json.Unmarshal(out.StructuredContent.(json.RawMessage), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	body := render(Deps{Tools: (&fixture{}).tools(), Profile: team(false)})
+	d := dataOf(body)
+	if d["error"] != "writes_disabled" || d["hint"] != writesHint {
+		t.Fatalf("data = %v", d)
+	}
+	next, _ := body["next"].([]any)
+	if len(next) != 1 || next[0].(map[string]any)["tool"] != toolsetsName {
+		t.Fatalf("next = %v, want the toolsets unlock", body["next"])
+	}
+	locked := dataOf(render(Deps{Tools: (&fixture{}).tools(), Profile: team(false), WritesLocked: true}))
+	if locked["hint"] != errWritesLocked.Hint {
+		t.Fatalf("pinned-off hint = %v", locked["hint"])
 	}
 }

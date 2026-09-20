@@ -55,15 +55,16 @@ func pinnedSpec(t testing.TB) *spec.Index {
 // spec; set k.ASC.SkipSpecCheck for deliberately invalid requests.
 func New(t testing.TB) *Kit {
 	t.Helper()
+	clock := NewFakeClock()
 	k := &Kit{
 		ASC:      NewFakeASC(t),
 		Spec:     pinnedSpec(t),
-		Plans:    NewFakePlanner(),
+		Plans:    NewFakePlanner(clock.Now),
 		State:    NewFakeStore(),
 		Files:    NewFakeFiles(t),
 		Fetch:    NewFakeFetcher(t),
 		Toolsets: NewFakeToolsets(),
-		Clock:    NewFakeClock(),
+		Clock:    clock,
 		Resolve:  &FakeResolver{},
 	}
 	k.ASC.Spec = k.Spec

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/idoo/hamn/internal/asc"
@@ -108,9 +109,10 @@ func newSession(deps Deps) (*session, error) {
 		s.tools = append(s.tools, t)
 	}
 	s.srv = mcp.NewServer(&mcp.Implementation{Name: "hamn", Title: "hamn", Version: deps.Version}, &mcp.ServerOptions{
-		Instructions: Instructions,
-		Logger:       deps.Logger,
-		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}},
+		Instructions:              Instructions,
+		Logger:                    deps.Logger,
+		Capabilities:              &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}},
+		SupportedProtocolVersions: legacyProtocolVersions(),
 	})
 	s.addResources()
 	s.addPrompts()
@@ -165,7 +167,7 @@ func (s *session) mcpTool(t tool.Tool, writes bool) *mcp.Tool {
 		Name:        t.Name(),
 		Title:       t.Meta().Title,
 		Description: t.DescriptionFor(writes),
-		InputSchema: t.InputSchemaFor(writes),
+		InputSchema: flatSchema(t.InputSchemaFor(writes)),
 		Annotations: &mcp.ToolAnnotations{
 			Title:           a.Title,
 			ReadOnlyHint:    a.ReadOnlyHint,
@@ -173,6 +175,55 @@ func (s *session) mcpTool(t tool.Tool, writes bool) *mcp.Tool {
 			IdempotentHint:  a.IdempotentHint,
 			OpenWorldHint:   a.OpenWorldHint,
 		},
+	}
+}
+
+// legacyProtocolVersions is every SDK protocol version older than
+// mrtrProtocol. On 2026-07-28 a server may no longer send elicitation/create
+// mid-request, which is how hamn asks the human to approve, so hamn caps
+// sessions at 2025-11-25: a 2026-07-28 client is told the supported list and
+// falls back to the initialize handshake at 2025-11-25.
+func legacyProtocolVersions() []string {
+	return slices.DeleteFunc(mcp.SupportedProtocolVersions(), func(v string) bool { return v >= mrtrProtocol })
+}
+
+// flatSchema returns a copy of in where every nullable type array such as
+// ["null","array"] (inferred from Go nil slices and pointers) is a single
+// type. Gemini and other OpenAPI-subset clients reject type arrays; the
+// fields stay optional because they are not in "required".
+func flatSchema(in *jsonschema.Schema) *jsonschema.Schema {
+	if in == nil {
+		return nil
+	}
+	out := in.CloneSchemas()
+	collapseNullable(out)
+	return out
+}
+
+func collapseNullable(s *jsonschema.Schema) {
+	if s == nil {
+		return
+	}
+	if len(s.Types) > 0 {
+		types := slices.DeleteFunc(slices.Clone(s.Types), func(t string) bool { return t == "null" })
+		if len(types) == 1 {
+			s.Type, s.Types = types[0], nil
+		} else {
+			s.Types = types
+		}
+	}
+	for _, c := range []*jsonschema.Schema{s.Items, s.AdditionalProperties, s.Not, s.Contains, s.PropertyNames, s.UnevaluatedItems, s.UnevaluatedProperties} {
+		collapseNullable(c)
+	}
+	for _, list := range [][]*jsonschema.Schema{s.PrefixItems, s.AllOf, s.AnyOf, s.OneOf} {
+		for _, c := range list {
+			collapseNullable(c)
+		}
+	}
+	for _, m := range []map[string]*jsonschema.Schema{s.Properties, s.PatternProperties, s.Defs, s.Definitions} {
+		for _, c := range m {
+			collapseNullable(c)
+		}
 	}
 }
 

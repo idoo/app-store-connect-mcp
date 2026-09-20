@@ -3,6 +3,7 @@ package tool
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -18,12 +19,17 @@ type Error struct {
 // Error implements error.
 func (e *Error) Error() string { return e.Message }
 
+// EnableWritesHint is the one way hamn tells agents to turn writes on: the
+// toolsets tool asks the human in the client and, when the client cannot
+// ask, returns the restart steps for that client.
+const EnableWritesHint = `call toolsets {"action":"enable_writes"} so the user can approve writes for this session (if the client cannot show the approval, it returns the restart steps)`
+
 // Sentinel errors shared by every tool.
 var (
 	ErrWritesDisabled = &Error{
 		Code:    "writes_disabled",
 		Message: "writes are disabled",
-		Hint:    "restart hamn with --allow-writes, HAMN_ALLOW_WRITES=1 or allow_writes=true in the profile",
+		Hint:    EnableWritesHint,
 	}
 	ErrIndividualKeyUnsupported = &Error{
 		Code:    "individual_key_unsupported",
@@ -184,4 +190,32 @@ func BodyFor(err error) ErrorBody {
 		b.Next = ns.NextSteps()
 	}
 	return b
+}
+
+// InvalidArgs returns an error wrapping [ErrInvalidArgs] with the formatted
+// message ("invalid arguments: <msg>"). %w in format wraps as in fmt.Errorf.
+func InvalidArgs(format string, args ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{ErrInvalidArgs}, args...)...)
+}
+
+// APIStatus returns the HTTP status of the [APIError] in err's chain, or 0.
+func APIStatus(err error) int {
+	var ae *APIError
+	if errors.As(err, &ae) {
+		return ae.Status
+	}
+	return 0
+}
+
+// IsNotFound reports a reference that matched nothing: a resolver
+// [ErrNotFound] or an App Store Connect 404.
+func IsNotFound(err error) bool {
+	var nf *ErrNotFound
+	return errors.As(err, &nf) || APIStatus(err) == http.StatusNotFound
+}
+
+// IsConflict reports an App Store Connect 409 (e.g. the object already
+// exists). Callers must read the state back before trusting it.
+func IsConflict(err error) bool {
+	return APIStatus(err) == http.StatusConflict
 }

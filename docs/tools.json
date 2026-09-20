@@ -42,10 +42,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "from": {
           "description": "first processing date YYYY-MM-DD",
@@ -69,10 +66,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "raw_rows": {
           "description": "also return up to this many raw rows (max 500)",
@@ -166,10 +160,7 @@
         },
         "copyright": {
           "description": "e.g. 2026 Example AB",
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "platform": {
           "enum": [
@@ -189,67 +180,37 @@
           "description": "App Review contact, demo account and notes",
           "properties": {
             "contact_email": {
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             },
             "contact_first_name": {
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             },
             "contact_last_name": {
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             },
             "contact_phone": {
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             },
             "demo_account_name": {
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             },
             "demo_account_password": {
               "description": "never echoed back",
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             },
             "demo_account_required": {
-              "type": [
-                "null",
-                "boolean"
-              ]
+              "type": "boolean"
             },
             "notes": {
               "description": "notes for App Review",
-              "type": [
-                "null",
-                "string"
-              ]
+              "type": "string"
             }
           },
-          "type": [
-            "null",
-            "object"
-          ]
+          "type": "object"
         },
         "secondary_category": {
           "description": "category id or name; empty string clears it",
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "version": {
           "description": "editable (default) or a version string",
@@ -397,10 +358,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "max_items": {
           "description": "items across pages (default 200, max 5000)",
@@ -548,10 +506,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "confirm": {
           "description": "true after reviewing the preview",
@@ -875,10 +830,7 @@
         },
         "family_sharable": {
           "description": "cannot be turned off once on",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "localizations": {
           "additionalProperties": {
@@ -909,10 +861,7 @@
           "type": "string"
         },
         "review_note": {
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "review_screenshot": {
           "description": "path to a PNG/JPEG screenshot for App Review",
@@ -1026,10 +975,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "version": {
           "description": "editable (default), live or a version string",
@@ -1088,10 +1034,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "version": {
           "description": "editable (default), live or a version string",
@@ -1132,10 +1075,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "platform": {
           "enum": [
@@ -1254,10 +1194,7 @@
         },
         "auto_renew": {
           "description": "offer code: renew after the offer",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "confirm": {
           "description": "true after reviewing the preview",
@@ -1273,10 +1210,7 @@
             ],
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "duration": {
           "description": "length of one offer period",
@@ -1372,10 +1306,7 @@
             ],
             "type": "object"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "priority": {
           "description": "win-back: default NORMAL",
@@ -1395,10 +1326,7 @@
         },
         "wait_months": {
           "description": "win-back: months between two win-back offers",
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         }
       },
       "required": [
@@ -1537,33 +1465,21 @@
               "items": {
                 "type": "string"
               },
-              "type": [
-                "null",
-                "array"
-              ]
+              "type": "array"
             },
             "available_in_new_territories": {
               "description": "only settable when availability is first created",
-              "type": [
-                "null",
-                "boolean"
-              ]
+              "type": "boolean"
             },
             "remove": {
               "description": "territories to remove the app from sale in",
               "items": {
                 "type": "string"
               },
-              "type": [
-                "null",
-                "array"
-              ]
+              "type": "array"
             }
           },
-          "type": [
-            "null",
-            "object"
-          ]
+          "type": "object"
         },
         "base_territory": {
           "description": "territory of price; default current base or USA",
@@ -1618,10 +1534,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "type": "object"
@@ -1671,20 +1584,14 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "territories": {
           "description": "3-letter codes to show; default: top 20 storefronts",
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "type": "object"
@@ -1721,33 +1628,21 @@
               "items": {
                 "type": "string"
               },
-              "type": [
-                "null",
-                "array"
-              ]
+              "type": "array"
             },
             "available_in_new_territories": {
               "description": "only settable when availability is first created",
-              "type": [
-                "null",
-                "boolean"
-              ]
+              "type": "boolean"
             },
             "remove": {
               "description": "territories to remove the app from sale in",
               "items": {
                 "type": "string"
               },
-              "type": [
-                "null",
-                "array"
-              ]
+              "type": "array"
             }
           },
-          "type": [
-            "null",
-            "object"
-          ]
+          "type": "object"
         },
         "base_territory": {
           "description": "territory of price; default current base or USA",
@@ -1798,10 +1693,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "type": "object"
@@ -1839,10 +1731,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "platform": {
           "enum": [
@@ -1947,10 +1836,7 @@
         },
         "phased": {
           "description": "7-day phased release",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "plan_id": {
           "description": "from the preview call",
@@ -1975,10 +1861,7 @@
         },
         "uses_non_exempt_encryption": {
           "description": "export compliance answer",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "version": {
           "description": "version to prepare or create, e.g. 1.4; default: editable",
@@ -2114,10 +1997,7 @@
             },
             "phased": {
               "description": "7-day phased release",
-              "type": [
-                "null",
-                "boolean"
-              ]
+              "type": "boolean"
             },
             "release_type": {
               "enum": [
@@ -2133,10 +2013,7 @@
             },
             "uses_non_exempt_encryption": {
               "description": "export compliance answer",
-              "type": [
-                "null",
-                "boolean"
-              ]
+              "type": "boolean"
             },
             "whats_new": {
               "additionalProperties": {
@@ -2146,10 +2023,7 @@
               "type": "object"
             }
           },
-          "type": [
-            "null",
-            "object"
-          ]
+          "type": "object"
         },
         "platform": {
           "enum": [
@@ -2196,20 +2070,14 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "include_subscriptions": {
           "description": "subscriptions to submit with it: product id, name or id",
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "plan_id": {
           "description": "from the preview call",
@@ -2274,10 +2142,7 @@
             ],
             "type": "integer"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "since": {
           "description": "\"last_seen\" or ISO date/time; only newer",
@@ -2288,10 +2153,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "unanswered": {
           "description": "only reviews without a response",
@@ -2348,10 +2210,7 @@
             ],
             "type": "object"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -2409,10 +2268,7 @@
             ],
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "period": {
           "description": "preset in Pacific time; default yesterday",
@@ -2504,10 +2360,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "platform": {
           "enum": [
@@ -2561,10 +2414,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "mode": {
           "description": "replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones",
@@ -2626,10 +2476,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "mode": {
           "description": "replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones",
@@ -2819,10 +2666,7 @@
             ],
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "enable": {
           "items": {
@@ -2847,10 +2691,7 @@
                         "properties": {
                           "enabled": {
                             "description": "default true",
-                            "type": [
-                              "null",
-                              "boolean"
-                            ]
+                            "type": "boolean"
                           },
                           "key": {
                             "enum": [
@@ -2869,10 +2710,7 @@
                         ],
                         "type": "object"
                       },
-                      "type": [
-                        "null",
-                        "array"
-                      ]
+                      "type": "array"
                     }
                   },
                   "required": [
@@ -2881,10 +2719,7 @@
                   ],
                   "type": "object"
                 },
-                "type": [
-                  "null",
-                  "array"
-                ]
+                "type": "array"
               },
               "type": {
                 "enum": [
@@ -2925,10 +2760,7 @@
             ],
             "type": "object"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -3042,10 +2874,7 @@
             ],
             "type": "object"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -3082,20 +2911,14 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "devices": {
           "description": "device ids, or [\"all\"] for every enabled device; development and ad hoc types only",
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "name": {
           "description": "profile name, unique in the team",
@@ -3333,10 +3156,7 @@
         },
         "family_sharable": {
           "description": "cannot be turned off once on",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "group": {
           "description": "subscription group reference name (max 64); created if missing",
@@ -3344,10 +3164,7 @@
         },
         "group_level": {
           "description": "rank in the group, 1 = highest",
-          "type": [
-            "null",
-            "integer"
-          ]
+          "type": "integer"
         },
         "group_localizations": {
           "additionalProperties": {
@@ -3410,10 +3227,7 @@
           "type": "string"
         },
         "review_note": {
-          "type": [
-            "null",
-            "string"
-          ]
+          "type": "string"
         },
         "review_screenshot": {
           "description": "path to a PNG/JPEG screenshot for App Review",
@@ -3494,19 +3308,13 @@
               "type": "string"
             },
             "demo_account_required": {
-              "type": [
-                "null",
-                "boolean"
-              ]
+              "type": "boolean"
             },
             "notes": {
               "type": "string"
             }
           },
-          "type": [
-            "null",
-            "object"
-          ]
+          "type": "object"
         },
         "build": {
           "description": "number, id, latest (default) or latest-valid",
@@ -3521,10 +3329,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "platform": {
           "enum": [
@@ -3537,10 +3342,7 @@
         },
         "uses_non_exempt_encryption": {
           "description": "export compliance if the build has none (ask the user, never guess)",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "what_to_test": {
           "additionalProperties": {
@@ -3711,10 +3513,7 @@
             ],
             "type": "object"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -3828,10 +3627,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -3889,10 +3685,7 @@
             ],
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -3929,10 +3722,7 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "confirm": {
           "description": "true after reviewing the preview",
@@ -3972,10 +3762,7 @@
             ],
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         }
       },
       "required": [
@@ -4163,10 +3950,7 @@
         },
         "enabled": {
           "description": "default true on create, unchanged on update",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "event_types": {
           "description": "events to deliver (required to create)",
@@ -4187,10 +3971,7 @@
             ],
             "type": "string"
           },
-          "type": [
-            "null",
-            "array"
-          ]
+          "type": "array"
         },
         "name": {
           "description": "webhook name (required to create)",
@@ -4245,10 +4026,7 @@
         },
         "clean": {
           "description": "clean build (default: the workflow setting)",
-          "type": [
-            "null",
-            "boolean"
-          ]
+          "type": "boolean"
         },
         "pull_request": {
           "description": "open pull request number",

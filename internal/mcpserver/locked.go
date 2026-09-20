@@ -39,6 +39,7 @@ func (s *session) writeLocked() map[string]bool {
 // "fix_via" objects in the data) that name a tool hidden by read-only mode:
 // they gain locked:"writes_disabled" and the enable_writes unlock call.
 func (s *session) markLocked(r *tool.Result) {
+	s.unifyWritesHint(r)
 	locked := s.writeLocked()
 	if len(locked) == 0 {
 		return
@@ -65,6 +66,41 @@ func (s *session) markLocked(r *tool.Result) {
 	if markValue(v, locked) {
 		r.Data = v
 	}
+}
+
+// writesHint is the one way hamn tells an agent to turn writes on.
+const writesHint = `call toolsets with action "enable_writes"; it asks the user to approve writes for this session`
+
+// unifyWritesHint rewrites a writes_disabled error, whatever tool raised it,
+// to the single unlock path: the toolsets enable_writes call (or, when writes
+// are pinned off, how to unpin them). Clients without elicitation get restart
+// steps from enable_writes itself.
+func (s *session) unifyWritesHint(r *tool.Result) {
+	if !r.IsError {
+		return
+	}
+	var b *tool.ErrorBody
+	switch v := r.Data.(type) {
+	case tool.ErrorBody:
+		b = &v
+		defer func() { r.Data = *b }()
+	case *tool.ErrorBody:
+		b = v
+	}
+	if b == nil || b.Error != tool.ErrWritesDisabled.Code {
+		return
+	}
+	if s.deps.WritesLocked {
+		b.Hint = errWritesLocked.Hint
+		return
+	}
+	b.Hint = writesHint
+	for _, n := range r.Next {
+		if n.Tool == toolsetsName {
+			return
+		}
+	}
+	r.Next = append(r.Next, unlockWrites)
 }
 
 // markValue walks v and marks steps under "fix_via" keys and in "next"

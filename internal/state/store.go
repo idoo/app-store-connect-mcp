@@ -1,6 +1,8 @@
 package state
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,9 +17,10 @@ import (
 )
 
 const (
-	dirMode   = 0o700
-	fileMode  = 0o600
-	cursorsDB = "cursors.json"
+	dirMode         = 0o700
+	fileMode        = 0o600
+	cursorKind      = "cursors"
+	legacyCursorsDB = "cursors.json"
 )
 
 var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$`)
@@ -61,31 +64,39 @@ func New(dir string) (*Store, error) {
 // Dir returns the root directory.
 func (s *Store) Dir() string { return s.dir }
 
-// Cursor returns the stored cursor for profile/app/name, or "".
+// Cursor returns the stored cursor for profile/app/name, or "". Values
+// written by hamn 0.1.0 into the shared cursors.json are still read when no
+// per-key record exists yet.
 func (s *Store) Cursor(profile, app, name string) (string, error) {
+	var rec cursorRecord
+	ok, err := s.Load(cursorKind, cursorFile(profile, app, name), &rec)
+	if err != nil || ok {
+		return rec.Value, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	m, err := s.readCursors()
+	m, err := s.readLegacyCursors()
 	if err != nil {
 		return "", err
 	}
 	return m[cursorKey(profile, app, name)], nil
 }
 
-// SetCursor stores a cursor value for profile/app/name.
+// SetCursor stores a cursor value for profile/app/name. Each cursor is its
+// own atomically replaced file, so concurrent hamn processes updating
+// different cursors never overwrite each other.
 func (s *Store) SetCursor(profile, app, name, value string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	m, err := s.readCursors()
-	if err != nil {
-		return err
-	}
-	m[cursorKey(profile, app, name)] = value
-	b, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("state: encode cursors: %w", err)
-	}
-	return writeAtomic(filepath.Join(s.dir, cursorsDB), b)
+	return s.Save(cursorKind, cursorFile(profile, app, name), cursorRecord{
+		Profile: profile, App: app, Name: name, Value: value,
+	})
+}
+
+// cursorRecord is the on-disk form of one cursor.
+type cursorRecord struct {
+	Profile string `json:"profile"`
+	App     string `json:"app"`
+	Name    string `json:"name"`
+	Value   string `json:"value"`
 }
 
 // Load decodes the record kind/key into v and reports whether it existed.
@@ -148,9 +159,10 @@ func (s *Store) recordPath(kind, key string) (string, error) {
 	return filepath.Join(s.dir, kind, key+".json"), nil
 }
 
-func (s *Store) readCursors() (map[string]string, error) {
+// readLegacyCursors reads the cursors.json map written by hamn 0.1.0.
+func (s *Store) readLegacyCursors() (map[string]string, error) {
 	m := map[string]string{}
-	b, err := os.ReadFile(filepath.Join(s.dir, cursorsDB))
+	b, err := os.ReadFile(filepath.Join(s.dir, legacyCursorsDB))
 	if errors.Is(err, fs.ErrNotExist) {
 		return m, nil
 	}
@@ -166,6 +178,13 @@ func (s *Store) readCursors() (map[string]string, error) {
 func cursorKey(profile, app, name string) string {
 	b, _ := json.Marshal([]string{profile, app, name}) // []string always marshals.
 	return string(b)
+}
+
+// cursorFile is the record key of a cursor: a hash, since profile, app and
+// name may hold characters that are not valid in file names.
+func cursorFile(profile, app, name string) string {
+	sum := sha256.Sum256([]byte(cursorKey(profile, app, name)))
+	return hex.EncodeToString(sum[:])
 }
 
 // writeAtomic writes b to a temp file in the same directory, syncs it and

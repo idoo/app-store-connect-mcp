@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -200,5 +202,103 @@ func TestSessionWritesAreSessionScoped(t *testing.T) {
 	}
 	if base.calls != 2 || len(shared) != 1 || !shared[0] {
 		t.Fatalf("base calls = %d, shared SetWrites = %v", base.calls, shared)
+	}
+}
+
+// authTransport adds the bearer token to every request.
+type authTransport struct{ token string }
+
+func (a authTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+a.token)
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+func TestHTTPBuildsOneServerPerSession(t *testing.T) {
+	factory := SessionFactory(Deps{Tools: []tool.Tool{}, Version: "test"})
+	var mu sync.Mutex
+	seen := map[*mcp.Server]bool{}
+	h, err := HTTPHandler(HTTPOptions{Token: "t", NewServer: func(r *http.Request) *mcp.Server {
+		s := factory(r)
+		mu.Lock()
+		seen[s] = true
+		mu.Unlock()
+		return s
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+	ctx := context.Background()
+	tr := &mcp.StreamableClientTransport{Endpoint: ts.URL, HTTPClient: &http.Client{Transport: authTransport{"t"}}}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "1"}, nil).Connect(ctx, tr, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cs.Close() }()
+	for range 10 {
+		if _, err := cs.ListTools(ctx, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	// The probe, the session server, and one throwaway Build for the
+	// client's server/discover attempt (rejected: hamn caps at 2025-11-25).
+	// Before the fix, every request built a server (~13 here).
+	live := 0
+	for s := range seen {
+		for range s.Sessions() {
+			live++
+		}
+	}
+	if len(seen) > 3 || live != 1 {
+		t.Fatalf("distinct servers = %d (want ≤ 3), live sessions = %d (want 1)", len(seen), live)
+	}
+}
+
+func TestHTTPSessionCapAndIdleTimeout(t *testing.T) {
+	h, err := HTTPHandler(HTTPOptions{
+		Token: "t", SessionTimeout: 100 * time.Millisecond, MaxSessions: 1,
+		NewServer: SessionFactory(Deps{Tools: []tool.Tool{}, Version: "test"}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := doHTTP(t, h, "/mcp", "Bearer t", ""); rec.Code != http.StatusOK || rec.Header().Get(sessionIDHeader) == "" {
+		t.Fatalf("first session = %d", rec.Code)
+	}
+	if rec := doHTTP(t, h, "/mcp", "Bearer t", ""); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("second session over cap = %d, want 503", rec.Code)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		rec := doHTTP(t, h, "/mcp", "Bearer t", "")
+		if rec.Code == http.StatusOK {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("idle session never expired: still %d", rec.Code)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestSessionLimitsFromEnv(t *testing.T) {
+	t.Setenv(EnvHTTPSessionTimeout, "5m")
+	t.Setenv(EnvHTTPMaxSessions, "-1")
+	d, n, err := sessionLimits(HTTPOptions{})
+	if err != nil || d != 5*time.Minute || n != 0 {
+		t.Fatalf("env limits = %v %d %v", d, n, err)
+	}
+	t.Setenv(EnvHTTPSessionTimeout, "")
+	t.Setenv(EnvHTTPMaxSessions, "")
+	if d, n, _ := sessionLimits(HTTPOptions{}); d != DefaultSessionTimeout || n != DefaultMaxSessions {
+		t.Fatalf("defaults = %v %d", d, n)
+	}
+	t.Setenv(EnvHTTPSessionTimeout, "soon")
+	if _, _, err := sessionLimits(HTTPOptions{}); err == nil {
+		t.Fatal("bad duration accepted")
 	}
 }

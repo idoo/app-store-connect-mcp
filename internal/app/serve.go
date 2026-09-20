@@ -22,6 +22,9 @@ type ServeOptions struct {
 	HTTP mcpserver.HTTPOptions
 	// Logger receives server logs on stderr; nil uses a stderr text logger.
 	Logger *slog.Logger
+	// Root confines file tools to this directory (--root); empty falls back
+	// to HAMN_ROOT, then the client's MCP roots, then the git root of the cwd.
+	Root string
 }
 
 // Serve builds the environment and runs the MCP server until ctx ends: one
@@ -38,7 +41,11 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	for _, p := range r.Profile.Problems {
 		logger.Warn(p)
 	}
-	env, err := NewEnv(ctx, r, opts.Version)
+	root := opts.Root
+	if root == "" {
+		root = os.Getenv("HAMN_ROOT")
+	}
+	env, err := newEnv(ctx, r, opts.Version, root)
 	if err != nil {
 		return err
 	}

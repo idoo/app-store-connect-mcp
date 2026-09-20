@@ -107,8 +107,13 @@ func WritesLocked(cwd, home string) (bool, error) {
 // NewEnv builds the base tool environment for resolved. Without a configured
 // profile the env has no ASC client or resolver; tools then fail with
 // tool.ErrUnavailable and doctor explains the setup. Key-loading failures for a
-// configured profile are returned as errors.
+// configured profile are returned as errors. The file root comes from
+// HAMN_ROOT when set (see [ProjectFiles]).
 func NewEnv(ctx context.Context, r *config.Resolved, version string) (*tool.Env, error) {
+	return newEnv(ctx, r, version, os.Getenv("HAMN_ROOT"))
+}
+
+func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*tool.Env, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("app: cwd: %w", err)
@@ -125,7 +130,8 @@ func NewEnv(ctx context.Context, r *config.Resolved, version string) (*tool.Env,
 	if err != nil {
 		return nil, fmt.Errorf("app: state: %w", err)
 	}
-	files, err := NewFiles(DefaultRoot(cwd))
+	home, _ := os.UserHomeDir()
+	files, err := NewProjectFiles(root, cwd, home)
 	if err != nil {
 		return nil, err
 	}

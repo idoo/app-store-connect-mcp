@@ -61,11 +61,15 @@ func (ts *TokenSource) Token(ctx context.Context) (string, error) {
 	return tok.Value, nil
 }
 
-// Invalidate drops the cached token so the next Token call signs a fresh one
-// (used after Apple answers 401).
-func (ts *TokenSource) Invalidate() {
+// Invalidate drops the cached token if it is still tok, so the next Token call
+// signs a fresh one (used after Apple answers 401). A token another caller
+// already replaced is kept, so concurrent 401s on the same stale token
+// trigger a single re-sign.
+func (ts *TokenSource) Invalidate(tok string) {
 	ts.mu.Lock()
-	ts.cur = Token{}
+	if ts.cur.Value == tok {
+		ts.cur = Token{}
+	}
 	ts.mu.Unlock()
 }
 

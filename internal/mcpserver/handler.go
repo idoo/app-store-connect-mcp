@@ -47,6 +47,7 @@ func (s *session) env(ctx context.Context, req *mcp.CallToolRequest) *tool.Env {
 	e.Version = s.deps.Version
 	e.Progress = nil
 	e.Elicit = elicitFunc(req.Session)
+	e.Roots = rootsFunc(req.Session)
 	if req.Params != nil && req.Session != nil {
 		if token := req.Params.GetProgressToken(); token != nil {
 			ss := req.Session
@@ -82,6 +83,29 @@ func elicitFunc(ss *mcp.ServerSession) func(context.Context, string) (bool, erro
 		}
 		approved, _ := r.Content["approve"].(bool)
 		return r.Action == "accept" && approved, nil
+	}
+}
+
+// rootsFunc lists the client's root URIs, or is nil when the client did not
+// declare the roots capability.
+func rootsFunc(ss *mcp.ServerSession) func(context.Context) ([]string, error) {
+	if ss == nil {
+		return nil
+	}
+	p := ss.InitializeParams()
+	if p == nil || p.Capabilities == nil || p.Capabilities.RootsV2 == nil { //nolint:staticcheck // roots stay functional during the SEP-2577 deprecation window.
+		return nil
+	}
+	return func(ctx context.Context) ([]string, error) {
+		r, err := ss.ListRoots(ctx, nil) //nolint:staticcheck // see above.
+		if err != nil {
+			return nil, fmt.Errorf("list roots: %w", err)
+		}
+		uris := make([]string, 0, len(r.Roots))
+		for _, x := range r.Roots {
+			uris = append(uris, x.URI)
+		}
+		return uris, nil
 	}
 }
 

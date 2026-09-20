@@ -55,6 +55,9 @@ func TestCapResultListResult(t *testing.T) {
 			if lr.Returned != tt.wantReturned || len(lr.Data) != tt.wantReturned || len(lr.Included) != tt.wantIncluded {
 				t.Errorf("returned=%d data=%d included=%d", lr.Returned, len(lr.Data), len(lr.Included))
 			}
+			if wantCursor := map[bool]string{true: "c"}[tt.wantReturned == len(full.Data)]; lr.NextCursor != wantCursor {
+				t.Errorf("next_cursor = %q, want %q (a cursor after dropped items would skip them)", lr.NextCursor, wantCursor)
+			}
 			if (tr != nil) != tt.wantTrunc {
 				t.Fatalf("truncation = %+v, want present=%v", tr, tt.wantTrunc)
 			}
@@ -103,6 +106,16 @@ func TestCapResultGeneric(t *testing.T) {
 				m := got.(map[string]any)
 				if _, ok := m["included"]; ok || len(m["builds"].([]any)) != 3 || len(m["tags"].([]any)) != 2 {
 					t.Errorf("got %v", m)
+				}
+			},
+		},
+		{
+			name: "object with cursor drops it and fixes returned", in: map[string]any{"builds": builds, "returned": 8, "next_cursor": "c"},
+			max: sizeOf(t, map[string]any{"builds": builds[:3], "returned": 8, "next_cursor": "c"}), wantDropped: 5,
+			check: func(t *testing.T, got any) {
+				m := got.(map[string]any)
+				if _, ok := m["next_cursor"]; ok || m["returned"] != 3 || len(m["builds"].([]any)) != 3 {
+					t.Errorf("got %v, want 3 builds, returned 3, no next_cursor", m)
 				}
 			},
 		},
