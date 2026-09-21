@@ -9,10 +9,11 @@ package release
 // fingerprint:
 //
 //	key, err := prepareArgsKey(app, platform, versionString, buildID, in.releaseDesired)
-//	fp, err := releaseFingerprint(ctx, env, app.ID, platform, versionRef)
+//	snap, err := loadReleaseSnapshot(ctx, env, app.ID, platform, versionRef)
+//	fp, err := snap.State.fingerprint()
 //	wctx, res := tool.Preview(ctx, env, in.PlanID, key, fp, preview)
 //
-// and release_submit uses submitArgsKey + releaseFingerprint the same way.
+// and release_submit uses submitArgsKey + the snapshot fingerprint the same way.
 // Keys are built from RESOLVED values (app id, platform, version string,
 // build id), so "Hjul"/"latest" and the ids they resolve to share a plan.
 //
@@ -219,43 +220,43 @@ func stateFromVersion(versionString string, platform tool.Platform, v *versionDe
 	return st
 }
 
-// releaseFingerprint reads the current release state (2 GETs once the version
-// is resolved) and returns its fingerprint. versionRef "" means editable; a
-// version string that does not exist yet yields the "to be created" state.
-func releaseFingerprint(ctx context.Context, env *tool.Env, appID string, platform tool.Platform, versionRef tool.VersionRef) (string, error) {
-	st, err := loadReleaseState(ctx, env, appID, platform, versionRef)
-	if err != nil {
-		return "", err
+// versionedBuildRef pins "latest" and "latest-valid" to the version's
+// marketing version, so a newer upload of another version (a 2.4 TestFlight
+// build while 2.3.1 is prepared) is never picked. Other refs are kept.
+func versionedBuildRef(ref tool.BuildRef, versionString string) tool.BuildRef {
+	r := strings.ToLower(strings.TrimSpace(string(ref)))
+	if versionString == "" || (r != string(tool.BuildLatest) && r != string(tool.BuildLatestValid)) {
+		return ref
 	}
-	return st.fingerprint()
+	return tool.BuildRef("latest:" + versionString)
 }
 
-// loadReleaseState is the state behind [releaseFingerprint].
-func loadReleaseState(ctx context.Context, env *tool.Env, appID string, platform tool.Platform, versionRef tool.VersionRef) (releaseState, error) {
-	if versionRef == "" {
-		versionRef = tool.VersionEditable
-	}
-	var detail *versionDetail
-	ver, err := env.Resolve.Version(ctx, appID, platform, versionRef)
+// buildMarketingVersion returns the build's preReleaseVersion.version
+// ("" when Apple has none).
+func buildMarketingVersion(ctx context.Context, env *tool.Env, buildID string) (string, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/builds/"+buildID+"/preReleaseVersion", url.Values{"fields[preReleaseVersions]": {"version"}})
 	switch {
 	case err == nil:
-		if detail, err = fetchVersionDetail(ctx, env, ver.ID); err != nil {
-			return releaseState{}, err
-		}
-	case isNotFound(err) && concreteVersion(versionRef):
-		// the version will be created by release_prepare
+		r, _ := resp.First()
+		return r.Str("version"), nil
+	case isNotFound(err):
+		return "", nil
 	default:
-		return releaseState{}, err
+		return "", fmt.Errorf("get build %s version: %w", buildID, err)
 	}
-	sub, ok, err := fetchOpenSubmission(ctx, env, appID, platform)
-	if err != nil {
-		return releaseState{}, err
+}
+
+// readyProducts lists the ready products release_submit attaches by default.
+func readyProducts(s *statusSnapshot) []string {
+	out := make([]string, 0, len(s.ReadyIAPs)+len(s.ReadySubscriptions))
+	for _, p := range s.ReadyIAPs {
+		out = append(out, "attach iap "+p)
 	}
-	subState := ""
-	if ok {
-		subState = sub.Str("state")
+	for _, p := range s.ReadySubscriptions {
+		out = append(out, "attach subscription "+p)
 	}
-	return stateFromVersion(string(versionRef), platform, detail, subState), nil
+	slices.Sort(out)
+	return out
 }
 
 // concreteVersion reports whether ref is a version string rather than a keyword.

@@ -18,6 +18,8 @@ type submitIn struct {
 	Version              tool.VersionRef `json:"version,omitempty" jsonschema:"version string; default: editable"`
 	IncludeIAPs          []string        `json:"include_iaps,omitempty" jsonschema:"IAPs to submit with it: product id, name or id"`
 	IncludeSubscriptions []string        `json:"include_subscriptions,omitempty" jsonschema:"subscriptions to submit with it: product id, name or id"`
+	// AttachFirstTimeProducts nil means true.
+	AttachFirstTimeProducts *bool `json:"attach_first_time_products,omitempty" jsonschema:"attach every ready IAP/subscription (default true)"`
 	tool.ConfirmPlan
 }
 
@@ -48,12 +50,14 @@ func init() {
 	}, releaseCancel))
 }
 
-// submitKey is release_submit's canonical plan args. Without products it
-// marshals exactly like [submitArgsKey], so release_status plans verify.
+// submitKey is release_submit's canonical plan args. Without products and
+// with the default attach_first_time_products it marshals exactly like
+// [submitArgsKey], so release_status plans verify.
 type submitKey struct {
 	submitPlanKey
 	IAPs          []string `json:"include_iaps,omitempty"`
 	Subscriptions []string `json:"include_subscriptions,omitempty"`
+	NoAutoAttach  bool     `json:"no_auto_attach,omitempty"`
 }
 
 // openItemStates are product version states that can go into a submission.
@@ -113,14 +117,30 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 		return nil, tool.WithNext(fmt.Errorf("%w: version %s has no build; attach one with release_prepare", tool.ErrInvalidArgs, out.Version.String),
 			statusNext(app, platform, out.Version.String, map[string]any{"build": "latest"}))
 	}
+	ss, err := loadStatusSnapshot(ctx, env, app, platform, in.Version)
+	if err != nil {
+		return nil, err
+	}
+	if err := preflightBlocks(runChecks(ss)); err != nil {
+		return nil, tool.WithNext(err, statusNext(app, platform, out.Version.String, nil))
+	}
 
+	attach := in.AttachFirstTimeProducts == nil || *in.AttachFirstTimeProducts
+	iaps, subs := in.IncludeIAPs, in.IncludeSubscriptions
+	if attach {
+		iaps = mergeRefs(iaps, ss.ReadyIAPs)
+		subs = mergeRefs(subs, ss.ReadySubscriptions)
+	}
 	wanted := []wantedItem{{Kind: kindAppStoreVersion, Label: "version " + out.Version.String, Target: ver.ID}}
-	products, notes, err := resolveProducts(ctx, env, app.ID, in.IncludeIAPs, in.IncludeSubscriptions)
+	products, notes, err := resolveProducts(ctx, env, app.ID, iaps, subs)
 	if err != nil {
 		return nil, err
 	}
 	wanted = append(wanted, products...)
 	out.Notes = notes
+	if !attach && len(ss.ReadyIAPs)+len(ss.ReadySubscriptions) > 0 {
+		out.Notes = append(out.Notes, fmt.Sprintf("%d ready product(s) not attached (attach_first_time_products:false)", len(ss.ReadyIAPs)+len(ss.ReadySubscriptions)))
+	}
 	var rejected []string
 	for _, it := range out.Submission.Items {
 		if it.State == "REJECTED" {
@@ -151,7 +171,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	}
 	intended = append(intended, "submit for App Review")
 
-	key := submitKey{submitPlanKey: submitArgsKey(app, platform, out.Version.String), IAPs: in.IncludeIAPs, Subscriptions: in.IncludeSubscriptions}
+	key := submitKey{submitPlanKey: submitArgsKey(app, platform, out.Version.String), IAPs: in.IncludeIAPs, Subscriptions: in.IncludeSubscriptions, NoAutoAttach: !attach}
 	fp, err := snap.State.fingerprint()
 	if err != nil {
 		return nil, err
@@ -237,6 +257,42 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	}
 	out.Submission = submissionView{ID: subID, State: state, Items: out.Submission.Items}
 	return tool.OK(out).Then(reviewStatusNext(app, platform)), nil
+}
+
+// preflightBlocks refuses a submission release_status would block, before
+// anything is created at Apple.
+func preflightBlocks(checks []check) error {
+	var blocks []string
+	for _, c := range checks {
+		if c.Status != statusBlock {
+			continue
+		}
+		msg := c.ID + ": " + c.Detail
+		if len(c.Items) > 0 {
+			msg += " (" + strings.Join(c.Items, "; ") + ")"
+		}
+		if c.FixVia != nil && c.FixVia.Tool != "" {
+			msg += " [fix: " + c.FixVia.Tool + "]"
+		} else if c.FixVia != nil && c.FixVia.Manual != "" {
+			msg += " [fix: " + c.FixVia.Manual + "]"
+		}
+		blocks = append(blocks, msg)
+	}
+	if len(blocks) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%w: nothing was submitted, %d preflight check(s) block it: %s", tool.ErrInvalidArgs, len(blocks), strings.Join(blocks, " | "))
+}
+
+// mergeRefs appends the refs of extra not already in refs.
+func mergeRefs(refs, extra []string) []string {
+	out := slices.Clone(refs)
+	for _, r := range extra {
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // resolveProducts resolves IAP and subscription references to the open

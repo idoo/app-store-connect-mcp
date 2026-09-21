@@ -44,6 +44,29 @@
       }
     },
     {
+      "method": "POST",
+      "path": "/v1/reviewSubmissionItems",
+      "body": {
+        "data": {
+          "relationships": {
+            "inAppPurchaseVersion": {
+              "data": {
+                "id": "iv1",
+                "type": "inAppPurchaseVersions"
+              }
+            },
+            "reviewSubmission": {
+              "data": {
+                "id": "rs9",
+                "type": "reviewSubmissions"
+              }
+            }
+          },
+          "type": "reviewSubmissionItems"
+        }
+      }
+    },
+    {
       "method": "PATCH",
       "path": "/v1/reviewSubmissions/rs9",
       "body": {
@@ -81,6 +104,12 @@
         "kind": "appStoreVersion",
         "label": "version 1.4",
         "target_id": "v1",
+        "action": "added"
+      },
+      {
+        "kind": "inAppPurchaseVersion",
+        "label": "Pro",
+        "target_id": "iv1",
         "action": "added"
       }
     ],

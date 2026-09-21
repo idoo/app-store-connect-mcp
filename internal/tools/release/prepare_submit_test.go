@@ -64,6 +64,8 @@ func writable(k *tooltest.Kit) *tooltest.Kit {
 	return k
 }
 
+// The state release_status fingerprints its plans over must equal the one
+// release_prepare/release_submit read back, or status plans never verify.
 func TestReleaseSnapshotFingerprintMatchesStatus(t *testing.T) {
 	k := setup(t, readyFixture())
 	for _, ref := range []tool.VersionRef{"1.4", "", "9.9"} {
@@ -75,12 +77,20 @@ func TestReleaseSnapshotFingerprintMatchesStatus(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want, err := releaseFingerprint(t.Context(), k.Env, "100", tool.IOS, ref)
+		sref := ref
+		if sref == "" {
+			sref = tool.VersionEditable
+		}
+		ss, err := loadStatusSnapshot(t.Context(), k.Env, k.Resolve.Apps[0], tool.IOS, sref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := stateFromVersion(string(sref), tool.IOS, ss.Version, "").fingerprint()
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got != want {
-			t.Errorf("ref %q: snapshot fingerprint differs from releaseFingerprint", ref)
+			t.Errorf("ref %q: snapshot fingerprint differs from release_status state", ref)
 		}
 	}
 }
@@ -156,7 +166,7 @@ func TestReleasePrepareWithoutPlanIsRefused(t *testing.T) {
 
 func TestReleasePrepareBuildStillProcessing(t *testing.T) {
 	k := setup(t, readyFixture())
-	k.Resolve.Builds["latest"] = tool.Build{ID: "b2", Number: "43", ProcessingState: "PROCESSING"}
+	k.Resolve.Builds["latest:1.4"] = tool.Build{ID: "b2", Number: "43", ProcessingState: "PROCESSING"}
 	_, sres := call(t, k, `{"desired":{"build":"latest","release_type":"MANUAL"}}`)
 	writable(k)
 	k.ASC.Handle("PATCH", "/v1/appStoreVersions/{id}", 200, doc(t, jres{Type: "appStoreVersions", ID: "v1", Attrs: map[string]any{"releaseType": "MANUAL"}}))
@@ -175,18 +185,36 @@ func TestReleasePrepareBuildStillProcessing(t *testing.T) {
 	}
 }
 
+// ReleaseManager#7: a hotfix (new version + What's New) takes one approval
+// round; What's New lands on the locales Apple copied to the new version.
 func TestReleasePrepareCreatesVersion(t *testing.T) {
 	k := setup(t, readyFixture())
 	_, sres := call(t, k, `{"version":"2.0","desired":{"release_type":"AFTER_APPROVAL","phased":true,"whats_new":{"*":"Hi"}}}`)
 	writable(k)
 	k.ASC.Handle("POST", "/v1/appStoreVersions", 201, doc(t, jres{Type: "appStoreVersions", ID: "v2", Attrs: map[string]any{"versionString": "2.0"}}))
 	k.ASC.Handle("POST", "/v1/appStoreVersionPhasedReleases", 201, doc(t, jres{Type: "appStoreVersionPhasedReleases", ID: "pr1", Attrs: map[string]any{}}))
+	k.ASC.HandleFunc("PATCH", "/v1/appStoreVersionLocalizations/{id}", func(r tool.Request) tooltest.Fixture {
+		return tooltest.Fixture{Status: 200, Body: []byte(doc(t, jres{Type: "appStoreVersionLocalizations", ID: strings.Split(r.Path, "/")[3], Attrs: map[string]any{"whatsNew": "Hi"}}))}
+	})
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_prepare"), k.Env, argsJSON(t, sres.Next[0].Args)))
 	out := tooltest.Decode[prepareOut](t, res)
 	if !out.Version.Created || out.Version.ID != "v2" {
 		t.Errorf("version = %+v", out.Version)
 	}
+	if n := len(k.ASC.RequestsTo("PATCH", "/v1/appStoreVersionLocalizations/{id}")); n != 2 {
+		t.Errorf("What's New PATCHes = %d, want 2 (one per copied locale)", n)
+	}
+	for _, s := range out.Steps {
+		if s.Step == "whats_new" && s.Status != stepDone {
+			t.Errorf("whats_new step = %+v", s)
+		}
+	}
 	tooltest.AssertGolden(t, "testdata/prepare_submit/prepare_create.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
+}
+
+// iapVersionRoute serves the ready Pro IAP's open version iv1.
+func iapVersionRoute(t *testing.T, k *tooltest.Kit) {
+	k.ASC.Handle("GET", "/v2/inAppPurchases/{id}/versions", 200, doc(t, []jres{{Type: "inAppPurchaseVersions", ID: "iv1", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}}}))
 }
 
 // submissionFixture registers an open submission (state "" = none).
@@ -239,6 +267,7 @@ func submitTwice(t *testing.T, k *tooltest.Kit, args string) *tool.Result {
 func TestReleaseSubmitNewSubmission(t *testing.T) {
 	k := writable(setup(t, readyFixture()))
 	submitHandlers(t, k)
+	iapVersionRoute(t, k)
 	res := submitTwice(t, k, `{"app":"Hjul","version":"1.4"}`)
 	out := tooltest.Decode[submitOut](t, res)
 	if !out.Created || out.Submission.ID != "rs9" || out.Submission.State != "WAITING_FOR_REVIEW" {
@@ -251,9 +280,10 @@ func TestReleaseSubmitReusesDraft(t *testing.T) {
 	k := writable(setup(t, readyFixture()))
 	submissionFixture(t, k, "READY_FOR_REVIEW")
 	submitHandlers(t, k)
+	iapVersionRoute(t, k)
 	submitTwice(t, k, `{"app":"Hjul"}`)
 	got := mutationLog(k)
-	if len(got) != 2 || got[0].Path != "/v1/reviewSubmissionItems" || got[1].Path != "/v1/reviewSubmissions/rs1" {
+	if len(got) != 3 || got[0].Path != "/v1/reviewSubmissionItems" || got[1].Path != "/v1/reviewSubmissionItems" || got[2].Path != "/v1/reviewSubmissions/rs1" {
 		t.Errorf("mutations = %+v", got)
 	}
 	if len(k.ASC.RequestsTo("POST", "/v1/reviewSubmissions")) != 0 {
@@ -266,6 +296,7 @@ func TestReleaseSubmitAfterRejectionResolvesItems(t *testing.T) {
 	submissionFixture(t, k, "UNRESOLVED_ISSUES",
 		jres{Type: "reviewSubmissionItems", ID: "it1", Attrs: map[string]any{"state": "REJECTED"}, Rels: map[string]any{"appStoreVersion": "appStoreVersions:v1"}})
 	submitHandlers(t, k)
+	iapVersionRoute(t, k)
 	res := submitTwice(t, k, `{"app":"Hjul"}`)
 	tooltest.AssertGolden(t, "testdata/prepare_submit/submit_resubmit.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 }
@@ -329,5 +360,44 @@ func TestReleaseCancelDraftDeletesItems(t *testing.T) {
 	}
 	if len(k.ASC.RequestsTo("PATCH", "/v1/reviewSubmissions/{id}")) != 0 {
 		t.Error("draft was PATCHed canceled")
+	}
+}
+
+// ReleaseManager#6: release_submit refuses on a block check before it
+// creates anything or proposes a plan.
+func TestReleaseSubmitRefusesOnPreflightBlock(t *testing.T) {
+	f := readyFixture()
+	f.noPrice = true
+	k := writable(setup(t, f))
+	submitHandlers(t, k)
+	iapVersionRoute(t, k)
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "release_submit"), k.Env, `{"app":"Hjul"}`), tool.ErrInvalidArgs.Code)
+	if !strings.Contains(body.Message, "pricing_availability") {
+		t.Errorf("message = %q", body.Message)
+	}
+	if n := len(k.ASC.Mutations()); n != 0 || len(k.Plans.Proposed) != 0 {
+		t.Errorf("mutations = %d, plans = %d", n, len(k.Plans.Proposed))
+	}
+}
+
+// ReleaseManager#2: ready products are attached by default (listed in the
+// preview); attach_first_time_products:false leaves them out.
+func TestReleaseSubmitAutoAttachesReadyProducts(t *testing.T) {
+	k := writable(setup(t, readyFixture()))
+	submitHandlers(t, k)
+	iapVersionRoute(t, k)
+	out := tooltest.Decode[submitOut](t, submitTwice(t, k, `{"app":"Hjul"}`))
+	if !slices.ContainsFunc(out.Items, func(w wantedItem) bool { return w.Kind == kindIAPVersion && w.Target == "iv1" && w.Action == "added" }) {
+		t.Errorf("items = %+v", out.Items)
+	}
+	if b, _ := json.Marshal(k.Plans.Proposed); !strings.Contains(string(b), "add Pro") {
+		t.Errorf("preview does not list the IAP: %s", b)
+	}
+
+	k = writable(setup(t, readyFixture()))
+	submitHandlers(t, k)
+	out = tooltest.Decode[submitOut](t, submitTwice(t, k, `{"app":"Hjul","attach_first_time_products":false}`))
+	if len(out.Items) != 1 || !slices.ContainsFunc(out.Notes, func(n string) bool { return strings.Contains(n, "not attached") }) {
+		t.Errorf("opt-out items = %+v notes = %v", out.Items, out.Notes)
 	}
 }

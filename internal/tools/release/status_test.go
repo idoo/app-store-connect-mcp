@@ -27,6 +27,13 @@ type fixture struct {
 	// korea answers the GRAC question with nil and makes KOR available (true)
 	// or unavailable (false); nil leaves the declaration complete.
 	korea *bool
+	// buildVersion is the attached build's marketing version (default 1.4).
+	buildVersion string
+	noIPad       bool // no iPad screenshot sets anywhere
+	// ageUnanswered leaves a general (non-Korea) age rating question nil.
+	ageUnanswered bool
+	// iapState overrides the Pro IAP: product state, no versions.
+	iapState string
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -97,7 +104,15 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		"editable": {ID: "v1", String: "1.4", Platform: tool.IOS, State: "PREPARE_FOR_SUBMISSION"},
 		"1.4":      {ID: "v1", String: "1.4", Platform: tool.IOS, State: "PREPARE_FOR_SUBMISSION"},
 	}
-	k.Resolve.Builds = map[tool.BuildRef]tool.Build{"latest": {ID: "b2", Number: "43", ProcessingState: "VALID"}}
+	k.Resolve.Builds = map[tool.BuildRef]tool.Build{
+		"latest":     {ID: "b2", Number: "43", ProcessingState: "VALID"},
+		"latest:1.4": {ID: "b2", Number: "43", ProcessingState: "VALID"},
+	}
+	bv := "1.4"
+	if f.buildVersion != "" {
+		bv = f.buildVersion
+	}
+	k.ASC.Handle("GET", "/v1/builds/{id}/preReleaseVersion", 200, doc(t, jres{Type: "preReleaseVersions", ID: "pre1", Attrs: map[string]any{"version": bv}}))
 
 	prior := []jres{}
 	if !f.first {
@@ -158,6 +173,9 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 	}, inc...))
 
 	age := map[string]any{"violenceCartoonOrFantasy": "NONE", "kidsAgeBand": nil}
+	if f.ageUnanswered {
+		age["messagingAndChat"] = nil
+	}
 	if f.korea != nil {
 		age["gracRatingClassificationNumber"] = nil
 		k.ASC.Handle("GET", "/v2/appAvailabilities/{id}/territoryAvailabilities", 200, doc(t, []jres{
@@ -179,6 +197,10 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 			sets = append(sets, jres{Type: "appScreenshotSets", ID: "set-" + id, Attrs: map[string]any{"screenshotDisplayType": "APP_IPHONE_67"}, Rels: map[string]any{"appScreenshots": []string{"appScreenshots:s-" + id}}})
 			shots = append(shots, jres{Type: "appScreenshots", ID: "s-" + id, Attrs: map[string]any{"assetDeliveryState": map[string]any{"state": "COMPLETE"}}})
 		}
+		if !f.noIPad {
+			sets = append(sets, jres{Type: "appScreenshotSets", ID: "ipad-" + id, Attrs: map[string]any{"screenshotDisplayType": "APP_IPAD_PRO_3GEN_129"}, Rels: map[string]any{"appScreenshots": []string{"appScreenshots:p-" + id}}})
+			shots = append(shots, jres{Type: "appScreenshots", ID: "p-" + id, Attrs: map[string]any{"assetDeliveryState": map[string]any{"state": "COMPLETE"}}})
+		}
 		return tooltest.Fixture{Status: 200, Body: []byte(doc(t, sets, shots...))}
 	})
 	if f.noPrice {
@@ -192,8 +214,12 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 	} else {
 		k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, `{"data":[]}`)
 	}
-	k.ASC.Handle("GET", "/v1/apps/{id}/inAppPurchasesV2", 200, doc(t, []jres{{Type: "inAppPurchases", ID: "iap1", Attrs: map[string]any{"name": "Pro", "state": "READY_TO_SUBMIT"}, Rels: map[string]any{"versions": []string{"inAppPurchaseVersions:iv1"}}}},
-		jres{Type: "inAppPurchaseVersions", ID: "iv1", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}}))
+	if f.iapState != "" {
+		k.ASC.Handle("GET", "/v1/apps/{id}/inAppPurchasesV2", 200, doc(t, []jres{{Type: "inAppPurchases", ID: "iap1", Attrs: map[string]any{"name": "Pro", "productId": "pro", "state": f.iapState}}}))
+	} else {
+		k.ASC.Handle("GET", "/v1/apps/{id}/inAppPurchasesV2", 200, doc(t, []jres{{Type: "inAppPurchases", ID: "iap1", Attrs: map[string]any{"name": "Pro", "state": "READY_TO_SUBMIT"}, Rels: map[string]any{"versions": []string{"inAppPurchaseVersions:iv1"}}}},
+			jres{Type: "inAppPurchaseVersions", ID: "iv1", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}}))
+	}
 	k.ASC.Handle("GET", "/v1/apps/{id}/subscriptionGroups", 200, `{"data":[]}`)
 	return k
 }
@@ -349,7 +375,11 @@ func TestReleaseStatusDesiredPlans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fp, err := releaseFingerprint(ctx, k.Env, app.ID, tool.IOS, "1.4")
+	snap, err := loadReleaseSnapshot(ctx, k.Env, app.ID, tool.IOS, "1.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp, err := snap.State.fingerprint()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,5 +509,126 @@ func TestReleaseStatusKoreaAgeRating(t *testing.T) {
 				t.Errorf("age_rating = %+v", c)
 			}
 		})
+	}
+}
+
+// ReleaseManager#1: a build of another marketing version blocks, and
+// build:"latest" resolves the newest build of the version, not of the app.
+func TestReleaseStatusBuildVersionMismatch(t *testing.T) {
+	f := readyFixture()
+	f.buildVersion = "1.5"
+	k := setup(t, f)
+	k.Resolve.Builds["latest"] = tool.Build{ID: "b9", Number: "99", ProcessingState: "VALID"} // a 1.5 upload
+	out, _ := call(t, k, `{"app":"Hjul","desired":{"build":"latest"}}`)
+	if c := checkByID(t, out, "build"); c.Status != statusBlock || !strings.Contains(c.Detail, "version 1.5, not 1.4") {
+		t.Errorf("build = %+v", c)
+	}
+	if out.Plan == nil || !slices.Contains(out.Plan.Changes, "attach build 43 (b2)") {
+		t.Errorf("plan = %+v", out.Plan)
+	}
+}
+
+// ReleaseManager#3: READY_TO_SUBMIT IAPs are ready, WAITING_FOR_UPLOAD and
+// rejected ones are pending; none vanish.
+func TestCheckProductsStates(t *testing.T) {
+	classify := func(c check, label, st string) string {
+		switch {
+		case slices.Contains(c.Items, label):
+			return "ready"
+		case slices.Contains(c.Items, label+": "+st):
+			return "pending"
+		}
+		return "none"
+	}
+	for st, want := range map[string]string{
+		"READY_TO_SUBMIT": "ready", "READY_FOR_REVIEW": "ready", "WAITING_FOR_UPLOAD": "pending",
+		"MISSING_METADATA": "pending", "REJECTED": "pending", "DEVELOPER_REJECTED": "pending",
+		"DEVELOPER_ACTION_NEEDED": "pending", "PREPARE_FOR_SUBMISSION": "pending",
+		"APPROVED": "none", "WAITING_FOR_REVIEW": "none", "IN_REVIEW": "none", "REMOVED_FROM_SALE": "none",
+	} {
+		if got := classify(checkProducts(&statusSnapshot{IAPs: map[string]string{"Pro": st}}), "iap Pro", st); got != want {
+			t.Errorf("IAP %s = %s, want %s", st, got, want)
+		}
+	}
+	for st, want := range map[string]string{"READY_TO_SUBMIT": "ready", "MISSING_METADATA": "pending", "REJECTED": "pending", "APPROVED": "none"} {
+		if got := classify(checkProducts(&statusSnapshot{Subscriptions: map[string]string{"Monthly": st}}), "subscription Monthly", st); got != want {
+			t.Errorf("subscription %s = %s, want %s", st, got, want)
+		}
+	}
+}
+
+// ReleaseManager#2/#3: an unversioned READY_TO_SUBMIT IAP is listed and the
+// submit plan says it will be attached.
+func TestReleaseStatusUnversionedIAPReady(t *testing.T) {
+	f := readyFixture()
+	f.iapState = "READY_TO_SUBMIT"
+	k := setup(t, f)
+	out, _ := call(t, k, `{"app":"Hjul","desired":{"submit":true}}`)
+	if c := checkByID(t, out, "in_app_products"); !slices.Contains(c.Items, "iap Pro") {
+		t.Errorf("in_app_products = %+v", c)
+	}
+	found := false
+	for _, p := range k.Plans.Proposed {
+		if strings.HasPrefix(p.Summary, "submit ") {
+			b, _ := json.Marshal(p.Intended)
+			found = strings.Contains(string(b), "attach iap pro")
+		}
+	}
+	if !found {
+		t.Errorf("submit plan does not list the IAP: %+v", k.Plans.Proposed)
+	}
+}
+
+// ReleaseManager#4: an iOS version without any iPad screenshots is never ok.
+func TestReleaseStatusIPadUnknownWarns(t *testing.T) {
+	f := readyFixture()
+	f.noIPad = true
+	out, _ := call(t, setup(t, f), `{"app":"Hjul"}`)
+	c := checkByID(t, out, "screenshots")
+	if c.Status != statusWarn || len(c.Items) != 1 || !strings.Contains(c.Items[0], "APP_IPAD_PRO_3GEN_129 is required") {
+		t.Errorf("screenshots = %+v", c)
+	}
+}
+
+// ReleaseManager#5: unanswered general age rating questions block.
+func TestReleaseStatusAgeRatingUnansweredBlocks(t *testing.T) {
+	f := readyFixture()
+	f.ageUnanswered = true
+	out, _ := call(t, setup(t, f), `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "age_rating"); c.Status != statusBlock || !slices.Equal(c.Items, []string{"messagingAndChat"}) || c.FixVia == nil || c.FixVia.Tool != "appinfo_update" {
+		t.Errorf("age_rating = %+v", c)
+	}
+	if ready(out) {
+		t.Error("ready with an unanswered age rating question")
+	}
+}
+
+// AgentUX#4: in read-only mode the release_cancel option says it is locked
+// and how to unlock it.
+func TestReleaseStatusCancelOptionLocked(t *testing.T) {
+	out, _ := call(t, lockedKit(t, false), `{"app":"Hjul"}`)
+	o := out.InFlight.Options[0]
+	if o.Locked != "writes_disabled" || o.Unlock == nil || o.Unlock.Tool != "toolsets" || o.Unlock.Args["action"] != "enable_writes" {
+		t.Errorf("option = %+v", o)
+	}
+	k := lockedKit(t, false)
+	k.Env.Profile.AllowWrites = true
+	out, _ = call(t, k, `{"app":"Hjul"}`)
+	if o := out.InFlight.Options[0]; o.Locked != "" || o.Unlock != nil {
+		t.Errorf("write mode option = %+v", o)
+	}
+}
+
+// AgentUX#6a: a live version's missing required screenshots are reported
+// per locale, as info.
+func TestReleaseStatusLiveVersionScreenshotsInfo(t *testing.T) {
+	f := readyFixture()
+	f.state, f.noIPhoneShots = "READY_FOR_DISTRIBUTION", true
+	k := setup(t, f)
+	k.Resolve.Versions["live"] = tool.Version{ID: "v1", String: "1.4", Platform: tool.IOS, State: "READY_FOR_DISTRIBUTION"}
+	out, _ := call(t, k, `{"app":"Hjul","version":"live"}`)
+	c := checkByID(t, out, "screenshots")
+	if c.Status != statusInfo || c.FixVia != nil || !strings.Contains(c.Detail, "not editable") || len(c.Items) != 1 || !strings.Contains(c.Items[0], "en-US: no screenshots for APP_IPHONE_67") {
+		t.Errorf("screenshots = %+v", c)
 	}
 }

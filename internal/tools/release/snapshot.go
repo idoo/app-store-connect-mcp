@@ -15,15 +15,15 @@ import (
 )
 
 // releaseSnapshot is the remote state a release plan is fingerprinted over,
-// plus the resources it was read from. It performs exactly the reads of
-// [loadReleaseState], so its fingerprint equals [releaseFingerprint].
+// plus the resources it was read from. release_status computes the same
+// state with [stateFromVersion], so their fingerprints match.
 type releaseSnapshot struct {
 	State      releaseState
 	Detail     *versionDetail // nil when the version does not exist yet
 	Submission *tool.Resource // the open review submission, if any
 }
 
-// loadReleaseSnapshot mirrors [loadReleaseState] and keeps the resources.
+// loadReleaseSnapshot reads the version detail and open submission.
 func loadReleaseSnapshot(ctx context.Context, env *tool.Env, appID string, platform tool.Platform, ref tool.VersionRef) (*releaseSnapshot, error) {
 	if ref == "" {
 		ref = tool.VersionEditable

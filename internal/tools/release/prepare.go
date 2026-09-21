@@ -115,7 +115,7 @@ func releasePrepare(ctx context.Context, env *tool.Env, in prepareIn) (*tool.Res
 
 	var build *tool.Build
 	if d.Build != "" {
-		b, err := env.Resolve.Build(ctx, app.ID, platform, d.Build)
+		b, err := env.Resolve.Build(ctx, app.ID, platform, versionedBuildRef(d.Build, versionString))
 		if err != nil {
 			return nil, err
 		}
@@ -413,15 +413,12 @@ func (p *preparer) phased(ctx context.Context) error {
 }
 
 // whatsNew sets What's New on the version's existing locales through the
-// metadata engine. It is skipped for a version created by this call and on
-// an app's first version.
+// metadata engine. On a version created by this call it first re-reads the
+// locales Apple copied from the previous version; it is skipped on an app's
+// first version.
 func (p *preparer) whatsNew(ctx context.Context) error {
 	wn := p.key.WhatsNew
 	if len(wn) == 0 {
-		return nil
-	}
-	if p.created {
-		p.step("whats_new", stepSkipped, "version was just created; run release_status again to plan What's New on its locales")
 		return nil
 	}
 	prior, err := priorReleased(ctx, p.env, p.app.ID, p.platform)
@@ -431,6 +428,13 @@ func (p *preparer) whatsNew(ctx context.Context) error {
 	if !prior {
 		p.step("whats_new", stepSkipped, "first version: Apple rejects What's New on an app's first release")
 		return nil
+	}
+	if p.created {
+		d, err := fetchVersionDetail(ascrules.WithEventualConsistency(ctx), p.env, p.out.Version.ID)
+		if err != nil {
+			return err
+		}
+		p.snap.Detail = d
 	}
 	remote := &metadata.Listing{
 		App:     metadata.AppInfoFields{VersionID: p.out.Version.ID, VersionLocalizationIDs: map[string]string{}},

@@ -76,7 +76,7 @@
       {
         "id": "in_app_products",
         "status": "ok",
-        "detail": "1 product(s) ready; release_submit attaches them",
+        "detail": "1 product(s) ready; release_submit attaches them (attach_first_time_products:false skips them)",
         "items": [
           "iap Pro"
         ]
