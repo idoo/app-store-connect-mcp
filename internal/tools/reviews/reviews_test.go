@@ -209,7 +209,6 @@ func replyKit(t *testing.T) *tooltest.Kit {
 	k.ASC.Handle("GET", "/v1/customerReviews/r3", 200,
 		`{"data":`+review("r3", 2, d18, "DEU", "resp1")+`,"included":[`+response("resp1", "Old reply")+`]}`)
 	k.ASC.Handle("GET", "/v1/customerReviews/r4", 200, `{"data":`+review("r4", 5, d20, "USA", "")+`}`)
-	k.ASC.Handle("DELETE", "/v1/customerReviewResponses/resp1", http.StatusNoContent, "")
 	k.ASC.Handle("POST", "/v1/customerReviewResponses", http.StatusCreated,
 		`{"data":{"type":"customerReviewResponses","id":"new1","attributes":{"responseBody":"x","state":"PENDING_PUBLISH"}}}`)
 	return k
@@ -217,26 +216,28 @@ func replyKit(t *testing.T) *tooltest.Kit {
 
 const replyArgs = `{"app":"a1","confirm":true,"replies":[{"review_id":"r3","body":"Danke, fixed in 2.1"}]}`
 
-func TestReplyReplacesExistingWithDeleteThenPost(t *testing.T) {
+// Apple's POST customerReviewResponses replaces an existing response, so an
+// edit is a single POST and never a DELETE.
+func TestReplyReplacesExistingWithSinglePost(t *testing.T) {
 	k := replyKit(t)
 	asked := k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, replyArgs))
 	muts := k.ASC.Mutations()
-	if len(muts) != 2 || muts[0].Method != "DELETE" || muts[0].Path != "/v1/customerReviewResponses/resp1" ||
-		muts[1].Method != "POST" || muts[1].Path != "/v1/customerReviewResponses" {
+	if len(muts) != 1 || muts[0].Method != "POST" || muts[0].Path != "/v1/customerReviewResponses" {
 		t.Fatalf("mutations = %+v", muts)
 	}
-	body := tooltest.JSON(t, muts[1].Body)
+	body := tooltest.JSON(t, muts[0].Body)
 	if !strings.Contains(body, `"responseBody":"Danke, fixed in 2.1"`) || !strings.Contains(body, `"id":"r3"`) {
 		t.Fatalf("POST body = %s", body)
 	}
-	if len(*asked) != 1 || !strings.Contains((*asked)[0], "Danke, fixed in 2.1") || !strings.Contains((*asked)[0], "replaces existing response resp1") {
+	if len(*asked) != 1 || !strings.Contains((*asked)[0], "Danke, fixed in 2.1") || !strings.Contains((*asked)[0], "replaces existing response resp1") ||
+		strings.Contains((*asked)[0], "are deleted first") {
 		t.Fatalf("prompt = %v", *asked)
 	}
 	out := tooltest.Decode[map[string]any](t, res)
 	results, _ := out["results"].([]any)
 	first, _ := results[0].(map[string]any)
-	if first["status"] != "replaced" || first["response_id"] != "new1" || first["deleted_response_id"] != "resp1" {
+	if first["status"] != "replaced" || first["response_id"] != "new1" || first["replaced_response_id"] != "resp1" {
 		t.Fatalf("result = %v", out)
 	}
 	if cur, _ := k.State.Cursor("test", "a1", cursorName); cur != d18 {
@@ -294,7 +295,7 @@ func TestReplyRequiresHuman(t *testing.T) {
 		k := replyKit(t)
 		k.Env.Profile.AllowNoElicit = true
 		tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, replyArgs))
-		if len(k.ASC.Mutations()) != 2 {
+		if len(k.ASC.Mutations()) != 1 {
 			t.Fatalf("mutations = %+v", k.ASC.Mutations())
 		}
 	})

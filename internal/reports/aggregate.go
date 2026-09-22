@@ -1,7 +1,6 @@
 package reports
 
 import (
-	"math/big"
 	"sort"
 	"strings"
 )
@@ -21,26 +20,18 @@ const (
 
 // SalesGroup is the aggregate for one combination of dimension values.
 type SalesGroup struct {
-	Key      map[Dim]string     `json:"key,omitempty"`
-	Units    map[Category]int64 `json:"units"`
-	Proceeds Money              `json:"proceeds"`
+	Key      map[Dim]string `json:"key,omitempty"`
+	Units    Units          `json:"units"`
+	Proceeds Money          `json:"proceeds"`
 }
 
 func newSalesGroup(key map[Dim]string) *SalesGroup {
-	return &SalesGroup{Key: key, Units: map[Category]int64{}, Proceeds: Money{}}
+	return &SalesGroup{Key: key, Units: Units{}, Proceeds: Money{}}
 }
 
 func (g *SalesGroup) add(r SalesRow, c Category) {
-	g.Units[c] += r.Units
+	g.Units.Add(c, r.Units)
 	g.Proceeds.Add(r.ProceedsCurrency, r.TotalProceeds())
-}
-
-func (g *SalesGroup) totalUnits() int64 {
-	var n int64
-	for _, u := range g.Units {
-		n += u
-	}
-	return n
 }
 
 // SalesReport is the result of AggregateSales.
@@ -110,9 +101,8 @@ func AggregateSales(rows []SalesRow, by []Dim, topN int, cat Categorizer) SalesR
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool {
-		ui, uj := groups[ids[i]].totalUnits(), groups[ids[j]].totalUnits()
-		if ui != uj {
-			return ui > uj
+		if c := groups[ids[i]].Units.Total().Cmp(groups[ids[j]].Units.Total()); c != 0 {
+			return c > 0
 		}
 		return ids[i] < ids[j]
 	})
@@ -213,59 +203,20 @@ func EventSummary(rows []SubscriptionEventRow) EventsSummary {
 	return s
 }
 
-// FXSource labels a TotalUSD computed from exchange rates in the file.
-const FXSource = "exchange rates in report file (estimate)"
-
-// USDOnlySource labels a TotalUSD from a report whose proceeds are all USD.
-const USDOnlySource = "all proceeds in USD"
-
-// FinanceTotals summarizes a FINANCIAL / FINANCE_DETAIL report.
+// FinanceTotals summarizes a FINANCIAL / FINANCE_DETAIL report. Apple's
+// finance reports carry no exchange rates (those are only on the web Payments
+// page), so totals stay per currency and are never converted.
 type FinanceTotals struct {
 	Proceeds Money `json:"proceeds"`
 	Units    int64 `json:"units"`
-	// TotalUSD is set only when every non-USD row carries an exchange rate.
-	TotalUSD       *string `json:"total_usd,omitempty"`
-	TotalUSDSource string  `json:"total_usd_source,omitempty"`
-	// MissingRates lists currencies without a rate (TotalUSD unavailable).
-	MissingRates []string `json:"missing_rates,omitempty"`
 }
 
-// FinanceSummary sums extended partner share per currency. USD is never
-// guessed: TotalUSD is computed exactly from per-row exchange rates, and only
-// if every non-USD row has one.
+// FinanceSummary sums extended partner share per currency.
 func FinanceSummary(rows []FinanceRow) FinanceTotals {
 	s := FinanceTotals{Proceeds: Money{}}
-	usd := new(big.Rat)
-	missing := map[string]bool{}
-	usedFX := false
 	for _, r := range rows {
 		s.Units += r.Quantity
 		s.Proceeds.Add(r.PartnerShareCurrency, r.ExtendedPartnerShare)
-		cur := strings.ToUpper(strings.TrimSpace(r.PartnerShareCurrency))
-		switch {
-		case cur == "USD":
-			usd.Add(usd, r.ExtendedPartnerShare)
-		case r.ExchangeRate != nil:
-			usedFX = true
-			usd.Add(usd, new(big.Rat).Mul(r.ExtendedPartnerShare, r.ExchangeRate))
-		default:
-			missing[cur] = true
-		}
-	}
-	if len(missing) > 0 {
-		for c := range missing {
-			s.MissingRates = append(s.MissingRates, c)
-		}
-		sort.Strings(s.MissingRates)
-		return s
-	}
-	if len(rows) > 0 {
-		v := FormatAmount("USD", usd)
-		s.TotalUSD = &v
-		s.TotalUSDSource = USDOnlySource
-		if usedFX {
-			s.TotalUSDSource = FXSource
-		}
 	}
 	return s
 }

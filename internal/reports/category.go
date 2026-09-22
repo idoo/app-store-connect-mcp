@@ -12,7 +12,9 @@ const (
 	CategoryRedownload   Category = "redownload"
 	CategoryIAP          Category = "iap"
 	CategorySubscription Category = "subscription"
-	CategoryOther        Category = "other"
+	// CategoryRestore counts restored non-consumable IAPs (IA3): not revenue.
+	CategoryRestore Category = "restore"
+	CategoryOther   Category = "other"
 )
 
 // Categorizer maps a Product Type Identifier to a Category.
@@ -30,6 +32,7 @@ var defaultCategories = map[string]Category{
 	"FI1": CategoryIAP,
 	"IAY": CategorySubscription, "IAC": CategorySubscription, "IAY-M": CategorySubscription,
 	"IAC-M": CategorySubscription,
+	"IA3":   CategoryRestore, "IA3-M": CategoryRestore,
 }
 
 // DefaultCategory is the built-in Categorizer; unknown identifiers map to

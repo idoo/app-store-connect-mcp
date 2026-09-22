@@ -1,0 +1,4 @@
+Transaction Date	Settlement Date	Apple Identifier	SKU	Title	Developer Name	Product Type Identifier	Country of Sale	Quantity	Partner Share	Extended Partner Share	Partner Share Currency	Customer Price	Customer Currency	Sale or Return	Promo Code	Order Type	Region
+09/10/2026	10/25/2026	1000000099	notes.pro	Notes Pro Unlock	Example Dev	IA1	DE	2	0.69	1.38	EUR	0.99	EUR	S			Europe
+09/12/2026	10/25/2026	1000000099	notes.monthly	Notes Monthly	Example Dev	IAY	JP	1	420	420	JPY	600	JPY	S			Japan
+09/14/2026	10/25/2026	1000000099	notes.monthly	Notes Monthly	Example Dev	IAY	US	10	2.79	27.90	USD	3.99	USD	S			Americas

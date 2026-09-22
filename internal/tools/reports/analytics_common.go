@@ -51,7 +51,7 @@ func activeRequest(reqs []tool.Resource, accessType string) (tool.Resource, bool
 func analyticsNotSetUp(env *tool.Env, appID string) error {
 	hint := "call analytics_setup once; " + analyticsLagNote
 	if !env.Profile.AllowWrites {
-		hint = "analytics_setup needs writes (restart hamn with --allow-writes or HAMN_ALLOW_WRITES=1), then call it once; " + analyticsLagNote
+		hint = "analytics_setup needs writes: " + tool.EnableWritesHint + "; then call it once; " + analyticsLagNote
 	}
 	return tool.WithNext(&tool.Error{
 		Code:    "analytics_not_set_up",
