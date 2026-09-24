@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -118,6 +119,9 @@ func TestProjectFilesClientRoots(t *testing.T) {
 }
 
 func TestRootPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file URIs; Windows strips the leading slash (file:///C:/x)")
+	}
 	tests := []struct {
 		uri  string
 		ok   bool

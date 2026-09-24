@@ -141,12 +141,13 @@ func TestStoreRoundTripAndPerms(t *testing.T) {
 		t.Fatalf("missing load = %v %v", ok, err)
 	}
 
+	posix := runtime.GOOS != "windows" // Windows reports 0666/0777 modes.
 	for _, p := range []string{filepath.Join(dir, cursorKind, cursorFile("p", "app", "reviews")+".json"), filepath.Join(dir, "uploads", "abc123.json")} {
 		fi, err := os.Stat(p)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if fi.Mode().Perm() != fileMode {
+		if posix && fi.Mode().Perm() != fileMode {
 			t.Errorf("%s mode = %v, want 0600", p, fi.Mode().Perm())
 		}
 	}
@@ -154,7 +155,7 @@ func TestStoreRoundTripAndPerms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != dirMode {
+	if posix && fi.Mode().Perm() != dirMode {
 		t.Errorf("dir mode = %v, want 0700", fi.Mode().Perm())
 	}
 	entries, err := os.ReadDir(dir)
