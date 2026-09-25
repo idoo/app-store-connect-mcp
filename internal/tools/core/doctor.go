@@ -43,7 +43,10 @@ type doctorOut struct {
 	Writes      bool     `json:"writes"`
 	SpecVersion string   `json:"spec_version,omitempty"`
 	Toolsets    []string `json:"toolsets"`
-	Checks      []check  `json:"checks"`
+	// FileRoot is the directory file tools may read and write; empty means
+	// file access is refused (see the files check).
+	FileRoot string  `json:"file_root"`
+	Checks   []check `json:"checks"`
 }
 
 func init() {
@@ -77,6 +80,9 @@ func doctor(ctx context.Context, env *tool.Env, _ doctorIn) (*tool.Result, error
 	add(specCheck(out.SpecVersion))
 	add(writesCheck(p.AllowWrites))
 	add(vendorCheck(p))
+	root, files := filesCheck(env.Files)
+	out.FileRoot = root
+	add(files)
 
 	for _, ts := range env.Toolsets.List() {
 		if ts.Enabled {
@@ -194,6 +200,19 @@ func writesCheck(allow bool) check {
 		Name: "writes", Status: statusOK, Detail: "read-only: write tools are hidden",
 		Fix: "to change App Store Connect, call toolsets action:\"enable_writes\" or restart with --allow-writes",
 	}
+}
+
+// filesCheck reports the effective root of file tools (export_dir,
+// screenshot sync, uploads); a refused root names the fix.
+func filesCheck(f tool.Files) (string, check) {
+	root, err := f.Resolve(".")
+	if err != nil {
+		return "", check{
+			Name: "files", Status: statusWarn, Detail: "file access refused: " + err.Error(),
+			Fix: "start hamn with --root <project dir> (or set HAMN_ROOT), or open the project folder in a client that sends MCP roots",
+		}
+	}
+	return root, check{Name: "files", Status: statusOK, Detail: "file tools are confined to " + root}
 }
 
 func vendorCheck(p tool.ProfileInfo) check {

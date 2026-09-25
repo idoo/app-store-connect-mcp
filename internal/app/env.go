@@ -6,8 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/idoo/hamn/internal/asc"
 	"github.com/idoo/hamn/internal/auth"
@@ -20,6 +22,38 @@ import (
 
 // ErrNoProfile means no credentials profile is configured.
 var ErrNoProfile = errors.New("no App Store Connect profile configured (run `hamn auth add` or set ASC_KEY_ID)")
+
+// errNoCredentials is what every App Store Connect call returns when no
+// credentials are configured. GUI clients hide hamn's stderr, so the tool
+// error itself carries the setup steps.
+var errNoCredentials = &tool.Error{
+	Code:    "no_credentials",
+	Message: "no App Store Connect API key is configured for hamn",
+	Hint: "in a terminal run `hamn auth add` (or `hamn auth import` to copy ASC_* env vars into a profile), then restart this client; " +
+		"or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH in this client's hamn server env. " +
+		"GUI clients (Claude Desktop, Cursor, Windsurf) do not see your shell environment",
+}
+
+// noCredentialsASC stands in for the client when no key is configured.
+type noCredentialsASC struct{}
+
+func (noCredentialsASC) Do(context.Context, tool.Request) (*tool.Response, error) {
+	return nil, errNoCredentials
+}
+
+func (noCredentialsASC) Get(context.Context, string, url.Values) (*tool.Response, error) {
+	return nil, errNoCredentials
+}
+
+func (noCredentialsASC) List(context.Context, string, tool.ListOptions) (*tool.ListResult, error) {
+	return nil, errNoCredentials
+}
+
+func (noCredentialsASC) Download(context.Context, tool.Request) ([]byte, http.Header, error) {
+	return nil, nil, errNoCredentials
+}
+func (noCredentialsASC) RateLimit() tool.RateLimit        { return tool.RateLimit{} }
+func (noCredentialsASC) ClockSkew() (time.Duration, bool) { return 0, false }
 
 // KeySource maps a config key reference to the auth package's key source.
 // Keychain keys are read lazily by auth; file keys by path; env and fastlane
@@ -148,6 +182,8 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*too
 	client, err := NewClient(ctx, r, version, idx)
 	switch {
 	case errors.Is(err, ErrNoProfile):
+		env.ASC = noCredentialsASC{}
+		env.Resolve = resolve.New(env.ASC, resolve.Options{DefaultApp: r.Profile.DefaultApp, Clock: env.Clock})
 	case err != nil:
 		return nil, err
 	default:

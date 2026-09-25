@@ -95,13 +95,16 @@ func apiSearch(_ context.Context, env *tool.Env, in searchIn) (*tool.Result, err
 	if readOnly {
 		n = searchMax // over-fetch, then drop mutations
 	}
-	hits := []tool.SearchHit{}
+	hits := []searchHit{}
 	for _, h := range env.Spec.Search(in.Query, n) {
 		if readOnly && h.Method != http.MethodGet {
 			continue
 		}
 		if len(hits) < limit {
-			hits = append(hits, h)
+			hits = append(hits, searchHit{
+				OperationID: h.ID, Method: h.Method, Path: h.Path, Summary: h.Summary,
+				Tags: h.Tags, Deprecated: h.Deprecated, Score: h.Score,
+			})
 		}
 	}
 	res := tool.OK(map[string]any{"query": in.Query, "spec_version": env.Spec.Version(), "operations": hits})
@@ -109,9 +112,21 @@ func apiSearch(_ context.Context, env *tool.Env, in searchIn) (*tool.Result, err
 		res.Warn("read-only mode: only GET operations listed; pass include_writes:true to see mutations")
 	}
 	if len(hits) > 0 {
-		res.Then(tool.NextStep{Tool: "asc_api_describe", Args: map[string]any{"operation_id": hits[0].ID}})
+		res.Then(tool.NextStep{Tool: "asc_api_describe", Args: map[string]any{"operation_id": hits[0].OperationID}})
 	}
 	return res, nil
+}
+
+// searchHit is one asc_api_search result; operation_id is the argument
+// asc_api_describe takes.
+type searchHit struct {
+	OperationID string   `json:"operation_id"`
+	Method      string   `json:"method"`
+	Path        string   `json:"path"`
+	Summary     string   `json:"summary,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Deprecated  bool     `json:"deprecated,omitempty"`
+	Score       float64  `json:"score"`
 }
 
 func apiDescribe(_ context.Context, env *tool.Env, in describeIn) (*tool.Result, error) {
@@ -417,7 +432,9 @@ func addDocument(out map[string]any, resp *tool.Response) {
 }
 
 // splitPath validates an API path (optionally a full api.appstoreconnect
-// URL) and splits off its query string.
+// URL) and splits off its query string. The path part must be plain: no
+// percent escapes (an encoded %2e%2e or %2f would match a spec template yet
+// reach Apple as another resource) and no dot segments.
 func splitPath(raw string) (string, url.Values, error) {
 	p := strings.TrimSpace(raw)
 	p = strings.TrimPrefix(p, appleAPIOrigin)
@@ -425,6 +442,14 @@ func splitPath(raw string) (string, url.Values, error) {
 		return "", nil, fmt.Errorf("%w: path must be an App Store Connect API path such as /v1/apps", tool.ErrInvalidArgs)
 	}
 	path, rawQuery, _ := strings.Cut(p, "?")
+	if strings.Contains(path, "%") {
+		return "", nil, fmt.Errorf("%w: path must not contain percent escapes; pass ids as plain text", tool.ErrInvalidArgs)
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if seg == "." {
+			return "", nil, fmt.Errorf("%w: path has a dot segment: %s", tool.ErrInvalidArgs, path)
+		}
+	}
 	q, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: query string: %v", tool.ErrInvalidArgs, err)

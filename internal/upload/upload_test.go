@@ -3,6 +3,7 @@ package upload
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net/http"
@@ -335,9 +336,44 @@ func TestParseBinaryPlistCycle(t *testing.T) {
 	mustContain(t, func() error { _, err := ParsePlist(b); return err }(), "cyclic")
 }
 
+// plistDAGBomb returns a binary plist of depth arrays, each holding 8
+// references to the next one: tiny on disk, 8^depth objects when expanded.
+func plistDAGBomb(depth int) []byte {
+	b := []byte("bplist00")
+	var offsets []byte
+	for i := range depth {
+		offsets = append(offsets, byte(len(b)))
+		b = append(b, 0xA8)
+		for range 8 {
+			b = append(b, byte(i+1))
+		}
+	}
+	offsets = append(offsets, byte(len(b)))
+	b = append(b, 0x09) // true
+	tableAt := len(b)
+	b = append(b, offsets...)
+	trailer := make([]byte, 32)
+	trailer[6], trailer[7] = 1, 1
+	binary.BigEndian.PutUint64(trailer[8:], uint64(depth+1))
+	binary.BigEndian.PutUint64(trailer[24:], uint64(tableAt))
+	return append(b, trailer...)
+}
+
+func TestParseBinaryPlistSharedRefBomb(t *testing.T) {
+	// One shared leaf referenced 8 times (like a deduplicated string) is
+	// fine: 9 objects from an 18-byte body.
+	small, err := ParsePlist(plistDAGBomb(1))
+	if err != nil || len(small.([]any)) != 8 {
+		t.Fatalf("shared leaf = %v, %v", small, err)
+	}
+	// Sharing containers multiplies: 8^20 objects from a few hundred bytes.
+	mustContain(t, func() error { _, err := ParsePlist(plistDAGBomb(20)); return err }(), "too many objects")
+}
+
 func FuzzParsePlist(f *testing.F) {
 	f.Add([]byte(xmlInfoPlist))
 	f.Add([]byte("bplist00\xA1\x00\x08\x00\x00\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a"))
+	f.Add(plistDAGBomb(20))
 	f.Fuzz(func(_ *testing.T, b []byte) { _, _ = ParsePlist(b) })
 }
 

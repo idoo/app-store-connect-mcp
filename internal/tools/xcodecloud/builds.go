@@ -84,7 +84,10 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 	if in.PullRequest < 0 {
 		return nil, invalid("pull_request must be positive")
 	}
-	wf, err := resolveWorkflow(ctx, env, in.App, in.Workflow)
+	if strings.TrimSpace(in.Workflow) == "" {
+		return nil, invalid("workflow is required (name or id)")
+	}
+	wf, err := resolveWorkflow(ctx, env, in.App, in.Workflow, "xcc_build_start")
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +182,7 @@ func resolveSource(ctx context.Context, env *tool.Env, repoID string, in buildSt
 
 type buildStatusIn struct {
 	Run         string      `json:"run,omitempty" jsonschema:"build run id; default: latest run of workflow"`
-	Workflow    string      `json:"workflow,omitempty" jsonschema:"workflow name or id, when run is not given"`
+	Workflow    string      `json:"workflow,omitempty" jsonschema:"workflow name or id, when run is not given; default: the app's only workflow"`
 	App         tool.AppRef `json:"app,omitempty" jsonschema:"app used to find the workflow by name; default: pinned app"`
 	Wait        bool        `json:"wait,omitempty" jsonschema:"poll until the run completes or wait_seconds pass"`
 	WaitSeconds int         `json:"wait_seconds,omitempty" jsonschema:"maximum wait (default 45, max 300)"`
@@ -251,9 +254,8 @@ func buildStatus(ctx context.Context, env *tool.Env, in buildStatusIn) (*tool.Re
 	}
 	runID := strings.TrimSpace(in.Run)
 	if runID == "" {
-		if strings.TrimSpace(in.Workflow) == "" {
-			return nil, invalid("pass run (id) or workflow")
-		}
+		// Without a workflow the app's only workflow is used; several are
+		// listed by name and app.
 		id, err := latestRun(ctx, env, in.App, in.Workflow)
 		if err != nil {
 			return nil, err
@@ -291,7 +293,7 @@ func buildStatus(ctx context.Context, env *tool.Env, in buildStatusIn) (*tool.Re
 
 // latestRun returns the id of the newest build run of a workflow.
 func latestRun(ctx context.Context, env *tool.Env, app tool.AppRef, workflow string) (string, error) {
-	wf, err := resolveWorkflow(ctx, env, app, workflow)
+	wf, err := resolveWorkflow(ctx, env, app, workflow, "xcc_build_status")
 	if err != nil {
 		return "", err
 	}
@@ -371,25 +373,31 @@ func readActions(ctx context.Context, env *tool.Env, runID string, includeURLs b
 		return nil, fmt.Errorf("list actions of build run %s: %w", runID, err)
 	}
 	out := make([]actionOut, 0, len(res.Data))
-	detailed := 0
+	var detail []int // indexes into out of completed actions to detail
 	for _, r := range res.Data {
 		a := actionOut{
 			ID: r.ID, Name: r.Str("name"), Type: r.Str("actionType"), ExecutionProgress: r.Str("executionProgress"),
 			CompletionStatus: r.Str("completionStatus"), Issues: issues(r.Attributes["issueCounts"]),
 		}
 		a.RequiredToPass, _ = r.Bool("isRequiredToPass")
-		if a.ExecutionProgress == "COMPLETE" && detailed < maxDetailActions {
-			detailed++
-			if a.Artifacts, err = readArtifacts(ctx, env, a.ID, includeURLs); err != nil {
-				return nil, err
-			}
-			if a.Type == "TEST" {
-				if a.Tests, err = readTests(ctx, env, a.ID); err != nil {
-					return nil, err
-				}
-			}
+		if a.ExecutionProgress == "COMPLETE" && len(detail) < maxDetailActions {
+			detail = append(detail, len(out))
 		}
 		out = append(out, a)
+	}
+	err = tool.Parallel(ctx, fanOut, detail, func(ctx context.Context, _ int, idx int) error {
+		a := &out[idx]
+		var err error
+		if a.Artifacts, err = readArtifacts(ctx, env, a.ID, includeURLs); err != nil {
+			return err
+		}
+		if a.Type == "TEST" {
+			a.Tests, err = readTests(ctx, env, a.ID)
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

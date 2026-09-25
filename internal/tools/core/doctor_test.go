@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -120,5 +121,21 @@ func TestDoctorReadOnlyMode(t *testing.T) {
 	}
 	if out := tooltest.Decode[doctorOut](t, res); out.Writes {
 		t.Error("writes reported enabled")
+	}
+}
+
+func TestDoctorFileRoot(t *testing.T) {
+	k := kit(t)
+	k.ASC.Handle("GET", "/v1/apps", 200, emptyApps)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "doctor"), k.Env, ""))
+	if out := tooltest.Decode[doctorOut](t, res); out.FileRoot != k.Files.Root || checksOf(t, res)["files"].Status != statusOK {
+		t.Fatalf("file_root = %q, files = %+v, want %q ok", out.FileRoot, checksOf(t, res)["files"], k.Files.Root)
+	}
+
+	k.Env.Files = nil // no safe root: file tools refuse
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "doctor"), k.Env, ""))
+	c := checksOf(t, res)["files"]
+	if out := tooltest.Decode[doctorOut](t, res); out.FileRoot != "" || c.Status != statusWarn || !strings.Contains(c.Fix, "--root") {
+		t.Fatalf("refused root: file_root = %q, files = %+v", out.FileRoot, c)
 	}
 }

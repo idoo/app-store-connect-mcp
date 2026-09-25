@@ -171,6 +171,31 @@ func TestNewClientKeyKindIssuer(t *testing.T) {
 	}
 }
 
+// TestNewEnvNoCredentialsErrorExplainsSetup: with no key configured every
+// App Store Connect call (and app resolution) fails with the setup steps in
+// the tool error itself, since GUI clients never show hamn's stderr.
+func TestNewEnvNoCredentialsErrorExplainsSetup(t *testing.T) {
+	r := testResolved(t, nil, tool.KeyTeam)
+	r.Profile = config.ResolvedProfile{}
+	env, err := NewEnv(context.Background(), r, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, getErr := env.ASC.Get(context.Background(), "/v1/apps", nil)
+	_, appErr := env.Resolve.App(context.Background(), tool.AppRef("Hjul"))
+	for _, err := range []error{getErr, appErr} {
+		b, jerr := json.Marshal(tool.Fail(err).Data)
+		if jerr != nil {
+			t.Fatal(jerr)
+		}
+		for _, want := range []string{"no_credentials", "hamn auth add", "ASC_KEY_ID", "ASC_PRIVATE_KEY_PATH"} {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("error body %s lacks %q", b, want)
+			}
+		}
+	}
+}
+
 func jwtClaims(t *testing.T, authz string) map[string]any {
 	t.Helper()
 	parts := strings.Split(strings.TrimPrefix(authz, "Bearer "), ".")

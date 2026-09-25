@@ -194,9 +194,18 @@ func TestEnableToolsetSendsListChanged(t *testing.T) {
 	f := &fixture{}
 	h := connect(t, Deps{Tools: f.tools(), Profile: team(false)}, "test", nil)
 	_ = h.names(t)
-	res, _ := h.call(t, "toolsets", map[string]any{"action": "enable", "toolsets": []string{"signing"}})
+	res, body := h.call(t, "toolsets", map[string]any{"action": "enable", "toolsets": []string{"signing"}})
 	if res.IsError {
 		t.Fatalf("enable failed: %+v", res.Content)
+	}
+	changed, _ := dataOf(body)["changed"].([]any)
+	if dataOf(body)["toolsets"] != nil || len(changed) != 1 ||
+		changed[0].(map[string]any)["name"] != "signing" ||
+		!strings.Contains(fmt.Sprint(changed[0]), "signing_bundle_ids_list") {
+		t.Fatalf("enable result = %v, want only the signing toolset", body)
+	}
+	if _, again := h.call(t, "toolsets", map[string]any{"action": "enable", "toolsets": []string{"signing"}}); len(dataOf(again)["changed"].([]any)) != 0 {
+		t.Fatalf("re-enable result = %v, want no changes", again)
 	}
 	select {
 	case <-h.changed:
@@ -209,7 +218,7 @@ func TestEnableToolsetSendsListChanged(t *testing.T) {
 	if res, _ := h.call(t, "toolsets", map[string]any{"action": "disable", "toolsets": []string{"core"}}); !res.IsError {
 		t.Fatal("disabling core succeeded")
 	}
-	_, body := h.call(t, "toolsets", map[string]any{"action": "list"})
+	_, body = h.call(t, "toolsets", map[string]any{"action": "list"})
 	sets, _ := dataOf(body)["toolsets"].([]any)
 	var release map[string]any
 	for _, s := range sets {
@@ -221,6 +230,23 @@ func TestEnableToolsetSendsListChanged(t *testing.T) {
 	if len(locked) != 2 || !strings.Contains(fmt.Sprint(locked), "writes_disabled") {
 		t.Fatalf("release locked = %v", release)
 	}
+}
+
+func TestToolsetsToolNotReadOnlyHint(t *testing.T) {
+	h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", nil)
+	res, err := h.cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tl := range res.Tools {
+		if tl.Name == "toolsets" {
+			if tl.Annotations == nil || tl.Annotations.ReadOnlyHint || tl.Annotations.DestructiveHint == nil || *tl.Annotations.DestructiveHint {
+				t.Fatalf("toolsets annotations = %+v, want write (not read-only, not destructive)", tl.Annotations)
+			}
+			return
+		}
+	}
+	t.Fatal("toolsets not listed in read-only mode")
 }
 
 func TestEnableWrites(t *testing.T) {

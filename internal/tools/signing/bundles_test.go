@@ -81,16 +81,24 @@ func TestBundleIDsListWithCapabilities(t *testing.T) {
 
 	k2 := newKit(t)
 	k2.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
-	out = tooltest.Decode[bundleIDsListOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_ids_list"), k2.Env, ``)))
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_bundle_ids_list"), k2.Env, ``))
+	out = tooltest.Decode[bundleIDsListOut](t, res)
 	if out.Returned != 2 {
 		t.Fatalf("returned = %d", out.Returned)
 	}
-	caps := out.BundleIDs[0].Capabilities
-	if len(caps) != 2 || caps[0].Type != "ICLOUD" || caps[1].Type != "PUSH_NOTIFICATIONS" {
-		t.Fatalf("capabilities = %+v", caps)
+	b := out.BundleIDs[0]
+	if strings.Join(b.Capabilities, ",") != "ICLOUD,PUSH_NOTIFICATIONS" {
+		t.Fatalf("capabilities = %v, want types only", b.Capabilities)
 	}
-	if s := caps[0].Settings; len(s) != 1 || s[0].Key != "ICLOUD_VERSION" || len(s[0].Enabled) != 1 || s[0].Enabled[0] != "XCODE_6" {
-		t.Fatalf("settings = %+v", s)
+	if s := b.Settings["ICLOUD"]; len(s) != 1 || s[0].Key != "ICLOUD_VERSION" || len(s[0].Enabled) != 1 || s[0].Enabled[0] != "XCODE_6" || len(b.Settings) != 1 {
+		t.Fatalf("settings = %+v", b.Settings)
+	}
+	// The shared seed id is hoisted once, not repeated per row.
+	if out.SeedID != "TEAM1" || b.SeedID != "" || out.BundleIDs[1].SeedID != "" {
+		t.Fatalf("seed ids: top %q rows %q %q", out.SeedID, b.SeedID, out.BundleIDs[1].SeedID)
+	}
+	if j := tooltest.JSON(t, res.Data); strings.Contains(j, "B1_PUSH") {
+		t.Fatalf("capability ids leaked: %s", j)
 	}
 }
 
@@ -193,7 +201,7 @@ func TestCapabilitiesEnableIdempotentAndAdditive(t *testing.T) {
 	}
 }
 
-func TestCapabilitiesDisableRequiresConfirm(t *testing.T) {
+func TestCapabilitiesDisableRequiresHuman(t *testing.T) {
 	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/bundleIds", http.StatusOK, bundleDoc)
 	args := `{"bundle_id":"se.jvcr.hjul","enable":[{"type":"MAPS"}],"disable":["PUSH_NOTIFICATIONS"]}`
@@ -205,12 +213,25 @@ func TestCapabilitiesDisableRequiresConfirm(t *testing.T) {
 		t.Fatalf("preview = %v", out)
 	}
 
+	confirmed := strings.Replace(args, "{", `{"confirm":true,`, 1)
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, confirmed), "human_approval_required")
+	k.Elicit(false)
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, confirmed), "declined")
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("disabled without a human: %s", requestLog(k.ASC.Mutations()))
+	}
+
+	asked := k.Elicit(true)
 	k.ASC.Handle(http.MethodPost, "/v1/bundleIdCapabilities", http.StatusCreated,
 		`{"data":{"type":"bundleIdCapabilities","id":"B1_MAPS","attributes":{"capabilityType":"MAPS"}}}`)
 	k.ASC.Handle(http.MethodDelete, "/v1/bundleIdCapabilities/{id}", http.StatusNoContent, ``)
-	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env,
-		strings.Replace(args, "{", `{"confirm":true,`, 1)))
-	wantLog(t, k, "GET /v1/bundleIds", "GET /v1/bundleIds", "POST /v1/bundleIdCapabilities", "DELETE /v1/bundleIdCapabilities/B1_PUSH")
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_capabilities_set"), k.Env, confirmed))
+	if len(*asked) != 1 || res.Meta.ApprovedBy != tool.ApprovedHuman {
+		t.Fatalf("asked = %d, approved_by = %q", len(*asked), res.Meta.ApprovedBy)
+	}
+	if got := requestLog(k.ASC.Mutations()); got != "POST /v1/bundleIdCapabilities\nDELETE /v1/bundleIdCapabilities/B1_PUSH" {
+		t.Fatalf("mutations:\n%s", got)
+	}
 	out := tooltest.Decode[capsSetOut](t, res)
 	if out.Failed != 0 || len(out.Items) != 2 || out.Items[0].Action != capEnabled || out.Items[1].Action != capDisabled {
 		t.Fatalf("items = %+v", out.Items)

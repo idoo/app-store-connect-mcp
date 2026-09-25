@@ -23,19 +23,22 @@ type toolsetEntry struct {
 	Locked []lockedTool `json:"locked,omitempty"`
 }
 
-// toolsetsTool builds the session's toolsets tool (core, read, local).
+// toolsetsTool builds the session's toolsets tool (core, local). Its
+// enable_writes action changes the session's security mode, so it is a Write
+// tool (no readOnlyHint) that stays listed in read-only mode.
 func (s *session) toolsetsTool() tool.Tool {
 	names := make([]any, len(tool.AllToolsets))
 	for i, ts := range tool.AllToolsets {
 		names[i] = string(ts)
 	}
 	return tool.New(tool.Meta{
-		Name:        toolsetsName,
-		Toolset:     tool.Core,
-		Title:       "Toolsets",
-		Description: "List toolsets, enable or disable them for this session (tool list refreshes), or ask the user to allow App Store Connect writes for this session.",
-		Class:       tool.Read,
-		Local:       true,
+		Name:              toolsetsName,
+		Toolset:           tool.Core,
+		Title:             "Toolsets",
+		Description:       "List toolsets, enable or disable them for this session (tool list refreshes), or ask the user to allow App Store Connect writes for this session.",
+		Class:             tool.Write,
+		AvailableReadOnly: true,
+		Local:             true,
 		Enums: map[string][]any{
 			"action":   {"list", "enable", "disable", "enable_writes"},
 			"toolsets": names,
@@ -52,6 +55,10 @@ func (s *session) toolsetsHandler(ctx context.Context, env *tool.Env, in toolset
 		for i, n := range in.Toolsets {
 			ts[i] = tool.Toolset(n)
 		}
+		before := map[tool.Toolset]bool{}
+		for _, info := range s.List() {
+			before[info.Name] = info.Enabled
+		}
 		var err error
 		if in.Action == "enable" {
 			err = s.Enable(ctx, ts...)
@@ -61,7 +68,7 @@ func (s *session) toolsetsHandler(ctx context.Context, env *tool.Env, in toolset
 		if err != nil {
 			return nil, err
 		}
-		return tool.OK(map[string]any{"toolsets": s.listDetailed()}), nil
+		return tool.OK(map[string]any{"changed": s.changedSince(before)}), nil
 	default:
 		return s.enableWritesAction(ctx, env)
 	}
@@ -83,6 +90,38 @@ func (s *session) listDetailed() []toolsetEntry {
 			}
 			out[i].Locked = append(out[i].Locked, lockedTool{Tool: t.Name(), Reason: reason})
 		}
+	}
+	return out
+}
+
+// changedToolset is one toolset whose enabled state an enable/disable call
+// flipped; an enabled one lists the tools it added and those still locked.
+type changedToolset struct {
+	Name    tool.Toolset `json:"name"`
+	Enabled bool         `json:"enabled"`
+	Tools   []string     `json:"tools,omitempty"`
+	Locked  []lockedTool `json:"locked,omitempty"`
+}
+
+// changedSince reports only the toolsets whose enabled state differs from
+// before; the client re-reads the full list via list_changed.
+func (s *session) changedSince(before map[tool.Toolset]bool) []changedToolset {
+	p := s.profile()
+	out := []changedToolset{}
+	for _, e := range s.listDetailed() {
+		if before[e.Name] == e.Enabled {
+			continue
+		}
+		c := changedToolset{Name: e.Name, Enabled: e.Enabled}
+		if e.Enabled {
+			c.Locked = e.Locked
+			for _, t := range s.tools {
+				if t.Meta().Toolset == e.Name && t.ListedIn(p) {
+					c.Tools = append(c.Tools, t.Name())
+				}
+			}
+		}
+		out = append(out, c)
 	}
 	return out
 }

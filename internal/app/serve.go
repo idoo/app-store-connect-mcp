@@ -49,7 +49,7 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	if err != nil {
 		return err
 	}
-	if env.ASC == nil {
+	if _, none := env.ASC.(noCredentialsASC); none {
 		logger.Warn(ErrNoProfile.Error())
 	}
 	cwd, err := os.Getwd()
