@@ -34,6 +34,9 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
    - Emoji or unsupported characters in some locales are reported per locale;
      fix the text, do not drop the locale silently.
    - Steps reported `already` are done; that is success.
+   - Beta review outcome `rejected` is a failure: external testers will not get
+     this build. Tell the user, relay the note, and after the fix ship a new
+     build (`builds_wait`, then distribute it). Calling again does not resubmit.
 
 ## Testers
 - List: `testflight_testers_list` with `app`, optionally `group`, `email`, `state`.

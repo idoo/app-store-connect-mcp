@@ -220,8 +220,8 @@ func attrDiff(r tool.Resource, want map[string]any) (map[string]any, []string, e
 	return changed, names, nil
 }
 
-// patch updates attrs of one resource. ConfirmNone write tools carry the
-// write capability in ctx before the handler runs.
+// patch updates attrs of one resource. ctx must be the write context returned
+// by the tool's confirm gate (tool.RequireConfirm / RequireHumanConfirm).
 func patch(ctx context.Context, env *tool.Env, path, typ, id string, attrs map[string]any) error {
 	_, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPatch, Path: path, Write: true, Body: resourceBody(typ, id, attrs, nil)})
 	return err

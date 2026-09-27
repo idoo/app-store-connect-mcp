@@ -173,7 +173,18 @@ type Env struct {
 	// declines and an error wrapping [ErrElicitationUnavailable] when the
 	// client cannot ask.
 	Elicit func(ctx context.Context, msg string) (bool, error)
+
+	// noProgress records that Progress was nil before [Env.complete].
+	noProgress bool
 }
+
+// HasProgress reports whether the client asked for progress notifications
+// (sent a progressToken). Long waits clamp to [NoProgressWaitCap] without it,
+// since such clients typically cancel a request after about 60 s.
+func (e *Env) HasProgress() bool { return e.Progress != nil && !e.noProgress }
+
+// NoProgressWaitCap bounds a tool's wait when the client sent no progress token.
+const NoProgressWaitCap = 50 * time.Second
 
 // complete returns a copy of e with every nil member replaced by a stand-in.
 func (e *Env) complete() *Env {
@@ -209,6 +220,7 @@ func (e *Env) complete() *Env {
 		c.SetWrites = func(bool) {}
 	}
 	if c.Progress == nil {
+		c.noProgress = true
 		c.Progress = func(float64, float64, string) {}
 	}
 	if c.Elicit == nil {

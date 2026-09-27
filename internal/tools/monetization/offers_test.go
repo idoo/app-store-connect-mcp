@@ -1,11 +1,13 @@
 package monetization
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
@@ -216,6 +218,9 @@ func TestOffersCreateRejectsBeforeRequests(t *testing.T) {
 
 func TestOfferCodesGenerateOneTimeWithValues(t *testing.T) {
 	k := newKit(t)
+	// An older batch of the same shape does not block a new one.
+	k.ASC.Handle(http.MethodGet, offerOneTimeListPath, http.StatusOK, jsonapiDoc(
+		`[`+offerBatchDoc("ot0", 25, "2026-12-31", "2025-11-01T10:00:00Z")+`]`))
 	k.ASC.Handle(http.MethodPost, "/v1/subscriptionOfferCodeOneTimeUseCodes", http.StatusCreated,
 		`{"data":{"type":"subscriptionOfferCodeOneTimeUseCodes","id":"otN","attributes":{"numberOfCodes":25,"active":true}}}`)
 	csv := "Code\n"
@@ -302,5 +307,125 @@ func TestOfferParseCodes(t *testing.T) {
 	got, err := offerParseCodes([]byte("ABC123\n\nDEF456\n"))
 	if err != nil || len(got) != 2 || got[1] != "DEF456" {
 		t.Fatalf("got %v, %v", got, err)
+	}
+}
+
+const offerOneTimeListPath = "/v1/subscriptionOfferCodes/{id}/oneTimeUseCodes"
+
+func offerBatchDoc(id string, n int, exp, created string) string {
+	return fmt.Sprintf(`{"type":"subscriptionOfferCodeOneTimeUseCodes","id":%q,"attributes":{"numberOfCodes":%d,"expirationDate":%q,"createdDate":%q,"environment":"PRODUCTION","active":true}}`,
+		id, n, exp, created)
+}
+
+// Monetization#7: a same-shaped batch minted within the hour (e.g. by a call
+// whose outcome was unknown) is returned instead of minting a second one.
+func TestOfferCodesOneTimeRecentBatchIsAlready(t *testing.T) {
+	k := newKit(t)
+	// FakeClock is 2026-01-02T03:04:05Z; this batch is 24 minutes old.
+	k.ASC.Handle(http.MethodGet, offerOneTimeListPath, http.StatusOK, jsonapiDoc(
+		`[`+offerBatchDoc("ot1", 25, "2026-12-31", "2026-01-02T02:40:00Z")+`]`))
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offer_codes_generate"), k.Env,
+		`{"offer_code_id":"oc1","type":"one_time","number_of_codes":25,"expiration_date":"2026-12-31","confirm":true}`))
+	got := tooltest.Decode[map[string]any](t, res)
+	if got["already"] != true || got["id"] != "ot1" || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("result = %v, mutations = %v", got, requestLog(k.ASC.Mutations()))
+	}
+	if len(res.Next) != 1 || res.Next[0].Args["batch_id"] != "ot1" {
+		t.Fatalf("next = %+v", res.Next)
+	}
+}
+
+// Monetization#7: a 5xx on the mint is outcome_unknown and never retried.
+func TestOfferCodesOneTimeServerErrorIsOutcomeUnknown(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, offerOneTimeListPath, http.StatusOK, jsonapiDoc(`[]`))
+	k.ASC.Handle(http.MethodPost, "/v1/subscriptionOfferCodeOneTimeUseCodes", http.StatusInternalServerError,
+		`{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"boom"}]}`)
+	k.Elicit(true)
+	res := tooltest.Call(t, mustTool(t, "offer_codes_generate"), k.Env,
+		`{"offer_code_id":"oc1","type":"one_time","number_of_codes":25,"expiration_date":"2026-12-31","confirm":true}`)
+	tooltest.MustFail(t, res, "outcome_unknown")
+	if n := len(k.ASC.RequestsTo(http.MethodPost, "/v1/subscriptionOfferCodeOneTimeUseCodes")); n != 1 {
+		t.Fatalf("%d mint POSTs, want exactly 1", n)
+	}
+}
+
+func introDoc(id, terr, mode, dur string, periods int, start string) string {
+	s := ""
+	if start != "" {
+		s = fmt.Sprintf(`,"startDate":%q`, start)
+	}
+	return fmt.Sprintf(`{"type":"subscriptionIntroductoryOffers","id":%q,"attributes":{"offerMode":%q,"duration":%q,"numberOfPeriods":%d%s},
+		"relationships":{"territory":{"data":{"type":"territories","id":%q}}}}`, id, mode, dur, periods, s, terr)
+}
+
+// Monetization#4: an intro offer with different terms is a planned change
+// (old offer ended on start_date, new one created) behind the human gate,
+// never "already".
+func TestOffersCreateIntroDifferentTermsReplaces(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/introductoryOffers", http.StatusOK, jsonapiDoc(
+		`[`+introDoc("io1", "USA", "FREE_TRIAL", "ONE_WEEK", 1, "2025-06-01")+`]`))
+	k.ASC.Handle(http.MethodPatch, "/v1/subscriptionIntroductoryOffers/{id}", http.StatusOK,
+		`{"data":{"type":"subscriptionIntroductoryOffers","id":"io1"}}`)
+	k.ASC.Handle(http.MethodPost, "/v1/subscriptionIntroductoryOffers", http.StatusCreated,
+		`{"data":{"type":"subscriptionIntroductoryOffers","id":"ioN","attributes":{"offerMode":"FREE_TRIAL"}}}`)
+	args := `{"product_id":"` + offerTestProduct + `","kind":"intro","mode":"FREE_TRIAL","duration":"ONE_MONTH",
+		"start_date":"2026-11-01","prices":[{"territory":"USA"}]`
+	prev := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, args+`}`))
+	if pv := tooltest.JSON(t, prev.Data); !strings.Contains(pv, `"needs_confirm"`) || strings.Contains(pv, `"already"`) ||
+		!strings.Contains(pv, "end the current intro offer on 2026-11-01") || !strings.Contains(pv, "ONE_WEEK") || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("preview = %s", pv)
+	}
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, args+`,"confirm":true}`))
+	equalLines(t, requestLog(k.ASC.Mutations()), []string{
+		"PATCH /v1/subscriptionIntroductoryOffers/io1",
+		"POST /v1/subscriptionIntroductoryOffers",
+	})
+	if a := reqAttrs(t, k.ASC.Mutations()[0]); len(a) != 1 || a["endDate"] != "2026-11-01" {
+		t.Fatalf("patch attrs = %v", a)
+	}
+	out := tooltest.Decode[offersCreateOut](t, res)
+	if out.Created != 1 || len(out.Skipped) != 0 || strings.Join(out.Ended, ",") != "USA" {
+		t.Fatalf("out = %+v", out)
+	}
+}
+
+// Monetization#4: different terms with no start_date can't be scheduled
+// around the current offer: refused, nothing written, never "already".
+func TestOffersCreateIntroDifferentTermsWithoutStartRefused(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/introductoryOffers", http.StatusOK, jsonapiDoc(
+		`[`+introDoc("io1", "USA", "FREE_TRIAL", "ONE_WEEK", 1, "")+`]`))
+	k.Elicit(true)
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
+		"kind":"intro","mode":"FREE_TRIAL","duration":"ONE_MONTH","prices":[{"territory":"USA"}],"confirm":true}`), "invalid_arguments")
+	if !strings.Contains(body.Message, "USA (FREE_TRIAL ONE_WEEK") || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("body = %+v mutations = %v", body, requestLog(k.ASC.Mutations()))
+	}
+}
+
+// An intro offer that ended before the requested window doesn't block.
+func TestOfferIntroClassifyWindows(t *testing.T) {
+	attrs := map[string]any{"offerMode": "FREE_TRIAL", "duration": "ONE_MONTH", "numberOfPeriods": 1}
+	ended := tool.Resource{ID: "a", Attributes: map[string]any{
+		"offerMode": "FREE_TRIAL", "duration": "ONE_WEEK", "numberOfPeriods": 1.0,
+		"startDate": "2025-01-01", "endDate": "2025-06-01",
+	}}
+	if m, _ := offerIntroClassify([]tool.Resource{ended}, attrs, "", "", "", "2026-01-01"); m != introNone {
+		t.Fatalf("ended offer: %v", m)
+	}
+	same := tool.Resource{ID: "b", Attributes: map[string]any{"offerMode": "FREE_TRIAL", "duration": "ONE_MONTH", "numberOfPeriods": 1.0}}
+	if m, _ := offerIntroClassify([]tool.Resource{same}, attrs, "", "", "", "2026-01-01"); m != introSame {
+		t.Fatalf("same offer: %v", m)
+	}
+	future := tool.Resource{ID: "c", Attributes: map[string]any{
+		"offerMode": "FREE_TRIAL", "duration": "ONE_WEEK", "numberOfPeriods": 1.0,
+		"startDate": "2026-12-01",
+	}}
+	if m, _ := offerIntroClassify([]tool.Resource{future}, attrs, "", "2026-11-01", "", "2026-01-01"); m != introConflict {
+		t.Fatalf("later-starting offer: %v", m)
 	}
 }

@@ -38,7 +38,7 @@ func init() {
 		Confirm: tool.ConfirmByFlag,
 		Title:   "Control a phased release",
 		Description: "Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. " +
-			"Enable it before release (release_prepare phased:true). Without confirm:true previews.",
+			"Enable it before release (release_prepare phased:true). Without confirm:true previews; complete needs human approval.",
 		Enums: map[string][]any{"platform": platformEnum, "action": {"pause", "resume", "complete", "remove", "start"}},
 	}, releasePhased))
 }
@@ -190,7 +190,12 @@ func releasePhased(ctx context.Context, env *tool.Env, in phasedIn) (*tool.Resul
 		preview.Summary = fmt.Sprintf("%s the phased release of %s %s (day %d, %d%%)", in.Action, app.Name, out.Version.String, out.Before.CurrentDay, out.Before.Percent)
 		preview.Intended = []string{"phasedReleaseState " + cur + " → " + tr.to}
 	}
-	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, preview)
+	gate := tool.RequireConfirm
+	if in.Action == "complete" {
+		// Releasing to 100% of users at once is public and irreversible.
+		gate = tool.RequireHumanConfirm
+	}
+	wctx, res := gate(ctx, env, in.Confirm, preview)
 	if res != nil {
 		return res, nil
 	}

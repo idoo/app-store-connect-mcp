@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/idoo/hamn/internal/tool"
 )
@@ -118,21 +119,82 @@ func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*t
 	if in.Environment != "" {
 		attrs["environment"] = in.Environment
 	}
-	wctx, gres := tool.RequireConfirm(ctx, env, in.Confirm, preview("subscriptionOfferCodeOneTimeUseCodes", attrs))
+	batches, err := offerOneTimeBatches(ctx, env, codeID)
+	if err != nil {
+		return nil, err
+	}
+	if b, ok := offerRecentBatch(batches, in, env.Clock.Now()); ok {
+		// Same count, expiry and environment minted within the hour: most
+		// likely an earlier call (or one whose outcome was unknown).
+		out.ID = b.ID
+		if a, ok := b.Bool("active"); ok {
+			out.Active = &a
+		}
+		return tool.Already(out).Warn(fmt.Sprintf("batch %s with the same count and expiry was created at %s; change number_of_codes or "+
+			"expiration_date for a second batch", b.ID, b.Str("createdDate"))).
+			Then(tool.NextStep{Tool: "offer_codes_generate", Args: map[string]any{"batch_id": b.ID}}), nil
+	}
+	p := preview("subscriptionOfferCodeOneTimeUseCodes", attrs)
+	p.Current = map[string]any{"existing_one_time_batches": len(batches)}
+	wctx, gres := tool.RequireConfirm(ctx, env, in.Confirm, p)
 	if gres != nil {
 		return gres, nil
 	}
 	r, err := offerPostDoc(wctx, env, "/v1/subscriptionOfferCodeOneTimeUseCodes", "subscriptionOfferCodeOneTimeUseCodes",
 		offerDoc("subscriptionOfferCodeOneTimeUseCodes", attrs, rel, nil))
 	if err != nil {
-		return nil, tool.WithNext(fmt.Errorf("create one-time codes: %w", err),
-			tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
+		err = fmt.Errorf("create one-time codes: %w", err)
+		if prcUnknown(err) && !errors.Is(err, tool.ErrOutcomeUnknown) {
+			// Apple may have minted the batch: never retry blindly. A repeat
+			// call finds a batch minted within the hour and returns it.
+			err = fmt.Errorf("%w: %w", tool.ErrOutcomeUnknown, err)
+		}
+		return nil, tool.WithNext(err, tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
 	}
 	out.ID = r.ID
 	if a, ok := r.Bool("active"); ok {
 		out.Active = &a
 	}
 	return offerCodeValues(ctx, env, &out)
+}
+
+// offerOneTimeWindow is how far back a same-shaped batch counts as the
+// result of an earlier generate call.
+const offerOneTimeWindow = time.Hour
+
+// offerOneTimeBatches lists the one-time code batches of a campaign.
+func offerOneTimeBatches(ctx context.Context, env *tool.Env, codeID string) ([]tool.Resource, error) {
+	res, err := env.ASC.List(ctx, "/v1/subscriptionOfferCodes/"+url.PathEscape(codeID)+"/oneTimeUseCodes", tool.ListOptions{
+		Fields: map[string][]string{"subscriptionOfferCodeOneTimeUseCodes": {"numberOfCodes", "expirationDate", "createdDate", "environment", "active"}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list one-time code batches: %w", err)
+	}
+	return res.Data, nil
+}
+
+// offerRecentBatch finds a batch with the requested count, expiry and
+// environment created within offerOneTimeWindow of now.
+func offerRecentBatch(batches []tool.Resource, in offerCodesIn, now time.Time) (tool.Resource, bool) {
+	envName := in.Environment
+	if envName == "" {
+		envName = "PRODUCTION"
+	}
+	for _, b := range batches {
+		n, _ := b.Int("numberOfCodes")
+		if n != in.NumberOfCodes || !strings.HasPrefix(b.Str("expirationDate"), in.ExpirationDate) {
+			continue
+		}
+		if e := b.Str("environment"); e != "" && e != envName {
+			continue
+		}
+		created, err := time.Parse(time.RFC3339, b.Str("createdDate"))
+		if err != nil || now.Sub(created) > offerOneTimeWindow {
+			continue
+		}
+		return b, true
+	}
+	return tool.Resource{}, false
 }
 
 // offerCodesValidate checks generate arguments before any request.

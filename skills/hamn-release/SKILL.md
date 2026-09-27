@@ -35,22 +35,27 @@ the human with `hamn auth add`).
    for `release_submit`. Show the user the preview (current → intended).
 5. `release_prepare` with the same `app`, `version`, `build`, `whats_new`,
    `release_type`, `phased` and `uses_non_exempt_encryption` as the plan, plus
-   `plan_id` set to its `plan_id`.
+   `plan_id` set to its `plan_id`. For a hotfix this is one round: when it
+   creates the new version it also sets What's New in the same call.
    - A step with `needs_input` (for example export compliance): ask the user the
      exact question from the result, then re-plan with the answer.
    - A step with `still_processing`: go back to step 3.
 6. `release_status` again: everything must be `ok` or an accepted `warn`.
 7. Ask the user: "Submit <app> <version> with build <n> for App Review now?"
-   Only after a yes: `release_submit` with `app`, `version` (and
-   `include_iaps` / `include_subscriptions` for first-time products). The first
-   call previews and returns a `plan_id`; the second call passes the same
-   arguments plus that `plan_id`, and the client asks the user to approve.
+   Only after a yes: `release_submit` with `app` and `version`. First-time
+   in-app purchases and subscriptions that are ready are attached
+   automatically and listed in the preview; pass
+   `attach_first_time_products: false` only if the user wants to hold them
+   back. The first call previews and returns a `plan_id`; the second call
+   passes the same arguments plus that `plan_id`, and the client asks the user
+   to approve. If a preflight check blocks, it refuses: fix what it lists.
    `already_submitted` means it is already in review: report, do not retry.
 8. Watch: `release_review_status` with `app`. Rejections are not exposed by the
    API: give the Resolution Center link, help fix, then submit again.
 9. After approval with a MANUAL release: ask, then `release_publish` (preview,
    then `confirm: true`). For a phased release use `release_phased` with
-   `action` pause / resume / complete, again preview first.
+   `action` pause / resume / complete, again preview first. `complete` sends the
+   version to every user at once, so the client asks the user to approve it.
 10. To pull a submission back: ask, then `release_cancel` (preview, then
     `confirm: true`).
 
@@ -61,6 +66,16 @@ the human with `hamn auth add`).
 - `outcome_unknown` on a mutation: read the state back with `release_status`
   before doing anything else. Never repeat the mutation blindly.
 - `_truncated` in a result: narrow the query; do not assume the list is complete.
+
+## Multi-platform (iOS and macOS, same version)
+Each platform is its own App Store version with its own build and its own
+review submission. For "ship 2.3 on iOS and macOS":
+- Run steps 2–7 once per platform, passing `platform` (`IOS`, `MAC_OS`) on
+  every call: `release_status`, `release_prepare`, `release_submit`.
+- Resolve `build` per platform. An iOS build cannot go on the macOS version;
+  `"latest"` picks the newest build of that platform and version.
+- You get one plan and one approval per platform. Report each platform's
+  state separately; one platform done does not mean the release is done.
 
 ## Safety rules
 - Never ask the user to paste an API key, .p8 contents or JWT into chat. Keys

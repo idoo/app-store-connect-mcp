@@ -34,10 +34,12 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
 
 ## Money rules
 - Proceeds are per currency. Never add amounts in different currencies.
-- A USD total is allowed only from Apple's FX rates: `finance_report` gives
-  `total_usd` when every currency has a rate; `sales_report` with
-  `with_usd_estimate: true` adds `proceeds_estimate_usd`. Label it
-  "estimate, Apple FX rates" and keep the per-currency figures next to it.
+- hamn gives no USD totals. Apple's reports carry no exchange rates;
+  `finance_report` says so in its `note`. The rates and bank-currency totals
+  are only on the web Payments page (App Store Connect → Payments and
+  Financial Reports). Point the user there if they want one number.
+- Units under `restore` are restored non-consumable purchases (IA3). They are
+  not new sales and earn nothing; don't count them as purchases.
 - Never convert with rates from memory or the web.
 - Sales data lags: days not yet published come back as `pending`; say so
   instead of reporting zero.
