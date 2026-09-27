@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
+	"unicode"
 
 	"github.com/idoo/hamn/internal/applemeta"
 	"github.com/idoo/hamn/internal/tool"
@@ -31,6 +33,13 @@ const (
 	IssueLevelUnavailable = "level_unavailable"
 	IssueIncompleteLocale = "incomplete_locale"
 	IssueWhatsNewFirst    = "whats_new_first_version"
+	IssueLocaleMapped     = "locale_mapped"
+	IssueLockedOnLive     = "field_locked_on_live"
+	IssueUnknownSourceKey = "unknown_source_key"
+	IssueKeywordsSpaces   = "keywords_spaces"
+	IssueKeywordsDup      = "keywords_duplicate"
+	IssueKeywordsEmpty    = "keywords_empty_token"
+	IssueKeywordsInName   = "keywords_in_name"
 )
 
 // DiffOptions tunes [Diff].
@@ -39,6 +48,13 @@ type DiffOptions struct {
 	Remove []string
 	// FirstVersion drops whatsNew (Apple rejects it on an app's first version).
 	FirstVersion bool
+	// PromoOnly is set when the version is live or in review: Apple accepts
+	// only promotionalText there, so other version fields (and app-info
+	// fields when no app info is editable) become warnings, not changes.
+	PromoOnly bool
+	// AppInfoState is the state of the app info when none is editable; it
+	// explains why app-info fields cannot change.
+	AppInfoState string
 }
 
 // FieldChange is one field's old → new value. Old is nil when the remote
@@ -105,7 +121,7 @@ func Diff(remote, desired *Listing, opts DiffOptions) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &Plan{Changes: []Change{}, fingerprint: fp}
+	p := &Plan{Changes: []Change{}, Warnings: slices.Clone(desired.Notes), fingerprint: fp}
 
 	want := normalizeDesired(desired, p)
 	remove := map[string]bool{}
@@ -169,6 +185,9 @@ func normalizeDesired(desired *Listing, p *Plan) map[string]*LocaleFields {
 			continue
 		}
 		from[code] = raw
+		if applemeta.LocaleFolded(raw, code) {
+			p.Warnings = append(p.Warnings, foldedIssue(raw, code))
+		}
 		if lf := desired.Locales[raw]; lf != nil {
 			cp := *lf
 			want[code] = &cp
@@ -202,11 +221,22 @@ func (p *Plan) planLocale(remote *Listing, code string, lf *LocaleFields, opts D
 		p.warnf(code, "whatsNew", IssueWhatsNewFirst, "whatsNew dropped: an app's first version has no release notes")
 	}
 	rf := remote.Locales[code]
+	if opts.PromoOnly {
+		p.lockToPromo(remote, code, lf, rf)
+	}
+	p.requireName(remote, code, lf)
+	if kw, ok := lf.Get("keywords"); ok {
+		p.lintKeywords(code, kw, lf, rf)
+	}
 	for _, level := range Levels {
 		if !lf.has(level) {
 			continue
 		}
 		if !remote.pulled(level) {
+			if level == LevelAppInfo && opts.AppInfoState != "" {
+				p.errorf(code, "", IssueLevelUnavailable, "app info is %s, so name, subtitle and privacy fields of %s can't change until a new version is being prepared", opts.AppInfoState, code)
+				continue
+			}
 			p.errorf(code, "", IssueLevelUnavailable, "%s-level fields given for %s but that level was not pulled", level, code)
 			continue
 		}
@@ -244,17 +274,130 @@ func (p *Plan) planLocale(remote *Listing, code string, lf *LocaleFields, opts D
 	}
 }
 
-// checkComplete warns when a new localization lacks fields App Review needs.
+// checkComplete warns when a new version localization lacks fields App
+// Review needs (a missing name is an error, see requireName).
 func (p *Plan) checkComplete(code string, level Level, lf *LocaleFields) {
-	required := []string{"description", "keywords"}
-	if level == LevelAppInfo {
-		required = []string{"name"}
+	if level != LevelVersion {
+		return
 	}
-	for _, k := range required {
+	for _, k := range []string{"description", "keywords"} {
 		if v, ok := lf.Get(k); !ok || v == "" {
 			p.warnf(code, k, IssueIncompleteLocale, "new %s localization %s has no %s; App Review requires it", level, code, k)
 		}
 	}
+}
+
+// requireName rejects a locale that would be created without a name: Apple
+// needs name to create an appInfoLocalization, and a version localization
+// without one leaves the locale with no store name.
+func (p *Plan) requireName(remote *Listing, code string, lf *LocaleFields) {
+	if !remote.pulled(LevelAppInfo) || remote.LocalizationID(LevelAppInfo, code) != "" {
+		return
+	}
+	creating := false
+	for _, level := range Levels {
+		if lf.has(level) && remote.pulled(level) && remote.LocalizationID(level, code) == "" {
+			creating = true
+		}
+	}
+	if v, ok := lf.Get("name"); creating && (!ok || strings.TrimSpace(v) == "") {
+		p.errorf(code, "name", IssueIncompleteLocale, "new locale %s needs a name (fastlane name.txt or default/name.txt, Expo title); without it the locale is created half-way", code)
+	}
+}
+
+// lockToPromo drops every field Apple refuses on a live or in-review
+// version: version fields other than promotionalText, app-info fields when
+// no app info is editable, and any new localization. Differing values are
+// reported as one warning per locale.
+func (p *Plan) lockToPromo(remote *Listing, code string, lf, rf *LocaleFields) {
+	var locked []string
+	for _, f := range Fields {
+		v, ok := lf.Get(f.Key)
+		if !ok {
+			continue
+		}
+		keep := false
+		switch f.Level {
+		case LevelVersion:
+			keep = f.Key == "promotionalText" && remote.LocalizationID(LevelVersion, code) != ""
+		case LevelAppInfo:
+			keep = remote.pulled(LevelAppInfo)
+		}
+		if keep {
+			continue
+		}
+		lf.Clear(f.Key)
+		if old, had := rf.Get(f.Key); !had || old != v {
+			locked = append(locked, f.Key)
+		}
+	}
+	if len(locked) > 0 {
+		p.warnf(code, "", IssueLockedOnLive, "%s skipped: on a live or in-review version only promotionalText of an existing locale can change (%s)", code, strings.Join(locked, ", "))
+	}
+}
+
+// lintKeywords warns about keyword bytes wasted on spaces after commas,
+// empty or duplicate tokens, and words the name or subtitle already index.
+func (p *Plan) lintKeywords(code, v string, lf, rf *LocaleFields) {
+	if v == "" {
+		return
+	}
+	names := map[string]bool{}
+	for _, k := range []string{"name", "subtitle"} {
+		s, ok := lf.Get(k)
+		if !ok {
+			s, _ = rf.Get(k)
+		}
+		for _, w := range words(s) {
+			names[w] = true
+		}
+	}
+	seen := map[string]bool{}
+	var kept, dups, inName []string
+	spaces, empty := false, 0
+	for _, tok := range strings.Split(v, ",") {
+		t := strings.TrimSpace(tok)
+		if t != tok {
+			spaces = true
+		}
+		if t == "" {
+			empty++
+			continue
+		}
+		k := strings.ToLower(t)
+		if seen[k] {
+			dups = append(dups, t)
+			continue
+		}
+		seen[k] = true
+		kept = append(kept, t)
+		if ws := words(t); len(ws) > 0 && !slices.ContainsFunc(ws, func(w string) bool { return !names[w] }) {
+			inName = append(inName, t)
+		}
+	}
+	norm := strings.Join(kept, ",")
+	saved := len(v) - len(norm)
+	if spaces {
+		p.warnf(code, "keywords", IssueKeywordsSpaces, "spaces around commas waste bytes; use %q (saves %d bytes)", norm, saved)
+	}
+	if empty > 0 {
+		p.warnf(code, "keywords", IssueKeywordsEmpty, "%d empty keyword(s) (double or trailing commas); use %q (saves %d bytes)", empty, norm, saved)
+	}
+	if len(dups) > 0 {
+		p.warnf(code, "keywords", IssueKeywordsDup, "duplicate keyword(s) %s; use %q (saves %d bytes)", strings.Join(dups, ", "), norm, saved)
+	}
+	if len(inName) > 0 {
+		n := 0
+		for _, t := range inName {
+			n += len(t) + 1
+		}
+		p.warnf(code, "keywords", IssueKeywordsInName, "%s already in the name or subtitle, which Apple indexes too; dropping frees %d bytes", strings.Join(inName, ", "), n)
+	}
+}
+
+// words splits s into lowercased letter/digit runs.
+func words(s string) []string {
+	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
 func (p *Plan) validate(code string, f FieldSpec, v string) {

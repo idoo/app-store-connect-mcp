@@ -66,9 +66,11 @@ func TestDisplayForPixels(t *testing.T) {
 		{"6.9 portrait", 1320, 2868, tool.IOS, []DisplayType{AppIPhone67}},
 		{"6.7 landscape", 2796, 1290, tool.IOS, []DisplayType{AppIPhone67}},
 		{"6.5", 1242, 2688, tool.IOS, []DisplayType{AppIPhone65}},
-		{"5.8 vs 6.1 ambiguous", 1125, 2436, tool.IOS, []DisplayType{AppIPhone61, AppIPhone58}},
+		{"6.1 capture prefers current slot over 5.8", 1125, 2436, tool.IOS, []DisplayType{AppIPhone61}},
+		{"1170x2532 prefers 6.1", 1170, 2532, tool.IOS, []DisplayType{AppIPhone61}},
 		{"13 inch iPad new", 2064, 2752, tool.IOS, []DisplayType{AppIPadPro3Gen129}},
-		{"12.9 ambiguous legacy", 2048, 2732, tool.IOS, []DisplayType{AppIPadPro3Gen129, AppIPadPro129}},
+		{"12.9 capture prefers current 13 inch slot", 2048, 2732, tool.IOS, []DisplayType{AppIPadPro3Gen129}},
+		{"legacy-only size stays legacy", 1242, 2208, tool.IOS, []DisplayType{AppIPhone55}},
 		{"mac", 2880, 1800, tool.MacOS, []DisplayType{AppDesktop}},
 		{"mac portrait rejected", 1800, 2880, tool.MacOS, nil},
 		{"4K tv", 3840, 2160, tool.TVOS, []DisplayType{AppAppleTV}},
@@ -84,6 +86,31 @@ func TestDisplayForPixels(t *testing.T) {
 				t.Errorf("DisplayForPixels(%d,%d,%q) = %v,%v; want %v", tc.w, tc.h, tc.platform, got, ok, tc.want)
 			}
 		})
+	}
+}
+
+func TestDisplayFromFileName(t *testing.T) {
+	tests := []struct {
+		name string
+		want DisplayType
+	}{
+		{"iPad Pro (12.9-inch) (3rd generation)-01Home.png", AppIPadPro3Gen129},
+		{"iPad Pro (12.9-inch)-01Home.png", AppIPadPro129},
+		{"iPhone X-02.png", AppIPhone58},
+		{"iPhone XS Max-02.png", AppIPhone65},
+		{"iPhone 11 Pro Max-1.png", AppIPhone65},
+		{"03_IPHONE_58_home.png", AppIPhone58},
+		{"APP_IPAD_PRO_3GEN_129-1.png", AppIPadPro3Gen129},
+		{"IMESSAGE_APP_IPHONE_67_1.png", IMessageIPhone67},
+		{"iPhone XR-1.png", ""},
+		{"XIPHONE_58.png", ""},
+		{"01-home.png", ""},
+	}
+	for _, tc := range tests {
+		got, ok := DisplayFromFileName(tc.name)
+		if got != tc.want || ok != (tc.want != "") {
+			t.Errorf("DisplayFromFileName(%q) = %q,%v; want %q", tc.name, got, ok, tc.want)
+		}
 	}
 }
 

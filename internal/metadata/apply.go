@@ -72,27 +72,27 @@ func Apply(ctx context.Context, client tool.ASC, plan *Plan, ids Targets, progre
 	}
 	results := make([]ItemResult, len(plan.Changes))
 	var (
-		wg   sync.WaitGroup
 		mu   sync.Mutex
 		done int
 	)
-	sem := make(chan struct{}, applyConcurrency)
-	for i, c := range plan.Changes {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-			results[i] = applyOne(ctx, client, c, ids)
-			if progress != nil {
-				mu.Lock()
-				done++
-				progress(done, len(plan.Changes))
-				mu.Unlock()
+	// Per-change failures land in results and never cancel the others.
+	perr := tool.Parallel(ctx, applyConcurrency, plan.Changes, func(ctx context.Context, i int, c Change) error {
+		results[i] = applyOne(ctx, client, c, ids)
+		if progress != nil {
+			mu.Lock()
+			done++
+			progress(done, len(plan.Changes))
+			mu.Unlock()
+		}
+		return nil
+	})
+	if perr != nil {
+		for i, c := range plan.Changes {
+			if results[i].Outcome == "" {
+				results[i] = ItemResult{Locale: c.Locale, Level: c.Level, Op: c.Op, ID: c.ID, Outcome: OutcomeError, Error: "not sent: " + perr.Error()}
 			}
-		}()
+		}
 	}
-	wg.Wait()
 	return results, nil
 }
 
@@ -108,7 +108,11 @@ func applyOne(ctx context.Context, client tool.ASC, c Change, ids Targets) ItemR
 	attrs := map[string]any{}
 	for _, f := range c.Fields {
 		r.Fields = append(r.Fields, f.Field)
-		attrs[f.Field] = f.New
+		if f.New == "" && f.Field != "name" {
+			attrs[f.Field] = nil // the spec's clear is null; "" fails URL validation
+		} else {
+			attrs[f.Field] = f.New
+		}
 	}
 	api := apis[c.Level]
 	var err error

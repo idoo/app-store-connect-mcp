@@ -73,6 +73,41 @@ func TestNormalizeLocaleRejects(t *testing.T) {
 	}
 }
 
+func TestLocaleFolded(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"de-CH", true},
+		{"de-AT", true},
+		{"en-IN", true},
+		{"en-NZ", true},
+		{"nn", true},
+		{"zh-HK", true},
+		{"ar-AE", true},
+		{"de-DE", false},
+		{"de_de", false},
+		{"DE-de", false},
+		{"de", false},
+		{"ja-JP", false},
+		{"zh-CN", false},
+		{"pt_BR", false},
+		{"German", false},
+		{"English (UK)", false},
+		{"nb", false},
+		{"es-419", false},
+	}
+	for _, tc := range tests {
+		out, err := NormalizeLocale(tc.in)
+		if err != nil {
+			t.Fatalf("NormalizeLocale(%q): %v", tc.in, err)
+		}
+		if got := LocaleFolded(tc.in, out); got != tc.want {
+			t.Errorf("LocaleFolded(%q, %q) = %v; want %v", tc.in, out, got, tc.want)
+		}
+	}
+}
+
 func TestTerritoryLanguage(t *testing.T) {
 	for territory, loc := range TerritoryLanguage {
 		if !IsLocale(loc) {

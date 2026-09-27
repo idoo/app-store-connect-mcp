@@ -9,6 +9,7 @@ package metadata
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/idoo/hamn/internal/applemeta"
@@ -162,6 +163,9 @@ type AppInfoFields struct {
 type Listing struct {
 	App     AppInfoFields            `json:"app,omitzero"`
 	Locales map[string]*LocaleFields `json:"locales"`
+	// Notes are reader findings (unknown keys, folded locales) that [Diff]
+	// reports as plan warnings.
+	Notes []Issue `json:"-"`
 }
 
 // LocalizationID returns the remote localization id of locale at level.
@@ -204,9 +208,10 @@ func (l *Listing) locale(code string) *LocaleFields {
 }
 
 // Normalize returns a copy of l whose locale keys are ASC codes. Unknown
-// locales and keys that collide after normalization are errors.
+// locales and keys that collide after normalization are errors; regional
+// variants folded into another locale (de-CH → de-DE) add a note.
 func (l *Listing) Normalize() (*Listing, error) {
-	out := &Listing{App: l.App, Locales: make(map[string]*LocaleFields, len(l.Locales))}
+	out := &Listing{App: l.App, Locales: make(map[string]*LocaleFields, len(l.Locales)), Notes: slices.Clone(l.Notes)}
 	from := map[string]string{}
 	for _, raw := range l.SortedLocales() {
 		code, err := applemeta.NormalizeLocale(raw)
@@ -217,8 +222,16 @@ func (l *Listing) Normalize() (*Listing, error) {
 			return nil, fmt.Errorf("metadata: locales %q and %q both map to %s", prev, raw, code)
 		}
 		from[code] = raw
+		if applemeta.LocaleFolded(raw, code) {
+			out.Notes = append(out.Notes, foldedIssue(raw, code))
+		}
 		lf := *l.Locales[raw]
 		out.Locales[code] = &lf
 	}
 	return out, nil
+}
+
+// foldedIssue is the warning for a regional locale folded into code.
+func foldedIssue(raw, code string) Issue {
+	return Issue{Locale: code, Code: IssueLocaleMapped, Message: fmt.Sprintf("%s → %s: App Store Connect has no %s listing, so this writes the %s one", raw, code, raw, code)}
 }

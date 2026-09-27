@@ -21,6 +21,7 @@ type pullIn struct {
 	Version   tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, else live), live or a version string"`
 	Locales   tool.LocaleSet  `json:"locales,omitempty" jsonschema:"locales or aliases; default all"`
 	ExportDir string          `json:"export_dir,omitempty" jsonschema:"fastlane dir to write (new, empty or named metadata)"`
+	Fields    []string        `json:"fields,omitempty" jsonschema:"only these fields, e.g. [\"subtitle\",\"keywords\"]; default all"`
 }
 
 type pullOut struct {
@@ -45,8 +46,28 @@ func init() {
 		Title: "Pull store listing",
 		Description: "Every locale's listing (app info and version text) of the editable version, else live. export_dir " +
 			"writes a fastlane metadata dir. Edit with metadata_plan.",
-		Enums: map[string][]any{"platform": platformEnum},
+		Enums: map[string][]any{"platform": platformEnum, "fields": fieldEnum},
 	}, metadataPull))
+}
+
+// fieldEnum lists the listing field keys accepted by metadata_pull fields.
+var fieldEnum = func() []any {
+	out := make([]any, 0, len(metadata.Fields))
+	for _, f := range metadata.Fields {
+		out = append(out, f.Key)
+	}
+	return out
+}()
+
+// onlyFields returns a copy of lf holding just the listed field keys.
+func onlyFields(lf *metadata.LocaleFields, keys []string) *metadata.LocaleFields {
+	out := &metadata.LocaleFields{}
+	for _, k := range keys {
+		if v, ok := lf.Get(k); ok {
+			_ = out.Set(k, v) // keys are schema-validated field names
+		}
+	}
+	return out
 }
 
 func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, error) {
@@ -54,15 +75,16 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 	if err != nil {
 		return nil, err
 	}
-	editable, live, _, err := appInfos(ctx, env, t.App.ID, "")
+	infos, err := appInfos(ctx, env, t.App.ID, "")
 	if err != nil {
 		return nil, err
 	}
-	info := editable
-	if info == nil || t.Version.State == versionStateLive {
-		if live != nil {
-			info = live
-		}
+	info := infos.Editable
+	if info == nil {
+		info = infos.Locked
+	}
+	if (info == nil || t.Version.State == versionStateLive) && infos.Live != nil {
+		info = infos.Live
 	}
 	infoID := ""
 	out := pullOut{App: t.appOut(), Platform: t.Platform, Version: t.versionOut(), Source: "editable"}
@@ -106,6 +128,11 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 			out.AvailableLocales = slices.Sorted(maps.Keys(listing.Locales))
 		}
 		listing.Locales = kept
+	}
+	if len(in.Fields) > 0 {
+		for code, lf := range listing.Locales {
+			listing.Locales[code] = onlyFields(lf, in.Fields)
+		}
 	}
 	out.Locales = listing.Locales
 

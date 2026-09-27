@@ -1,6 +1,7 @@
 package screenshots
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -132,6 +133,7 @@ type planOut struct {
 	Summary  summaryOut    `json:"summary"`
 	Sets     []*setPlan    `json:"sets"`
 	Problems []problem     `json:"problems,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
 	PlanID   string        `json:"plan_id,omitempty"`
 }
 
@@ -153,6 +155,7 @@ type planned struct {
 	mode     string
 	sets     []*setPlan
 	problems []problem
+	warnings []string
 	remote   any
 	key      syncKey
 }
@@ -161,9 +164,9 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "screenshots_plan", Toolset: tool.Screenshots, Class: tool.Read, Idempotent: true,
 		Title: "Plan screenshot sync",
-		Description: "Diffs a local screenshot dir against the editable version: validates PNG/JPEG size and alpha, skips equal " +
-			"checksums, lists uploads, deletes (replace mode), reorders and problems. Returns plan_id for screenshots_sync. " +
-			"Ambiguous sizes need a <display> subdir.",
+		Description: "Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal " +
+			"checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. " +
+			"Display: <display> subdir, file-name hint or pixels.",
 		Enums: map[string][]any{"platform": platformEnum, "mode": modeEnum},
 	}, screenshotsPlan))
 }
@@ -230,11 +233,11 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 		slices.Sort(only)
 		only = slices.Compact(only)
 	}
-	files, problems, err := scanDir(env, root, t.Platform, only)
+	files, problems, warnings, err := scanDir(env, root, t.Platform, only)
 	if err != nil {
 		return nil, err
 	}
-	p := &planned{t: t, in: in, mode: mode, problems: problems}
+	p := &planned{t: t, in: in, mode: mode, problems: problems, warnings: warnings}
 
 	locs, err := localizations(ctx, env, t.Version.ID)
 	if err != nil {
@@ -322,11 +325,15 @@ func fingerprintSets(sets []remoteSet) []remoteSet {
 	return out
 }
 
-// scanDir walks root: <locale>/<file> or <locale>/<display>/<file>.
-func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) ([]localFile, []problem, error) {
+// scanDir walks root: <locale>/<file> or <locale>/<display>/<file>. Files are
+// in natural order (2.png before 10.png); warnings name locale directories
+// folded into another listing (de-CH → de-DE).
+func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) ([]localFile, []problem, []string, error) {
 	var files []localFile
 	var problems []problem
+	var warnings []string
 	badLocales := map[string]bool{}
+	folded := map[string]bool{}
 	err := env.Files.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -365,6 +372,10 @@ func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) 
 		if only != nil && !slices.Contains(only, locale) {
 			return nil
 		}
+		if !folded[parts[0]] && applemeta.LocaleFolded(parts[0], locale) {
+			folded[parts[0]] = true
+			warnings = append(warnings, fmt.Sprintf("locale_mapped: %s/ → %s: App Store Connect has no %s listing, so these go to %s", parts[0], locale, parts[0], locale))
+		}
 		var display applemeta.DisplayType
 		if len(parts) == 3 {
 			if display, err = applemeta.ParseDisplay(parts[1]); err != nil {
@@ -384,10 +395,50 @@ func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) 
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: read %s: %v", tool.ErrInvalidArgs, root, err)
+		return nil, nil, nil, fmt.Errorf("%w: read %s: %v", tool.ErrInvalidArgs, root, err)
 	}
-	slices.SortFunc(files, func(a, b localFile) int { return strings.Compare(a.Rel, b.Rel) })
-	return files, problems, nil
+	slices.SortFunc(files, func(a, b localFile) int { return naturalCompare(a.Rel, b.Rel) })
+	return files, problems, warnings, nil
+}
+
+// naturalCompare orders strings with digit runs compared by value, so
+// "en-US/2.png" sorts before "en-US/10.png".
+func naturalCompare(a, b string) int {
+	for a != "" && b != "" {
+		da, db := isDigit(a[0]), isDigit(b[0])
+		if da && db {
+			na, ra := digitRun(a)
+			nb, rb := digitRun(b)
+			ta, tb := strings.TrimLeft(na, "0"), strings.TrimLeft(nb, "0")
+			if c := cmp.Compare(len(ta), len(tb)); c != 0 {
+				return c
+			}
+			if c := strings.Compare(ta, tb); c != 0 {
+				return c
+			}
+			if c := cmp.Compare(len(na), len(nb)); c != 0 {
+				return c
+			}
+			a, b = ra, rb
+			continue
+		}
+		if a[0] != b[0] {
+			return cmp.Compare(a[0], b[0])
+		}
+		a, b = a[1:], b[1:]
+	}
+	return cmp.Compare(len(a), len(b))
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// digitRun splits s into its leading digits and the rest.
+func digitRun(s string) (string, string) {
+	i := 0
+	for i < len(s) && isDigit(s[i]) {
+		i++
+	}
+	return s[:i], s[i:]
 }
 
 // inspect reads one image: pixel size → display (unless given), validation
@@ -403,6 +454,11 @@ func inspect(env *tool.Env, path, rel, locale string, display applemeta.DisplayT
 		return nil, &problem{File: rel, Kind: problemInvalidImage, Message: "not a decodable PNG or JPEG: " + err.Error()}, nil
 	}
 	if display == "" {
+		if hint, ok := applemeta.DisplayFromFileName(filepath.Base(rel)); ok && applemeta.ValidPixels(hint, cfg.Width, cfg.Height) {
+			display = hint
+		}
+	}
+	if display == "" {
 		cands, _ := applemeta.DisplayForPixels(cfg.Width, cfg.Height, platform)
 		switch len(cands) {
 		case 0:
@@ -412,7 +468,7 @@ func inspect(env *tool.Env, path, rel, locale string, display applemeta.DisplayT
 		default:
 			return nil, &problem{
 				File: rel, Kind: problemAmbiguousSize, Candidates: cands,
-				Message: fmt.Sprintf("%dx%d fits several display types; move it into %s/<display>/", cfg.Width, cfg.Height, locale),
+				Message: fmt.Sprintf("%dx%d fits several display types; move it into %s/<display>/ or put the type in the file name", cfg.Width, cfg.Height, locale),
 			}, nil
 		}
 	}
@@ -514,7 +570,7 @@ func remoteLabel(r remoteShot, local []localFile, used map[string]bool) string {
 func (p *planned) out() planOut {
 	o := planOut{
 		App: p.t.appOut(), Platform: p.t.Platform, Version: p.t.versionOut(), Mode: p.mode,
-		Sets: []*setPlan{}, Problems: p.problems,
+		Sets: []*setPlan{}, Problems: p.problems, Warnings: p.warnings,
 	}
 	for _, s := range p.sets {
 		o.Summary.Sets++

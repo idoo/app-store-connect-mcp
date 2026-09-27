@@ -20,12 +20,15 @@ import (
 // platformEnum lists the App Store Connect platforms accepted by `platform`.
 var platformEnum = []any{string(tool.IOS), string(tool.MacOS), string(tool.TVOS), string(tool.VisionOS)}
 
-// App info states that are no longer editable.
+// App info and version states.
 const (
-	infoStateLive     = "READY_FOR_DISTRIBUTION"
-	infoStateReplaced = "REPLACED_WITH_NEW_INFO"
-	versionStateLive  = "READY_FOR_DISTRIBUTION"
+	infoStateLive    = "READY_FOR_DISTRIBUTION"
+	versionStateLive = "READY_FOR_DISTRIBUTION"
 )
+
+// infoEditable lists the AppInfo states whose fields Apple accepts writes
+// for; WAITING_FOR_REVIEW, IN_REVIEW, PENDING_RELEASE and ACCEPTED are locked.
+var infoEditable = []string{"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "READY_FOR_REVIEW"}
 
 // maxShown caps old/new values echoed in plan results.
 const maxShown = 160
@@ -102,32 +105,56 @@ func resolveTarget(ctx context.Context, env *tool.Env, appRef tool.AppRef, platf
 	return t, nil
 }
 
-// appInfos returns the app's editable app info (not live or replaced) and the
-// live one; either may be nil. include is an optional include= value.
-func appInfos(ctx context.Context, env *tool.Env, appID, include string) (editable, live *tool.Resource, included []tool.Resource, err error) {
+// appInfoSet is the app's app infos by role; any may be nil.
+type appInfoSet struct {
+	// Editable is the app info writes go to.
+	Editable *tool.Resource
+	// Live is the app info of the live version.
+	Live *tool.Resource
+	// Locked is an app info in review or approved (not editable, not live).
+	Locked   *tool.Resource
+	Included []tool.Resource
+}
+
+// lockedState is the state of the locked app info, or "".
+func (s appInfoSet) lockedState() string {
+	if s.Locked == nil {
+		return ""
+	}
+	return s.Locked.Str("state")
+}
+
+// appInfos sorts the app's app infos into editable (explicit allow-list),
+// live and locked. include is an optional include= value.
+func appInfos(ctx context.Context, env *tool.Env, appID, include string) (appInfoSet, error) {
 	q := url.Values{}
 	if include != "" {
 		q.Set("include", include)
 	}
 	resp, err := env.ASC.Get(ctx, "/v1/apps/"+appID+"/appInfos", q)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("list app infos: %w", err)
+		return appInfoSet{}, fmt.Errorf("list app infos: %w", err)
 	}
+	s := appInfoSet{Included: resp.Included}
 	for i := range resp.Data {
 		r := &resp.Data[i]
-		switch r.Str("state") {
-		case infoStateLive:
-			if live == nil {
-				live = r
+		state := r.Str("state")
+		switch {
+		case state == infoStateLive:
+			if s.Live == nil {
+				s.Live = r
 			}
-		case infoStateReplaced:
-		default:
-			if editable == nil {
-				editable = r
+		case slices.Contains(infoEditable, state):
+			if s.Editable == nil {
+				s.Editable = r
+			}
+		case state != "REPLACED_WITH_NEW_INFO":
+			if s.Locked == nil {
+				s.Locked = r
 			}
 		}
 	}
-	return editable, live, resp.Included, nil
+	return s, nil
 }
 
 // attrStr unwraps a string attribute, including untrusted-wrapped text.
@@ -241,14 +268,21 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 	if err != nil {
 		return nil, err
 	}
-	editable, _, _, err := appInfos(ctx, env, t.App.ID, "")
+	infos, err := appInfos(ctx, env, t.App.ID, "")
 	if err != nil {
 		return nil, err
 	}
 	p := &planned{t: t, source: source}
-	if editable != nil {
-		p.appInfoID, p.infoState = editable.ID, editable.Str("state")
+	opts := metadata.DiffOptions{FirstVersion: t.FirstVersion}
+	switch {
+	case infos.Editable != nil:
+		p.appInfoID, p.infoState = infos.Editable.ID, infos.Editable.Str("state")
+	case infos.Locked != nil:
+		opts.AppInfoState = infos.lockedState()
+	case infos.Live != nil:
+		opts.AppInfoState = infos.Live.Str("state")
 	}
+	opts.PromoOnly = t.Version.State == versionStateLive || slices.Contains(inFlightLocked, t.Version.State)
 	remote, err := metadata.Pull(ctx, env.ASC, t.Version.ID, p.appInfoID)
 	if err != nil {
 		return nil, err
@@ -266,7 +300,8 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 		}
 	}
 	slices.Sort(remove)
-	plan, err := metadata.Diff(remote, desired, metadata.DiffOptions{Remove: remove, FirstVersion: t.FirstVersion})
+	opts.Remove = remove
+	plan, err := metadata.Diff(remote, desired, opts)
 	if err != nil && !errors.Is(err, metadata.ErrInvalidListing) {
 		return nil, err
 	}

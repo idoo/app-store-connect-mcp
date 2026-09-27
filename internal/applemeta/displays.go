@@ -195,6 +195,26 @@ func Displays() []DisplaySpec { return slices.Clone(displaySpecs) }
 // PreviewTypes returns every app preview slot.
 func PreviewTypes() []PreviewType { return slices.Clone(previewTypes) }
 
+// Preview video limits per Apple's "App preview specifications".
+const (
+	PreviewMinSeconds = 15
+	PreviewMaxSeconds = 30
+)
+
+// previewSizes are the accepted app preview resolutions per slot, in either
+// orientation. Slots without an entry are not checked.
+var previewSizes = map[PreviewType][]Size{
+	"IPHONE_67": {{886, 1920}}, "IPHONE_65": {{886, 1920}}, "IPHONE_61": {{886, 1920}}, "IPHONE_58": {{886, 1920}},
+	"IPHONE_55": {{1080, 1920}}, "IPHONE_47": {{750, 1334}}, "IPHONE_40": {{1080, 1920}},
+	"IPAD_PRO_3GEN_129": {{1200, 1600}}, "IPAD_PRO_3GEN_11": {{1200, 1600}}, "IPAD_PRO_129": {{1200, 1600}},
+	"IPAD_105": {{1200, 1600}}, "IPAD_97": {{1200, 1600}, {900, 1200}},
+	"DESKTOP": {{1920, 1080}}, "APPLE_TV": {{1920, 1080}}, "APPLE_VISION_PRO": {{3840, 2160}},
+}
+
+// PreviewSizes returns the accepted resolutions of an app preview slot
+// (either orientation), or nil when the slot is not checked.
+func PreviewSizes(p PreviewType) []Size { return slices.Clone(previewSizes[p]) }
+
 // LookupDisplay returns the spec for a display type.
 func LookupDisplay(d DisplayType) (DisplaySpec, bool) {
 	s, ok := displayByType[d]
@@ -218,19 +238,108 @@ func ValidPixels(d DisplayType, w, h int) bool {
 }
 
 // DisplayForPixels returns the non-iMessage display types that accept w×h on
-// platform (empty platform means any). More than one result means the size
-// is ambiguous and the caller must ask, not guess; the preferred slot is first.
+// platform (empty platform means any). When exactly one current (non-legacy)
+// slot accepts the size, legacy slots are dropped: 1125x2436 is a 6.3" shot,
+// not a 5.8" one, unless a <display> dir or file-name hint says otherwise.
+// More than one result means the size is ambiguous between current slots and
+// the caller must ask, not guess; the preferred slot is first.
 func DisplayForPixels(w, h int, platform tool.Platform) ([]DisplayType, bool) {
-	var out []DisplayType
+	var all, current []DisplayType
 	for _, s := range displaySpecs {
 		if s.IMessage || (platform != "" && s.Platform != platform) {
 			continue
 		}
 		if s.Accepts(w, h) {
-			out = append(out, s.Type)
+			all = append(all, s.Type)
+			if !s.Legacy {
+				current = append(current, s.Type)
+			}
 		}
 	}
-	return out, len(out) > 0
+	if len(current) == 1 {
+		return current, true
+	}
+	return all, len(all) > 0
+}
+
+// displayHint maps a file-name token to a slot.
+type displayHint struct {
+	tok string
+	d   DisplayType
+}
+
+// fileNameHints maps fastlane snapshot device-name fragments (lowercased) to
+// slots. Longer, more specific fragments come first.
+var fileNameHints = []displayHint{
+	{"ipad pro (12.9-inch) (3rd generation)", AppIPadPro3Gen129},
+	{"ipad pro (12.9-inch) (4th generation)", AppIPadPro3Gen129},
+	{"ipad pro (12.9-inch) (5th generation)", AppIPadPro3Gen129},
+	{"ipad pro (12.9-inch) (6th generation)", AppIPadPro3Gen129},
+	{"ipad pro 13-inch", AppIPadPro3Gen129},
+	{"ipad pro (13-inch)", AppIPadPro3Gen129},
+	{"ipad pro (12.9-inch)", AppIPadPro129},
+	{"ipad pro 11-inch", AppIPadPro3Gen11},
+	{"ipad pro (11-inch)", AppIPadPro3Gen11},
+	{"ipad pro (10.5-inch)", AppIPad105},
+	{"ipad pro (9.7-inch)", AppIPad97},
+	{"iphone xs max", AppIPhone65},
+	{"iphone 11 pro max", AppIPhone65},
+	{"iphone 11 pro", AppIPhone58},
+	{"iphone xs", AppIPhone58},
+	{"iphone x", AppIPhone58},
+	{"iphone 8 plus", AppIPhone55},
+	{"iphone 7 plus", AppIPhone55},
+	{"iphone 6s plus", AppIPhone55},
+}
+
+// enumHints lists display enum tokens (with and without the APP_ prefix),
+// longest first so IMESSAGE_APP_IPHONE_67 wins over IPHONE_67.
+var enumHints = func() []displayHint {
+	var out []displayHint
+	for _, s := range displaySpecs {
+		out = append(out, displayHint{string(s.Type), s.Type})
+		if t, ok := strings.CutPrefix(string(s.Type), "APP_"); ok {
+			out = append(out, displayHint{t, s.Type})
+		}
+	}
+	slices.SortStableFunc(out, func(a, b displayHint) int { return len(b.tok) - len(a.tok) })
+	return out
+}()
+
+// DisplayFromFileName reads a display hint from a screenshot file name: an
+// enum token such as IPHONE_58 or APP_IPAD_PRO_3GEN_129 (delimited by
+// non-alphanumerics), or a fastlane snapshot device name such as
+// "iPad Pro (12.9-inch) (3rd generation)-01.png". Callers must still check
+// the pixels with [ValidPixels].
+func DisplayFromFileName(name string) (DisplayType, bool) {
+	up := strings.ToUpper(name)
+	for _, h := range enumHints {
+		for i := 0; ; {
+			j := strings.Index(up[i:], h.tok)
+			if j < 0 {
+				break
+			}
+			start, end := i+j, i+j+len(h.tok)
+			if (start == 0 || !isAlnum(up[start-1])) && (end == len(up) || !isAlnum(up[end])) {
+				return h.d, true
+			}
+			i = start + 1
+		}
+	}
+	low := strings.ToLower(name)
+	for _, h := range fileNameHints {
+		if k := strings.Index(low, h.tok); k >= 0 {
+			end := k + len(h.tok)
+			if end == len(low) || !isAlnum(low[end]) {
+				return h.d, true
+			}
+		}
+	}
+	return "", false
+}
+
+func isAlnum(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // RequiredDisplays returns the screenshot slots App Store review requires for
