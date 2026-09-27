@@ -22,9 +22,9 @@
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
 |[`builds_list`](#builds_list)|R|none|Builds newest first: number, version, processing state, dates, export compliance, TestFlight state and groups. Expired hidden unless include_expired.|
-|[`builds_wait`](#builds_wait)|R|none|Poll a build until processing ends (VALID, INVALID or FAILED) with progress. At the timeout returns still_processing; call again with the same args to keep waiting.|
+|[`builds_wait`](#builds_wait)|R|none|Poll a build until processing ends (VALID, INVALID or FAILED) with progress. Waits at most 50 s unless the client sends a progress token. At the timeout returns still_processing; call again with the same args.|
 |[`release_cancel`](#release_cancel)|D|human|Cancel the open review submission (state CANCELING), or empty an unsent draft by deleting its items. Without confirm:true returns a preview.|
-|[`release_phased`](#release_phased)|D|flag|Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. Enable it before release (release_prepare phased:true). Without confirm:true previews.|
+|[`release_phased`](#release_phased)|D|flag|Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. Enable it before release (release_prepare phased:true). Without confirm:true previews; complete needs human approval.|
 |[`release_prepare`](#release_prepare)|W|plan|Apply a release_status plan (plan_id from release_status desired): create version, attach build, compliance, release type, phasing, What's New. Never waits for processing.|
 |[`release_publish`](#release_publish)|D|human|Release a PENDING_DEVELOPER_RELEASE version to the App Store; other states are refused. Without confirm:true returns a preview.|
 |[`release_review_status`](#release_review_status)|R|none|Current and recent App Review submissions with items and states. Reviewer messages aren't in the API: read the Resolution Center link, fix, then release_submit.|
@@ -49,7 +49,7 @@
 |---|---|---|---|
 |[`appinfo_update`](#appinfo_update)|W|flag|Set categories, age rating, App Review contact/demo/notes, content rights, copyright. Without confirm:true previews current→new. Listing text: metadata_plan.|
 |[`metadata_apply`](#metadata_apply)|W|plan|Apply a metadata_plan: same arguments plus plan_id; refused if the listing changed since. Creates missing locales; deletes only locales in remove.|
-|[`metadata_plan`](#metadata_plan)|R|none|Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay.|
+|[`metadata_plan`](#metadata_plan)|R|none|Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay. version:live changes promotionalText only.|
 |[`metadata_pull`](#metadata_pull)|R|none|Every locale's listing (app info and version text) of the editable version, else live. export_dir writes a fastlane metadata dir. Edit with metadata_plan.|
 
 ## reviews ★
@@ -65,7 +65,7 @@
 |---|---|---|---|
 |[`analytics_report`](#analytics_report)|R|none|Without report: lists the app's analytics reports. With report: sums metrics of its newest segments by dimensions. Needs analytics_setup; data lags 24–48 h.|
 |[`analytics_setup`](#analytics_setup)|W|none|Ensures an ONGOING analytics report request exists (optional ONE_TIME_SNAPSHOT for history); existing ones report already. Data arrives 24–48 h later via analytics_report.|
-|[`finance_report`](#finance_report)|R|none|Decoded Payments & Financial report for one fiscal month: proceeds per currency, FX rates, top products, total_usd only if every currency has a rate. Unpublished months: pending.|
+|[`finance_report`](#finance_report)|R|none|Decoded Payments & Financial report for one fiscal month: proceeds per currency and top products. No FX rates or USD totals: Apple shows those only on the web Payments page. Unpublished months: pending.|
 |[`insights_summary`](#insights_summary)|R|none|Use first for "how is my app doing": units and proceeds vs the previous period, ratings, versions, TestFlight feedback, analytics status; each section ok or unavailable and why.|
 |[`sales_report`](#sales_report)|R|none|Decoded Sales & Trends rows and aggregates (units by category, proceeds per currency, top-N) for a period, from/to or frequency+report_date. Overviews: insights_summary. Unpublished days: pending.|
 
@@ -74,8 +74,8 @@
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
 |[`previews_upload`](#previews_upload)|W|none|Uploads one app preview video to a locale's preview set of the editable version, creating the set if needed; optional poster frame time code. Same checksum already present = no-op. Max 3 previews per set.|
-|[`screenshots_list`](#screenshots_list)|R|none|Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes. thumbnails:true attaches up to 4 small images.|
-|[`screenshots_plan`](#screenshots_plan)|R|none|Diffs a local screenshot dir against the editable version: validates PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders and problems. Returns plan_id for screenshots_sync. Ambiguous sizes need a <display> subdir.|
+|[`screenshots_list`](#screenshots_list)|R|none|Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back to the primary). thumbnails:true attaches up to 4 small images.|
+|[`screenshots_plan`](#screenshots_plan)|R|none|Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. Display: <display> subdir, file-name hint or pixels.|
 |[`screenshots_sync`](#screenshots_sync)|W|plan|Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.|
 
 ## uploads
@@ -89,15 +89,15 @@
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
 |[`iap_list`](#iap_list)|R|none|In-app purchases (v2) of an app in one request: product id, type, state, latest version state and localizations. Filter by state or type. Prices: use pricing_get. Subscriptions: subscriptions_list.|
-|[`iap_upsert`](#iap_upsert)|W|none|Create an IAP by product_id or PATCH only changed fields; never re-creates an existing product id (Apple burns ids). Writes localizations on the open IAP version and uploads a review screenshot. Never deletes locales.|
+|[`iap_upsert`](#iap_upsert)|W|flag|Create an IAP by product_id or PATCH only changed fields, plus localizations, review screenshot and availability. Overwrites need confirm:true; creating (burns the id) and family sharing on need a human.|
 |[`offer_codes_generate`](#offer_codes_generate)|W|human|Generate one-time codes or a custom code for an offer-code campaign (offers_create kind offer_code); needs confirm:true and human approval. One-time code values are written to offer-codes/<batch_id>.csv (path + count returned, never the values); batch_id re-downloads them.|
 |[`offers_create`](#offers_create)|W|human|Create an intro (per territory), promotional, win-back or offer-code offer on a subscription. Prices by customer price or price_point_id; equalize:true expands one price to all territories. Needs confirm:true and human approval; a same-name offer is already.|
 |[`offers_list`](#offers_list)|R|none|Introductory (grouped by terms), promotional, win-back and offer-code offers of one subscription (product_id) or every subscription of the app: mode, duration, periods, eligibility, territory counts, code counts. An IAP product_id lists its offer codes.|
 |[`pricing_apply`](#pricing_apply)|D|human|Apply a pricing_plan: same arguments plus plan_id; refused if prices changed since. App/IAP: one schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.|
-|[`pricing_get`](#pricing_get)|R|none|Current prices of an app, IAP or subscription: base territory, prices in effect per territory (requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids or product ids) returns each one's base price and territory count.|
+|[`pricing_get`](#pricing_get)|R|none|Current prices of an app, IAP or subscription: base territory, prices in effect per territory (requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids) returns each one's base price, or its price per requested territory (≤10).|
 |[`pricing_plan`](#pricing_plan)|R|none|Preview a price change (base price matched to Apple's price points, Apple equalization elsewhere, optional overrides) and app availability changes: old→new per territory, call count, rate-limit check. Returns plan_id for pricing_apply.|
 |[`subscriptions_list`](#subscriptions_list)|R|none|Subscription groups with localizations, and each group's subscriptions: product id, period, level, state, latest version state and offer counts. One request per group. Prices: pricing_get.|
-|[`subscriptions_upsert`](#subscriptions_upsert)|W|none|Find or create a subscription group by reference name, then a subscription by product_id (PATCH only changed fields; never re-creates a product id). Writes localizations on the open versions and a review screenshot. Never deletes.|
+|[`subscriptions_upsert`](#subscriptions_upsert)|W|flag|Find or create a subscription group by reference name and a subscription by product_id; PATCH only changed fields, plus localizations, review screenshot and availability. Overwrites need confirm:true; creating, family sharing on and group level changes need a human.|
 
 ## signing
 
@@ -105,7 +105,7 @@
 |---|---|---|---|
 |[`signing_bundle_id_create`](#signing_bundle_id_create)|W|none|Register a bundle identifier (explicit or wildcard com.example.*) for IOS, MAC_OS or UNIVERSAL. Idempotent: an already registered identifier returns already:true with the existing bundle ID; nothing is changed.|
 |[`signing_bundle_ids_list`](#signing_bundle_ids_list)|R|none|Registered bundle IDs (identifier, name, platform, seed id) with their enabled capabilities and settings. Filter by identifier, platform or a name/identifier substring. Use before signing_capabilities_set or signing_profile_create.|
-|[`signing_capabilities_set`](#signing_capabilities_set)|D|flag|Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; already enabled ones are skipped. Disabling or changing settings returns a preview and needs confirm:true; it invalidates profiles.|
+|[`signing_capabilities_set`](#signing_capabilities_set)|D|flag|Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; already enabled ones are skipped. Changing settings needs confirm:true; disabling also needs the user's approval. Both invalidate profiles.|
 |[`signing_certificates_list`](#signing_certificates_list)|R|none|Signing certificates by type, sorted by expiration, with days_left. expiring_within_days keeps only certificates expiring (or expired) within N days. Certificate content (base64 DER) is returned only with include_content.|
 |[`signing_devices_register`](#signing_devices_register)|W|none|Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices are reported as already (with their status) and not re-posted. Per-device results; one failure does not stop the batch.|
 |[`signing_profile_create`](#signing_profile_create)|W|none|Create a profile for a bundle ID (identifier or id). certificates: ids or ["all"] (all unexpired of the matching type); devices: ids or ["all"] (enabled devices), only for development/ad hoc types. An active profile with the same name, type and bundle is already:true.|
@@ -275,7 +275,7 @@
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`build`|string|||latest (default), build number or build id|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
-|`timeout_seconds`|integer|||how long to wait (default 45, max 300)|
+|`timeout_seconds`|integer|||how long to wait (default 45, max 300; 50 when the client sends no progress token)|
 
 ### doctor
 
@@ -285,7 +285,7 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`month`|string|||Apple fiscal month YYYY-MM; default: last closed month|
+|`month`|string|||Apple fiscal month YYYY-MM; default: newest published of the last two closed months|
 |`region`|string|||default ZZ (FINANCIAL) or Z1 (FINANCE_DETAIL)|
 |`report_type`|string||`FINANCIAL`, `FINANCE_DETAIL`|default FINANCIAL|
 |`top_n`|integer|||products kept, default 10, max 100|
@@ -305,6 +305,8 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
+|`availability`|object|||territories it is sold in|
+|`confirm`|boolean|||true after reviewing the preview|
 |`family_sharable`|boolean|||cannot be turned off once on|
 |`localizations`|object|||by locale: display name (max 30) and description (max 45)|
 |`product_id`|string|yes||product identifier; the lookup key|
@@ -351,6 +353,7 @@ No arguments.
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`export_dir`|string|||fastlane dir to write (new, empty or named metadata)|
+|`fields`|string[]||`name`, `subtitle`, `privacyPolicyUrl`, `privacyChoicesUrl`, `privacyPolicyText`, `description`, `keywords`, `marketingUrl`, `promotionalText`, `supportUrl`, `whatsNew`|only these fields, e.g. ["subtitle","keywords"]; default all|
 |`locales`|string[]|||locales or aliases; default all|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 |`version`|string|||editable (default, else live), live or a version string|
@@ -428,9 +431,10 @@ No arguments.
 |`overrides`|object|||territory → customer price, set manually instead of equalized|
 |`plan_id`|string|||from the preview call|
 |`plan_type`|string||`MONTHLY`, `UPFRONT`|subscriptions only|
-|`preserve_current_price`|boolean|||subscriptions: keep existing subscribers on their price|
+|`preserve_current_price`|boolean|||subscriptions: existing subscribers keep their price on increases; default true|
 |`price`|string|||customer price in the base territory currency, e.g. 4.99; nearest price point is used|
 |`product_id`|string|||product id of the IAP or subscription|
+|`reset_manual_prices`|boolean|||app/IAP: drop manual prices not in overrides so they follow equalization|
 |`start_date`|string|||YYYY-MM-DD; default today|
 |`territories`|string[]|||subscriptions: limit the change to these territories|
 
@@ -455,9 +459,10 @@ No arguments.
 |`kind`|string||`app`, `iap`, `subscription`|default app|
 |`overrides`|object|||territory → customer price, set manually instead of equalized|
 |`plan_type`|string||`MONTHLY`, `UPFRONT`|subscriptions only|
-|`preserve_current_price`|boolean|||subscriptions: keep existing subscribers on their price|
+|`preserve_current_price`|boolean|||subscriptions: existing subscribers keep their price on increases; default true|
 |`price`|string|||customer price in the base territory currency, e.g. 4.99; nearest price point is used|
 |`product_id`|string|||product id of the IAP or subscription|
+|`reset_manual_prices`|boolean|||app/IAP: drop manual prices not in overrides so they follow equalization|
 |`start_date`|string|||YYYY-MM-DD; default today|
 |`territories`|string[]|||subscriptions: limit the change to these territories|
 
@@ -526,6 +531,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
+|`attach_first_time_products`|boolean|||attach every ready IAP/subscription (default true)|
 |`include_iaps`|string[]|||IAPs to submit with it: product id, name or id|
 |`include_subscriptions`|string[]|||subscriptions to submit with it: product id, name or id|
 |`plan_id`|string|||from the preview call|
@@ -566,7 +572,6 @@ No arguments.
 |`report_type`|string||`SALES`, `PRE_ORDER`, `NEWSSTAND`, `SUBSCRIPTION`, `SUBSCRIPTION_EVENT`, `SUBSCRIBER`, `SUBSCRIPTION_OFFER_CODE_REDEMPTION`, `INSTALLS`, `FIRST_ANNUAL`, `WIN_BACK_ELIGIBILITY`|default SALES|
 |`to`|string|||last day YYYY-MM-DD, inclusive|
 |`top_n`|integer|||groups kept, default 10, max 100|
-|`with_usd_estimate`|boolean|||add proceeds_estimate_usd via Apple's latest FX rates|
 
 ### screenshots_list
 
@@ -696,6 +701,8 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
+|`availability`|object|||territories it is sold in|
+|`confirm`|boolean|||true after reviewing the preview|
 |`family_sharable`|boolean|||cannot be turned off once on|
 |`group`|string|yes||subscription group reference name (max 64); created if missing|
 |`group_level`|integer|||rank in the group, 1 = highest|
@@ -856,7 +863,7 @@ No arguments.
 |`run`|string|||build run id; default: latest run of workflow|
 |`wait`|boolean|||poll until the run completes or wait_seconds pass|
 |`wait_seconds`|integer|||maximum wait (default 45, max 300)|
-|`workflow`|string|||workflow name or id, when run is not given|
+|`workflow`|string|||workflow name or id, when run is not given; default: the app's only workflow|
 
 ### xcc_workflows_list
 

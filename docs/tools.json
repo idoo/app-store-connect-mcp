@@ -649,7 +649,7 @@
     "toolset": "release",
     "class": "R",
     "title": "Wait for build processing",
-    "description": "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. At the timeout returns still_processing; call again with the same args to keep waiting.",
+    "description": "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. Waits at most 50 s unless the client sends a progress token. At the timeout returns still_processing; call again with the same args.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -677,7 +677,7 @@
           "type": "string"
         },
         "timeout_seconds": {
-          "description": "how long to wait (default 45, max 300)",
+          "description": "how long to wait (default 45, max 300; 50 when the client sends no progress token)",
           "type": "integer"
         }
       },
@@ -712,7 +712,7 @@
     "toolset": "reports",
     "class": "R",
     "title": "Payments and financial report",
-    "description": "Decoded Payments & Financial report for one fiscal month: proceeds per currency, FX rates, top products, total_usd only if every currency has a rate. Unpublished months: pending.",
+    "description": "Decoded Payments & Financial report for one fiscal month: proceeds per currency and top products. No FX rates or USD totals: Apple shows those only on the web Payments page. Unpublished months: pending.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -723,7 +723,7 @@
       "additionalProperties": false,
       "properties": {
         "month": {
-          "description": "Apple fiscal month YYYY-MM; default: last closed month",
+          "description": "Apple fiscal month YYYY-MM; default: newest published of the last two closed months",
           "type": "string"
         },
         "region": {
@@ -813,7 +813,7 @@
     "toolset": "monetization",
     "class": "W",
     "title": "Create or update an in-app purchase",
-    "description": "Create an IAP by product_id or PATCH only changed fields; never re-creates an existing product id (Apple burns ids). Writes localizations on the open IAP version and uploads a review screenshot. Never deletes locales.",
+    "description": "Create an IAP by product_id or PATCH only changed fields, plus localizations, review screenshot and availability. Overwrites need confirm:true; creating (burns the id) and family sharing on need a human.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -827,6 +827,32 @@
         "app": {
           "description": "name, bundle id, SKU or id; default pinned",
           "type": "string"
+        },
+        "availability": {
+          "additionalProperties": false,
+          "description": "territories it is sold in",
+          "properties": {
+            "all": {
+              "description": "every App Store territory",
+              "type": "boolean"
+            },
+            "available_in_new_territories": {
+              "description": "default: current value, else all",
+              "type": "boolean"
+            },
+            "territories": {
+              "description": "3-letter territory codes; replaces the current list",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "confirm": {
+          "description": "true after reviewing the preview",
+          "type": "boolean"
         },
         "family_sharable": {
           "description": "cannot be turned off once on",
@@ -884,7 +910,7 @@
     },
     "default_toolset": false,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "flag"
   },
   {
     "name": "insights_summary",
@@ -993,7 +1019,7 @@
     "toolset": "metadata",
     "class": "R",
     "title": "Plan store listing changes",
-    "description": "Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay.",
+    "description": "Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay. version:live changes promotionalText only.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -1069,6 +1095,26 @@
         "export_dir": {
           "description": "fastlane dir to write (new, empty or named metadata)",
           "type": "string"
+        },
+        "fields": {
+          "description": "only these fields, e.g. [\"subtitle\",\"keywords\"]; default all",
+          "items": {
+            "enum": [
+              "name",
+              "subtitle",
+              "privacyPolicyUrl",
+              "privacyChoicesUrl",
+              "privacyPolicyText",
+              "description",
+              "keywords",
+              "marketingUrl",
+              "promotionalText",
+              "supportUrl",
+              "whatsNew"
+            ],
+            "type": "string"
+          },
+          "type": "array"
         },
         "locales": {
           "description": "locales or aliases; default all",
@@ -1514,7 +1560,7 @@
           "type": "string"
         },
         "preserve_current_price": {
-          "description": "subscriptions: keep existing subscribers on their price",
+          "description": "subscriptions: existing subscribers keep their price on increases; default true",
           "type": "boolean"
         },
         "price": {
@@ -1524,6 +1570,10 @@
         "product_id": {
           "description": "product id of the IAP or subscription",
           "type": "string"
+        },
+        "reset_manual_prices": {
+          "description": "app/IAP: drop manual prices not in overrides so they follow equalization",
+          "type": "boolean"
         },
         "start_date": {
           "description": "YYYY-MM-DD; default today",
@@ -1548,7 +1598,7 @@
     "toolset": "monetization",
     "class": "R",
     "title": "Get current prices",
-    "description": "Current prices of an app, IAP or subscription: base territory, prices in effect per territory (requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids or product ids) returns each one's base price and territory count.",
+    "description": "Current prices of an app, IAP or subscription: base territory, prices in effect per territory (requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids) returns each one's base price, or its price per requested territory (≤10).",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -1673,7 +1723,7 @@
           "type": "string"
         },
         "preserve_current_price": {
-          "description": "subscriptions: keep existing subscribers on their price",
+          "description": "subscriptions: existing subscribers keep their price on increases; default true",
           "type": "boolean"
         },
         "price": {
@@ -1683,6 +1733,10 @@
         "product_id": {
           "description": "product id of the IAP or subscription",
           "type": "string"
+        },
+        "reset_manual_prices": {
+          "description": "app/IAP: drop manual prices not in overrides so they follow equalization",
+          "type": "boolean"
         },
         "start_date": {
           "description": "YYYY-MM-DD; default today",
@@ -1754,7 +1808,7 @@
     "toolset": "release",
     "class": "D",
     "title": "Control a phased release",
-    "description": "Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. Enable it before release (release_prepare phased:true). Without confirm:true previews.",
+    "description": "Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. Enable it before release (release_prepare phased:true). Without confirm:true previews; complete needs human approval.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
@@ -2065,6 +2119,10 @@
           "description": "name, bundle id, SKU or id; default pinned",
           "type": "string"
         },
+        "attach_first_time_products": {
+          "description": "attach every ready IAP/subscription (default true)",
+          "type": "boolean"
+        },
         "include_iaps": {
           "description": "IAPs to submit with it: product id, name or id",
           "items": {
@@ -2320,10 +2378,6 @@
         "top_n": {
           "description": "groups kept, default 10, max 100",
           "type": "integer"
-        },
-        "with_usd_estimate": {
-          "description": "add proceeds_estimate_usd via Apple's latest FX rates",
-          "type": "boolean"
         }
       },
       "type": "object"
@@ -2337,7 +2391,7 @@
     "toolset": "screenshots",
     "class": "R",
     "title": "List screenshots and previews",
-    "description": "Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes. thumbnails:true attaches up to 4 small images.",
+    "description": "Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back to the primary). thumbnails:true attaches up to 4 small images.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2391,7 +2445,7 @@
     "toolset": "screenshots",
     "class": "R",
     "title": "Plan screenshot sync",
-    "description": "Diffs a local screenshot dir against the editable version: validates PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders and problems. Returns plan_id for screenshots_sync. Ambiguous sizes need a <display> subdir.",
+    "description": "Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. Display: <display> subdir, file-name hint or pixels.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2612,7 +2666,7 @@
     "toolset": "signing",
     "class": "D",
     "title": "Enable or disable bundle ID capabilities",
-    "description": "Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; already enabled ones are skipped. Disabling or changing settings returns a preview and needs confirm:true; it invalidates profiles.",
+    "description": "Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; already enabled ones are skipped. Changing settings needs confirm:true; disabling also needs the user's approval. Both invalidate profiles.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": false,
@@ -3139,7 +3193,7 @@
     "toolset": "monetization",
     "class": "W",
     "title": "Create or update a subscription",
-    "description": "Find or create a subscription group by reference name, then a subscription by product_id (PATCH only changed fields; never re-creates a product id). Writes localizations on the open versions and a review screenshot. Never deletes.",
+    "description": "Find or create a subscription group by reference name and a subscription by product_id; PATCH only changed fields, plus localizations, review screenshot and availability. Overwrites need confirm:true; creating, family sharing on and group level changes need a human.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -3153,6 +3207,32 @@
         "app": {
           "description": "name, bundle id, SKU or id; default pinned",
           "type": "string"
+        },
+        "availability": {
+          "additionalProperties": false,
+          "description": "territories it is sold in",
+          "properties": {
+            "all": {
+              "description": "every App Store territory",
+              "type": "boolean"
+            },
+            "available_in_new_territories": {
+              "description": "default: current value, else all",
+              "type": "boolean"
+            },
+            "territories": {
+              "description": "3-letter territory codes; replaces the current list",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "confirm": {
+          "description": "true after reviewing the preview",
+          "type": "boolean"
         },
         "family_sharable": {
           "description": "cannot be turned off once on",
@@ -3241,7 +3321,7 @@
     },
     "default_toolset": false,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "flag"
   },
   {
     "name": "testflight_distribute",
@@ -3646,9 +3726,10 @@
     "title": "Toolsets",
     "description": "List toolsets, enable or disable them for this session (tool list refreshes), or ask the user to allow App Store Connect writes for this session.",
     "annotations": {
+      "destructiveHint": false,
       "idempotentHint": false,
       "openWorldHint": false,
-      "readOnlyHint": true,
+      "readOnlyHint": false,
       "title": "Toolsets"
     },
     "input_schema": {
@@ -4086,7 +4167,7 @@
           "type": "integer"
         },
         "workflow": {
-          "description": "workflow name or id, when run is not given",
+          "description": "workflow name or id, when run is not given; default: the app's only workflow",
           "type": "string"
         }
       },

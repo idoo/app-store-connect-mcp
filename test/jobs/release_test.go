@@ -99,7 +99,7 @@ func releaseKit(t *testing.T) (*tooltest.Kit, *releaseFake) {
 	k := newKit(t)
 	v14 := tool.Version{ID: "v1", String: "1.4", Platform: tool.IOS, State: "PREPARE_FOR_SUBMISSION"}
 	k.Resolve.Versions = map[tool.VersionRef]tool.Version{tool.VersionEditable: v14, "1.4": v14}
-	k.Resolve.Builds = map[tool.BuildRef]tool.Build{tool.BuildLatest: {ID: "b2", Number: "43", ProcessingState: "VALID"}}
+	k.Resolve.Builds = map[tool.BuildRef]tool.Build{tool.BuildLatest: {ID: "b2", Number: "43", ProcessingState: "VALID"}, "latest:1.4": {ID: "b2", Number: "43", ProcessingState: "VALID"}}
 	f := &releaseFake{buildID: "b1", whatsNew: map[string]string{"loc-en": "Bug fixes.", "loc-de": "Fehlerbehebungen.", "loc-ja": "バグ修正。"}}
 	asc := k.ASC
 
@@ -157,6 +157,7 @@ func releaseKit(t *testing.T) (*tooltest.Kit, *releaseFake) {
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/inAppPurchasesV2", http.StatusOK, `{"data":[]}`)
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, `{"data":[]}`)
 	asc.Handle(http.MethodGet, "/v1/builds/{id}", http.StatusOK, string(jsonDoc(t, res{Type: "builds", ID: "b2", Attrs: map[string]any{"version": "43", "processingState": "VALID", "expired": false, "usesNonExemptEncryption": false}})))
+	asc.Handle(http.MethodGet, "/v1/builds/{id}/preReleaseVersion", http.StatusOK, string(jsonDoc(t, res{Type: "preReleaseVersions", ID: "prv14", Attrs: map[string]any{"version": "1.4", "platform": "IOS"}})))
 
 	// release_prepare
 	asc.HandleFunc(http.MethodPatch, "/v1/appStoreVersions/{id}/relationships/build", func(r tool.Request) tooltest.Fixture {
