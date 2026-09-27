@@ -1,0 +1,12 @@
+{
+  "name": "hamn",
+  "description": "App Store Connect for AI agents, the secure way: the hamn MCP server plus skills for releases, TestFlight, reviews, metadata translation, screenshots and sales. Requires the hamn binary on PATH (brew install idoo/tap/hamn).",
+  "version": "0.1.0",
+  "author": {
+    "name": "Ivan Verevkin"
+  },
+  "homepage": "https://github.com/idoo/hamn",
+  "repository": "https://github.com/idoo/hamn",
+  "license": "MIT",
+  "keywords": ["app-store-connect", "mcp", "ios", "macos", "testflight", "release", "app-store"]
+}
