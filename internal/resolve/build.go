@@ -91,7 +91,7 @@ func (r *Resolver) Build(ctx context.Context, appID string, platform tool.Platfo
 func (r *Resolver) buildByID(ctx context.Context, appID, id string) (tool.Build, error) {
 	res, err := r.asc.Get(ctx, "/v1/builds/"+id, url.Values{"fields[builds]": {buildFields}})
 	if err != nil {
-		if isNotFound(err) {
+		if tool.IsNotFound(err) {
 			return tool.Build{}, &tool.ErrNotFound{
 				Kind: "build", Ref: id, Hint: "use latest, latest-valid, latest:<version>, a build number or a build id",
 				Next: next("builds_list", map[string]any{"app": appID}),

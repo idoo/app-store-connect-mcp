@@ -35,7 +35,7 @@ func loadReleaseSnapshot(ctx context.Context, env *tool.Env, appID string, platf
 		if s.Detail, err = fetchVersionDetail(ctx, env, ver.ID); err != nil {
 			return nil, err
 		}
-	case isNotFound(err) && concreteVersion(ref):
+	case tool.IsNotFound(err) && concreteVersion(ref):
 		// the version does not exist yet
 	default:
 		return nil, err

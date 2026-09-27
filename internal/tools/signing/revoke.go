@@ -50,7 +50,7 @@ type revokeOut struct {
 func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Result, error) {
 	in.ID = strings.TrimSpace(in.ID)
 	if in.ID == "" {
-		return nil, invalidArgs("id is required")
+		return nil, tool.InvalidArgs("id is required")
 	}
 	var (
 		target revokeTarget
@@ -74,7 +74,7 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 		path = "/v1/profiles/" + url.PathEscape(in.ID)
 		irreversible = append(irreversible, "the profile is deleted; builds still need a new profile to be signed")
 	default:
-		return nil, invalidArgs("kind must be certificate or profile")
+		return nil, tool.InvalidArgs("kind must be certificate or profile")
 	}
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, er
 		"fields[certificates]": {"name,certificateType,displayName,serialNumber,expirationDate"},
 	})
 	notFound := &tool.ErrNotFound{Kind: "certificate", Ref: id, Next: []tool.NextStep{{Tool: "signing_certificates_list"}}}
-	if apiStatus(err) == http.StatusNotFound {
+	if tool.APIStatus(err) == http.StatusNotFound {
 		return revokeTarget{}, notFound
 	}
 	if err != nil {

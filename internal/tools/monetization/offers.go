@@ -445,7 +445,7 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	}, included)
 	created, err := offerPostDoc(wctx, env, sp.path, sp.typ, doc)
 	if err != nil {
-		if isConflict(err) {
+		if tool.IsConflict(err) {
 			if r, ok, rerr := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); rerr == nil && ok {
 				out.Offer = &r
 				out.Territories = r.Territories
@@ -537,10 +537,10 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		periods = 1
 	}
 	if periods < 1 {
-		return nil, offerSpec{}, invalidArgs("periods must be ≥ 1")
+		return nil, offerSpec{}, tool.InvalidArgs("periods must be ≥ 1")
 	}
 	if strings.TrimSpace(in.ProductID) == "" {
-		return nil, offerSpec{}, invalidArgs("product_id is required")
+		return nil, offerSpec{}, tool.InvalidArgs("product_id is required")
 	}
 	for arg, v := range map[string]string{"start_date": in.StartDate, "end_date": in.EndDate} {
 		if err := offerDate(arg, v); err != nil {
@@ -556,7 +556,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 	}
 	need := func(arg, v string) error {
 		if strings.TrimSpace(v) == "" {
-			return invalidArgs("%s is required for a %s offer", arg, in.Kind)
+			return tool.InvalidArgs("%s is required for a %s offer", arg, in.Kind)
 		}
 		return nil
 	}
@@ -571,7 +571,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		delete(attrs, "startDate")
 		delete(attrs, "endDate")
 		if in.StartDate != "" || in.EndDate != "" {
-			return nil, sp, invalidArgs("promotional offers have no start/end date")
+			return nil, sp, tool.InvalidArgs("promotional offers have no start/end date")
 		}
 		attrs["name"], attrs["offerCode"], attrs["numberOfPeriods"] = in.Name, in.ID, periods
 		sp = offerSpec{
@@ -583,7 +583,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 			return nil, sp, err
 		}
 		if in.PaidMonths < 1 || in.LapsedMinMonths < 1 || in.LapsedMaxMonths < in.LapsedMinMonths {
-			return nil, sp, invalidArgs("win-back needs paid_months ≥ 1 and 1 ≤ lapsed_min_months ≤ lapsed_max_months")
+			return nil, sp, tool.InvalidArgs("win-back needs paid_months ≥ 1 and 1 ≤ lapsed_min_months ≤ lapsed_max_months")
 		}
 		prio := in.Priority
 		if prio == "" {
@@ -604,10 +604,10 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 			return nil, sp, err
 		}
 		if len(in.Customers) == 0 {
-			return nil, sp, invalidArgs("customer_eligibilities is required for an offer code (NEW, EXISTING, EXPIRED)")
+			return nil, sp, tool.InvalidArgs("customer_eligibilities is required for an offer code (NEW, EXISTING, EXPIRED)")
 		}
 		if in.StartDate != "" || in.EndDate != "" {
-			return nil, sp, invalidArgs("offer codes have no start/end date; set expiration_date when generating codes")
+			return nil, sp, tool.InvalidArgs("offer codes have no start/end date; set expiration_date when generating codes")
 		}
 		delete(attrs, "startDate")
 		delete(attrs, "endDate")
@@ -620,7 +620,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 			match: func(r tool.Resource) bool { return r.Str("name") == in.Name },
 		}
 	default:
-		return nil, sp, invalidArgs("unknown kind %q", in.Kind)
+		return nil, sp, tool.InvalidArgs("unknown kind %q", in.Kind)
 	}
 	return attrs, sp, nil
 }
@@ -776,7 +776,7 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		r, err := offerPostDoc(wctx, env, "/v1/subscriptionIntroductoryOffers", "subscriptionIntroductoryOffers",
 			offerDoc("subscriptionIntroductoryOffers", attrs, rels, nil))
 		if err != nil {
-			if _, replaced := replace[p.Territory]; isConflict(err) && !replaced {
+			if _, replaced := replace[p.Territory]; tool.IsConflict(err) && !replaced {
 				out.Skipped = append(out.Skipped, p.Territory)
 				continue
 			}

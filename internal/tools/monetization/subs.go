@@ -220,7 +220,7 @@ const subsFields = "name,productId,state,subscriptionPeriod,groupLevel,reviewNot
 
 func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[string]any, err error) {
 	if strings.TrimSpace(in.Group) == "" {
-		return nil, nil, invalidArgs("group is required")
+		return nil, nil, tool.InvalidArgs("group is required")
 	}
 	if err := checkLimit("group", applemeta.FieldIAPReferenceName, in.Group); err != nil {
 		return nil, nil, err
@@ -229,13 +229,13 @@ func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[st
 	for k, l := range in.GroupLocalizations {
 		loc, err := applemeta.NormalizeLocale(k)
 		if err != nil {
-			return nil, nil, invalidArgs("group_localizations: %v", err)
+			return nil, nil, tool.InvalidArgs("group_localizations: %v", err)
 		}
 		if _, dup := glocs[loc]; dup {
-			return nil, nil, invalidArgs("group_localizations: locale %s given twice", loc)
+			return nil, nil, tool.InvalidArgs("group_localizations: locale %s given twice", loc)
 		}
 		if strings.TrimSpace(l.Name) == "" {
-			return nil, nil, invalidArgs("group_localizations[%s].name is required", loc)
+			return nil, nil, tool.InvalidArgs("group_localizations[%s].name is required", loc)
 		}
 		a := map[string]any{"name": l.Name}
 		if l.CustomAppName != "" {
@@ -246,7 +246,7 @@ func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[st
 	if in.ProductID == "" {
 		if in.Name != "" || in.Period != "" || in.GroupLevel != nil || in.ReviewNote != nil || in.FamilySharable != nil ||
 			len(in.Localizations) > 0 || in.ReviewScreenshot != "" {
-			return nil, nil, invalidArgs("subscription fields need product_id")
+			return nil, nil, tool.InvalidArgs("subscription fields need product_id")
 		}
 		return glocs, nil, nil
 	}
@@ -259,7 +259,7 @@ func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[st
 		}
 	}
 	if in.GroupLevel != nil && *in.GroupLevel < 1 {
-		return nil, nil, invalidArgs("group_level must be >= 1")
+		return nil, nil, tool.InvalidArgs("group_level must be >= 1")
 	}
 	if locs, err = normLocs("localizations", in.Localizations); err != nil {
 		return nil, nil, err
@@ -288,7 +288,7 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 		return nil, err
 	}
 	if in.Availability != nil && in.ProductID == "" {
-		return nil, invalidArgs("availability needs product_id")
+		return nil, tool.InvalidArgs("availability needs product_id")
 	}
 	if err := checkAvail(in.Availability); err != nil {
 		return nil, err
@@ -317,7 +317,7 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 		switch {
 		case err == nil:
 			out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionCreated}
-		case isConflict(err):
+		case tool.IsConflict(err):
 			if group, _, err = subsFindGroup(ctx, env, app.ID, in.Group); err != nil {
 				return nil, err
 			}
@@ -438,7 +438,7 @@ func subsPlanAll(ctx context.Context, env *tool.Env, g *upsertGate, appID string
 	}
 	if !p.found {
 		if in.Name == "" {
-			return nil, invalidArgs("subscription %q does not exist; name is required to create it", in.ProductID)
+			return nil, tool.InvalidArgs("subscription %q does not exist; name is required to create it", in.ProductID)
 		}
 		g.add(gateHuman, "POST /v1/subscriptions "+in.ProductID+" in group "+in.Group)
 		g.irreversible("product id " + in.ProductID + " is used up for good: it can never be reused, even after deletion")
@@ -497,7 +497,7 @@ func subsWriteProduct(ctx context.Context, env *tool.Env, appID, groupID string,
 	case cerr == nil:
 		it.ID, it.Action = created.ID, actionCreated
 		return created, it, nil
-	case isConflict(cerr):
+	case tool.IsConflict(cerr):
 		gid, rerr := subsFindAnywhere(ctx, env, appID, in.ProductID)
 		if rerr != nil {
 			return created, it, rerr
@@ -507,7 +507,7 @@ func subsWriteProduct(ctx context.Context, env *tool.Env, appID, groupID string,
 			return created, it, fmt.Errorf("create subscription %s: Apple reports a conflict but the product is not in this app; product ids are unique per account and cannot be reused: %w", in.ProductID, tool.ErrInvalidArgs)
 		case groupID:
 		default:
-			return created, it, invalidArgs("subscription %s already exists in another group (%s); subscriptions cannot move between groups", in.ProductID, gid)
+			return created, it, tool.InvalidArgs("subscription %s already exists in another group (%s); subscriptions cannot move between groups", in.ProductID, gid)
 		}
 		sub, _, found, err := subsFind(ctx, env, groupID, in.ProductID)
 		if err != nil {

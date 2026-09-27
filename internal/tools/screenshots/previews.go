@@ -147,6 +147,9 @@ func previewsUpload(ctx context.Context, env *tool.Env, in previewIn) (*tool.Res
 	case wait > maxWait:
 		wait = maxWait
 	}
+	if !env.HasProgress() {
+		wait = min(wait, int(tool.NoProgressWaitCap/time.Second))
+	}
 	attrs := map[string]any{"mimeType": mime}
 	if in.PreviewFrameTimeCode != "" {
 		attrs["previewFrameTimeCode"] = in.PreviewFrameTimeCode

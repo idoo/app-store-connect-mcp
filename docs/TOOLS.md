@@ -11,7 +11,7 @@
 |[`apps_get`](#apps_get)|R|none|One app at a glance: live version per platform, in-flight versions with state, 5 latest builds, listing locales. Use before release or TestFlight work.|
 |[`apps_list`](#apps_list)|R|none|List or fuzzy-find apps (name, bundle id, SKU or id; best first) with platforms and in-flight versions.|
 |[`asc_api_describe`](#asc_api_describe)|R|none|Describe one API operation (operation_id or method+path): params, enums, fields[] names, includes, body skeleton and a ready example call.|
-|[`asc_api_get`](#asc_api_get)|R|none|GET any App Store Connect operation, validated against the pinned spec first (a mismatch returns the skeleton, no call). Collections auto-paginate to max_items with next_cursor.|
+|[`asc_api_get`](#asc_api_get)|R|none|GET any App Store Connect operation, validated against the pinned spec first (a mismatch returns the skeleton, no call). Collections auto-paginate to limit with next_cursor.|
 |[`asc_api_request`](#asc_api_request)|D|human|POST/PATCH/DELETE any App Store Connect operation, spec-validated. Every call previews first and needs confirm:true plus human approval. Prefer workflow tools; reads: asc_api_get.|
 |[`asc_api_search`](#asc_api_search)|R|none|Find API operations by keywords, resource type or tag when no workflow tool fits; returns ranked operation ids, method, path, summary. Then asc_api_describe.|
 |[`doctor`](#doctor)|R|none|Health check of the active profile: key, JWT, Apple reachability, clock skew, rate limit, spec, write mode, toolsets, vendor number, each with a fix. Run first on 401/403.|
@@ -213,7 +213,7 @@
 |`cursor`|string|||next_cursor from a previous call (same path)|
 |`fields`|object|||sparse fieldsets: type → comma-separated fields|
 |`include`|string[]|||relationships to include|
-|`max_items`|integer|||items across pages (default 200, max 5000)|
+|`limit`|integer|||items across pages (default 200, max 5000)|
 |`path`|string|yes||concrete path, e.g. /v1/apps/123/builds|
 |`query`|object|||query params, e.g. {"sort":"-createdDate"}|
 |`unsafe_unlisted`|boolean|||allow a path missing from the pinned spec|
@@ -296,7 +296,7 @@ No arguments.
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`cursor`|string|||next_cursor of a previous call|
-|`max_items`|integer|||default 200, max 5000|
+|`limit`|integer|||default 200, max 5000|
 |`state`|string||`MISSING_METADATA`, `WAITING_FOR_UPLOAD`, `PROCESSING_CONTENT`, `READY_TO_SUBMIT`, `WAITING_FOR_REVIEW`, `IN_REVIEW`, `DEVELOPER_ACTION_NEEDED`, `PENDING_BINARY_APPROVAL`, `APPROVED`, `DEVELOPER_REMOVED_FROM_SALE`, `REMOVED_FROM_SALE`, `REJECTED`||
 |`type`|string||`CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION`||
 
@@ -543,8 +543,8 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; "all" = every app|
+|`limit`|integer|||max reviews overall (default 50, max 500)|
 |`mark_seen`|boolean|||advance the stored cursor to the newest returned|
-|`max_items`|integer|||max reviews overall (default 50, max 500)|
 |`rating`|integer[]||`1`, `2`, `3`, `4`, `5`|only these star ratings|
 |`since`|string|||"last_seen" or ISO date/time; only newer|
 |`territory`|string[]|||alpha-3 territory codes, e.g. USA, DEU|
@@ -622,7 +622,7 @@ No arguments.
 |---|---|---|---|---|
 |`cursor`|string|||next_cursor of a previous call|
 |`identifier`|string|||bundle identifier filter passed to Apple, e.g. com.example.app|
-|`max_items`|integer|||maximum bundle IDs to read (default 200, max 1000)|
+|`limit`|integer|||maximum bundle IDs to read (default 200, max 1000)|
 |`platform`|string||`IOS`, `MAC_OS`, `UNIVERSAL`||
 |`query`|string|||case-insensitive substring of the name or identifier|
 
@@ -641,7 +641,7 @@ No arguments.
 |---|---|---|---|---|
 |`expiring_within_days`|integer|||only certificates expiring within N days, including already expired ones|
 |`include_content`|boolean|||also return certificateContent (base64 DER)|
-|`max_items`|integer|||maximum certificates to read (default 200, max 1000)|
+|`limit`|integer|||maximum certificates to read (default 200, max 1000)|
 |`type`|string||`APPLE_PAY`, `APPLE_PAY_MERCHANT_IDENTITY`, `APPLE_PAY_PSP_IDENTITY`, `APPLE_PAY_RSA`, `DEVELOPER_ID_KEXT`, `DEVELOPER_ID_KEXT_G2`, `DEVELOPER_ID_APPLICATION`, `DEVELOPER_ID_APPLICATION_G2`, `DEVELOPMENT`, `DISTRIBUTION`, `IDENTITY_ACCESS`, `IOS_DEVELOPMENT`, `IOS_DISTRIBUTION`, `MAC_APP_DISTRIBUTION`, `MAC_INSTALLER_DISTRIBUTION`, `MAC_APP_DEVELOPMENT`, `PASS_TYPE_ID`, `PASS_TYPE_ID_WITH_NFC`||
 
 ### signing_devices_register
@@ -668,7 +668,7 @@ No arguments.
 |`cursor`|string|||next_cursor of a previous call|
 |`download`|boolean|||return profile_content (base64); requires id|
 |`id`|string|||read only this profile id|
-|`max_items`|integer|||maximum profiles to read (default 200, max 1000)|
+|`limit`|integer|||maximum profiles to read (default 200, max 1000)|
 |`name`|string|||profile name filter passed to Apple|
 |`state`|string||`ACTIVE`, `INVALID`||
 |`type`|string||`IOS_APP_DEVELOPMENT`, `IOS_APP_STORE`, `IOS_APP_ADHOC`, `IOS_APP_INHOUSE`, `MAC_APP_DEVELOPMENT`, `MAC_APP_STORE`, `MAC_APP_DIRECT`, `TVOS_APP_DEVELOPMENT`, `TVOS_APP_STORE`, `TVOS_APP_ADHOC`, `TVOS_APP_INHOUSE`, `MAC_CATALYST_APP_DEVELOPMENT`, `MAC_CATALYST_APP_STORE`, `MAC_CATALYST_APP_DIRECT`||
@@ -767,7 +767,7 @@ No arguments.
 |`email`|string|||exact tester email|
 |`group`|string|||beta group name or id; default: all|
 |`invite_type`|string||`EMAIL`, `PUBLIC_LINK`||
-|`max_items`|integer|||testers to fetch, default 200, max 1000|
+|`limit`|integer|||testers to fetch, default 200, max 1000|
 |`state`|string||`NOT_INVITED`, `INVITED`, `ACCEPTED`, `INSTALLED`, `REVOKED`|filters the fetched page|
 
 ### testflight_testers_remove

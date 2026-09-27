@@ -80,6 +80,9 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 	case wait > maxWait:
 		wait = maxWait
 	}
+	if !env.HasProgress() {
+		wait = min(wait, int(tool.NoProgressWaitCap/time.Second))
+	}
 	p, err := computePlan(ctx, env, in.sourceIn)
 	if err != nil {
 		return nil, err

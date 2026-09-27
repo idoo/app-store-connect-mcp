@@ -29,7 +29,7 @@ type listIn struct {
 	Unanswered bool        `json:"unanswered,omitempty" jsonschema:"only reviews without a response"`
 	Since      string      `json:"since,omitempty" jsonschema:"\"last_seen\" or ISO date/time; only newer"`
 	MarkSeen   bool        `json:"mark_seen,omitempty" jsonschema:"advance the stored cursor to the newest returned"`
-	MaxItems   int         `json:"max_items,omitempty" jsonschema:"max reviews overall (default 50, max 500)"`
+	Limit      int         `json:"limit,omitempty" jsonschema:"max reviews overall (default 50, max 500)"`
 }
 
 // appReviews groups the reviews of one app.
@@ -71,7 +71,7 @@ func readQuery() url.Values {
 }
 
 func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, error) {
-	limit := in.MaxItems
+	limit := in.Limit
 	if limit <= 0 {
 		limit = listDefault
 	}
@@ -124,7 +124,7 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 			}
 			g.Cursor = cur
 			if g.More {
-				res.Warn(fmt.Sprintf("app %s: cursor advanced past reviews that were not returned; raise max_items to see them", g.App.ID))
+				res.Warn(fmt.Sprintf("app %s: cursor advanced past reviews that were not returned; raise limit to see them", g.App.ID))
 			}
 		}
 	}

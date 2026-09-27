@@ -53,7 +53,7 @@ func checkAvail(in *availIn) error {
 		return nil
 	}
 	if in.All == (len(in.Territories) > 0) {
-		return invalidArgs("availability: give either territories or all:true")
+		return tool.InvalidArgs("availability: give either territories or all:true")
 	}
 	_, err := prcTerritories("availability.territories", in.Territories)
 	return err

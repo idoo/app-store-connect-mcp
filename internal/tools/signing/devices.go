@@ -59,7 +59,7 @@ type devicesRegisterOut struct {
 
 func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (*tool.Result, error) {
 	if len(in.Devices) == 0 || len(in.Devices) > maxDevices {
-		return nil, invalidArgs("devices must hold 1 to %d entries", maxDevices)
+		return nil, tool.InvalidArgs("devices must hold 1 to %d entries", maxDevices)
 	}
 	seen := map[string]bool{}
 	udids := make([]string, 0, len(in.Devices))
@@ -70,17 +70,17 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 			d.Platform = "IOS"
 		}
 		if d.Name == "" || d.UDID == "" {
-			return nil, invalidArgs("devices[%d]: name and udid are required", i)
+			return nil, tool.InvalidArgs("devices[%d]: name and udid are required", i)
 		}
 		if strings.ContainsAny(d.UDID, ", ") {
-			return nil, invalidArgs("devices[%d]: udid %q is malformed", i, d.UDID)
+			return nil, tool.InvalidArgs("devices[%d]: udid %q is malformed", i, d.UDID)
 		}
 		if err := checkEnum(fmt.Sprintf("devices[%d].platform", i), d.Platform, platforms); err != nil {
 			return nil, err
 		}
 		key := strings.ToLower(d.UDID)
 		if seen[key] {
-			return nil, invalidArgs("udid %s is listed twice", d.UDID)
+			return nil, tool.InvalidArgs("udid %s is listed twice", d.UDID)
 		}
 		seen[key] = true
 		udids = append(udids, d.UDID)
@@ -135,7 +135,7 @@ func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[st
 		"attributes": map[string]any{"name": d.Name, "udid": d.UDID, "platform": d.Platform},
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/devices", Body: body, Write: true})
-	if apiStatus(err) == http.StatusConflict {
+	if tool.APIStatus(err) == http.StatusConflict {
 		// Registered meanwhile (or the UDID differs only in case): read back.
 		if found, rerr := devicesByUDID(ctx, env, []string{d.UDID}); rerr == nil {
 			if r, ok := found[strings.ToLower(d.UDID)]; ok {

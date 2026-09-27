@@ -5,7 +5,6 @@ package signing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -75,20 +74,6 @@ type bundleOut struct {
 	Platform     string   `json:"platform"`
 	SeedID       string   `json:"seed_id,omitempty"`
 	Capabilities []capOut `json:"capabilities"`
-}
-
-// invalidArgs wraps a validation problem as invalid_arguments.
-func invalidArgs(format string, args ...any) error {
-	return fmt.Errorf("%w: "+format, append([]any{tool.ErrInvalidArgs}, args...)...)
-}
-
-// apiStatus returns the HTTP status of an App Store Connect error, or 0.
-func apiStatus(err error) int {
-	var ae *tool.APIError
-	if errors.As(err, &ae) {
-		return ae.Status
-	}
-	return 0
 }
 
 // indexIncluded indexes included resources by type and id.
@@ -196,7 +181,7 @@ func findIdentifier(ctx context.Context, env *tool.Env, identifier string) (bund
 func lookupBundle(ctx context.Context, env *tool.Env, ref string) (bundleOut, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return bundleOut{}, invalidArgs("bundle_id is required")
+		return bundleOut{}, tool.InvalidArgs("bundle_id is required")
 	}
 	notFound := &tool.ErrNotFound{
 		Kind: "bundle ID", Ref: ref,
@@ -214,7 +199,7 @@ func lookupBundle(ctx context.Context, env *tool.Env, ref string) (bundleOut, er
 		return b, nil
 	}
 	resp, err := env.ASC.Get(ctx, "/v1/bundleIds/"+url.PathEscape(ref), bundleQuery())
-	if apiStatus(err) == http.StatusNotFound {
+	if tool.APIStatus(err) == http.StatusNotFound {
 		return bundleOut{}, notFound
 	}
 	if err != nil {
@@ -232,7 +217,7 @@ func checkEnum(arg, v string, enum []any) error {
 	if slices.Contains(enum, any(v)) {
 		return nil
 	}
-	return invalidArgs("%s %q is not one of %v", arg, v, enum)
+	return tool.InvalidArgs("%s %q is not one of %v", arg, v, enum)
 }
 
 // sortedKeys returns the keys of m in order.

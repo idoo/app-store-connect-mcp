@@ -116,10 +116,6 @@ type lookupOut struct {
 	Note     string `json:"note,omitempty"`
 }
 
-func invalid(msg string) error {
-	return fmt.Errorf("%w: %s", tool.ErrInvalidArgs, msg)
-}
-
 func fetch(ctx context.Context, env *tool.Env, path string, q url.Values) (*itunesDoc, error) {
 	u := itunesBase + path + "?" + q.Encode()
 	resp, err := env.Fetch.Fetch(ctx, http.MethodGet, u, nil, nil, maxBody)
@@ -160,14 +156,14 @@ func lookup(ctx context.Context, env *tool.Env, in lookupIn) (*tool.Result, erro
 		country = "us"
 	}
 	if !countryRE.MatchString(country) {
-		return nil, invalid("country must be a two-letter storefront code such as us or se")
+		return nil, tool.InvalidArgs("country must be a two-letter storefront code such as us or se")
 	}
 	limit := in.Limit
 	switch {
 	case limit == 0:
 		limit = 50
 	case limit < 1 || limit > 200:
-		return nil, invalid("limit must be 1-200")
+		return nil, tool.InvalidArgs("limit must be 1-200")
 	}
 	term := strings.TrimSpace(in.Term)
 	ref := strings.TrimSpace(in.App)
@@ -175,7 +171,7 @@ func lookup(ctx context.Context, env *tool.Env, in lookupIn) (*tool.Result, erro
 		ref = env.Profile.DefaultApp
 	}
 	if ref == "" && term == "" {
-		return nil, invalid("set app (App Store id or bundle id) and/or term")
+		return nil, tool.InvalidArgs("set app (App Store id or bundle id) and/or term")
 	}
 	out := lookupOut{Country: country}
 	if ref != "" {
@@ -186,7 +182,7 @@ func lookup(ctx context.Context, env *tool.Env, in lookupIn) (*tool.Result, erro
 		case bundleRE.MatchString(ref):
 			q.Set("bundleId", ref)
 		default:
-			return nil, invalid("app must be a numeric App Store id or a bundle id; use apps_list to find them")
+			return nil, tool.InvalidArgs("app must be a numeric App Store id or a bundle id; use apps_list to find them")
 		}
 		doc, err := fetch(ctx, env, "/lookup", q)
 		if err != nil {

@@ -71,6 +71,9 @@ func buildsUpload(ctx context.Context, env *tool.Env, in buildUploadIn) (*tool.R
 	case wait > maxWaitSeconds:
 		wait = maxWaitSeconds
 	}
+	if !env.HasProgress() {
+		wait = min(wait, int(tool.NoProgressWaitCap/time.Second))
+	}
 
 	res, err := upload.Build(ctx, upload.DepsFromEnv(env), upload.BuildSpec{
 		AppID: app.ID, Platform: in.Platform,

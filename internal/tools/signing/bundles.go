@@ -48,7 +48,7 @@ type bundleIDsListIn struct {
 	Identifier string `json:"identifier,omitempty" jsonschema:"bundle identifier filter passed to Apple, e.g. com.example.app"`
 	Platform   string `json:"platform,omitempty"`
 	Query      string `json:"query,omitempty" jsonschema:"case-insensitive substring of the name or identifier"`
-	MaxItems   int    `json:"max_items,omitempty" jsonschema:"maximum bundle IDs to read (default 200, max 1000)"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"maximum bundle IDs to read (default 200, max 1000)"`
 	Cursor     string `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
 }
 
@@ -92,8 +92,8 @@ func compactBundle(b bundleOut) bundleRow {
 }
 
 func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*tool.Result, error) {
-	if in.MaxItems < 0 || in.MaxItems > 1000 {
-		return nil, invalidArgs("max_items must be between 1 and 1000")
+	if in.Limit < 0 || in.Limit > 1000 {
+		return nil, tool.InvalidArgs("limit must be between 1 and 1000")
 	}
 	q := bundleQuery()
 	q.Set("sort", "identifier")
@@ -103,7 +103,7 @@ func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*too
 	if in.Platform != "" {
 		q.Set("filter[platform]", in.Platform)
 	}
-	res, err := env.ASC.List(ctx, "/v1/bundleIds", tool.ListOptions{Query: q, MaxItems: in.MaxItems, Cursor: in.Cursor})
+	res, err := env.ASC.List(ctx, "/v1/bundleIds", tool.ListOptions{Query: q, MaxItems: in.Limit, Cursor: in.Cursor})
 	if err != nil {
 		return nil, fmt.Errorf("list bundle IDs: %w", err)
 	}
@@ -152,10 +152,10 @@ func bundleIDCreate(ctx context.Context, env *tool.Env, in bundleIDCreateIn) (*t
 	in.Identifier = strings.TrimSpace(in.Identifier)
 	in.Name = strings.TrimSpace(in.Name)
 	if !identifierRE.MatchString(in.Identifier) || len(in.Identifier) > 155 {
-		return nil, invalidArgs("identifier %q is not a valid bundle identifier", in.Identifier)
+		return nil, tool.InvalidArgs("identifier %q is not a valid bundle identifier", in.Identifier)
 	}
 	if in.Name == "" {
-		return nil, invalidArgs("name is required")
+		return nil, tool.InvalidArgs("name is required")
 	}
 	next := func(b bundleOut) tool.NextStep {
 		return tool.NextStep{Tool: "signing_capabilities_set", Args: map[string]any{"bundle_id": b.Identifier}}
@@ -177,7 +177,7 @@ func bundleIDCreate(ctx context.Context, env *tool.Env, in bundleIDCreateIn) (*t
 		"attributes": map[string]any{"identifier": in.Identifier, "name": in.Name, "platform": in.Platform},
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/bundleIds", Body: body, Write: true})
-	if apiStatus(err) == http.StatusConflict {
+	if tool.APIStatus(err) == http.StatusConflict {
 		// Registered concurrently or under another team member: read back.
 		b, ok, rerr := findIdentifier(ctx, env, in.Identifier)
 		if rerr == nil && ok {
@@ -287,7 +287,7 @@ func capSettingsSatisfied(cur capOut, want []capSettingIn) bool {
 // capValidate rejects empty, duplicate and contradictory capability lists.
 func capValidate(in capsSetIn) error {
 	if len(in.Enable) == 0 && len(in.Disable) == 0 {
-		return invalidArgs("pass at least one capability in enable or disable")
+		return tool.InvalidArgs("pass at least one capability in enable or disable")
 	}
 	seen := map[string]string{}
 	for _, e := range in.Enable {
@@ -295,12 +295,12 @@ func capValidate(in capsSetIn) error {
 			return err
 		}
 		if seen[e.Type] != "" {
-			return invalidArgs("capability %s is listed twice", e.Type)
+			return tool.InvalidArgs("capability %s is listed twice", e.Type)
 		}
 		seen[e.Type] = "enable"
 		for _, s := range e.Settings {
 			if len(s.Options) == 0 {
-				return invalidArgs("setting %s of %s needs at least one option", s.Key, e.Type)
+				return tool.InvalidArgs("setting %s of %s needs at least one option", s.Key, e.Type)
 			}
 		}
 	}
@@ -309,7 +309,7 @@ func capValidate(in capsSetIn) error {
 			return err
 		}
 		if prev := seen[d]; prev != "" {
-			return invalidArgs("capability %s is listed in both enable and disable, or twice", d)
+			return tool.InvalidArgs("capability %s is listed in both enable and disable, or twice", d)
 		}
 		seen[d] = "disable"
 	}
@@ -444,7 +444,7 @@ func capApply(ctx context.Context, env *tool.Env, bundleID string, ch capChange)
 		})
 	case capDisabled:
 		_, err = env.ASC.Do(ctx, tool.Request{Method: http.MethodDelete, Path: "/v1/bundleIdCapabilities/" + url.PathEscape(ch.cur.ID), Write: true})
-		if apiStatus(err) == http.StatusNotFound {
+		if tool.APIStatus(err) == http.StatusNotFound {
 			return capItem{Type: ch.enable.Type, Action: capAlreadyDisabled}
 		}
 	}

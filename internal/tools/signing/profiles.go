@@ -37,7 +37,7 @@ type profilesListIn struct {
 	State    string `json:"state,omitempty"`
 	Name     string `json:"name,omitempty" jsonschema:"profile name filter passed to Apple"`
 	BundleID string `json:"bundle_id,omitempty" jsonschema:"keep only profiles of this bundle identifier"`
-	MaxItems int    `json:"max_items,omitempty" jsonschema:"maximum profiles to read (default 200, max 1000)"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"maximum profiles to read (default 200, max 1000)"`
 	Cursor   string `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
 }
 
@@ -49,12 +49,12 @@ type profilesListOut struct {
 }
 
 func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.Result, error) {
-	if in.MaxItems < 0 || in.MaxItems > 1000 {
-		return nil, invalidArgs("max_items must be between 1 and 1000")
+	if in.Limit < 0 || in.Limit > 1000 {
+		return nil, tool.InvalidArgs("limit must be between 1 and 1000")
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.Download && in.ID == "" {
-		return nil, invalidArgs("download needs the id of one profile; list first to find it")
+		return nil, tool.InvalidArgs("download needs the id of one profile; list first to find it")
 	}
 	if in.ID != "" {
 		return profileGet(ctx, env, in.ID, in.Download)
@@ -70,7 +70,7 @@ func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.
 	if in.Name != "" {
 		q.Set("filter[name]", in.Name)
 	}
-	res, err := env.ASC.List(ctx, "/v1/profiles", tool.ListOptions{Query: q, MaxItems: in.MaxItems, Cursor: in.Cursor})
+	res, err := env.ASC.List(ctx, "/v1/profiles", tool.ListOptions{Query: q, MaxItems: in.Limit, Cursor: in.Cursor})
 	if err != nil {
 		return nil, fmt.Errorf("list profiles: %w", err)
 	}
@@ -105,7 +105,7 @@ func profileGet(ctx context.Context, env *tool.Env, id string, download bool) (*
 func readProfile(ctx context.Context, env *tool.Env, id string, content bool) (profileOut, error) {
 	resp, err := env.ASC.Get(ctx, "/v1/profiles/"+url.PathEscape(id), profileQuery(content))
 	notFound := &tool.ErrNotFound{Kind: "profile", Ref: id, Next: []tool.NextStep{{Tool: "signing_profiles_list"}}}
-	if apiStatus(err) == http.StatusNotFound {
+	if tool.APIStatus(err) == http.StatusNotFound {
 		return profileOut{}, notFound
 	}
 	if err != nil {
@@ -138,20 +138,20 @@ type profileCreateOut struct {
 func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*tool.Result, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
-		return nil, invalidArgs("name is required")
+		return nil, tool.InvalidArgs("name is required")
 	}
 	kind := profileKindOf(in.ProfileType)
 	if len(kind.CertTypes) == 0 {
-		return nil, invalidArgs("profile_type %q is not supported", in.ProfileType)
+		return nil, tool.InvalidArgs("profile_type %q is not supported", in.ProfileType)
 	}
 	if len(in.Certificates) == 0 {
-		return nil, invalidArgs("certificates is required (ids or [\"all\"])")
+		return nil, tool.InvalidArgs("certificates is required (ids or [\"all\"])")
 	}
 	switch {
 	case kind.DevicePlatform == "" && len(in.Devices) > 0:
-		return nil, invalidArgs("%s profiles take no devices", in.ProfileType)
+		return nil, tool.InvalidArgs("%s profiles take no devices", in.ProfileType)
 	case kind.DevicePlatform != "" && len(in.Devices) == 0:
-		return nil, invalidArgs("%s profiles need devices (ids or [\"all\"])", in.ProfileType)
+		return nil, tool.InvalidArgs("%s profiles need devices (ids or [\"all\"])", in.ProfileType)
 	}
 	bundle, err := lookupBundle(ctx, env, in.BundleID)
 	if err != nil {
@@ -188,7 +188,7 @@ func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*too
 		"relationships": rels,
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/profiles", Body: body, Write: true})
-	if apiStatus(err) == http.StatusConflict {
+	if tool.APIStatus(err) == http.StatusConflict {
 		if p, ok, rerr := findProfile(ctx, env, in.Name, in.ProfileType, bundle.ID); rerr == nil && ok {
 			return tool.Already(profileCreateOut{Profile: p}).Then(next(p)), nil
 		}
@@ -294,7 +294,7 @@ func cleanIDs(arg string, refs []string) ([]string, error) {
 	for _, r := range refs {
 		r = strings.TrimSpace(r)
 		if r == "" || strings.EqualFold(r, "all") {
-			return nil, invalidArgs(`%s: pass ids, or exactly ["all"]`, arg)
+			return nil, tool.InvalidArgs(`%s: pass ids, or exactly ["all"]`, arg)
 		}
 		if !slices.Contains(ids, r) {
 			ids = append(ids, r)

@@ -145,7 +145,7 @@ func (r *Resolver) nextVersion(ctx context.Context, appID string, plat tool.Plat
 func (r *Resolver) versionByID(ctx context.Context, appID, id string) (tool.Version, error) {
 	res, err := r.asc.Get(ctx, "/v1/appStoreVersions/"+id, url.Values{"fields[appStoreVersions]": {versionFields}})
 	if err != nil {
-		if isNotFound(err) {
+		if tool.IsNotFound(err) {
 			return tool.Version{}, &tool.ErrNotFound{
 				Kind: "version", Ref: id, Hint: "use editable, live, next, a version string or an appStoreVersion id",
 				Next: next("apps_get", map[string]any{"app": appID}),

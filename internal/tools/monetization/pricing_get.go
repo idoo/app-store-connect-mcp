@@ -145,16 +145,16 @@ func pricingGet(ctx context.Context, env *tool.Env, in pricingGetIn) (*tool.Resu
 // pricingGetProducts summarizes up to prcGetMaxProducts products of one kind.
 func pricingGetProducts(ctx context.Context, env *tool.Env, in pricingGetIn, k *prcKind, terrs []string) (*tool.Result, error) {
 	if k == prcApp {
-		return nil, invalidArgs("products needs kind iap or subscription")
+		return nil, tool.InvalidArgs("products needs kind iap or subscription")
 	}
 	if in.ProductID != "" {
-		return nil, invalidArgs("pass product_id or products, not both")
+		return nil, tool.InvalidArgs("pass product_id or products, not both")
 	}
 	if len(in.Products) > prcGetMaxProducts {
-		return nil, invalidArgs("products: at most %d per call, got %d", prcGetMaxProducts, len(in.Products))
+		return nil, tool.InvalidArgs("products: at most %d per call, got %d", prcGetMaxProducts, len(in.Products))
 	}
 	if len(terrs) > prcGetMaxTerritories {
-		return nil, invalidArgs("with products, territories takes at most %d codes, got %d; use product_id for more", prcGetMaxTerritories, len(terrs))
+		return nil, tool.InvalidArgs("with products, territories takes at most %d codes, got %d; use product_id for more", prcGetMaxTerritories, len(terrs))
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
@@ -266,7 +266,7 @@ func prcGetResolve(ctx context.Context, env *tool.Env, appRef tool.AppRef, k *pr
 	}
 	t := prcTarget{Kind: k.name, AppID: app.ID, AppName: app.Name}
 	if ref == "" {
-		return t, invalidArgs("product_id is required for kind %s", k.name)
+		return t, tool.InvalidArgs("product_id is required for kind %s", k.name)
 	}
 	catalog, err := prcGetCatalog(ctx, env, app.ID, k)
 	if err != nil {

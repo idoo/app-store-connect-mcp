@@ -226,7 +226,7 @@ type distribution struct {
 
 func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Result, error) {
 	if len(in.Groups) == 0 || len(in.Groups) > maxDistributeGroups {
-		return nil, invalidArgs("groups: pass 1-%d beta groups", maxDistributeGroups)
+		return nil, tool.InvalidArgs("groups: pass 1-%d beta groups", maxDistributeGroups)
 	}
 	wttAll, wttBy, err := localeMap("what_to_test", in.WhatToTest, func(s string) error {
 		if strings.TrimSpace(s) == "" {
@@ -245,13 +245,13 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 	if in.BetaReview != nil {
 		reviewAttrs = in.BetaReview.attrs()
 		if len(reviewAttrs) == 0 {
-			return nil, invalidArgs("beta_review: no fields given")
+			return nil, tool.InvalidArgs("beta_review: no fields given")
 		}
 		if e := in.BetaReview.ContactEmail; e != "" && !validEmail(e) {
-			return nil, invalidArgs("beta_review.contact_email %q is not an email address", e)
+			return nil, tool.InvalidArgs("beta_review.contact_email %q is not an email address", e)
 		}
 		if err := applemeta.Check(applemeta.FieldReviewNotes, in.BetaReview.Notes); err != nil {
-			return nil, invalidArgs("beta_review.notes: %v", err)
+			return nil, tool.InvalidArgs("beta_review.notes: %v", err)
 		}
 	}
 
@@ -294,7 +294,7 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 	// Gates: nothing is written unless the build can be distributed.
 	switch {
 	case d.st.expired:
-		return nil, tool.WithNext(invalidArgs("build %s is expired and cannot be distributed", d.out.Build.Number),
+		return nil, tool.WithNext(tool.InvalidArgs("build %s is expired and cannot be distributed", d.out.Build.Number),
 			tool.NextStep{Tool: "builds_list", Args: map[string]any{"app": app.ID}})
 	case d.st.processing != "VALID":
 		return tool.StillProcessing(d.out, "build "+d.out.Build.Number+" is "+d.st.processing+
@@ -451,7 +451,7 @@ func (d *distribution) compliance(ctx context.Context, want *bool) error {
 	_, err := write(ctx, d.env, http.MethodPatch, "/v1/builds/"+d.build.ID,
 		patchBody("builds", d.build.ID, map[string]any{"usesNonExemptEncryption": *want}))
 	switch {
-	case isConflict(err):
+	case tool.IsConflict(err):
 		// Info.plist answered it meanwhile; the next call reads the value.
 		d.out.Compliance = &complianceOut{UsesNonExemptEncryption: *want, Outcome: outcomeAlready}
 		d.warnings = append(d.warnings, "export compliance was already answered on the build; Apple refused to change it")
@@ -566,7 +566,7 @@ func (d *distribution) addToGroups(ctx context.Context) {
 			_, err := write(ctx, d.env, http.MethodPost, "/v1/betaGroups/"+g.ID+"/relationships/builds",
 				map[string]any{"data": []map[string]string{ref("builds", d.build.ID)}})
 			switch {
-			case isConflict(err):
+			case tool.IsConflict(err):
 				o.Outcome, o.Error = outcomeError, errText(err)
 				conflicts = append(conflicts, len(d.out.Groups))
 			case err != nil:
@@ -614,7 +614,7 @@ func (d *distribution) submitForReview(ctx context.Context) {
 			"relationships": map[string]any{"build": toOne("builds", d.build.ID)},
 		}})
 		switch {
-		case isConflict(err):
+		case tool.IsConflict(err):
 			if s, rerr := d.env.ASC.Get(ctx, "/v1/builds/"+d.build.ID+"/betaAppReviewSubmission",
 				url.Values{"fields[betaAppReviewSubmissions]": {"betaReviewState"}}); rerr == nil {
 				if r, found := s.First(); found {

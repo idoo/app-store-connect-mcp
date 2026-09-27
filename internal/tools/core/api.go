@@ -38,7 +38,7 @@ type getIn struct {
 	Query          map[string]string `json:"query,omitempty" jsonschema:"query params, e.g. {\"sort\":\"-createdDate\"}"`
 	Fields         map[string]string `json:"fields,omitempty" jsonschema:"sparse fieldsets: type → comma-separated fields"`
 	Include        []string          `json:"include,omitempty" jsonschema:"relationships to include"`
-	MaxItems       int               `json:"max_items,omitempty" jsonschema:"items across pages (default 200, max 5000)"`
+	Limit          int               `json:"limit,omitempty" jsonschema:"items across pages (default 200, max 5000)"`
 	Cursor         string            `json:"cursor,omitempty" jsonschema:"next_cursor from a previous call (same path)"`
 	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow a path missing from the pinned spec"`
 }
@@ -69,7 +69,7 @@ func init() {
 		Name: "asc_api_get", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "GET any API resource",
 		Description: "GET any App Store Connect operation, validated against the pinned spec first (a mismatch returns the " +
-			"skeleton, no call). Collections auto-paginate to max_items with next_cursor.",
+			"skeleton, no call). Collections auto-paginate to limit with next_cursor.",
 	}, apiGet))
 	tool.Register(tool.New(tool.Meta{
 		Name: "asc_api_request", Toolset: tool.Core, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
@@ -157,12 +157,12 @@ func apiDescribe(_ context.Context, env *tool.Env, in describeIn) (*tool.Result,
 }
 
 func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) {
-	maxItems := in.MaxItems
+	maxItems := in.Limit
 	if maxItems <= 0 {
 		maxItems = getDefaultMax
 	}
 	if maxItems > getMaxItems {
-		return nil, fmt.Errorf("%w: max_items must be at most %d", tool.ErrInvalidArgs, getMaxItems)
+		return nil, tool.InvalidArgs("limit must be at most %d", getMaxItems)
 	}
 	path, q, err := splitPath(in.Path)
 	if err != nil {

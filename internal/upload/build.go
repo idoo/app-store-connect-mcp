@@ -3,7 +3,6 @@ package upload
 import (
 	"archive/zip"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,7 +136,7 @@ func Build(ctx context.Context, d Deps, s BuildSpec) (*BuildResult, error) {
 		if !rec.Committed {
 			file, err := d.ASC.Get(ctx, "/v1/buildUploadFiles/"+url.PathEscape(rec.FileID), nil)
 			switch {
-			case isNotFound(err):
+			case tool.IsNotFound(err):
 				rec = resumeRecord{AppID: s.AppID, Platform: s.Platform, Version: s.Version, BuildNumber: s.BuildNumber, MD5: sum}
 			case err != nil:
 				return nil, fmt.Errorf("resume buildUploadFiles %s: %w", rec.FileID, err)
@@ -401,9 +400,4 @@ func reserveBuild(ctx context.Context, d Deps, s BuildSpec, uti string) (uploadI
 		return "", "", nil, fmt.Errorf("buildUpload %s: %w", up.ID, err)
 	}
 	return up.ID, file.ID, ops, nil
-}
-
-func isNotFound(err error) bool {
-	var api *tool.APIError
-	return errors.As(err, &api) && api.Status == http.StatusNotFound
 }

@@ -26,7 +26,7 @@ type certificatesListIn struct {
 	Type               string `json:"type,omitempty"`
 	ExpiringWithinDays int    `json:"expiring_within_days,omitempty" jsonschema:"only certificates expiring within N days, including already expired ones"`
 	IncludeContent     bool   `json:"include_content,omitempty" jsonschema:"also return certificateContent (base64 DER)"`
-	MaxItems           int    `json:"max_items,omitempty" jsonschema:"maximum certificates to read (default 200, max 1000)"`
+	Limit              int    `json:"limit,omitempty" jsonschema:"maximum certificates to read (default 200, max 1000)"`
 }
 
 type certificateOut struct {
@@ -58,10 +58,10 @@ var certFields = []string{"name", "certificateType", "displayName", "serialNumbe
 
 func certificatesList(ctx context.Context, env *tool.Env, in certificatesListIn) (*tool.Result, error) {
 	if in.ExpiringWithinDays < 0 {
-		return nil, invalidArgs("expiring_within_days must not be negative")
+		return nil, tool.InvalidArgs("expiring_within_days must not be negative")
 	}
-	if in.MaxItems < 0 || in.MaxItems > 1000 {
-		return nil, invalidArgs("max_items must be between 1 and 1000")
+	if in.Limit < 0 || in.Limit > 1000 {
+		return nil, tool.InvalidArgs("limit must be between 1 and 1000")
 	}
 	fields := slices.Clone(certFields)
 	if in.IncludeContent {
@@ -71,7 +71,7 @@ func certificatesList(ctx context.Context, env *tool.Env, in certificatesListIn)
 	if in.Type != "" {
 		q.Set("filter[certificateType]", in.Type)
 	}
-	res, err := env.ASC.List(ctx, "/v1/certificates", tool.ListOptions{Query: q, MaxItems: in.MaxItems})
+	res, err := env.ASC.List(ctx, "/v1/certificates", tool.ListOptions{Query: q, MaxItems: in.Limit})
 	if err != nil {
 		return nil, fmt.Errorf("list certificates: %w", err)
 	}
@@ -120,7 +120,7 @@ func certificatesList(ctx context.Context, env *tool.Env, in certificatesListIn)
 	out.Returned = len(out.Certificates)
 	result := tool.OK(out)
 	if res.NextCursor != "" {
-		result.Warn("more certificates exist than max_items; the expiration order covers only the certificates read")
+		result.Warn("more certificates exist than limit; the expiration order covers only the certificates read")
 	}
 	return result, nil
 }

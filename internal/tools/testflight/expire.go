@@ -58,7 +58,7 @@ type expireOut struct {
 
 func buildsExpire(ctx context.Context, env *tool.Env, in expireIn) (*tool.Result, error) {
 	if len(in.Builds) == 0 || len(in.Builds) > maxExpireBuilds {
-		return nil, invalidArgs("builds: pass 1-%d builds", maxExpireBuilds)
+		return nil, tool.InvalidArgs("builds: pass 1-%d builds", maxExpireBuilds)
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
@@ -98,7 +98,7 @@ func buildsExpire(ctx context.Context, env *tool.Env, in expireIn) (*tool.Result
 	for _, id := range ids {
 		r, ok := byID[id]
 		if !ok {
-			return nil, invalidArgs("build %s does not belong to app %s", id, app.Name)
+			return nil, tool.InvalidArgs("build %s does not belong to app %s", id, app.Name)
 		}
 		pre := inc["preReleaseVersions/"+r.RelID("preReleaseVersion")]
 		b := expireBuildOut{

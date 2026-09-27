@@ -37,4 +37,4 @@ I'm one person, so expect an acknowledgement within a few days and a fix or a pl
 - Only the `hamn auth` CLI can add or change credentials. No MCP tool accepts, returns or edits them.
 - JWTs are signed locally, cached in memory per profile for at most 19 minutes and only sent to `api.appstoreconnect.apple.com`.
 - JWTs, PEM blocks, `Authorization` headers and signed URL queries are redacted from results, errors and logs.
-- hamn has no telemetry and talks to nothing except Apple (and the public iTunes Search API for `store_lookup`).
+- hamn has no telemetry. It talks to `api.appstoreconnect.apple.com` (with the JWT), to the presigned upload and report URLs Apple returns (without auth, under the URL policy in [docs/SAFETY.md](docs/SAFETY.md)), and to the public iTunes Search API for `store_lookup`. `hamn auth add`/`import` make one `GET /v1/apps?limit=1` to check the key before saving, and `hamn config install claude-code` runs your local `claude` CLI.
