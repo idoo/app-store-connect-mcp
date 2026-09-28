@@ -99,10 +99,11 @@ func TestParseRejects(t *testing.T) {
 }
 
 func TestSaveRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", "config.toml")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sub", "config.toml")
 	in := &Config{
 		DefaultProfile: "a",
-		TrustedPins:    []string{"/src/app"},
+		TrustedPins:    []string{filepath.Join(dir, "src", "app")},
 		Profiles: map[string]Profile{
 			"a": {KeyID: "K1", IssuerID: "I", KeyKind: tool.KeyTeam, KeyPath: "/k.p8", AllowWrites: true},
 			"b": {KeyID: "K2", KeyKind: tool.KeyIndividual, KeySource: KeySourceKeychain},

@@ -23,6 +23,7 @@ func newTestFiles(t *testing.T) (*Files, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = f.Close() })
 	return f, base
 }
 

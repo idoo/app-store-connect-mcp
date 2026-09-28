@@ -21,7 +21,7 @@ func runSkillsCmd(t *testing.T, args ...string) (string, error) {
 
 func TestSkillsInstall(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	all, err := skills.All()
 	if err != nil || len(all) != 6 {
 		t.Fatalf("skills.All() = %d skills, %v", len(all), err)
@@ -76,7 +76,7 @@ func TestSkillsInstall(t *testing.T) {
 
 func TestSkillsInstallClientsAndDir(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	for client, rel := range map[string]string{
 		"codex":  ".codex/skills",
 		"cursor": ".cursor/skills",
@@ -99,7 +99,7 @@ func TestSkillsInstallClientsAndDir(t *testing.T) {
 }
 
 func TestSkillsUsageErrors(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setHome(t, t.TempDir())
 	for _, args := range [][]string{
 		{},
 		{"nope"},

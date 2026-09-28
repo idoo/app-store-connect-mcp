@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/url"
@@ -105,6 +106,23 @@ func (pf *ProjectFiles) Root() string {
 		return ""
 	}
 	return f.(*Files).Root()
+}
+
+// Close releases every root opened by the session.
+func (pf *ProjectFiles) Close() error {
+	pf.mu.Lock()
+	defer pf.mu.Unlock()
+	var errs []error
+	for _, f := range []*Files{pf.explicit, pf.def} {
+		if f != nil {
+			errs = append(errs, f.Close())
+		}
+	}
+	for dir, f := range pf.roots {
+		errs = append(errs, f.Close())
+		delete(pf.roots, dir)
+	}
+	return errors.Join(errs...)
 }
 
 // rootPath converts a file:// root URI to a local path.

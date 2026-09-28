@@ -70,6 +70,10 @@ func DefaultRoot(cwd string) string {
 // Root returns the confined root directory (symlinks resolved).
 func (f *Files) Root() string { return f.root }
 
+// Close releases the root directory handle. Windows refuses to delete or
+// rename a directory while a handle to it is open.
+func (f *Files) Close() error { return f.r.Close() }
+
 // Resolve returns the absolute, symlink-free path for p, or an error wrapping
 // [ErrOutsideRoot]. p may be relative to the root or absolute. Components that
 // do not exist yet are allowed, so the result can be used for new files.
