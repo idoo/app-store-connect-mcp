@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.26.x"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # GitHub release + assets
+      id-token: write # attestations, MCP Registry OIDC login
+      attestations: write
+      packages: write # ghcr.io/idoo/hamn
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+
+      # Gate: no tag ships with a reachable known vulnerability (stdlib included).
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+      - run: go test ./...
+
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        id: goreleaser
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build .mcpb bundle
+        id: mcpb
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mcpb=$(scripts/build-mcpb.sh "$version")
+          echo "path=$mcpb" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$mcpb" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.mcpb
+            dist/checksums.txt
+
+      - name: Upload .mcpb and tools.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MCPB: ${{ steps.mcpb.outputs.path }}
+        run: |
+          assets=("$MCPB")
+          if [ -f docs/tools.json ]; then assets+=(docs/tools.json); fi
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Homebrew formula (prebuilt archives) for idoo/homebrew-tap
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          scripts/brew-formula.sh "$version" dist/checksums.txt > dist/hamn.rb
+          {
+            echo "### Homebrew formula"
+            echo "Copy to \`idoo/homebrew-tap/Formula/hamn.rb\`:"
+            echo '```ruby'; cat dist/hamn.rb; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: homebrew-formula
+          path: dist/hamn.rb
+
+      - name: Publish to the MCP Registry (best effort)
+        continue-on-error: true
+        env:
+          MCPB_SHA256: ${{ steps.mcpb.outputs.sha256 }}
+          PUBLISHER_VERSION: "1.8.4"
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg v "$version" --arg sha "$MCPB_SHA256" '
+            .version = $v
+            | .packages |= map(
+                if .registryType == "mcpb" then
+                  .version = $v
+                  | .identifier = "https://github.com/idoo/hamn/releases/download/v\($v)/hamn-\($v).mcpb"
+                  | .fileSha256 = $sha
+                elif .registryType == "oci" then
+                  .identifier = "ghcr.io/idoo/hamn:\($v)"
+                else . end)' server.json > /tmp/server.json
+          mv /tmp/server.json server.json
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            | tar -xz -C /tmp mcp-publisher
+          /tmp/mcp-publisher login github-oidc
+          /tmp/mcp-publisher publish
