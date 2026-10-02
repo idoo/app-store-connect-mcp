@@ -1,4 +1,4 @@
-package asc
+package ascrules
 
 import (
 	"net/http"

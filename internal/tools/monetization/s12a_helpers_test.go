@@ -3,45 +3,21 @@ package monetization
 import (
 	"encoding/json"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
-)
-
-var (
-	s12aSpecOnce sync.Once
-	s12aSpecIdx  *spec.Index
-	s12aSpecErr  error
 )
 
 // s12aTestApp is the app every s12a test resolves.
 var s12aTestApp = tool.App{ID: "app1", BundleID: "se.jvcr.hjul", Name: "Hjul", Platforms: []tool.Platform{tool.IOS}}
 
-// s12aKit returns a kit with the real spec index whose request log is checked
-// against the spec (operation, query and body) on cleanup.
+// s12aKit returns a kit (its FakeASC checks every request against the spec)
+// resolving s12aTestApp.
 func s12aKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
-	s12aSpecOnce.Do(func() { s12aSpecIdx, s12aSpecErr = spec.Load() })
-	if s12aSpecErr != nil {
-		t.Fatal(s12aSpecErr)
-	}
 	k := tooltest.New(t)
-	k.Env.Spec = s12aSpecIdx
 	k.Resolve.Apps = []tool.App{s12aTestApp}
-	t.Cleanup(func() {
-		for _, r := range k.ASC.Requests() {
-			if _, ok := s12aSpecIdx.Match(r.Method, r.Path); !ok {
-				t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-				continue
-			}
-			if err := s12aSpecIdx.Validate(r); err != nil {
-				t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-			}
-		}
-	})
 	return k
 }
 

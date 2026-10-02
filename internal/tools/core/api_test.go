@@ -86,6 +86,7 @@ func TestAPIGetCollectionPaginates(t *testing.T) {
 
 func TestAPIGetSingleAndUnlisted(t *testing.T) {
 	k := kit(t)
+	k.ASC.SkipSpecCheck = true // exercises unsafe_unlisted
 	k.ASC.Handle("GET", "/v1/apps/{id}", 200, `{"data":{"type":"apps","id":"7","attributes":{"name":"Hjul"}}}`)
 	out := data(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_get"), k.Env, `{"path":"/v1/apps/7"}`)))
 	if d, _ := out["data"].(map[string]any); d["id"] != "7" || out["operation"] != "apps_getInstance" {
@@ -170,6 +171,7 @@ func TestAPIRequestInvalidBodyNotSent(t *testing.T) {
 
 func TestAPIRequestUnlisted(t *testing.T) {
 	k := kit(t)
+	k.ASC.SkipSpecCheck = true // exercises unsafe_unlisted
 	tl := mustTool(t, "asc_api_request")
 	res := tooltest.Call(t, tl, k.Env, `{"method":"POST","path":"/v1/brandNewThings","body":{"data":{"type":"brandNewThings"}}}`)
 	if !res.IsError {

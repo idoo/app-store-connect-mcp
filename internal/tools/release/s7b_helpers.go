@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/idoo/hamn/internal/tool"
 )
@@ -103,45 +102,6 @@ func jsonapiBody(typ, id string, attrs map[string]any, rels map[string]string) m
 // linkageBody builds a to-one relationship linkage document.
 func linkageBody(typ, id string) map[string]any {
 	return map[string]any{"data": map[string]any{"type": typ, "id": id}}
-}
-
-// consistencyRetries and consistencyWait bound the 404 retries of a read
-// made right after a create (Apple serves new objects with a short delay).
-const (
-	consistencyRetries = 3
-	consistencyWait    = time.Second
-)
-
-// getConsistent GETs path, retrying a 404 up to consistencyRetries times.
-// Use it only to read an object the tool has just created.
-func getConsistent(ctx context.Context, env *tool.Env, path string, q url.Values) (*tool.Response, error) {
-	for i := 0; ; i++ {
-		resp, err := env.ASC.Get(ctx, path, q)
-		if err == nil || i >= consistencyRetries || !isNotFound(err) {
-			return resp, err
-		}
-		if err := env.Clock.Sleep(ctx, consistencyWait); err != nil {
-			return nil, err
-		}
-	}
-}
-
-// hasAPICode reports whether err is an App Store Connect error with status
-// whose errors[] contain code.
-func hasAPICode(err error, status int, code string) bool {
-	var ae *tool.APIError
-	if !errors.As(err, &ae) || ae.Status != status {
-		return false
-	}
-	if ae.Code == code {
-		return true
-	}
-	for _, m := range ae.More {
-		if m.Code == code {
-			return true
-		}
-	}
-	return false
 }
 
 // Review submission item kinds: the relationship naming the reviewed object.

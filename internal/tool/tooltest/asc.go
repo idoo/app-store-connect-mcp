@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/idoo/hamn/internal/ascrules"
 	"github.com/idoo/hamn/internal/tool"
 )
 
@@ -40,7 +41,10 @@ type route struct {
 // "?k=v" suffix requires those query values. Several responses registered
 // for the same route are served in order, the last one repeating.
 // Unmatched requests fail the test. Like the real client, it refuses any
-// non-GET request lacking Request.Write and the context write capability.
+// non-GET request lacking Request.Write and the context write capability,
+// and it retries a 404 GET flagged with [ascrules.WithEventualConsistency].
+// When Spec is set (as [New] does), every request must validate against it
+// (method, path, query and body) or the test fails.
 type FakeASC struct {
 	t      testing.TB
 	mu     sync.Mutex
@@ -50,9 +54,14 @@ type FakeASC struct {
 	Limit tool.RateLimit
 	// Skew is returned by ClockSkew.
 	Skew time.Duration
+	// Spec, when set, validates every request.
+	Spec tool.Spec
+	// SkipSpecCheck disables the Spec validation for tests that send
+	// deliberately invalid or unlisted requests.
+	SkipSpecCheck bool
 }
 
-// NewFakeASC returns an empty FakeASC.
+// NewFakeASC returns an empty FakeASC that does not validate requests.
 func NewFakeASC(t testing.TB) *FakeASC { return &FakeASC{t: t} }
 
 // Handle registers an inline response body (JSON or raw).
@@ -155,7 +164,32 @@ func normalize(req tool.Request) tool.Request {
 }
 
 func (f *FakeASC) serve(ctx context.Context, req tool.Request) (Fixture, error) {
+	for i := 0; ; i++ {
+		fx, err := f.serveOnce(ctx, req)
+		if i >= ascrules.ConsistencyRetries || fx.Status != http.StatusNotFound ||
+			normalize(req).Method != http.MethodGet || !ascrules.IsEventualConsistency(ctx) {
+			return fx, err
+		}
+	}
+}
+
+// checkSpec fails the test when req does not validate against f.Spec.
+func (f *FakeASC) checkSpec(req tool.Request) {
+	f.mu.Lock()
+	s, skip := f.Spec, f.SkipSpecCheck
+	f.mu.Unlock()
+	if s == nil || skip {
+		return
+	}
+	if err := s.Validate(req); err != nil {
+		f.t.Errorf("FakeASC: %s %s?%s violates the pinned spec: %v (set Kit.ASC.SkipSpecCheck for deliberate invalid requests)",
+			req.Method, req.Path, req.Query.Encode(), err)
+	}
+}
+
+func (f *FakeASC) serveOnce(ctx context.Context, req tool.Request) (Fixture, error) {
 	req = normalize(req)
+	f.checkSpec(req)
 	f.mu.Lock()
 	f.reqs = append(f.reqs, req)
 	var hit *route
