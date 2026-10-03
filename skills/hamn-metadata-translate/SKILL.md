@@ -1,9 +1,9 @@
 ---
 name: hamn-metadata-translate
-description: Use when the user asks to translate or localize an App Store listing (name, subtitle, description, keywords, What's New) into more languages via the hamn App Store Connect MCP server ("translate Hjul's listing to German and French", "add Japanese App Store metadata").
+description: Use when the user asks to translate or localize an App Store listing (name, subtitle, description, keywords, What's New) into more languages via the Hamn App Store Connect MCP server ("translate Hjul's listing to German and French", "add Japanese App Store metadata").
 ---
 
-# Translate App Store metadata with hamn
+# Translate App Store metadata with Hamn
 
 Goal: pull the source listing, translate it per locale within Apple's limits,
 preview the diff, and apply it after the user approves.
@@ -60,7 +60,7 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
 ## Failure handling
 - `stale_plan`: the listing changed since planning. Pull again, re-plan, show
   the new diff.
-- `no_editable_version`: there is no version to edit; offer the hamn-release
+- `no_editable_version`: there is no version to edit; offer the `hamn-release`
   flow (`release_status` with `desired`) to create one first.
 - `writes_disabled`: call `toolsets` with `action: "enable_writes"`; the user
   approves. `writes_locked`: tell the user; do not work around it.

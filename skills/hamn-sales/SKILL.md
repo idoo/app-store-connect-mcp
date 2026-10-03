@@ -1,9 +1,9 @@
 ---
 name: hamn-sales
-description: Use when the user asks how an app is doing, for a weekly/monthly sales, downloads, proceeds, subscriptions or ratings report via the hamn App Store Connect MCP server ("how did Hjul do this week", "weekly report", "proceeds last month").
+description: Use when the user asks how an app is doing, for a weekly/monthly sales, downloads, proceeds, subscriptions or ratings report via the Hamn App Store Connect MCP server ("how did Hjul do this week", "weekly report", "proceeds last month").
 ---
 
-# Sales and weekly report with hamn
+# Sales and weekly report with Hamn
 
 Goal: a short, correct report of downloads, proceeds, subscriptions, ratings
 and release state for a period, compared with the previous period.
@@ -27,14 +27,14 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
    - `analytics_report` with `app` and `category` for impressions, page views,
      sessions and crashes.
    - `reviews_list` with `app` and `since: "last_seen"` for new ratings
-     (see hamn-reviews for replies).
+     (see `hamn-reviews` for replies).
 3. Write the report: headline numbers with change vs previous period, top
    countries/products, notable reviews, version and phased-release state, and
    what is pending or unavailable.
 
 ## Money rules
 - Proceeds are per currency. Never add amounts in different currencies.
-- hamn gives no USD totals. Apple's reports carry no exchange rates;
+- Hamn gives no USD totals. Apple's reports carry no exchange rates;
   `finance_report` says so in its `note`. The rates and bank-currency totals
   are only on the web Payments page (App Store Connect → Payments and
   Financial Reports). Point the user there if they want one number.
@@ -56,7 +56,7 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
 - `vendor_number_missing`: sales and finance need the account's vendor number,
   which the API does not expose. Tell the user where to find it (App Store
   Connect → Payments and Financial Reports, under the account name) and to run
-  the `hamn auth set` command from the error hint, then restart hamn. Still
+  the `hamn auth set` command from the error hint, then restart Hamn. Still
   report the sections `insights_summary` could fill.
 - `team_key_required` / `individual_key_unsupported`: Individual API keys
   cannot read sales or finance reports; the user needs a Team API key added

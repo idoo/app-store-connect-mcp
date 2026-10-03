@@ -5,7 +5,7 @@
   "display_name": "Hamn: App Store Connect",
   "version": "0.0.0",
   "description": "MCP server for App Store Connect. Ask Claude about releases, TestFlight, reviews and sales. Read-only by default.",
-  "long_description": "Hamn is an MCP server for App Store Connect, made by one indie developer in Sweden. Ask Claude what's blocking your next release, set What's New in ten languages, send a build to TestFlight testers, read this week's reviews or check last week's sales. It can also call any App Store Connect API endpoint. It starts read-only. Anything public or irreversible, like submitting for review or replying to a customer, shows you a preview first and waits for your yes. Your key stays on your machine. MIT, free, no telemetry.",
+  "long_description": "MCP server for App Store Connect. Ask Claude about releases, TestFlight, reviews and sales. Read-only by default; anything public waits for your yes.",
   "author": {
     "name": "Ivan Verevkin",
     "url": "https://github.com/idoo"

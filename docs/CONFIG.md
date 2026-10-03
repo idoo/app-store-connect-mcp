@@ -1,6 +1,6 @@
 # Configuration
 
-hamn reads credentials from the environment or from named profiles, then applies per-project pins and command-line flags. Credentials are only ever managed by a human with `hamn auth`; no MCP tool can read or change them.
+Hamn reads credentials from the environment or from named profiles, then applies per-project pins and command-line flags. Only a human manages credentials, with `hamn auth`. No MCP tool can read or change them.
 
 ## Commands
 
@@ -96,7 +96,7 @@ Writes: `--allow-writes` > `HAMN_ALLOW_WRITES` > the profile's `allow_writes`, a
 
 ## Config file
 
-`$XDG_CONFIG_HOME/hamn/config.toml`, else `~/.config/hamn/config.toml`, or `%AppData%\hamn\config.toml` on Windows. hamn refuses to load it if the file or its directory is writable by group or others (fix with `chmod 600` / `chmod 700`), and warns if others can read it. Unknown keys are errors, so a typo never silently drops a setting, and parse errors name the line and column.
+`$XDG_CONFIG_HOME/hamn/config.toml`, else `~/.config/hamn/config.toml`, or `%AppData%\hamn\config.toml` on Windows. Hamn refuses to load it if the file or its directory is writable by group or others (fix with `chmod 600` / `chmod 700`), and warns if others can read it. Unknown keys are errors, so a typo can't silently drop a setting. Parse errors name the line and column.
 
 ```toml
 default_profile = "personal"
@@ -133,7 +133,7 @@ vendor_number = "81234567"
 
 ### Team keys and individual keys
 
-Team keys have an issuer id and a role chosen by the Account Holder or an Admin. Individual keys belong to one user, have no issuer id and inherit that user's permissions; hamn signs them with `sub: "user"`. Some endpoints only work with team keys, and `docs/tools.json` marks those tools with `needs_team_key`.
+Team keys have an issuer id and a role chosen by the Account Holder or an Admin. Individual keys belong to one user, have no issuer id and inherit that user's permissions; Hamn signs them with `sub: "user"`. Some endpoints only work with team keys, and `docs/tools.json` marks those tools with `needs_team_key`.
 
 ### Vendor number
 
@@ -143,7 +143,7 @@ Finance reports carry proceeds per currency. Apple doesn't put exchange rates in
 
 ## Per-project pin: `.hamn.toml`
 
-hamn walks up from the working directory to the git root looking for `.hamn.toml`:
+Hamn walks up from the working directory to the git root looking for `.hamn.toml`:
 
 ```toml
 profile = "personal"
@@ -181,7 +181,7 @@ An expression is a comma- or space-separated list:
 HAMN_HTTP_TOKEN=$(openssl rand -hex 32) hamn serve --http 127.0.0.1:8765
 ```
 
-- Every request needs `Authorization: Bearer <token>`. Without `HAMN_HTTP_TOKEN`, hamn generates a token and prints it once to stderr (it refuses when stderr is not a terminal).
+- Every request needs `Authorization: Bearer <token>`. Without `HAMN_HTTP_TOKEN`, Hamn generates a token and prints it once to stderr (it refuses when stderr is not a terminal).
 - Non-loopback `Origin` headers are rejected, which blocks DNS rebinding from browser pages.
 - Binding to a non-loopback address needs `--allow-remote` and `--tls-cert`/`--tls-key`.
 - `/healthz` is unauthenticated and returns no data.
@@ -192,12 +192,12 @@ A Docker image (`ghcr.io/idoo/hamn`) is published with each release for this mod
 
 ## Project root
 
-File tools (screenshots, fastlane metadata, offer code files) work inside one directory, opened with Go's `os.Root`. hamn picks it in this order: `--root`, then `HAMN_ROOT`, then the first existing `file://` root the client declares over MCP, then the git root of the working directory. A root picked automatically that is `/` or your home directory is refused, and the tool error names `--root` and `HAMN_ROOT`; GUI clients often start servers in one of those. `doctor` shows the effective root as `file_root`.
+File tools (screenshots, fastlane metadata, offer code files) work inside one directory, opened with Go's `os.Root`. Hamn picks it in this order: `--root`, then `HAMN_ROOT`, then the first existing `file://` root the client declares over MCP, then the git root of the working directory. A root picked automatically that is `/` or your home directory is refused, and the tool error names `--root` and `HAMN_ROOT`. GUI clients often start servers in one of those. `doctor` shows the effective root as `file_root`.
 
 ## Protocol version
 
-MCP `2026-07-28` no longer lets a server ask the user in the middle of a tool call, which is how hamn's approval form works. hamn advertises protocol versions up to `2025-11-25` only, so a newer client falls back to `2025-11-25` and approvals keep working.
+MCP `2026-07-28` no longer lets a server ask the user in the middle of a tool call, and that is how Hamn's approval form works. Hamn advertises protocol versions up to `2025-11-25` only, so a newer client falls back to `2025-11-25` and approvals keep working.
 
 ## State
 
-Review and feedback cursors and upload resume files live in `$XDG_STATE_HOME/hamn`, else `~/.local/state/hamn` (`%LocalAppData%\hamn` on Windows), created with mode 0700. Each cursor is its own file under `cursors/` (written atomically, mode 0600), so several hamn processes don't overwrite each other; a 0.1.0 `cursors.json` is still read when no newer record exists. Plans live in memory only.
+Review and feedback cursors and upload resume files live in `$XDG_STATE_HOME/hamn`, else `~/.local/state/hamn` (`%LocalAppData%\hamn` on Windows), created with mode 0700. Each cursor is its own file under `cursors/` (written atomically, mode 0600), so several Hamn processes don't overwrite each other. A 0.1.0 `cursors.json` is still read when no newer record exists. Plans live in memory only.

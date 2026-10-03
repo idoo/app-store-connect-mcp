@@ -1,9 +1,9 @@
 ---
 name: hamn-testflight
-description: Use when the user asks to send a build to TestFlight testers, add or remove beta testers, or summarize TestFlight feedback and crashes via the hamn App Store Connect MCP server ("give build 42 to beta", "what are testers saying", "invite anna@example.com to TestFlight").
+description: Use when the user asks to send a build to TestFlight testers, add or remove beta testers, or summarize TestFlight feedback and crashes via the Hamn App Store Connect MCP server ("give build 42 to beta", "what are testers saying", "invite anna@example.com to TestFlight").
 ---
 
-# TestFlight with hamn
+# TestFlight with Hamn
 
 Goal: get a processed build to the right beta groups with What to Test notes,
 manage testers, and turn tester feedback into a short digest.
