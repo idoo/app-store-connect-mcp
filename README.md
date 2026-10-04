@@ -8,11 +8,10 @@ MCP server for App Store Connect. Read-only by default, and it asks before anyth
 [![Release](https://img.shields.io/github/v/release/idoo/hamn)](https://github.com/idoo/hamn/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-black)](https://modelcontextprotocol.io)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/idoo/hamn/badge)](https://scorecard.dev/viewer/?uri=github.com/idoo/hamn)
 
 ## Install
 
-Paste this into Claude Code, Cursor or Codex:
+Paste this into whatever AI is writing your app right now (we won't tell):
 
 ```text
 Set up the Hamn MCP server for me: https://github.com/idoo/hamn/blob/main/docs/INSTALL.md
@@ -34,11 +33,11 @@ Or with Homebrew: `brew install idoo/tap/hamn`, then follow [docs/INSTALL.md](do
 
 ## Security
 
-Hamn starts read-only. Anything public, irreversible or touching money shows a preview and waits for your yes in the client. Reviews and tester feedback are marked as untrusted, and your key never reaches the model. Details are in [docs/SAFETY.md](docs/SAFETY.md).
+Hamn can't break anything until you let it. Anything public, permanent or costing money waits for your yes. A 1-star review that says "ignore previous instructions" is still just a 1-star review. More in [docs/SAFETY.md](docs/SAFETY.md).
 
 ## What it does
 
-Releases, TestFlight, listings, screenshots, reviews, sales reports, IAPs and pricing, signing and Xcode Cloud, plus the rest of the App Store Connect API. See the [tool list](docs/TOOLS.md) and [config](docs/CONFIG.md).
+Everything you'd click in App Store Connect: releases, TestFlight, listings, screenshots, reviews, sales, IAPs, signing, Xcode Cloud. For everything else there's raw API access. [Tool list](docs/TOOLS.md), [config](docs/CONFIG.md).
 
 ## License
 
