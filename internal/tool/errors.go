@@ -46,6 +46,11 @@ var (
 		Message: "plan is unknown, expired, or the remote state changed since it was made",
 		Hint:    "call again without confirm to get a fresh plan",
 	}
+	ErrPreviewRequired = &Error{
+		Code:    "preview_required",
+		Message: "confirm:true needs a preview of the same arguments in this session first",
+		Hint:    "call again without confirm, show the preview to the user, then repeat with the same arguments and confirm:true",
+	}
 	ErrOutcomeUnknown = &Error{
 		Code:    "outcome_unknown",
 		Message: "the request may or may not have been applied",

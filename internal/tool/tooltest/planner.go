@@ -102,6 +102,66 @@ func PlannerConformance(t *testing.T, ttl time.Duration, newPlanner func(now fun
 			t.Fatal("duplicate plan ids")
 		}
 	})
+	claim := func(t *testing.T, s setup, a any) string {
+		t.Helper()
+		id, err := s.p.Propose(ctx, "x_delete", a, tool.FlagFingerprint, tool.PlanPreview{Summary: "s"})
+		if err != nil || id == "" {
+			t.Fatalf("Propose = %q, %v", id, err)
+		}
+		return id
+	}
+	needPreview := func(t *testing.T, err error, what string) {
+		t.Helper()
+		if !errors.Is(err, tool.ErrPreviewRequired) {
+			t.Fatalf("%s: err = %v, want preview_required", what, err)
+		}
+	}
+	t.Run("claim_once", func(t *testing.T) {
+		s := fresh()
+		claim(t, s, map[string]any{"app": "1"})
+		// confirm is not part of the binding.
+		if err := s.p.Claim(ctx, "x_delete", map[string]any{"app": "1", "confirm": true}); err != nil {
+			t.Fatalf("Claim = %v", err)
+		}
+		needPreview(t, s.p.Claim(ctx, "x_delete", map[string]any{"app": "1"}), "second claim")
+	})
+	t.Run("claim_without_preview", func(t *testing.T) {
+		needPreview(t, fresh().p.Claim(ctx, "x_delete", args), "no preview")
+	})
+	t.Run("claim_tool_mismatch", func(t *testing.T) {
+		s := fresh()
+		claim(t, s, args)
+		needPreview(t, s.p.Claim(ctx, "y_delete", args), "other tool")
+		if err := s.p.Claim(ctx, "x_delete", args); err != nil {
+			t.Fatalf("mismatch consumed the plan: %v", err)
+		}
+	})
+	t.Run("claim_args_mismatch", func(t *testing.T) {
+		s := fresh()
+		claim(t, s, args)
+		needPreview(t, s.p.Claim(ctx, "x_delete", map[string]any{"app": "2"}), "other args")
+	})
+	t.Run("claim_ignores_plan_fingerprints", func(t *testing.T) {
+		s := fresh()
+		if _, err := s.p.Propose(ctx, "x_delete", args, "fp1", tool.PlanPreview{}); err != nil {
+			t.Fatal(err)
+		}
+		needPreview(t, s.p.Claim(ctx, "x_delete", args), "plan_id plan")
+	})
+	t.Run("claim_valid_just_before_ttl", func(t *testing.T) {
+		s := fresh()
+		claim(t, s, args)
+		s.clock.add(ttl - time.Nanosecond)
+		if err := s.p.Claim(ctx, "x_delete", args); err != nil {
+			t.Fatalf("Claim at TTL-1ns = %v", err)
+		}
+	})
+	t.Run("claim_expired_at_ttl", func(t *testing.T) {
+		s := fresh()
+		claim(t, s, args)
+		s.clock.add(ttl)
+		needPreview(t, s.p.Claim(ctx, "x_delete", args), "claim at TTL")
+	})
 }
 
 type clock struct {

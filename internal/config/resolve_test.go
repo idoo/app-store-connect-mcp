@@ -63,8 +63,8 @@ func boolp(b bool) *bool { return &b }
 func TestResolvePrecedence(t *testing.T) {
 	envCreds := map[string]string{EnvKeyID: "ENV1", EnvIssuerID: "iss", EnvKeyPath: "/k/env.p8"}
 	type want struct {
-		name, app, warn string
-		writes, pinned  bool
+		name, app, warn        string
+		writes, pinned, locked bool
 	}
 	tests := []struct {
 		name    string
@@ -81,11 +81,14 @@ func TestResolvePrecedence(t *testing.T) {
 		{name: "env credentials beat default", env: envCreds, want: want{name: EnvProfileName}},
 		{name: "HAMN_PROFILE beats env credentials", env: merge(envCreds, map[string]string{EnvProfile: "ro"}), want: want{name: "ro"}},
 		{name: "env credentials beat pin", env: envCreds, project: "trusted", pin: `profile = "rw"`, want: want{name: EnvProfileName}},
-		{name: "untrusted pin selects read-only profile", project: "untrusted", pin: `profile = "ro"`, want: want{name: "ro", pinned: true}},
+		{name: "untrusted pin selects read-only profile", project: "untrusted", pin: `profile = "ro"`, want: want{name: "ro", pinned: true, locked: true, warn: "chosen by untrusted pin"}},
+		{name: "untrusted pin ignored when env enables writes", env: map[string]string{EnvAllowWrites: "1"}, project: "untrusted", pin: `profile = "ro"`, want: want{name: "main", writes: true, warn: `ignoring profile "ro" from untrusted pin`}},
+		{name: "untrusted pin ignored when flag enables writes", flags: Flags{AllowWrites: boolp(true)}, project: "untrusted", pin: `profile = "ro"`, want: want{name: "main", writes: true, warn: "writes are on (HAMN_ALLOW_WRITES or --allow-writes)"}},
+		{name: "trusted pin with writes on", env: map[string]string{EnvAllowWrites: "1"}, project: "trusted", pin: `profile = "ro"`, want: want{name: "ro", writes: true, pinned: true}},
 		{name: "untrusted pin cannot select writable profile", project: "untrusted", pin: `profile = "rw"`, want: want{name: "main", writes: true, warn: "untrusted pin"}},
 		{name: "trusted pin selects writable profile", project: "trusted", pin: `profile = "rw"`, want: want{name: "rw", app: "com.rw", writes: true, pinned: true}},
-		{name: "pin disables writes", project: "untrusted", pin: "allow_writes = false", want: want{name: "main", pinned: true}},
-		{name: "pin disables writes over env", env: map[string]string{EnvAllowWrites: "1"}, project: "trusted", pin: "allow_writes = false", want: want{name: "main", pinned: true, warn: "writes disabled by pin"}},
+		{name: "pin disables writes", project: "untrusted", pin: "allow_writes = false", want: want{name: "main", pinned: true, locked: true}},
+		{name: "pin disables writes over env", env: map[string]string{EnvAllowWrites: "1"}, project: "trusted", pin: "allow_writes = false", want: want{name: "main", pinned: true, locked: true, warn: "writes disabled by pin"}},
 		{name: "pin cannot enable writes", env: map[string]string{EnvProfile: "ro"}, project: "trusted", pin: "allow_writes = true", want: want{name: "ro", warn: "can only disable"}},
 		{name: "env disables writes", env: map[string]string{EnvAllowWrites: "false"}, want: want{name: "main"}},
 		{name: "flag enables writes over env", flags: Flags{AllowWrites: boolp(true)}, env: map[string]string{EnvAllowWrites: "0", EnvProfile: "ro"}, want: want{name: "ro", writes: true}},
@@ -122,7 +125,7 @@ func TestResolvePrecedence(t *testing.T) {
 				t.Fatal(err)
 			}
 			p := r.Profile
-			got := want{name: p.Name, app: p.DefaultApp, writes: p.AllowWrites, pinned: p.PinSource != ""}
+			got := want{name: p.Name, app: p.DefaultApp, writes: p.AllowWrites, pinned: p.PinSource != "", locked: r.WritesLocked}
 			wantNoWarn := tt.want
 			wantNoWarn.warn = ""
 			if got != wantNoWarn {
@@ -200,6 +203,10 @@ func TestResolveEnvCredentials(t *testing.T) {
 		{
 			name: "no key", env: map[string]string{EnvKeyID: "K1", EnvIssuerID: "I"},
 			kind: tool.KeyTeam, problem: "private key missing",
+		},
+		{
+			name: "ASC_KEY_PATH named", env: map[string]string{EnvKeyID: "K1", EnvIssuerID: "I", "ASC_KEY_PATH": "/k.p8"},
+			kind: tool.KeyTeam, problem: `ASC_KEY_PATH is set but hamn reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run hamn auth import`,
 		},
 		{
 			name: "fastlane names", env: map[string]string{FastlaneKeyID: "F1", FastlaneIssuerID: "I", FastlaneKeyPath: "/f.p8"},

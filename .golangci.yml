@@ -23,7 +23,6 @@ linters:
             - "$all"
             - "!**/internal/mcpserver/**"
             - "!**/internal/tools/docsgen/**"
-            - "!**/internal/deps/**"
             - "!**/test/jobs/**"
           deny:
             - pkg: github.com/modelcontextprotocol/go-sdk

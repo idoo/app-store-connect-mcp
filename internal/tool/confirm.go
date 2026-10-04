@@ -21,7 +21,8 @@ const (
 	ConfirmNone ConfirmMode = iota
 	// ConfirmByFlag means In embeds [ConfirmFlag]; without confirm:true the call is
 	// a preview. With it, the human is asked via elicitation when available
-	// (mandatory with [Meta.RequireHuman]).
+	// (mandatory with [Meta.RequireHuman]); an agent-only confirm must follow a
+	// preview of the same arguments in the session ([Planner.Claim]).
 	ConfirmByFlag
 	// ConfirmByPlan means In embeds [ConfirmPlan]; the first call returns a preview
 	// and a plan_id bound to the args and a state fingerprint; the second call
@@ -73,6 +74,8 @@ type previewBody struct {
 //	_, err := env.ASC.Do(wctx, req)
 //
 // Without confirm the result is a needs_confirm preview and nothing changes.
+// A confirm the human did not approve is refused with [ErrPreviewRequired]
+// unless a preview of the same arguments came first (single use).
 func RequireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) (context.Context, *Result) {
 	return requireConfirm(ctx, env, confirm, p, false)
 }
@@ -93,6 +96,9 @@ func requireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview, 
 	}
 	human = human || c.meta.RequireHuman
 	if !confirm && !env.NoConfirm {
+		// Without a plan store the preview is still returned; the confirm
+		// then fails closed in Claim unless a human approves.
+		_, _ = env.Plans.Propose(ctx, c.meta.Name, c.args, FlagFingerprint, p)
 		return nil, OK(previewBody{
 			Status:  ErrNeedsConfirm.Code,
 			Preview: p,
@@ -102,8 +108,18 @@ func requireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview, 
 	if res := approve(ctx, env, c, p, human); res != nil {
 		return nil, res
 	}
+	if c.approvedBy == ApprovedAgent && !env.NoConfirm {
+		if err := env.Plans.Claim(ctx, c.meta.Name, c.args); err != nil {
+			c.approvedBy = ""
+			return nil, Fail(fmt.Errorf("%s: %w", c.meta.Name, err))
+		}
+	}
 	return withWrite(ctx), nil
 }
+
+// FlagFingerprint is the state fingerprint [RequireConfirm] proposes its
+// previews at; [Planner.Claim] matches only plans proposed with it.
+const FlagFingerprint = "confirm_flag"
 
 // Preview is the gate of [ConfirmByPlan] tools. args is the tool input (its
 // "plan_id" key is ignored); fingerprint is a [Fingerprint] of the remote state

@@ -341,7 +341,10 @@ func sessionDeps(deps Deps) Deps {
 
 // sessionASC is one HTTP session's view of the shared ASC client: non-GET
 // requests fail with tool.ErrWritesDisabled unless this session enabled
-// writes. The shared client's own guard still applies.
+// writes. The shared client's own guard still applies, but it is one-way:
+// once any session opens it, only this wrapper keeps other sessions read-only,
+// so every mutating tool.ASC method must be overridden here
+// (TestSessionASCCoversMutators).
 type sessionASC struct {
 	tool.ASC
 	writes atomic.Bool

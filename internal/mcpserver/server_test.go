@@ -491,3 +491,81 @@ func TestWritesDisabledErrorPointsToEnableWrites(t *testing.T) {
 		t.Fatalf("pinned-off hint = %v", locked["hint"])
 	}
 }
+
+func TestHiddenToolCall(t *testing.T) {
+	var calls atomic.Int32
+	counted := func(name string, ts tool.Toolset, c tool.Class) tool.Tool {
+		m := tool.Meta{Name: name, Toolset: ts, Title: name, Description: "stub " + name, Class: c}
+		if c == tool.Destructive {
+			m.Confirm = tool.ConfirmByFlag
+		}
+		return tool.New(m, func(context.Context, *tool.Env, stubIn) (*tool.Result, error) {
+			calls.Add(1)
+			return tool.OK(map[string]any{"ok": true}), nil
+		})
+	}
+	tools := []tool.Tool{
+		counted("apps_list", tool.Core, tool.Read),
+		counted("release_submit", tool.Release, tool.Destructive),
+		counted("store_lookup", tool.Store, tool.Read),
+		stub("users_list", tool.Admin, tool.Read, func(m *tool.Meta) { m.NeedsTeamKey = true }),
+	}
+	nextOf := func(body map[string]any) []map[string]any {
+		var out []map[string]any
+		for _, n := range body["next"].([]any) {
+			out = append(out, n.(map[string]any))
+		}
+		return out
+	}
+
+	t.Run("writes_disabled", func(t *testing.T) {
+		h := connect(t, Deps{Tools: tools, Profile: team(false)}, "test", nil)
+		res, body := h.call(t, "release_submit", map[string]any{"confirm": true})
+		d := dataOf(body)
+		if !res.IsError || d["error"] != "writes_disabled" || d["hint"] != writesHint {
+			t.Fatalf("result = %v", body)
+		}
+		next := nextOf(body)
+		if len(next) == 0 || next[0]["tool"] != toolsetsName || next[0]["args"].(map[string]any)["action"] != "enable_writes" {
+			t.Fatalf("next = %v", next)
+		}
+		if calls.Load() != 0 {
+			t.Fatal("hidden tool handler ran")
+		}
+	})
+	t.Run("toolset_disabled", func(t *testing.T) {
+		h := connect(t, Deps{Tools: tools, Profile: team(false)}, "test", nil)
+		res, body := h.call(t, "store_lookup", map[string]any{})
+		if !res.IsError || dataOf(body)["error"] != "toolset_disabled" {
+			t.Fatalf("result = %v", body)
+		}
+		next := nextOf(body)
+		args, _ := json.Marshal(next[0]["args"])
+		if next[0]["tool"] != toolsetsName || string(args) != `{"action":"enable","toolsets":["store"]}` {
+			t.Fatalf("next = %v", next)
+		}
+		if calls.Load() != 0 {
+			t.Fatal("hidden tool handler ran")
+		}
+	})
+	t.Run("team_key", func(t *testing.T) {
+		h := connect(t, Deps{Tools: tools, Profile: tool.ProfileInfo{Name: "me", KeyKind: tool.KeyIndividual}}, "test", nil)
+		res, body := h.call(t, "users_list", map[string]any{})
+		if !res.IsError || dataOf(body)["error"] != tool.ErrIndividualKeyUnsupported.Code {
+			t.Fatalf("result = %v", body)
+		}
+	})
+	t.Run("unknown", func(t *testing.T) {
+		h := connect(t, Deps{Tools: tools, Profile: team(false)}, "test", nil)
+		if _, err := h.cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "no_such_tool"}); err == nil {
+			t.Fatal("unknown tool did not return a JSON-RPC error")
+		}
+	})
+	t.Run("writes_locked", func(t *testing.T) {
+		h := connect(t, Deps{Tools: tools, Profile: team(false), WritesLocked: true}, "test", nil)
+		res, body := h.call(t, "release_submit", map[string]any{"confirm": true})
+		if d := dataOf(body); !res.IsError || d["error"] != "writes_disabled" || d["hint"] != errWritesLocked.Hint {
+			t.Fatalf("result = %v", body)
+		}
+	})
+}

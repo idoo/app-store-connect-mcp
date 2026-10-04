@@ -46,6 +46,11 @@ type Planner interface {
 	// fingerprint and has not expired; it consumes the plan on success. Failures
 	// wrap [ErrStalePlan].
 	Verify(ctx context.Context, planID, toolName string, args any, fingerprint string) error
+	// Claim consumes the newest unexpired plan for toolName proposed at
+	// [FlagFingerprint] whose canonical args equal args'. It is how a
+	// [ConfirmByFlag] confirm proves a preview of the same call came first.
+	// Failures wrap [ErrPreviewRequired].
+	Claim(ctx context.Context, toolName string, args any) error
 }
 
 // StateStore is persistent local state (XDG state dir).

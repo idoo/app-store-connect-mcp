@@ -175,6 +175,8 @@ func TestWebhooksUpsertNeedsHuman(t *testing.T) {
 	k.Env.Profile.AllowNoElicit = true
 	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, emptyDoc)
 	k.ASC.Handle(http.MethodPost, "/v1/webhooks", http.StatusCreated, createdDoc)
+	tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env,
+		`{"name":"slack","url":"https://hooks.example.org/x","event_types":["BUILD_UPLOAD_STATE_UPDATED"]}`))
 	tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env, createArgs))
 	if len(k.ASC.Mutations()) != 1 {
 		t.Fatal("AllowNoElicit call did not write")

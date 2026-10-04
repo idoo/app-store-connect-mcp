@@ -77,6 +77,8 @@ func (noPlanner) Verify(context.Context, string, string, any, string) error {
 	return unavail("plan store")
 }
 
+func (noPlanner) Claim(context.Context, string, any) error { return ErrPreviewRequired }
+
 func (noStore) Cursor(string, string, string) (string, error)  { return "", unavail("state store") }
 func (noStore) SetCursor(string, string, string, string) error { return unavail("state store") }
 func (noStore) Load(string, string, any) (bool, error)         { return false, unavail("state store") }

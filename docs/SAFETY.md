@@ -15,7 +15,7 @@ Hamn holds a key that can publish apps, answer customers in public, change price
 
 **Read-only by default.** Write tools aren't even listed until you pass `--allow-writes`, set `HAMN_ALLOW_WRITES=1` or `allow_writes` in a profile. Turning them on mid-session with `toolsets` `enable_writes` asks you first. The API client also refuses every non-GET that doesn't come from a confirmed write tool. Raw writes go through `asc_api_request`, which is hidden too. Raw reads use `asc_api_get`.
 
-**Preview first.** A write call without confirmation only returns a preview. Some tools take `confirm:true` next. Others hand out a `plan_id` tied to the args, profile, session and current state. It's single use, lasts 15 minutes and is refused if anything changed meanwhile. Every result reports `_meta.hamn.approved_by`: `human`, `agent` or `none`.
+**Preview first.** A write call without confirmation only returns a preview. Some tools take `confirm:true` next, and only after that preview of the same arguments, so an agent can't skip it. Others hand out a `plan_id` tied to the args, profile, session and current state. It's single use, lasts 15 minutes and is refused if anything changed meanwhile. Every result reports `_meta.hamn.approved_by`: `human`, `agent` or `none`.
 
 **A human says yes.** Public, permanent and money-moving tools need you to accept an approval form in the client: `reviews_reply`, `release_submit`, `release_cancel`, `release_publish`, `builds_expire`, `testflight_testers_remove`, `pricing_apply`, `offers_create`, `offer_codes_generate`, `users_invite`, `users_remove`, `webhooks_upsert`, `webhooks_delete`, `signing_revoke`, and any `asc_api_request` call. Sometimes also:
 

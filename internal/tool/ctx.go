@@ -28,6 +28,9 @@ type call struct {
 	meta Meta
 	// approvedBy is "human", "agent" or "" (none), set by the confirm gates.
 	approvedBy string
+	// args are the decoded tool arguments; [RequireConfirm] binds previews
+	// and confirms to them.
+	args map[string]any
 }
 
 func withCall(ctx context.Context, c *call) context.Context {

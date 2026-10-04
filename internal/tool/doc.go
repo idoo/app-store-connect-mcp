@@ -56,7 +56,8 @@
 //   - ConfirmNone Write tools receive it before the handler runs.
 //   - ConfirmByFlag tools embed [ConfirmFlag] and call [RequireConfirm].
 //     Without confirm:true the call returns a preview and changes nothing;
-//     with it the human is asked via elicitation.
+//     with it the human is asked via elicitation; without a human answer it
+//     is accepted only after a preview of the same args ([Planner.Claim]).
 //   - ConfirmByPlan tools embed [ConfirmPlan] and call [Preview] with a
 //     [Fingerprint] of the remote state they depend on. The first call records
 //     a plan and returns its plan_id; the second (plan_id:"<plan_id>", same
