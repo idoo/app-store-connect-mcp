@@ -473,7 +473,7 @@ func TestPlanSkipsEqualChecksumAndReplaceDeletesEnumerated(t *testing.T) {
 	keep := f.addShot("loc-en", "APP_IPHONE_67", "old-a.png", md5Of(t, a))
 	gone := f.addShot("loc-en", "APP_IPHONE_67", "stale.png", "deadbeef")
 
-	p := tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots"}`)))
+	p := tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots","mode":"replace"}`)))
 	s := p.Sets[0]
 	if len(s.Skips) != 1 || s.Skips[0].ID != keep || len(s.Uploads) != 1 || s.Uploads[0].Rel != "en-US/02.png" {
 		t.Errorf("skips/uploads = %+v / %+v", s.Skips, s.Uploads)
@@ -485,8 +485,8 @@ func TestPlanSkipsEqualChecksumAndReplaceDeletesEnumerated(t *testing.T) {
 		t.Errorf("preview = %+v", k.Plans.Proposed)
 	}
 
-	// add mode never deletes.
-	p = tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots","mode":"add"}`)))
+	// No mode means add: never deletes by omission.
+	p = tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots"}`)))
 	if s := p.Sets[0]; len(s.Deletes) != 0 || len(s.Uploads) != 1 || s.Reorder {
 		t.Errorf("add mode set = %+v", s)
 	}
@@ -517,27 +517,27 @@ func TestPlanSyncRoundTripAndStaleRefusal(t *testing.T) {
 	keep := f.addShot("loc-en", "APP_IPHONE_67", "a.png", md5Of(t, a))
 	gone := f.addShot("loc-en", "APP_IPHONE_67", "old.png", "deadbeef")
 
-	p := tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots"}`)))
+	p := tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots","mode":"replace"}`)))
 	if p.Status != statusPlanned || p.Summary.Uploads != 2 || p.Summary.Deletes != 1 || p.Summary.CreateSets != 1 || p.Summary.Reorders != 1 {
 		t.Fatalf("summary = %+v", p.Summary)
 	}
 
 	// Without confirm a plan with deletes only previews.
-	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots"}`))
+	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots","mode":"replace"}`))
 	if m := tooltest.Decode[map[string]any](t, res); m["status"] != "planned" || len(k.ASC.Mutations()) != 0 {
 		t.Fatalf("unconfirmed sync = %v, mutations %v", m, mutations(k))
 	}
 
 	// The remote set changes: the first plan is stale.
 	f.addShot("loc-en", "APP_IPHONE_67", "other.png", "cafe")
-	body := tooltest.MustFail(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","plan_id":%q}`, p.PlanID)), "stale_plan")
+	body := tooltest.MustFail(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","mode":"replace","plan_id":%q}`, p.PlanID)), "stale_plan")
 	_ = body
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatalf("stale sync mutated: %v", mutations(k))
 	}
 
-	p = tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots"}`)))
-	res = tooltest.MustOK(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","plan_id":%q}`, p.PlanID)))
+	p = tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots","mode":"replace"}`)))
+	res = tooltest.MustOK(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","mode":"replace","plan_id":%q}`, p.PlanID)))
 	out := tooltest.Decode[syncOut](t, res)
 	if out.Status != "synced" || out.Uploaded != 2 || out.Deleted != 2 || out.Skipped != 1 || out.Failed != 0 || out.Pending != 0 {
 		t.Fatalf("sync out = %+v", out)

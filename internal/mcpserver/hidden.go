@@ -2,8 +2,10 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -30,7 +32,7 @@ func (s *session) hiddenToolMiddleware(next mcp.MethodHandler) mcp.MethodHandler
 		if !ok || r.Params == nil {
 			return next(ctx, method, req)
 		}
-		if res := s.hiddenResult(r.Params.Name); res != nil {
+		if res := s.hiddenResult(r.Params.Name, r.Params.Arguments); res != nil {
 			return s.render(res), nil
 		}
 		return next(ctx, method, req)
@@ -39,7 +41,7 @@ func (s *session) hiddenToolMiddleware(next mcp.MethodHandler) mcp.MethodHandler
 
 // hiddenResult returns the error result for a hidden tool, or nil when name
 // is listed, unknown or no longer hidden.
-func (s *session) hiddenResult(name string) *tool.Result {
+func (s *session) hiddenResult(name string, args json.RawMessage) *tool.Result {
 	s.mu.Lock()
 	listed := s.listed[name]
 	s.mu.Unlock()
@@ -49,6 +51,11 @@ func (s *session) hiddenResult(name string) *tool.Result {
 	i := slices.IndexFunc(s.tools, func(t tool.Tool) bool { return t.Name() == name })
 	if i < 0 {
 		return nil
+	}
+	if name == apiRequestName {
+		if r := apiReadRedirect(args); r != nil {
+			return r
+		}
 	}
 	m := s.tools[i].Meta()
 	p := s.profile()
@@ -70,4 +77,30 @@ func (s *session) hiddenResult(name string) *tool.Result {
 		return tool.Fail(fmt.Errorf("%s: %w", name, tool.ErrWritesDisabled))
 	}
 	return nil
+}
+
+// apiRequestName is the generic mutation tool; apiGetName is its read twin.
+const apiRequestName, apiGetName = "asc_api_request", "asc_api_get"
+
+// apiReadRedirect answers a read through the hidden asc_api_request (method
+// empty or GET) with the asc_api_get call, so a read never asks to unlock
+// writes. It is nil for mutations and unparsable arguments.
+func apiReadRedirect(raw json.RawMessage) *tool.Result {
+	var in struct {
+		Method string         `json:"method"`
+		Path   string         `json:"path"`
+		Query  map[string]any `json:"query"`
+	}
+	if len(raw) > 0 && json.Unmarshal(raw, &in) != nil {
+		return nil
+	}
+	if in.Method != "" && !strings.EqualFold(in.Method, "GET") {
+		return nil
+	}
+	next := map[string]any{"path": in.Path}
+	if len(in.Query) > 0 {
+		next["query"] = in.Query
+	}
+	return tool.Fail(fmt.Errorf("%w: %s is for mutations; use %s for reads", tool.ErrInvalidArgs, apiRequestName, apiGetName)).
+		Then(tool.NextStep{Tool: apiGetName, Args: next})
 }

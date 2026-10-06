@@ -13,9 +13,10 @@ import (
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "signing_devices_register", Toolset: tool.Signing, Class: tool.Write, Idempotent: true, NeedsTeamKey: true,
+		Confirm: tool.ConfirmByFlag, RequireHuman: false,
 		Title: "Register devices",
 		Description: "Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices " +
-			"are reported as already (with their status) and not re-posted. Per-device results; one failure does not stop the batch.",
+			"are reported as already (with their status) and not re-posted. New devices need confirm:true and human approval (yearly slots).",
 		Enums: map[string][]any{"devices.platform": platforms},
 	}, devicesRegister))
 }
@@ -30,6 +31,7 @@ type deviceIn struct {
 }
 
 type devicesRegisterIn struct {
+	tool.ConfirmFlag
 	Devices []deviceIn `json:"devices" jsonschema:"1 to 100 devices"`
 }
 
@@ -89,9 +91,29 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 	if err != nil {
 		return nil, err
 	}
+	var fresh []string
+	for _, d := range in.Devices {
+		if _, ok := existing[strings.ToLower(d.UDID)]; !ok {
+			fresh = append(fresh, d.UDID)
+		}
+	}
+	wctx := ctx
+	if len(fresh) > 0 {
+		// Each new device takes one of the yearly per-platform slots: a human
+		// must approve.
+		var res *tool.Result
+		wctx, res = tool.RequireHumanConfirm(ctx, env, in.Confirm, tool.PlanPreview{
+			Summary:      fmt.Sprintf("register %d new device(s)", len(fresh)),
+			Affected:     fresh,
+			Irreversible: []string{"each new device uses one of the yearly per-platform device slots until membership renewal"},
+		})
+		if res != nil {
+			return res, nil
+		}
+	}
 	out := devicesRegisterOut{Items: make([]deviceResult, 0, len(in.Devices))}
 	for _, d := range in.Devices {
-		item := registerOne(ctx, env, d, existing)
+		item := registerOne(wctx, env, d, existing)
 		switch item.Action {
 		case devRegistered:
 			out.Registered++

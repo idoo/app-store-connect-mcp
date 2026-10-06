@@ -107,7 +107,7 @@
 |[`signing_bundle_ids_list`](#signing_bundle_ids_list)|R|none|Registered bundle IDs (identifier, name, platform, seed id) with their enabled capabilities and settings. Filter by identifier, platform or a name/identifier substring. Use before signing_capabilities_set or signing_profile_create.|
 |[`signing_capabilities_set`](#signing_capabilities_set)|D|flag|Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; already enabled ones are skipped. Changing settings needs confirm:true; disabling also needs the user's approval. Both invalidate profiles.|
 |[`signing_certificates_list`](#signing_certificates_list)|R|none|Signing certificates by type, sorted by expiration, with days_left. expiring_within_days keeps only certificates expiring (or expired) within N days. Certificate content (base64 DER) is returned only with include_content.|
-|[`signing_devices_register`](#signing_devices_register)|W|none|Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices are reported as already (with their status) and not re-posted. Per-device results; one failure does not stop the batch.|
+|[`signing_devices_register`](#signing_devices_register)|W|flag|Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices are reported as already (with their status) and not re-posted. New devices need confirm:true and human approval (yearly slots).|
 |[`signing_profile_create`](#signing_profile_create)|W|none|Create a profile for a bundle ID (identifier or id). certificates: ids or ["all"] (all unexpired of the matching type); devices: ids or ["all"] (enabled devices), only for development/ad hoc types. An active profile with the same name, type and bundle is already:true.|
 |[`signing_profiles_list`](#signing_profiles_list)|R|none|Provisioning profiles with type, state, bundle identifier, expiration, device and certificate counts. Filter by type, state, name or bundle identifier. download:true with one id returns profile_content (base64 .mobileprovision).|
 |[`signing_revoke`](#signing_revoke)|D|human|Revoke a signing certificate or delete a provisioning profile by id. Without confirm returns a preview (name, type, expiry; for certificates the profiles it invalidates). confirm:true asks the human; irreversible.|
@@ -397,7 +397,7 @@ No arguments.
 |`prices`|object[]|yes||territory prices; free trial: territories only|
 |`priority`|string||`HIGH`, `NORMAL`|win-back: default NORMAL|
 |`product_id`|string|yes||subscription product id|
-|`start_date`|string|||YYYY-MM-DD (intro, win-back: required)|
+|`start_date`|string|||YYYY-MM-DD; win-back: required; intro: default now|
 |`wait_months`|integer|||win-back: months between two win-back offers|
 
 ### offers_list
@@ -591,7 +591,7 @@ No arguments.
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`dir`|string|yes||screenshots directory inside the project: <locale>/*.png\|jpg (fastlane; display inferred from pixels) or <locale>/<display>/*.png|
 |`locales`|string[]|||only these locales of the directory (default all)|
-|`mode`|string||`replace`, `add`|replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones|
+|`mode`|string||`add`, `replace`|add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 |`version`|string|||editable (default) or a version string of an editable version|
 
@@ -602,7 +602,7 @@ No arguments.
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`dir`|string|yes||screenshots directory inside the project: <locale>/*.png\|jpg (fastlane; display inferred from pixels) or <locale>/<display>/*.png|
 |`locales`|string[]|||only these locales of the directory (default all)|
-|`mode`|string||`replace`, `add`|replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones|
+|`mode`|string||`add`, `replace`|add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)|
 |`plan_id`|string|||from the preview call|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 |`version`|string|||editable (default) or a version string of an editable version|
@@ -648,6 +648,7 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
+|`confirm`|boolean|||true after reviewing the preview|
 |`devices`|object[]|yes||1 to 100 devices|
 
 ### signing_profile_create

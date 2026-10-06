@@ -231,6 +231,12 @@ func TestReleasePhasedRemoveOnlyInactive(t *testing.T) {
 	versionsFixture(t, k, "PENDING_DEVELOPER_RELEASE", "INACTIVE", 0)
 	k.ASC.Handle("DELETE", "/v1/appStoreVersionPhasedReleases/{id}", 204, "")
 	preview(t, k, "release_phased", `{"action":"remove"}`)
+	// Dropping the phased schedule releases to everyone: a human must approve.
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"remove","confirm":true}`), tool.ErrHumanRequired.Code)
+	if n := len(k.ASC.Mutations()); n != 0 {
+		t.Fatalf("remove without a human: %d mutations", n)
+	}
+	k.Elicit(true)
 	out := tooltest.Decode[phasedOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"remove","confirm":true}`)))
 	muts := k.ASC.Mutations()
 	if out.Status != "removed" || len(muts) != 1 || muts[0].Method != "DELETE" || muts[0].Path != "/v1/appStoreVersionPhasedReleases/pr1" {

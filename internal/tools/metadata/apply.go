@@ -48,7 +48,14 @@ func metadataApply(ctx context.Context, env *tool.Env, in applyIn) (*tool.Result
 	case statusNoChanges:
 		return tool.Already(out), nil
 	}
-	wctx, res := tool.Preview(ctx, env, in.PlanID, p.key, p.plan.Fingerprint(), p.preview())
+	gate, pv := tool.Preview, p.preview()
+	if p.t.Version.State == versionStateLive {
+		// Promotional text on the live version goes public at once, with no
+		// App Review in between: a human must approve.
+		gate = tool.PreviewHuman
+		pv.Irreversible = append(pv.Irreversible, "promotional text is public on the live product page immediately (no review)")
+	}
+	wctx, res := gate(ctx, env, in.PlanID, p.key, p.plan.Fingerprint(), pv)
 	if res != nil {
 		return res, nil
 	}

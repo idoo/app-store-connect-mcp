@@ -30,8 +30,9 @@ var versionScopedChecks = []string{"build", "export_compliance", "whats_new", "l
 
 // fixVia says how a check is fixed: a hamn tool, or manually at a URL.
 type fixVia struct {
-	Tool   string `json:"tool,omitempty"`
-	Manual string `json:"manual,omitempty"`
+	Tool   string         `json:"tool,omitempty"`
+	Args   map[string]any `json:"args,omitempty"`
+	Manual string         `json:"manual,omitempty"`
 }
 
 // check is one preflight result.
@@ -85,6 +86,8 @@ type statusSnapshot struct {
 	// ReadyIAPs / ReadySubscriptions are the product ids checkProducts lists
 	// as ready; release_submit attaches them unless told not to.
 	ReadyIAPs, ReadySubscriptions []string
+	// ProductsTruncated describes product lists cut at the item cap.
+	ProductsTruncated []string
 }
 
 func fixTool(name string) *fixVia { return &fixVia{Tool: name} }
@@ -295,12 +298,14 @@ func checkListing(s *statusSnapshot) check {
 			c.Items = append(c.Items, loc+": privacy policy URL missing")
 		}
 	}
-	blocking := len(c.Items)
+	blocking := slices.Clone(c.Items)
+	slices.Sort(blocking)
 	c.Items = append(c.Items, stored...)
 	slices.Sort(c.Items)
+	c.FixVia.Args = map[string]any{"app": s.App.ID, "platform": string(s.Platform)}
 	switch {
-	case blocking > 0:
-		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d listing problem(s)", len(c.Items))
+	case len(blocking) > 0:
+		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d listing problem(s); first: %s", len(c.Items), blocking[0])
 	case len(stored) > 0:
 		c.Status, c.Detail = statusWarn, "stored keywords exceed the documented 100-byte limit; Apple accepted them"
 	default:
@@ -529,6 +534,11 @@ func checkProducts(s *statusSnapshot) check {
 		c.Detail = fmt.Sprintf("%d product(s) ready; release_submit attaches them (attach_first_time_products:false skips them)", len(ready))
 	default:
 		c.Detail = "no products waiting for review"
+	}
+	if len(s.ProductsTruncated) > 0 {
+		// A partial list may hide first-time products: never report "ready" from it.
+		c.Status, c.FixVia = statusWarn, fixTool("iap_list")
+		c.Detail = strings.Join(s.ProductsTruncated, "; ") + "; " + c.Detail
 	}
 	return c
 }

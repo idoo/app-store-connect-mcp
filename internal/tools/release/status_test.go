@@ -34,6 +34,8 @@ type fixture struct {
 	ageUnanswered bool
 	// iapState overrides the Pro IAP: product state, no versions.
 	iapState string
+	// subtitle overrides the appInfo subtitle of the last locale.
+	subtitle string
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -152,7 +154,11 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		}})
 		iid := fmt.Sprintf("info%d", i)
 		infoLocRels = append(infoLocRels, "appInfoLocalizations:"+iid)
-		infoInc = append(infoInc, jres{Type: "appInfoLocalizations", ID: iid, Attrs: map[string]any{"locale": loc, "name": "Hjul", "subtitle": "Sail better", "privacyPolicyUrl": "https://jvcr.se/privacy"}})
+		sub := "Sail better"
+		if i == len(f.locales)-1 && f.subtitle != "" {
+			sub = f.subtitle
+		}
+		infoInc = append(infoInc, jres{Type: "appInfoLocalizations", ID: iid, Attrs: map[string]any{"locale": loc, "name": "Hjul", "subtitle": sub, "privacyPolicyUrl": "https://jvcr.se/privacy"}})
 	}
 	verRels := map[string]any{"appStoreVersionLocalizations": locRels, "appStoreReviewDetail": "appStoreReviewDetails:rd1"}
 	inc = append(inc, jres{Type: "appStoreReviewDetails", ID: "rd1", Attrs: map[string]any{

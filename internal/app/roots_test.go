@@ -151,3 +151,44 @@ func TestRootPath(t *testing.T) {
 		}
 	}
 }
+
+// A root that contains the home folder, a top-level folder or the disk root
+// would expose every project (and ~/.ssh): refused; a folder inside home is
+// fine.
+func TestUnsafeRootRefusesHomeAncestors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX paths")
+	}
+	base := t.TempDir()
+	home := mkdir(t, base, "Users", "ivan")
+	parent := filepath.Dir(home)
+	proj := mkdir(t, home, "code", "x")
+	for _, c := range []struct {
+		dir  string
+		want bool
+	}{
+		{"/", true},
+		{"/Users", true},
+		{"/home", true},
+		{home, true},
+		{parent, true},
+		{base, true},
+		{proj, false},
+	} {
+		if got := unsafeRoot(c.dir, home); got != c.want {
+			t.Errorf("unsafeRoot(%q) = %v, want %v", c.dir, got, c.want)
+		}
+	}
+	if !unsafeRoot("/Users", "") {
+		t.Error("a top-level folder must be refused without a home too")
+	}
+	pf := newProjectFiles(t, "", proj, home)
+	for _, uri := range []string{fileURI(parent), fileURI(base)} {
+		if _, err := pf.ForRoots([]string{uri}); !errors.Is(err, tool.ErrUnavailable) {
+			t.Errorf("client root %s: err = %v, want unavailable", uri, err)
+		}
+	}
+	if _, err := pf.ForRoots([]string{fileURI(proj)}); err != nil {
+		t.Errorf("client root inside home: %v", err)
+	}
+}

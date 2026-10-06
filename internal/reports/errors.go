@@ -22,7 +22,7 @@ type Limits struct {
 	MaxBytes int64
 	// MaxColumns caps the number of columns in any row.
 	MaxColumns int
-	// MaxRows caps the number of data rows (header and footer excluded).
+	// MaxRows caps the number of data and footer records (headers excluded).
 	MaxRows int
 }
 

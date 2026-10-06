@@ -186,7 +186,7 @@ func TestResolveEnvCredentials(t *testing.T) {
 		},
 		{
 			name: "missing issuer and kind", env: map[string]string{EnvKeyID: "K1", EnvKeyPath: "/k.p8"},
-			kind: tool.KeyTeam, key: KeyRef{Source: KeyFromFile, Path: "/k.p8", KeyID: "K1"}, problem: "ASC_KEY_KIND=individual",
+			kind: tool.KeyIndividual, key: KeyRef{Source: KeyFromFile, Path: "/k.p8", KeyID: "K1"}, problem: "no issuer ID: using an Individual key. Set ASC_ISSUER_ID for a team key.",
 		},
 		{
 			name: "explicit individual", env: map[string]string{EnvKeyID: "K1", EnvKeyKind: "Individual", EnvKeyPath: "/k.p8"},

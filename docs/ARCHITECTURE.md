@@ -49,7 +49,7 @@ sequenceDiagram
 
 `internal/spec/gen` turns Apple's `openapi.oas*.json` into a gzipped index plus `PROVENANCE.json`, embedded in the binary. It feeds `asc_api_search` and `asc_api_describe`, validates raw API calls before Apple sees them, supplies enum hints and the list of free-text fields, and lets the fake server reject made-up requests. `spec-drift.yml` checks for a new spec weekly and opens a PR.
 
-By hand: `HAMN_SPEC=/path/to/openapi.oas.json go generate ./internal/spec`.
+By hand: `HAMN_SPEC=/path/to/openapi.oas.json make spec`.
 
 ## Tests
 

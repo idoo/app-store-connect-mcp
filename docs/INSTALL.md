@@ -14,6 +14,24 @@ go install github.com/idoo/hamn/cmd/hamn@latest
 
 Claude Desktop can skip this: double-click `hamn-<version>.mcpb` from [Releases](https://github.com/idoo/hamn/releases).
 
+Docker (`ghcr.io/idoo/hamn`) speaks stdio by default. Mount the key read-only and pass credentials as env:
+
+```sh
+docker run -i --rm \
+  -e ASC_KEY_ID -e ASC_ISSUER_ID -e ASC_PRIVATE_KEY_PATH=/keys/AuthKey_XXXX.p8 \
+  -v ~/.appstoreconnect/private_keys:/keys:ro \
+  ghcr.io/idoo/hamn
+```
+
+For HTTP, the container listens on a non-loopback address, so it needs `--allow-remote`, a bearer token and TLS:
+
+```sh
+docker run -d --name hamn -p 8765:8765 \
+  -e ASC_KEY_ID -e ASC_ISSUER_ID -e ASC_PRIVATE_KEY_PATH=/keys/AuthKey_XXXX.p8 -e HAMN_HTTP_TOKEN \
+  -v ~/.appstoreconnect/private_keys:/keys:ro -v "$PWD/tls:/tls:ro" \
+  ghcr.io/idoo/hamn serve --http 0.0.0.0:8765 --allow-remote --tls-cert /tls/cert.pem --tls-key /tls/key.pem
+```
+
 ## 2. API key (the user does this, not you)
 
 Keys never pass through the agent. Ask the user to:

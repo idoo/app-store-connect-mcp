@@ -2,7 +2,7 @@ GO ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: build test vet lint generate smoke tidy tidy-check vuln docs snapshot mcpb
+.PHONY: build test vet lint spec smoke tidy tidy-check vuln docs snapshot mcpb
 
 build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/hamn ./cmd/hamn
@@ -16,8 +16,10 @@ vet:
 lint:
 	golangci-lint run ./...
 
-generate:
-	$(GO) generate ./...
+# Regenerates the embedded spec index; gen fails without HAMN_SPEC (path to
+# Apple's openapi.oas.json).
+spec:
+	$(GO) generate ./internal/spec
 
 smoke:
 	$(GO) test -tags live -count=1 ./test/live/...

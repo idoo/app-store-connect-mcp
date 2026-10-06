@@ -121,6 +121,7 @@
         "id": "loc0",
         "outcome": "ok"
       }
-    ]
+    ],
+    "note": "re-preview: prepare changed the version"
   }
 }

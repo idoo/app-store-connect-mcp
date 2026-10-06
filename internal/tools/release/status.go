@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"net/url"
@@ -12,6 +13,9 @@ import (
 	"github.com/idoo/hamn/internal/applemeta"
 	"github.com/idoo/hamn/internal/tool"
 )
+
+// productsMax is the pagination ceiling for product lists (Apple's 5000 cap).
+const productsMax = 5000
 
 type statusIn struct {
 	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
@@ -98,6 +102,9 @@ type statusPlan struct {
 	Notes          []string `json:"notes,omitempty"`
 	PreparePlanID  string   `json:"prepare_plan_id,omitempty"`
 	SubmitPlanID   string   `json:"submit_plan_id,omitempty"`
+	// missingBuild is the desired_build check when desired.build matched
+	// nothing; the plan then omits the build step.
+	missingBuild *check
 }
 
 type statusOut struct {
@@ -191,6 +198,15 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 			return nil, err
 		}
 		out.Plan = plan
+		if c := plan.missingBuild; c != nil {
+			out.Checks = append(out.Checks, *c)
+			out.Summary.Block++
+			if out.Summary.Ready != nil {
+				ready := false
+				out.Summary.Ready = &ready
+			}
+			res.Then(tool.NextStep{Tool: c.FixVia.Tool, Args: c.FixVia.Args})
+		}
 		res.Then(next...)
 	}
 	for _, c := range out.Checks {
@@ -434,9 +450,12 @@ func newerVersion(a, b string) bool {
 }
 
 func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
-	iaps, err := env.ASC.List(ctx, "/v1/apps/"+s.App.ID+"/inAppPurchasesV2", tool.ListOptions{Include: []string{"versions"}, Query: url.Values{"limit[versions]": {"5"}}})
+	iaps, err := env.ASC.List(ctx, "/v1/apps/"+s.App.ID+"/inAppPurchasesV2", tool.ListOptions{Include: []string{"versions"}, Query: url.Values{"limit[versions]": {"5"}}, MaxItems: productsMax})
 	if err != nil {
 		return fmt.Errorf("list in-app purchases: %w", err)
+	}
+	if iaps.NextCursor != "" {
+		s.ProductsTruncated = append(s.ProductsTruncated, fmt.Sprintf("in-app purchase list truncated at %d; first-time product check is partial", len(iaps.Data)))
 	}
 	versionState := map[string]string{}
 	for _, r := range iaps.Included {
@@ -474,9 +493,12 @@ func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 			s.ReadyIAPs = append(s.ReadyIAPs, productLabel(p))
 		}
 	}
-	groups, err := env.ASC.List(ctx, "/v1/apps/"+s.App.ID+"/subscriptionGroups", tool.ListOptions{Include: []string{"subscriptions"}, Query: url.Values{"limit[subscriptions]": {"50"}}})
+	groups, err := env.ASC.List(ctx, "/v1/apps/"+s.App.ID+"/subscriptionGroups", tool.ListOptions{Include: []string{"subscriptions"}, Query: url.Values{"limit[subscriptions]": {"50"}}, MaxItems: productsMax})
 	if err != nil {
 		return fmt.Errorf("list subscription groups: %w", err)
+	}
+	if groups.NextCursor != "" {
+		s.ProductsTruncated = append(s.ProductsTruncated, fmt.Sprintf("subscription group list truncated at %d; first-time product check is partial", len(groups.Data)))
 	}
 	for _, r := range groups.Included {
 		if r.Type == "subscriptions" {
@@ -531,15 +553,26 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 	}
 	if d.Build != "" {
 		b, err := env.Resolve.Build(ctx, s.App.ID, s.Platform, versionedBuildRef(d.Build, versionString))
-		if err != nil {
+		var nf *tool.ErrNotFound
+		switch {
+		case errors.As(err, &nf):
+			// The report stays useful on release day: the missing build is a
+			// blocker, and the plan goes on without the build step.
+			plan.missingBuild = &check{
+				ID: "desired_build", Status: statusBlock, Detail: nf.Hint,
+				FixVia: &fixVia{Tool: "builds_wait", Args: map[string]any{"app": s.App.ID, "platform": string(s.Platform), "build": string(d.Build)}},
+			}
+			d.Build = ""
+		case err != nil:
 			return nil, nil, err
-		}
-		buildID = b.ID
-		if b.ID != curBuildID {
-			plan.Changes = append(plan.Changes, fmt.Sprintf("attach build %s (%s)", b.Number, b.ID))
-			target = nil
-			if b.ProcessingState != "VALID" {
-				plan.Notes = append(plan.Notes, "build "+b.Number+" is "+b.ProcessingState+"; wait with builds_wait before submitting")
+		default:
+			buildID = b.ID
+			if b.ID != curBuildID {
+				plan.Changes = append(plan.Changes, fmt.Sprintf("attach build %s (%s)", b.Number, b.ID))
+				target = nil
+				if b.ProcessingState != "VALID" {
+					plan.Notes = append(plan.Notes, "build "+b.Number+" is "+b.ProcessingState+"; wait with builds_wait before submitting")
+				}
 			}
 		}
 	}
@@ -617,6 +650,8 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 			_, hasPhased = s.Version.one("appStoreVersionPhasedRelease", "appStoreVersionPhasedReleases")
 		}
 		switch {
+		case *d.Phased && !hasPhased && !s.PriorReleased:
+			plan.Notes = append(plan.Notes, "phased release is only available for updates; skipped for a first version")
 		case *d.Phased && !hasPhased:
 			plan.Changes = append(plan.Changes, "enable phased release (starts INACTIVE, begins on release)")
 		case !*d.Phased && hasPhased:

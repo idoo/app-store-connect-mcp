@@ -86,9 +86,52 @@ func logLargestTools(t *testing.T, srv *mcp.Server, top int) {
 	}
 }
 
-var readSuffixes = []string{
-	"_list", "_get", "_status", "_plan", "_pull", "_report", "_search",
-	"_describe", "_lookup", "_summary", "_wait",
+// readSuffixes, writeVerbs and destructiveVerbs map a tool name's final
+// segment to its class (§4.2); classExceptions lists the names that do not
+// follow the rule, with the class they must have.
+var (
+	readSuffixes = []string{
+		"_list", "_get", "_status", "_plan", "_pull", "_report", "_search",
+		"_describe", "_lookup", "_summary", "_wait",
+	}
+	writeVerbs = []string{
+		"create", "add", "set", "update", "upsert", "upload", "attach", "prepare", "distribute",
+		"start", "enable", "setup", "generate", "invite", "register", "sync",
+	}
+	destructiveVerbs = []string{
+		"delete", "remove", "expire", "submit", "cancel", "release", "publish", "reply", "revoke", "phased",
+	}
+	classExceptions = map[string]tool.Class{
+		"doctor":          tool.Read,
+		"asc_api_request": tool.Destructive, // generic mutation, any method
+		"metadata_apply":  tool.Write,       // applies a metadata_plan; deletes only listed locales
+		"pricing_apply":   tool.Destructive, // apply-pricing (§4.2)
+		"users_invite":    tool.Destructive, // Apple emails the invitee immediately
+		// W verbs declared D in their packages; reported to Main, kept as shipped.
+		"signing_capabilities_set": tool.Destructive, // can disable capabilities
+		"webhooks_upsert":          tool.Destructive, // sends App Store events to an external URL
+	}
+)
+
+// expectedClass returns the class the name's verb implies, or false when the
+// verb is unknown.
+func expectedClass(name string) (tool.Class, bool) {
+	if c, ok := classExceptions[name]; ok {
+		return c, true
+	}
+	for _, s := range readSuffixes {
+		if strings.HasSuffix(name, s) {
+			return tool.Read, true
+		}
+	}
+	verb := name[strings.LastIndexByte(name, '_')+1:]
+	switch {
+	case slices.Contains(writeVerbs, verb):
+		return tool.Write, true
+	case slices.Contains(destructiveVerbs, verb):
+		return tool.Destructive, true
+	}
+	return 0, false
 }
 
 func TestRegistryNamingAndMeta(t *testing.T) {
@@ -100,15 +143,18 @@ func TestRegistryNamingAndMeta(t *testing.T) {
 		if len(m.Description) > tool.MaxDescription {
 			t.Errorf("%s: description %d bytes > %d", m.Name, len(m.Description), tool.MaxDescription)
 		}
-		if m.Class != tool.Read || m.Name == "doctor" || strings.HasPrefix(m.Name, "toolsets") {
-			continue
+		if m.Class == tool.Read && !m.Idempotent {
+			t.Errorf("read tool %s is not Idempotent", m.Name)
 		}
-		ok := false
-		for _, s := range readSuffixes {
-			ok = ok || strings.HasSuffix(m.Name, s)
+		if strings.HasPrefix(m.Name, "toolsets") {
+			continue // server-local session control, classed in mcpserver
 		}
-		if !ok {
-			t.Errorf("read tool %s lacks an allowed suffix %v", m.Name, readSuffixes)
+		want, ok := expectedClass(m.Name)
+		switch {
+		case !ok:
+			t.Errorf("tool %s: unknown verb; use a suffix from %v, %v or %v, or add an exception", m.Name, readSuffixes, writeVerbs, destructiveVerbs)
+		case m.Class != want:
+			t.Errorf("tool %s: class %v, its verb implies %v", m.Name, m.Class, want)
 		}
 	}
 }

@@ -82,8 +82,9 @@ func (p Profile) Validate() error {
 }
 
 // ResolvedKind returns the explicit key kind, or the kind implied by the
-// issuer id (team when present). The second result is false when the kind is
-// undetermined: no issuer and no explicit kind.
+// issuer id: team when present, otherwise individual, matching the signer,
+// which omits iss without an issuer. The second result is false when the kind
+// is inferred from a missing issuer rather than declared.
 func (p Profile) ResolvedKind() (tool.KeyKind, bool) {
 	switch {
 	case p.KeyKind != "":
@@ -91,7 +92,7 @@ func (p Profile) ResolvedKind() (tool.KeyKind, bool) {
 	case p.IssuerID != "":
 		return tool.KeyTeam, true
 	default:
-		return tool.KeyTeam, false
+		return tool.KeyIndividual, false
 	}
 }
 

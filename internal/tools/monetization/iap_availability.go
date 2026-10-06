@@ -138,7 +138,8 @@ func planAvail(ctx context.Context, env *tool.Env, k availKind, productID string
 }
 
 // gate adds the planned availability write to g: a first availability is
-// additive, replacing one needs confirm.
+// additive, replacing one needs confirm, and removing territories stops sales
+// there, so it needs human approval.
 func (p *availPlan) gate(g *upsertGate, k availKind) {
 	if p == nil {
 		return
@@ -149,7 +150,13 @@ func (p *availPlan) gate(g *upsertGate, k availKind) {
 		level = gateOverwrite
 		desc += fmt.Sprintf(" (adds %s; removes %s)", joinOrNone(p.Added), joinOrNone(p.Removed))
 	}
+	if len(p.Removed) > 0 {
+		level = gateHuman
+	}
 	g.add(level, desc)
+	if len(p.Removed) > 0 {
+		g.irreversible("stops sales in " + joinOrNone(p.Removed))
+	}
 }
 
 func joinOrNone(s []string) string {

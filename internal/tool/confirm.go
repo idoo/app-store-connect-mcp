@@ -128,6 +128,20 @@ const FlagFingerprint = "confirm_flag"
 // fingerprint (stale → error result), asks the human when possible and returns
 // a write-capable context.
 func Preview(ctx context.Context, env *Env, planID string, args any, fingerprint string, p PlanPreview) (context.Context, *Result) {
+	return preview(ctx, env, planID, args, fingerprint, p, false)
+}
+
+// PreviewHuman is [Preview] with human approval forced for this call, as if
+// the tool declared [Meta.RequireHuman] (the way [RequireHumanConfirm] relates
+// to [RequireConfirm]): for plans that make things public or irreversible
+// while the tool's other plans need only the agent's plan_id. NoConfirm does
+// not skip it; without elicitation it is refused unless the profile sets
+// AllowNoElicit.
+func PreviewHuman(ctx context.Context, env *Env, planID string, args any, fingerprint string, p PlanPreview) (context.Context, *Result) {
+	return preview(ctx, env, planID, args, fingerprint, p, true)
+}
+
+func preview(ctx context.Context, env *Env, planID string, args any, fingerprint string, p PlanPreview, human bool) (context.Context, *Result) {
 	c, res := gateCall(ctx, env, ConfirmByPlan)
 	if res != nil {
 		return nil, res
@@ -135,7 +149,8 @@ func Preview(ctx context.Context, env *Env, planID string, args any, fingerprint
 	if fingerprint == "" {
 		return nil, Fail(fmt.Errorf("%s: %w: empty state fingerprint", c.meta.Name, ErrInternal))
 	}
-	if env.NoConfirm && !c.meta.RequireHuman {
+	human = human || c.meta.RequireHuman
+	if env.NoConfirm && !human {
 		c.approvedBy = ApprovedAgent
 		return withWrite(ctx), nil
 	}
@@ -154,7 +169,7 @@ func Preview(ctx context.Context, env *Env, planID string, args any, fingerprint
 	if err := env.Plans.Verify(ctx, planID, c.meta.Name, args, fingerprint); err != nil {
 		return nil, Fail(err)
 	}
-	if res := approve(ctx, env, c, p, c.meta.RequireHuman); res != nil {
+	if res := approve(ctx, env, c, p, human); res != nil {
 		return nil, res
 	}
 	return withWrite(ctx), nil

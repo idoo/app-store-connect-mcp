@@ -62,13 +62,9 @@ func (s *session) env(ctx context.Context, req *mcp.CallToolRequest) *tool.Env {
 	return &e
 }
 
-var approveSchema = map[string]any{
-	"type": "object",
-	"properties": map[string]any{
-		"approve": map[string]any{"type": "boolean", "title": "Approve", "default": false},
-	},
-	"required": []string{"approve"},
-}
+// approveSchema is an empty form: the client's Accept button is the human
+// yes, so no field can be left at a default that silently declines.
+var approveSchema = map[string]any{"type": "object", "properties": map[string]any{}}
 
 // elicitFunc returns a yes/no elicitation for ss, or nil when the client did
 // not declare elicitation (tool.Call then reports ErrElicitationUnavailable).
@@ -81,8 +77,7 @@ func elicitFunc(ss *mcp.ServerSession) func(context.Context, string) (bool, erro
 		if err != nil {
 			return false, fmt.Errorf("elicit approval: %w", err)
 		}
-		approved, _ := r.Content["approve"].(bool)
-		return r.Action == "accept" && approved, nil
+		return r.Action == "accept", nil
 	}
 }
 
@@ -114,15 +109,20 @@ func rootsFunc(ss *mcp.ServerSession) func(context.Context) ([]string, error) {
 // asked through multi round-trip input requests instead.
 const mrtrProtocol = "2026-07-28"
 
-// canElicit reports whether ss declared elicitation on a protocol version
-// that allows in-request elicitation. On newer versions hamn fails closed
+// canElicit reports whether ss declared form elicitation (an empty
+// elicitation object means form) on a protocol version that allows
+// in-request elicitation. URL-only clients and newer versions fail closed
 // (Elicit reports ErrElicitationUnavailable).
 func canElicit(ss *mcp.ServerSession) bool {
 	if ss == nil {
 		return false
 	}
 	p := ss.InitializeParams()
-	return p != nil && p.Capabilities != nil && p.Capabilities.Elicitation != nil && p.ProtocolVersion < mrtrProtocol
+	if p == nil || p.Capabilities == nil {
+		return false
+	}
+	e := p.Capabilities.Elicitation
+	return e != nil && (e.Form != nil || e.URL == nil) && p.ProtocolVersion < mrtrProtocol
 }
 
 // render converts a tool result into an MCP result: structuredContent is

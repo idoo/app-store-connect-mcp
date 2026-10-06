@@ -152,3 +152,22 @@ func TestDefaultPath(t *testing.T) {
 		}
 	}
 }
+
+func TestResolvedKind(t *testing.T) {
+	tests := []struct {
+		name     string
+		p        Profile
+		kind     tool.KeyKind
+		explicit bool
+	}{
+		{"issuer means team", Profile{IssuerID: "I"}, tool.KeyTeam, true},
+		{"no issuer means individual", Profile{}, tool.KeyIndividual, false},
+		{"explicit team", Profile{KeyKind: tool.KeyTeam}, tool.KeyTeam, true},
+		{"explicit individual", Profile{KeyKind: tool.KeyIndividual}, tool.KeyIndividual, true},
+	}
+	for _, tt := range tests {
+		if kind, explicit := tt.p.ResolvedKind(); kind != tt.kind || explicit != tt.explicit {
+			t.Errorf("%s: ResolvedKind() = %s, %v; want %s, %v", tt.name, kind, explicit, tt.kind, tt.explicit)
+		}
+	}
+}

@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+- Promotional text on a live version, removing IAP or subscription territories, `release_phased remove` and registering new devices now need your approval in the client.
+- Approval forms: pressing Accept approves. Clients that only support URL elicitation get setup instructions instead of an error.
+- `screenshots_sync` defaults to `add` and deletes nothing unless you pass `mode: replace`.
+- `latest-valid` now really picks a VALID build. `release_status` reports a missing build as a check instead of failing, and build lists name other platforms with builds.
+- Report decoding streams records within its limits, keeps every section of multi-section reports, and fails instead of dropping rows.
+- Fixed the percentage-change sign after a negative period, and subscriber refunds are now counted as a positive number separate from units.
+- Client roots that contain your home directory are refused, and `offer-codes/` is git-ignored on first write.
+- An empty issuer ID now means an Individual key everywhere. Docs gained Docker recipes and brew caveats, `tools.json` is attested, and `make generate` became `make docs` / `make spec`.
+
 ## [0.1.3] - 2026-10-26
 
 - Calling a hidden tool now returns how to unlock it (writes or toolset) instead of "unknown tool".

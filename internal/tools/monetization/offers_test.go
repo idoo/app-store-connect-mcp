@@ -249,6 +249,10 @@ func TestOfferCodesGenerateOneTimeWithValues(t *testing.T) {
 	if err != nil || !strings.HasPrefix(string(file), "code\nCODEAX9\n") || strings.Count(string(file), "\n") != 26 {
 		t.Fatalf("codes file = %q, %v", file, err)
 	}
+	// Redeemable codes never get committed: the directory ignores itself.
+	if ig, err := k.Files.ReadFile("offer-codes/.gitignore"); err != nil || string(ig) != "*\n" || out.Note != "offer-codes/ is git-ignored" {
+		t.Fatalf(".gitignore = %q, %v, note %q", ig, err, out.Note)
+	}
 	if got := k.ASC.RequestsTo(http.MethodGet, "/v1/subscriptionOfferCodeOneTimeUseCodes/{id}/values"); len(got) != 1 || got[0].Path != "/v1/subscriptionOfferCodeOneTimeUseCodes/otN/values" {
 		t.Fatalf("values requests = %+v", got)
 	}

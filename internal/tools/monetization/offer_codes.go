@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"strings"
@@ -60,6 +61,7 @@ type offerCodesResultOut struct {
 	File           string `json:"file,omitempty"`
 	ValuesPending  bool   `json:"values_pending,omitempty"`
 	Sensitive      string `json:"sensitive,omitempty"`
+	Note           string `json:"note,omitempty"`
 }
 
 func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*tool.Result, error) {
@@ -319,6 +321,9 @@ func offerCodeValues(ctx context.Context, env *tool.Env, out *offerCodesResultOu
 		_ = w.Write([]string{c})
 	}
 	w.Flush()
+	if err := ensureOfferCodesIgnored(env.Files); err != nil {
+		return nil, err
+	}
 	name := offerCodesDir + "/" + out.ID + ".csv"
 	if err := env.Files.WriteFile(name, buf.Bytes(), 0o600); err != nil {
 		return nil, fmt.Errorf("write code values: %w", err)
@@ -329,7 +334,25 @@ func offerCodeValues(ctx context.Context, env *tool.Env, out *offerCodesResultOu
 	out.Count = len(codes)
 	out.File = name
 	out.Sensitive = "the file holds redeemable codes; share it only with intended recipients and never paste the values into chat"
+	out.Note = offerCodesDir + "/ is git-ignored"
 	return tool.OK(out), nil
+}
+
+// ensureOfferCodesIgnored writes offer-codes/.gitignore ("*") before the first
+// code file so redeemable codes are never committed by accident.
+func ensureOfferCodesIgnored(files tool.Files) error {
+	name := offerCodesDir + "/.gitignore"
+	_, err := files.Stat(name)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("check %s: %w", name, err)
+	}
+	if err := files.WriteFile(name, []byte("*\n"), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", name, err)
+	}
+	return nil
 }
 
 // offerParseCodes reads the first column of each CSV record, skipping a

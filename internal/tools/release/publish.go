@@ -191,8 +191,9 @@ func releasePhased(ctx context.Context, env *tool.Env, in phasedIn) (*tool.Resul
 		preview.Intended = []string{"phasedReleaseState " + cur + " → " + tr.to}
 	}
 	gate := tool.RequireConfirm
-	if in.Action == "complete" {
-		// Releasing to 100% of users at once is public and irreversible.
+	if in.Action == "complete" || in.Action == "remove" {
+		// Releasing to 100% of users at once, or dropping the phased schedule,
+		// is public and irreversible.
 		gate = tool.RequireHumanConfirm
 	}
 	wctx, res := gate(ctx, env, in.Confirm, preview)

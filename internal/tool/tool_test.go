@@ -322,6 +322,48 @@ func TestPlanRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPreviewHumanForcesHuman(t *testing.T) {
+	k := tooltest.New(t)
+	k.ASC.SkipSpecCheck = true // /v1/things is a deliberately fake operation
+	k.ASC.Handle("PATCH", "/v1/things/1", 200, `{"data":{"type":"things","id":"1","attributes":{"text":"new"}}}`)
+	tl := tool.New(tool.Meta{
+		Name: "example_apply", Toolset: tool.Metadata, Description: "Applies text.",
+		Class: tool.Write, Confirm: tool.ConfirmByPlan,
+	}, func(ctx context.Context, env *tool.Env, in planIn) (*tool.Result, error) {
+		wctx, res := tool.PreviewHuman(ctx, env, in.PlanID, in, "fp", tool.PlanPreview{Summary: "set public text"})
+		if res != nil {
+			return res, nil
+		}
+		_, err := env.ASC.Do(wctx, tool.Request{Method: "PATCH", Path: "/v1/things/1", Write: true, Body: map[string]any{}})
+		return tool.OK(map[string]any{"applied": true}), err
+	})
+	plan := func() string {
+		id, _ := tooltest.Decode[map[string]any](t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"text":"new"}`)))["plan_id"].(string)
+		if id == "" {
+			t.Fatal("no plan_id")
+		}
+		return id
+	}
+	// Meta.RequireHuman is false, yet a valid plan_id alone is refused.
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"text":"new","plan_id":"`+plan()+`"}`), "human_approval_required")
+	// NoConfirm (CI) does not skip the forced human gate.
+	k.Env.NoConfirm = true
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"text":"new","plan_id":"`+plan()+`"}`), "human_approval_required")
+	if n := len(k.ASC.Mutations()); n != 0 {
+		t.Fatalf("mutations = %d", n)
+	}
+	k.Env.NoConfirm = false
+	k.Elicit(false)
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"text":"new","plan_id":"`+plan()+`"}`), "declined")
+	k.Elicit(true)
+	if res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"text":"new","plan_id":"`+plan()+`"}`)); res.Meta.ApprovedBy != tool.ApprovedHuman {
+		t.Errorf("approved_by = %q, want human", res.Meta.ApprovedBy)
+	}
+	if n := len(k.ASC.Mutations()); n != 1 {
+		t.Fatalf("mutations = %d", n)
+	}
+}
+
 func TestAnnotations(t *testing.T) {
 	cases := []struct {
 		class                 tool.Class

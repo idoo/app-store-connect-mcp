@@ -52,7 +52,7 @@ func NewProjectFiles(explicit, cwd, home string) (*ProjectFiles, error) {
 // open confines to dir unless it is / or the home directory.
 func (pf *ProjectFiles) open(dir string) (*Files, error) {
 	if unsafeRoot(dir, pf.home) {
-		return nil, fmt.Errorf("%w: file access is off because the project folder resolved to %s (the disk root or your home folder); start hamn with --root <project folder> or set HAMN_ROOT",
+		return nil, fmt.Errorf("%w: file access is off because the project folder resolved to %s (the disk root, a top-level folder, or your home folder or one containing it); start hamn with --root <project folder> or set HAMN_ROOT",
 			tool.ErrUnavailable, dir)
 	}
 	f, err := NewFiles(dir)
@@ -138,14 +138,29 @@ func rootPath(uri string) (string, bool) {
 	return filepath.Clean(filepath.FromSlash(p)), true
 }
 
-// unsafeRoot reports whether dir is the filesystem root or the home directory
-// (symlinks resolved).
+// unsafeRoot reports whether dir is the filesystem root, a top-level folder
+// (fewer than 2 path components, e.g. /Users, before or after resolving
+// symlinks: macOS /home is an automount link), the home directory or any
+// ancestor of it (symlinks resolved).
 func unsafeRoot(dir, home string) bool {
 	d := canonical(dir)
-	if filepath.Dir(d) == d {
+	lexical := dir
+	if abs, err := filepath.Abs(dir); err == nil {
+		lexical = abs
+	}
+	if filepath.Dir(d) == d || pathDepth(d) < 2 || pathDepth(filepath.Clean(lexical)) < 2 {
 		return true
 	}
-	return home != "" && d == canonical(home)
+	return home != "" && within(d, canonical(home))
+}
+
+// pathDepth counts the components of a clean absolute path below its volume.
+func pathDepth(p string) int {
+	rest := strings.Trim(filepath.ToSlash(strings.TrimPrefix(p, filepath.VolumeName(p))), "/")
+	if rest == "" {
+		return 0
+	}
+	return strings.Count(rest, "/") + 1
 }
 
 func canonical(p string) string {

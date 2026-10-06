@@ -1367,7 +1367,7 @@
           "type": "string"
         },
         "start_date": {
-          "description": "YYYY-MM-DD (intro, win-back: required)",
+          "description": "YYYY-MM-DD; win-back: required; intro: default now",
           "type": "string"
         },
         "wait_months": {
@@ -2471,10 +2471,10 @@
           "type": "array"
         },
         "mode": {
-          "description": "replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones",
+          "description": "add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)",
           "enum": [
-            "replace",
-            "add"
+            "add",
+            "replace"
           ],
           "type": "string"
         },
@@ -2533,10 +2533,10 @@
           "type": "array"
         },
         "mode": {
-          "description": "replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones",
+          "description": "add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)",
           "enum": [
-            "replace",
-            "add"
+            "add",
+            "replace"
           ],
           "type": "string"
         },
@@ -2888,7 +2888,7 @@
     "toolset": "signing",
     "class": "W",
     "title": "Register devices",
-    "description": "Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices are reported as already (with their status) and not re-posted. Per-device results; one failure does not stop the batch.",
+    "description": "Register up to 100 devices (name, udid, platform) in one call. Idempotent by UDID: already registered devices are reported as already (with their status) and not re-posted. New devices need confirm:true and human approval (yearly slots).",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -2899,6 +2899,10 @@
     "input_schema": {
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "description": "true after reviewing the preview",
+          "type": "boolean"
+        },
         "devices": {
           "description": "1 to 100 devices",
           "items": {
@@ -2938,7 +2942,7 @@
     },
     "default_toolset": false,
     "needs_team_key": true,
-    "confirm": "none"
+    "confirm": "flag"
   },
   {
     "name": "signing_profile_create",

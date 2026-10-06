@@ -66,6 +66,9 @@ type buildsListOut struct {
 	Total    int           `json:"total,omitempty"`
 	Returned int           `json:"returned"`
 	Builds   []buildRow    `json:"builds"`
+	// OtherPlatforms counts matching builds on the app's other platforms
+	// when the platform was inferred and found none.
+	OtherPlatforms map[tool.Platform]int `json:"other_platforms,omitempty"`
 }
 
 func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Result, error) {
@@ -137,11 +140,55 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 		}
 	}
 	out.Returned = len(out.Builds)
+	if in.Platform == "" && len(out.Builds) == 0 {
+		if out.OtherPlatforms, err = otherPlatformBuilds(ctx, env, app, platform, q); err != nil {
+			return nil, err
+		}
+	}
 	res := tool.OK(out)
 	if processing != nil {
 		res.Then(tool.NextStep{Tool: "builds_wait", Args: map[string]any{"app": app.ID, "platform": string(platform), "build": processing.ID}})
 	}
+	for _, p := range app.Platforms {
+		if out.OtherPlatforms[p] > 0 {
+			res.Then(tool.NextStep{Tool: "builds_list", Args: map[string]any{"app": app.ID, "platform": string(p)}})
+		}
+	}
 	return res, nil
+}
+
+// otherPlatformBuilds counts the builds matching q on each of the app's
+// other platforms with one limit=1 GET per platform; platforms without
+// builds are omitted (nil when none has any).
+func otherPlatformBuilds(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, q url.Values) (map[tool.Platform]int, error) {
+	var out map[tool.Platform]int
+	for _, p := range app.Platforms {
+		if p == platform {
+			continue
+		}
+		pq := url.Values{
+			"filter[app]":                        {app.ID},
+			"filter[preReleaseVersion.platform]": {string(p)},
+			"limit":                              {"1"},
+			"fields[builds]":                     {"version"},
+		}
+		for _, k := range []string{"filter[preReleaseVersion.version]", "filter[processingState]", "filter[expired]"} {
+			if v := q.Get(k); v != "" {
+				pq.Set(k, v)
+			}
+		}
+		resp, err := env.ASC.Get(ctx, "/v1/builds", pq)
+		if err != nil {
+			return nil, fmt.Errorf("count %s builds: %w", p, err)
+		}
+		if n := max(pagingTotal(resp.Meta), len(resp.Data)); n > 0 {
+			if out == nil {
+				out = map[tool.Platform]int{}
+			}
+			out[p] = n
+		}
+	}
+	return out, nil
 }
 
 // pagingTotal reads meta.paging.total (0 when absent).

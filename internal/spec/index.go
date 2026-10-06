@@ -14,8 +14,8 @@ import (
 	"github.com/idoo/hamn/internal/tool"
 )
 
-// Regenerate with Apple's spec: HAMN_SPEC=/path/to/openapi.oas.json go generate ./internal/spec
-//go:generate sh -c "go run ./gen -out . -in \"${HAMN_SPEC:?set HAMN_SPEC to the path of Apple's openapi.oas.json}\""
+// Regenerate with Apple's spec: HAMN_SPEC=/path/to/openapi.oas.json make spec
+//go:generate go run ./gen -out .
 
 //go:embed index.json.gz
 var indexGz []byte

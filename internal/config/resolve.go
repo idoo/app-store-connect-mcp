@@ -245,7 +245,7 @@ func (r *Resolved) loadProfile(name string, cfg *Config, env envCreds, hasEnv bo
 			key = KeyRef{Source: KeyFromKeychain, KeyID: prof.KeyID}
 		}
 		r.setProfile(name, prof, key)
-		p.Problems = append(p.Problems, kindProblems(prof, `key_kind = "individual" in profile `+strconv.Quote(name))...)
+		p.Problems = append(p.Problems, kindProblems(prof, "issuer_id in profile "+strconv.Quote(name))...)
 	}
 	return nil
 }
