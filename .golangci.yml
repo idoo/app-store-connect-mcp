@@ -24,6 +24,7 @@ linters:
             - "!**/internal/mcpserver/**"
             - "!**/internal/tools/docsgen/**"
             - "!**/internal/deps/**"
+            - "!**/test/jobs/**"
           deny:
             - pkg: github.com/modelcontextprotocol/go-sdk
               desc: only internal/mcpserver and internal/tools/docsgen talk to the MCP SDK
@@ -40,8 +41,9 @@ linters:
           files:
             - "**/internal/tools/**"
           deny:
-            - pkg: github.com/idoo/hamn/internal/asc
-              desc: tool packages use tool.Env.ASC, never the client directly
+            # "$" makes the match exact, so internal/ascrules stays allowed.
+            - pkg: github.com/idoo/hamn/internal/asc$
+              desc: tool packages use tool.Env.ASC and internal/ascrules, never the client directly
     forbidigo:
       forbid:
         - pattern: ^fmt\.Print.*$

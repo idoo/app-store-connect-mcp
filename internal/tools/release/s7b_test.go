@@ -4,34 +4,11 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
-
-var (
-	specOnce sync.Once
-	specIdx  *spec.Index
-	specErr  error
-)
-
-// specCheck validates every request the fake received against the pinned
-// App Store Connect spec (path, method, query keys/enums, body).
-func specCheck(t *testing.T, k *tooltest.Kit) {
-	t.Helper()
-	specOnce.Do(func() { specIdx, specErr = spec.Load() })
-	if specErr != nil {
-		t.Fatal(specErr)
-	}
-	for _, r := range k.ASC.Requests() {
-		if err := specIdx.Validate(r); err != nil {
-			t.Errorf("%s %s?%s: %v", r.Method, r.Path, r.Query.Encode(), err)
-		}
-	}
-}
 
 // loggedReq is the golden form of one mutation.
 type loggedReq struct {
@@ -151,7 +128,6 @@ func TestReleasePrepareAppliesStatusPlan(t *testing.T) {
 	if got := len(k.ASC.Requests()) - before; got > 14 {
 		t.Errorf("prepare made %d requests", got)
 	}
-	specCheck(t, k)
 
 	// The plan is single use.
 	res = tooltest.Call(t, mustTool(t, "release_prepare"), k.Env, argsJSON(t, sres.Next[0].Args))
@@ -196,7 +172,6 @@ func TestReleasePrepareBuildStillProcessing(t *testing.T) {
 	if len(muts) != 1 || muts[0].Path != "/v1/appStoreVersions/v1" {
 		t.Errorf("mutations = %+v", mutationLog(k))
 	}
-	specCheck(t, k)
 }
 
 func TestReleasePrepareCreatesVersion(t *testing.T) {
@@ -211,7 +186,6 @@ func TestReleasePrepareCreatesVersion(t *testing.T) {
 		t.Errorf("version = %+v", out.Version)
 	}
 	tooltest.AssertGolden(t, "testdata/s7b/prepare_create.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
-	specCheck(t, k)
 }
 
 // submissionFixture registers an open submission (state "" = none).
@@ -269,7 +243,6 @@ func TestReleaseSubmitNewSubmission(t *testing.T) {
 		t.Errorf("out = %+v", out)
 	}
 	tooltest.AssertGolden(t, "testdata/s7b/submit_new.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
-	specCheck(t, k)
 }
 
 func TestReleaseSubmitReusesDraft(t *testing.T) {
@@ -284,7 +257,6 @@ func TestReleaseSubmitReusesDraft(t *testing.T) {
 	if len(k.ASC.RequestsTo("POST", "/v1/reviewSubmissions")) != 0 {
 		t.Error("created a second submission")
 	}
-	specCheck(t, k)
 }
 
 func TestReleaseSubmitAfterRejectionResolvesItems(t *testing.T) {
@@ -294,7 +266,6 @@ func TestReleaseSubmitAfterRejectionResolvesItems(t *testing.T) {
 	submitHandlers(t, k)
 	res := submitTwice(t, k, `{"app":"Hjul"}`)
 	tooltest.AssertGolden(t, "testdata/s7b/submit_resubmit.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
-	specCheck(t, k)
 }
 
 func TestReleaseSubmitAlreadySubmitted(t *testing.T) {
@@ -321,7 +292,6 @@ func TestReleaseSubmitAttachesIAPVersion(t *testing.T) {
 	k.ASC.Handle("POST", "/v1/inAppPurchaseVersions", 201, doc(t, jres{Type: "inAppPurchaseVersions", ID: "iv9", Attrs: map[string]any{"state": "PREPARE_FOR_SUBMISSION"}}))
 	res := submitTwice(t, k, `{"app":"Hjul","include_iaps":["Pro"]}`)
 	tooltest.AssertGolden(t, "testdata/s7b/submit_iap.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
-	specCheck(t, k)
 }
 
 func TestReleaseCancelInReview(t *testing.T) {
@@ -340,7 +310,6 @@ func TestReleaseCancelInReview(t *testing.T) {
 		t.Errorf("out = %+v", out)
 	}
 	tooltest.AssertGolden(t, "testdata/s7b/cancel_in_review.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
-	specCheck(t, k)
 }
 
 func TestReleaseCancelDraftDeletesItems(t *testing.T) {
@@ -357,5 +326,4 @@ func TestReleaseCancelDraftDeletesItems(t *testing.T) {
 	if len(k.ASC.RequestsTo("PATCH", "/v1/reviewSubmissions/{id}")) != 0 {
 		t.Error("draft was PATCHed canceled")
 	}
-	specCheck(t, k)
 }

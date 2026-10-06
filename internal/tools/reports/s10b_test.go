@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/spec"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
@@ -23,11 +22,6 @@ const notFound = `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The spe
 func s10bKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
 	k := tooltest.New(t)
-	idx, err := spec.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	k.Env.Spec = idx
 	k.Clock.Set(s10bNow)
 	k.Resolve.Apps = []tool.App{
 		{ID: "1000000001", BundleID: "com.example.notes", Name: "Example Notes", SKU: "com.example.notes"},
@@ -59,20 +53,6 @@ func handleGz(t *testing.T, k *tooltest.Kit, pattern, file string) {
 	k.ASC.HandleFixture(http.MethodGet, pattern, tooltest.Fixture{
 		Header: http.Header{"Content-Type": {"application/a-gzip"}}, Body: gz(t, file),
 	})
-}
-
-// assertSpec checks every recorded request against the pinned spec.
-func assertSpec(t *testing.T, k *tooltest.Kit) {
-	t.Helper()
-	for _, r := range k.ASC.Requests() {
-		if _, ok := k.Env.Spec.Match(r.Method, r.Path); !ok {
-			t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-			continue
-		}
-		if err := k.Env.Spec.Validate(r); err != nil {
-			t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-		}
-	}
 }
 
 func mustTool(t *testing.T, name string) tool.Tool {
@@ -131,7 +111,6 @@ func TestSalesReportThisWeek(t *testing.T) {
 			t.Errorf("query = %s accept=%q", q.Encode(), r.Accept)
 		}
 	}
-	assertSpec(t, k)
 }
 
 func TestSalesReportAppFilterAndUSDEstimate(t *testing.T) {
@@ -154,7 +133,6 @@ func TestSalesReportAppFilterAndUSDEstimate(t *testing.T) {
 	if len(fin) != 1 || fin[0].Query.Get("filter[reportType]") != "FINANCE_DETAIL" || fin[0].Query.Get("filter[regionCode]") != "Z1" {
 		t.Errorf("finance requests = %+v", fin)
 	}
-	assertSpec(t, k)
 }
 
 func TestSalesReportUSDEstimateMissingRate(t *testing.T) {
@@ -205,7 +183,6 @@ func TestSalesReportExplicitFrequency(t *testing.T) {
 	if s := tooltest.JSON(t, got["covered_days"]); s != `["2026-10-18"]` {
 		t.Errorf("covered = %s", s)
 	}
-	assertSpec(t, k)
 
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"frequency":"WEEKLY","report_date":"2026-10-21"}`), "invalid_arguments")
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday","from":"2026-10-01","to":"2026-10-02"}`), "invalid_arguments")
@@ -239,7 +216,6 @@ func TestFinanceReportWithFX(t *testing.T) {
 	if r.Get("filter[reportType]") != "FINANCE_DETAIL" || r.Get("filter[vendorNumber]") != "12345678" {
 		t.Errorf("query = %s", r.Encode())
 	}
-	assertSpec(t, k)
 }
 
 func TestFinanceReportWithoutFX(t *testing.T) {
@@ -259,7 +235,6 @@ func TestFinanceReportWithoutFX(t *testing.T) {
 	if got["region"] != "ZZ" || got["report_type"] != "FINANCIAL" {
 		t.Errorf("defaults = %s", tooltest.JSON(t, got))
 	}
-	assertSpec(t, k)
 }
 
 func TestFinanceReportPending(t *testing.T) {

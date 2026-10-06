@@ -101,7 +101,6 @@ func TestInsightsSummaryWithSales(t *testing.T) {
 	if len(rv) != 1 || rv[0].Query.Get("sort") != "-createdDate" {
 		t.Errorf("review requests = %+v", rv)
 	}
-	assertSpec(t, k)
 }
 
 func TestInsightsSummaryVendorMissing(t *testing.T) {

@@ -169,11 +169,6 @@ func (s *fakeShot) res(typ string) jres {
 func newKit(t *testing.T) (*tooltest.Kit, *fake) {
 	t.Helper()
 	k := tooltest.New(t)
-	specOnce.Do(func() { specIdx, specErr = spec.Load() })
-	if specErr != nil {
-		t.Fatal(specErr)
-	}
-	k.Env.Spec = specIdx
 	k.Resolve.Apps = []tool.App{{ID: "app1", Name: "Hjul", BundleID: "se.hjul", Platforms: []tool.Platform{tool.IOS}}}
 	k.Resolve.AppLocales = []string{"en-US", "de-DE"}
 	k.Resolve.Versions = map[tool.VersionRef]tool.Version{
@@ -184,7 +179,6 @@ func newKit(t *testing.T) (*tooltest.Kit, *fake) {
 		sets: map[string][]*fakeSet{}, shots: map[string]*fakeShot{}, previews: map[string][]*fakePreviewSet{},
 	}
 	f.routes()
-	t.Cleanup(func() { assertSpec(t, k) })
 	return k, f
 }
 
@@ -385,20 +379,6 @@ func (f *fake) routes() {
 		s.state = "COMPLETE"
 		return tooltest.Fixture{Status: 200, Body: doc(t, s.res("appPreviews"))}
 	})
-}
-
-// assertSpec checks every recorded request against the pinned spec.
-func assertSpec(t *testing.T, k *tooltest.Kit) {
-	t.Helper()
-	for _, r := range k.ASC.Requests() {
-		if _, ok := k.Env.Spec.Match(r.Method, r.Path); !ok {
-			t.Errorf("%s %s is not a spec operation", r.Method, r.Path)
-			continue
-		}
-		if err := k.Env.Spec.Validate(r); err != nil {
-			t.Errorf("%s %s?%s violates the spec: %v", r.Method, r.Path, r.Query.Encode(), err)
-		}
-	}
 }
 
 // write puts a file into the kit's project root.

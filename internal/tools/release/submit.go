@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/idoo/hamn/internal/ascrules"
 	"github.com/idoo/hamn/internal/tool"
 )
 
@@ -226,7 +227,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	}
 	if state == "" {
 		// Read back a submission this call may just have created.
-		rb, err := getConsistent(wctx, env, "/v1/reviewSubmissions/"+subID, url.Values{"fields[reviewSubmissions]": {"state"}})
+		rb, err := env.ASC.Get(ascrules.WithEventualConsistency(wctx), "/v1/reviewSubmissions/"+subID, url.Values{"fields[reviewSubmissions]": {"state"}})
 		if err != nil {
 			return nil, fmt.Errorf("read back review submission: %w", err)
 		}

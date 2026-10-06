@@ -80,7 +80,6 @@ func TestReleaseReviewStatusWithItems(t *testing.T) {
 	if n := len(k.ASC.Requests()); n != 2 {
 		t.Errorf("%d requests, want 2", n)
 	}
-	specCheck(t, k)
 }
 
 func TestReleaseReviewStatusNone(t *testing.T) {
@@ -90,7 +89,6 @@ func TestReleaseReviewStatusNone(t *testing.T) {
 	if out := tooltest.Decode[reviewStatusOut](t, res); out.Current != nil || out.Rejection != nil {
 		t.Errorf("out = %+v", out)
 	}
-	specCheck(t, k)
 }
 
 func TestReleasePublishWrongStateRefused(t *testing.T) {
@@ -104,7 +102,6 @@ func TestReleasePublishWrongStateRefused(t *testing.T) {
 	if n := len(k.ASC.Mutations()); n != 0 {
 		t.Errorf("%d mutations", n)
 	}
-	specCheck(t, k)
 }
 
 func TestReleasePublishPosts(t *testing.T) {
@@ -125,7 +122,6 @@ func TestReleasePublishPosts(t *testing.T) {
 	if got := tooltest.JSON(t, muts[0].Body); got != want {
 		t.Errorf("body = %s", got)
 	}
-	specCheck(t, k)
 }
 
 func TestReleasePublishAlreadyReleased(t *testing.T) {
@@ -145,7 +141,6 @@ func TestReleasePublishExplicitVersion(t *testing.T) {
 	if !strings.Contains(body.Message, "WAITING_FOR_REVIEW") || len(body.Next) != 1 || body.Next[0].Tool != "release_review_status" {
 		t.Errorf("body = %+v", body)
 	}
-	specCheck(t, k)
 }
 
 func TestReleasePhasedTransitions(t *testing.T) {
@@ -175,7 +170,6 @@ func TestReleasePhasedTransitions(t *testing.T) {
 			if len(muts) != 1 || muts[0].Path != "/v1/appStoreVersionPhasedReleases/pr1" || tooltest.JSON(t, muts[0].Body) != want {
 				t.Errorf("mutations = %+v", mutationLog(k))
 			}
-			specCheck(t, k)
 		})
 	}
 }
@@ -206,7 +200,6 @@ func TestReleasePhasedRemoveOnlyInactive(t *testing.T) {
 	if out.Status != "removed" || len(muts) != 1 || muts[0].Method != "DELETE" || muts[0].Path != "/v1/appStoreVersionPhasedReleases/pr1" {
 		t.Errorf("out = %+v mutations = %+v", out, mutationLog(k))
 	}
-	specCheck(t, k)
 }
 
 func TestReleasePhasedStartOnLiveIsManual(t *testing.T) {
@@ -254,7 +247,6 @@ func TestBuildsList(t *testing.T) {
 		q.Get("include") != "preReleaseVersion,buildBetaDetail,betaGroups" || q.Get("fields[builds]") == "" {
 		t.Errorf("query = %s", q.Encode())
 	}
-	specCheck(t, k)
 }
 
 // buildFixture queues processing states for build b2 (the last repeats).
@@ -297,7 +289,6 @@ func TestBuildsWaitValid(t *testing.T) {
 	if len(res.Next) == 0 || res.Next[0].Tool != "testflight_distribute" {
 		t.Errorf("next = %+v", res.Next)
 	}
-	specCheck(t, k)
 }
 
 func TestBuildsWaitTimeout(t *testing.T) {

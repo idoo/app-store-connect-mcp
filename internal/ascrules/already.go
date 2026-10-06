@@ -1,4 +1,7 @@
-package asc
+// Package ascrules holds App Store Connect behaviour rules shared by the
+// client and the tool packages: the eventual-consistency read flag and the
+// per-operation "already exists" answers.
+package ascrules
 
 import (
 	"errors"
