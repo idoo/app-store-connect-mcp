@@ -10,7 +10,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Build upload states (BuildUploadState).

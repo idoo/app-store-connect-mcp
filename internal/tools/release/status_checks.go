@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/applemeta"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Check statuses.
@@ -16,7 +16,7 @@ const (
 	statusBlock = "block"
 	// statusInfo is a fact, not a problem: nothing to fix now.
 	statusInfo = "info"
-	// statusManual is a check hamn cannot read via the API; a human must
+	// statusManual is a check asc-mcp cannot read via the API; a human must
 	// confirm it in App Store Connect (fix_via.manual is the deep link).
 	statusManual = "manual"
 )
@@ -28,7 +28,7 @@ var lockedStates = []string{"WAITING_FOR_REVIEW", "IN_REVIEW", "ACCEPTED", "PEND
 // versionScopedChecks cannot change while the version is with App Review.
 var versionScopedChecks = []string{"build", "export_compliance", "whats_new", "listing", "screenshots", "review_detail"}
 
-// fixVia says how a check is fixed: a hamn tool, or manually at a URL.
+// fixVia says how a check is fixed: a asc-mcp tool, or manually at a URL.
 type fixVia struct {
 	Tool   string         `json:"tool,omitempty"`
 	Args   map[string]any `json:"args,omitempty"`
@@ -263,7 +263,7 @@ func limitIssue(locale string, f applemeta.Field, v string) string {
 
 func checkListing(s *statusSnapshot) check {
 	c := check{ID: "listing", Status: statusOK, FixVia: fixTool("metadata_plan")}
-	// stored lists over-limit keywords Apple already accepted: hamn refuses to
+	// stored lists over-limit keywords Apple already accepted: asc-mcp refuses to
 	// write such a value, but the stored one is not a submit blocker.
 	var stored []string
 	for _, l := range s.Version.localizations() {
@@ -278,7 +278,7 @@ func checkListing(s *statusSnapshot) check {
 			switch {
 			case msg == "":
 			case f == applemeta.FieldKeywords:
-				stored = append(stored, msg+" (stored value accepted by Apple; hamn will not write values over the limit)")
+				stored = append(stored, msg+" (stored value accepted by Apple; asc-mcp will not write values over the limit)")
 			default:
 				c.Items = append(c.Items, msg)
 			}

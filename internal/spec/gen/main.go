@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idoo/hamn/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
 )
 
 const defaultSourceURL = "https://developer.apple.com/sample-code/app-store-connect/app-store-connect-openapi-specification.zip"
@@ -41,7 +41,7 @@ type Provenance struct {
 }
 
 func main() {
-	in := flag.String("in", os.Getenv("HAMN_SPEC"), "path to Apple's openapi.oas.json (default $HAMN_SPEC)")
+	in := flag.String("in", os.Getenv("ASC_MCP_SPEC"), "path to Apple's openapi.oas.json (default $ASC_MCP_SPEC)")
 	out := flag.String("out", filepath.Join("internal", "spec"), "output directory")
 	zipSHA := flag.String("zip-sha256", "", "sha256 of the downloaded spec zip (kept from PROVENANCE.json when the spec is unchanged)")
 	source := flag.String("source-url", defaultSourceURL, "spec download URL")
@@ -54,7 +54,7 @@ func main() {
 
 func run(in, out, zipSHA, source string) error {
 	if in == "" {
-		return errors.New("-in or HAMN_SPEC is required")
+		return errors.New("-in or ASC_MCP_SPEC is required")
 	}
 	raw, err := os.ReadFile(filepath.Clean(in)) //nolint:gosec // dev tool: operator-supplied spec path
 	if err != nil {

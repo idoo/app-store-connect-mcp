@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/idoo/hamn/internal/ascrules"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/ascrules"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // applyConcurrency is the number of localization requests in flight.

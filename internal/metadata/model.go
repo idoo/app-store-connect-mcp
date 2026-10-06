@@ -12,7 +12,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/idoo/hamn/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 )
 
 // Level is the App Store Connect resource a localized field lives on.

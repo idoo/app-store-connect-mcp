@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
-	_ "github.com/idoo/hamn/internal/tools/all" // register every tool
-	"github.com/idoo/hamn/skills"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/all" // register every tool
+	"github.com/idoo/app-store-connect-mcp/skills"
 )
 
 var wantSkills = []string{
-	"hamn-metadata-translate", "hamn-release", "hamn-reviews",
-	"hamn-sales", "hamn-screenshots", "hamn-testflight",
+	"asc-mcp-metadata-translate", "asc-mcp-release", "asc-mcp-reviews",
+	"asc-mcp-sales", "asc-mcp-screenshots", "asc-mcp-testflight",
 }
 
 // vocabulary lists snake_case words skills may put in backticks that are

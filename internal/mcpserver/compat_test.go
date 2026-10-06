@@ -13,9 +13,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/asc"
-	"github.com/idoo/hamn/internal/mcpserver"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/asc"
+	"github.com/idoo/app-store-connect-mcp/internal/mcpserver"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // listTools returns the advertised tools of a fresh server over an

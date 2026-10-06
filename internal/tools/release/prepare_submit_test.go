@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 // loggedReq is the golden form of one mutation.

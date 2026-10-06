@@ -1,18 +1,18 @@
 # Contributing
 
-Hamn is small on purpose. Open a short issue before a big PR.
+asc-mcp is small on purpose. Open a short issue before a big PR.
 
 ## Setup
 
 Go 1.25+, plus golangci-lint v2 for linting.
 
 ```sh
-make build      # bin/hamn
+make build      # bin/asc-mcp
 make test       # go test -race ./...
 make vet
 make lint
 make docs       # regenerates docs/TOOLS.md and docs/tools.json, fails on any diff
-make spec       # spec index only; needs HAMN_SPEC=/path/to/openapi.oas.json
+make spec       # spec index only; needs ASC_MCP_SPEC=/path/to/openapi.oas.json
 ```
 
 CI fails if docsgen changes anything, so run `make docs` and commit what it writes.
@@ -26,7 +26,7 @@ Tests never write to a real App Store Connect account. Everything runs against f
 Hand-write fixtures from the spec's examples, or record them:
 
 ```sh
-go run -tags dev ./cmd/hamn-record -app 1234567890 -out testdata/fixtures
+go run -tags dev ./cmd/asc-mcp-record -app 1234567890 -out testdata/fixtures
 ```
 
 The recorder is GET-only and swaps out ids, names and emails. Read what it wrote anyway. `go test ./... -update` rewrites goldens. Review the diff, because goldens are the contract. A redaction scan fails if anything secret-looking lands in one.

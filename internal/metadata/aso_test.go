@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 func issue(is []Issue, code string) *Issue {

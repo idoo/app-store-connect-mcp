@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/asc"
-	"github.com/idoo/hamn/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/asc"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
 )
 
 // TestToken is the bearer token the client from [Server.NewClient] sends.
@@ -33,7 +33,7 @@ func (s *Server) NewClient(t testing.TB) *asc.Client {
 		Spec:      idx,
 		FreeText:  idx.FreeTextAttributes,
 		Clock:     instantClock{},
-		UserAgent: "hamn/asctest",
+		UserAgent: "asc-mcp/asctest",
 		Jitter:    func() float64 { return 0 },
 	}
 	c, err := asc.New(o)

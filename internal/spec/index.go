@@ -11,10 +11,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// Regenerate with Apple's spec: HAMN_SPEC=/path/to/openapi.oas.json make spec
+// Regenerate with Apple's spec: ASC_MCP_SPEC=/path/to/openapi.oas.json make spec
 //go:generate go run ./gen -out .
 
 //go:embed index.json.gz

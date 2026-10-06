@@ -3,16 +3,16 @@
 #   goreleaser release --snapshot --clean --skip=publish,sign,docker
 version: 2
 
-project_name: hamn
+project_name: asc-mcp
 
 before:
   hooks:
     - go mod download
 
 builds:
-  - id: hamn
-    main: ./cmd/hamn
-    binary: hamn
+  - id: asc-mcp
+    main: ./cmd/asc-mcp
+    binary: asc-mcp
     env:
       - CGO_ENABLED=0
     goos: [darwin, linux, windows]
@@ -26,17 +26,17 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 # Fat darwin binary for the .mcpb bundle only (mcpb platform overrides are
-# per-OS, not per-arch). Archives below take only the per-arch `hamn` builds.
+# per-OS, not per-arch). Archives below take only the per-arch `asc-mcp` builds.
 universal_binaries:
-  - id: hamn-universal
-    ids: [hamn]
-    name_template: hamn
+  - id: asc-mcp-universal
+    ids: [asc-mcp]
+    name_template: asc-mcp
     replace: false
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - id: hamn
-    ids: [hamn]
+  - id: asc-mcp
+    ids: [asc-mcp]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
@@ -58,7 +58,7 @@ sboms:
 # Keyless cosign (GitHub OIDC) over checksums.txt; the bundle covers every
 # archive through its sha256. Verify:
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \
-#     --certificate-identity-regexp '^https://github.com/idoo/hamn/.github/workflows/release.yml@refs/tags/v' \
+#     --certificate-identity-regexp '^https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/v' \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
 signs:
   - id: checksums
@@ -69,10 +69,10 @@ signs:
 
 # Docker image, distroless static, multi-arch: stdio by default; HTTP needs --allow-remote and TLS.
 dockers_v2:
-  - id: hamn
-    ids: [hamn]
+  - id: asc-mcp
+    ids: [asc-mcp]
     images:
-      - ghcr.io/idoo/hamn
+      - ghcr.io/idoo/app-store-connect-mcp
     tags:
       - "{{ .Version }}"
       - "{{ if not .Prerelease }}latest{{ end }}"
@@ -81,13 +81,13 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     labels:
-      org.opencontainers.image.title: hamn
+      org.opencontainers.image.title: asc-mcp
       org.opencontainers.image.description: MCP server for App Store Connect, read-only by default
-      org.opencontainers.image.source: https://github.com/idoo/hamn
+      org.opencontainers.image.source: https://github.com/idoo/app-store-connect-mcp
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.licenses: MIT
-      io.modelcontextprotocol.server.name: io.github.idoo/hamn
+      io.modelcontextprotocol.server.name: io.github.idoo/app-store-connect-mcp
 
 changelog:
   use: git
@@ -118,7 +118,7 @@ changelog:
 release:
   github:
     owner: idoo
-    name: hamn
+    name: asc-mcp
   prerelease: auto
   # Immutable releases: goreleaser only creates a draft; release.yml adds the
   # .mcpb, tools.json and attestations, then publishes it as the last step.
@@ -126,10 +126,10 @@ release:
   replace_existing_draft: false
   mode: keep-existing
   footer: |
-    **Install:** `brew install idoo/tap/hamn`, `curl -fsSL https://raw.githubusercontent.com/idoo/hamn/main/install.sh | sh`,
-    `go install github.com/idoo/hamn/cmd/hamn@{{ .Tag }}`, `docker pull ghcr.io/idoo/hamn:{{ .Version }}`,
-    or `hamn-{{ .Version }}.mcpb` for Claude Desktop.
+    **Install:** `brew install idoo/tap/asc-mcp`, `curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh`,
+    `go install github.com/idoo/app-store-connect-mcp/cmd/asc-mcp@{{ .Tag }}`, `docker pull ghcr.io/idoo/app-store-connect-mcp:{{ .Version }}`,
+    or `asc-mcp-{{ .Version }}.mcpb` for Claude Desktop.
 
-    **Verify:** `gh attestation verify hamn_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/hamn`, or
-    `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github.com/idoo/hamn/.github/workflows/release.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
-    The .mcpb is listed in `hamn-{{ .Version }}.mcpb.sha256`.
+    **Verify:** `gh attestation verify asc-mcp_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp`, or
+    `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
+    The .mcpb is listed in `asc-mcp-{{ .Version }}.mcpb.sha256`.

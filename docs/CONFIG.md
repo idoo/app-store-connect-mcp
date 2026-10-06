@@ -1,26 +1,26 @@
 # Configuration
 
-Credentials come from env vars or named profiles. Only a human at a terminal manages them with `hamn auth`. No MCP tool can read or change them, however nicely it asks.
+Credentials come from env vars or named profiles. Only a human at a terminal manages them with `asc-mcp auth`. No MCP tool can read or change them, however nicely it asks.
 
 ## Commands
 
-`hamn --help` lists them all, and every subcommand takes `--help`. The ones worth knowing:
+`asc-mcp --help` lists them all, and every subcommand takes `--help`. The ones worth knowing:
 
 ```text
-hamn [serve]                      MCP over stdio (default)
-hamn auth add|import              add a key; asks team or individual (--kind), tests it first (--no-verify skips)
-hamn auth list|test|remove
-hamn auth set [NAME] key=value    vendor_number, default_app, allow_writes, issuer_id, key_kind
-hamn doctor [--profile NAME]
-hamn config snippet|install CLIENT [--profile NAME]
-hamn skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--force]
+asc-mcp [serve]                      MCP over stdio (default)
+asc-mcp auth add|import              add a key; asks team or individual (--kind), tests it first (--no-verify skips)
+asc-mcp auth list|test|remove
+asc-mcp auth set [NAME] key=value    vendor_number, default_app, allow_writes, issuer_id, key_kind
+asc-mcp doctor [--profile NAME]
+asc-mcp config snippet|install CLIENT [--profile NAME]
+asc-mcp skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--force]
 ```
 
 `auth set` without a name targets `env` when `ASC_KEY_ID` is set (stored under `[env]`), otherwise the default profile. Setting `issuer_id=` or `key_kind=individual` turns a profile into an individual key.
 
-`config install` merges Hamn into the client's file and keeps a backup: `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.codex/config.toml`, or `Claude/claude_desktop_config.json` and `Code/User/mcp.json` under your app-support dir. For `claude-code` it runs `claude mcp add`, or prints the command if `claude` isn't on your PATH. It writes the `hamn` on your PATH, so `brew upgrade` doesn't break anything.
+`config install` merges asc-mcp into the client's file and keeps a backup: `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.codex/config.toml`, or `Claude/claude_desktop_config.json` and `Code/User/mcp.json` under your app-support dir. For `claude-code` it runs `claude mcp add`, or prints the command if `claude` isn't on your PATH. It writes the `asc-mcp` on your PATH, so `brew upgrade` doesn't break anything.
 
-## `hamn serve` flags
+## `asc-mcp serve` flags
 
 | Flag | Meaning |
 |---|---|
@@ -28,7 +28,7 @@ hamn skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--
 | `--allow-writes` | Turn on write tools |
 | `--toolsets EXPR` | See [Toolsets](#toolsets) |
 | `--discovery` | Start with core tools only |
-| `--no-confirm` | Skip previews, only with `HAMN_CI=1`. Human-approval tools still ask |
+| `--no-confirm` | Skip previews, only with `ASC_MCP_CI=1`. Human-approval tools still ask |
 | `--http ADDR` | Streamable HTTP instead of stdio |
 | `--allow-remote`, `--tls-cert`, `--tls-key` | Non-loopback HTTP, TLS required |
 | `--http-session-timeout`, `--http-max-sessions` | Defaults `30m` and `64` |
@@ -42,24 +42,24 @@ hamn skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--
 | `ASC_PRIVATE_KEY_PATH` or `ASC_PRIVATE_KEY` | The `.p8` path, or the key as PEM / base64 PEM |
 | `ASC_KEY_KIND` | `team` or `individual`, if it can't be guessed |
 | `ASC_VENDOR_NUMBER` | For sales and finance reports |
-| `HAMN_PROFILE`, `HAMN_ALLOW_WRITES`, `HAMN_TOOLSETS`, `HAMN_DISCOVERY`, `HAMN_ROOT` | Same as the flags |
-| `HAMN_MAX_RESPONSE_BYTES` | Result cap, default `60000` (4096 to 10 MiB) |
-| `HAMN_MAX_RETRIES` | Default `3` (0 to 10) |
-| `HAMN_CI` | Required for `--no-confirm` |
-| `HAMN_HTTP_TOKEN`, `HAMN_HTTP_SESSION_TIMEOUT`, `HAMN_HTTP_MAX_SESSIONS` | HTTP mode |
-| `HAMN_BASE_URL` | Loopback-only API override, for tests |
+| `ASC_MCP_PROFILE`, `ASC_MCP_ALLOW_WRITES`, `ASC_MCP_TOOLSETS`, `ASC_MCP_DISCOVERY`, `ASC_MCP_ROOT` | Same as the flags |
+| `ASC_MCP_MAX_RESPONSE_BYTES` | Result cap, default `60000` (4096 to 10 MiB) |
+| `ASC_MCP_MAX_RETRIES` | Default `3` (0 to 10) |
+| `ASC_MCP_CI` | Required for `--no-confirm` |
+| `ASC_MCP_HTTP_TOKEN`, `ASC_MCP_HTTP_SESSION_TIMEOUT`, `ASC_MCP_HTTP_MAX_SESSIONS` | HTTP mode |
+| `ASC_MCP_BASE_URL` | Loopback-only API override, for tests |
 
-fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `HAMN_VERSION` and `HAMN_INSTALL_DIR`.
+fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `ASC_MCP_VERSION` and `ASC_MCP_INSTALL_DIR`.
 
-Profile picked: `--profile` > `HAMN_PROFILE` > `ASC_*` env > `.hamn.toml` > `default_profile` > the only profile. Writes: `--allow-writes` > `HAMN_ALLOW_WRITES` > profile `allow_writes`, and a pin can still switch them off.
+Profile picked: `--profile` > `ASC_MCP_PROFILE` > `ASC_*` env > `.asc-mcp.toml` > `default_profile` > the only profile. Writes: `--allow-writes` > `ASC_MCP_ALLOW_WRITES` > profile `allow_writes`, and a pin can still switch them off.
 
 ## Config file
 
-`~/.config/hamn/config.toml` (or `$XDG_CONFIG_HOME`, `%AppData%` on Windows). Hamn refuses it if group or others can write it, and complains if they can read it. Unknown keys are errors, so typos don't vanish quietly.
+`~/.config/asc-mcp/config.toml` (or `$XDG_CONFIG_HOME`, `%AppData%` on Windows). asc-mcp refuses it if group or others can write it, and complains if they can read it. Unknown keys are errors, so typos don't vanish quietly.
 
 ```toml
 default_profile = "personal"
-trusted_pins = ["/Users/me/code/hjul"]   # dirs whose .hamn.toml may pick any profile
+trusted_pins = ["/Users/me/code/hjul"]   # dirs whose .asc-mcp.toml may pick any profile
 allow_profile_switch = false              # adds a per-call `profile` argument
 
 [profiles.personal]
@@ -85,7 +85,7 @@ Individual keys have no issuer id and get their user's permissions. Some endpoin
 
 ## Per-project pin
 
-Hamn looks for `.hamn.toml` from the working directory up to the git root:
+asc-mcp looks for `.asc-mcp.toml` from the working directory up to the git root:
 
 ```toml
 profile = "personal"
@@ -104,15 +104,15 @@ Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (default
 ## HTTP mode
 
 ```sh
-HAMN_HTTP_TOKEN=$(openssl rand -hex 32) hamn serve --http 127.0.0.1:8765
+ASC_MCP_HTTP_TOKEN=$(openssl rand -hex 32) asc-mcp serve --http 127.0.0.1:8765
 ```
 
-Every request needs `Authorization: Bearer <token>`. Without `HAMN_HTTP_TOKEN` Hamn prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected. `/healthz` needs no token and says nothing. Each session gets its own server, so toolsets and `enable_writes` don't leak between sessions. Past the session cap you get `503` with `Retry-After`. The Docker image is `ghcr.io/idoo/hamn`.
+Every request needs `Authorization: Bearer <token>`. Without `ASC_MCP_HTTP_TOKEN` asc-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected. `/healthz` needs no token and says nothing. Each session gets its own server, so toolsets and `enable_writes` don't leak between sessions. Past the session cap you get `503` with `Retry-After`. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
 
 ## Files and state
 
-File tools work inside one root: `--root`, `HAMN_ROOT`, the client's first `file://` MCP root, then the git root. An automatic pick of `/` or your home dir is refused. `doctor` shows it as `file_root`.
+File tools work inside one root: `--root`, `ASC_MCP_ROOT`, the client's first `file://` MCP root, then the git root. An automatic pick of `/` or your home dir is refused. `doctor` shows it as `file_root`.
 
-Hamn advertises MCP protocol versions up to `2025-11-25`, because newer ones forbid asking the user mid-call and that's how approvals work.
+asc-mcp advertises MCP protocol versions up to `2025-11-25`, because newer ones forbid asking the user mid-call and that's how approvals work.
 
-Review and feedback cursors and upload resume files live in `~/.local/state/hamn` (or `$XDG_STATE_HOME`, `%LocalAppData%` on Windows). Plans live in memory only.
+Review and feedback cursors and upload resume files live in `~/.local/state/asc-mcp` (or `$XDG_STATE_HOME`, `%LocalAppData%` on Windows). Plans live in memory only.

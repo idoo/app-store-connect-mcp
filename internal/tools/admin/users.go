@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // roles is UserRole of App Store Connect spec 4.5.1.

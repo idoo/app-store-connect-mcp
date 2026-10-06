@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // reviewIn is the App Review contact, demo account and notes of a version.

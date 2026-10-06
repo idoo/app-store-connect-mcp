@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Field weights for the BM25-lite term frequency.

@@ -1,4 +1,4 @@
-module github.com/idoo/hamn
+module github.com/idoo/app-store-connect-mcp
 
 go 1.25.0
 

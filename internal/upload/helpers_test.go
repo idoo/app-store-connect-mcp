@@ -16,8 +16,8 @@ import (
 	"testing"
 	"unicode/utf16"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 // writeCtx obtains a write-capable context the only way tools can: from

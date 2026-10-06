@@ -36,7 +36,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement privately: open a private report through the repository's [Security → Report a vulnerability](https://github.com/idoo/hamn/security/advisories/new) form (mention "Code of Conduct"), or contact the maintainer through the email on [his GitHub profile](https://github.com/idoo). All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement privately: open a private report through the repository's [Security → Report a vulnerability](https://github.com/idoo/app-store-connect-mcp/security/advisories/new) form (mention "Code of Conduct"), or contact the maintainer through the email on [his GitHub profile](https://github.com/idoo). All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 

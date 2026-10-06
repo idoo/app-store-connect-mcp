@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // prcAvailIn is the requested change of an app's territory availability.

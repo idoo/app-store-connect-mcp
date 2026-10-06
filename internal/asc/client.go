@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/idoo/hamn/internal/ascrules"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/ascrules"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Client is the App Store Connect HTTP client. It implements [tool.ASC]:

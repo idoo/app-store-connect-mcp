@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Analytics report request access types (spec enum).

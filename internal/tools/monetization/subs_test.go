@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 const subsTestProduct = "se.jvcr.hjul.plus.year"

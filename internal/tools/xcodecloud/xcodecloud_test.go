@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 // kit returns a kit with app Hjul; its FakeASC checks every request against

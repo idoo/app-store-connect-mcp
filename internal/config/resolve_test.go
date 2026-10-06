@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type resolveFixture struct {
@@ -22,7 +22,7 @@ func newResolveFixture(t *testing.T) resolveFixture {
 	home := t.TempDir()
 	f := resolveFixture{
 		home:      home,
-		cfgPath:   filepath.Join(home, ".config", "hamn", "config.toml"),
+		cfgPath:   filepath.Join(home, ".config", "asc-mcp", "config.toml"),
 		trusted:   filepath.Join(home, "trusted"),
 		untrusted: filepath.Join(home, "untrusted"),
 		plain:     filepath.Join(home, "plain"),
@@ -76,14 +76,14 @@ func TestResolvePrecedence(t *testing.T) {
 		wantErr string
 	}{
 		{name: "config default", want: want{name: "main", writes: true}},
-		{name: "env HAMN_PROFILE", env: map[string]string{EnvProfile: "ro"}, want: want{name: "ro"}},
+		{name: "env ASC_MCP_PROFILE", env: map[string]string{EnvProfile: "ro"}, want: want{name: "ro"}},
 		{name: "flag beats env", flags: Flags{Profile: "rw"}, env: map[string]string{EnvProfile: "ro"}, want: want{name: "rw", app: "com.rw", writes: true}},
 		{name: "env credentials beat default", env: envCreds, want: want{name: EnvProfileName}},
-		{name: "HAMN_PROFILE beats env credentials", env: merge(envCreds, map[string]string{EnvProfile: "ro"}), want: want{name: "ro"}},
+		{name: "ASC_MCP_PROFILE beats env credentials", env: merge(envCreds, map[string]string{EnvProfile: "ro"}), want: want{name: "ro"}},
 		{name: "env credentials beat pin", env: envCreds, project: "trusted", pin: `profile = "rw"`, want: want{name: EnvProfileName}},
 		{name: "untrusted pin selects read-only profile", project: "untrusted", pin: `profile = "ro"`, want: want{name: "ro", pinned: true, locked: true, warn: "chosen by untrusted pin"}},
 		{name: "untrusted pin ignored when env enables writes", env: map[string]string{EnvAllowWrites: "1"}, project: "untrusted", pin: `profile = "ro"`, want: want{name: "main", writes: true, warn: `ignoring profile "ro" from untrusted pin`}},
-		{name: "untrusted pin ignored when flag enables writes", flags: Flags{AllowWrites: boolp(true)}, project: "untrusted", pin: `profile = "ro"`, want: want{name: "main", writes: true, warn: "writes are on (HAMN_ALLOW_WRITES or --allow-writes)"}},
+		{name: "untrusted pin ignored when flag enables writes", flags: Flags{AllowWrites: boolp(true)}, project: "untrusted", pin: `profile = "ro"`, want: want{name: "main", writes: true, warn: "writes are on (ASC_MCP_ALLOW_WRITES or --allow-writes)"}},
 		{name: "trusted pin with writes on", env: map[string]string{EnvAllowWrites: "1"}, project: "trusted", pin: `profile = "ro"`, want: want{name: "ro", writes: true, pinned: true}},
 		{name: "untrusted pin cannot select writable profile", project: "untrusted", pin: `profile = "rw"`, want: want{name: "main", writes: true, warn: "untrusted pin"}},
 		{name: "trusted pin selects writable profile", project: "trusted", pin: `profile = "rw"`, want: want{name: "rw", app: "com.rw", writes: true, pinned: true}},
@@ -206,7 +206,7 @@ func TestResolveEnvCredentials(t *testing.T) {
 		},
 		{
 			name: "ASC_KEY_PATH named", env: map[string]string{EnvKeyID: "K1", EnvIssuerID: "I", "ASC_KEY_PATH": "/k.p8"},
-			kind: tool.KeyTeam, problem: `ASC_KEY_PATH is set but hamn reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run hamn auth import`,
+			kind: tool.KeyTeam, problem: `ASC_KEY_PATH is set but asc-mcp reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run asc-mcp auth import`,
 		},
 		{
 			name: "fastlane names", env: map[string]string{FastlaneKeyID: "F1", FastlaneIssuerID: "I", FastlaneKeyPath: "/f.p8"},

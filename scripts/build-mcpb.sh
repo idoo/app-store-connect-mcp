@@ -1,12 +1,12 @@
 #!/bin/sh
 # Pack goreleaser's dist/ binaries into one cross-platform Claude Desktop
-# bundle: dist/hamn-<version>.mcpb plus dist/hamn-<version>.mcpb.sha256.
+# bundle: dist/asc-mcp-<version>.mcpb plus dist/asc-mcp-<version>.mcpb.sha256.
 #
 # Bundle layout (server/):
-#   hamn-darwin               universal (arm64 + amd64)
-#   hamn-linux                sh dispatcher on `uname -m`
-#   hamn-linux-amd64, hamn-linux-arm64
-#   hamn-windows-amd64.exe    (Windows on Arm runs it under x64 emulation)
+#   asc-mcp-darwin               universal (arm64 + amd64)
+#   asc-mcp-linux                sh dispatcher on `uname -m`
+#   asc-mcp-linux-amd64, asc-mcp-linux-arm64
+#   asc-mcp-windows-amd64.exe    (Windows on Arm runs it under x64 emulation)
 # The manifest's tool list is generated from docs/tools.json (default
 # toolsets, tools listed in read-only mode).
 #
@@ -31,7 +31,7 @@ version=${version#v}
 # Find one binary in dist/ by goreleaser target directory prefix.
 find_bin() {
 	for d in "$dist"/$1; do
-		for f in "$d/hamn" "$d/hamn.exe"; do
+		for f in "$d/asc-mcp" "$d/asc-mcp.exe"; do
 			if [ -f "$f" ]; then
 				printf '%s\n' "$f"
 				return 0
@@ -46,21 +46,21 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT INT TERM
 mkdir -p "$stage/server"
 
-cp "$(find_bin 'hamn-universal_darwin_all')" "$stage/server/hamn-darwin"
-cp "$(find_bin 'hamn_linux_amd64*')" "$stage/server/hamn-linux-amd64"
-cp "$(find_bin 'hamn_linux_arm64*')" "$stage/server/hamn-linux-arm64"
-cp "$(find_bin 'hamn_windows_amd64*')" "$stage/server/hamn-windows-amd64.exe"
-cat >"$stage/server/hamn-linux" <<'EOF'
+cp "$(find_bin 'asc-mcp-universal_darwin_all')" "$stage/server/asc-mcp-darwin"
+cp "$(find_bin 'asc-mcp_linux_amd64*')" "$stage/server/asc-mcp-linux-amd64"
+cp "$(find_bin 'asc-mcp_linux_arm64*')" "$stage/server/asc-mcp-linux-arm64"
+cp "$(find_bin 'asc-mcp_windows_amd64*')" "$stage/server/asc-mcp-windows-amd64.exe"
+cat >"$stage/server/asc-mcp-linux" <<'EOF'
 #!/bin/sh
 # mcpb platform overrides are per-OS; pick the Linux binary for this CPU.
 dir=$(dirname -- "$0")
 case $(uname -m) in
-aarch64 | arm64) exec "$dir/hamn-linux-arm64" "$@" ;;
-*) exec "$dir/hamn-linux-amd64" "$@" ;;
+aarch64 | arm64) exec "$dir/asc-mcp-linux-arm64" "$@" ;;
+*) exec "$dir/asc-mcp-linux-amd64" "$@" ;;
 esac
 EOF
-chmod 0755 "$stage/server/hamn-darwin" "$stage/server/hamn-linux" \
-	"$stage/server/hamn-linux-amd64" "$stage/server/hamn-linux-arm64"
+chmod 0755 "$stage/server/asc-mcp-darwin" "$stage/server/asc-mcp-linux" \
+	"$stage/server/asc-mcp-linux-amd64" "$stage/server/asc-mcp-linux-arm64"
 
 cp "$root/packaging/mcpb/icon.png" "$root/LICENSE" "$stage/"
 jq --arg v "$version" --argjson ts "$default_toolsets" --slurpfile tools "$root/docs/tools.json" '
@@ -77,7 +77,7 @@ else
 	echo "build-mcpb: npx not found, skipping manifest validation" >&2
 fi
 
-out="$dist/hamn-$version.mcpb"
+out="$dist/asc-mcp-$version.mcpb"
 rm -f "$out" "$out.sha256"
 (cd "$stage" && zip -qrX "$out" manifest.json icon.png LICENSE server)
 if command -v sha256sum >/dev/null 2>&1; then
@@ -86,5 +86,5 @@ else
 	sum=$(shasum -a 256 "$out" | awk '{ print $1 }')
 fi
 # Same "<sha256>  <name>" format as checksums.txt, so `sha256sum -c` works.
-printf '%s  %s\n' "$sum" "hamn-$version.mcpb" >"$out.sha256"
+printf '%s  %s\n' "$sum" "asc-mcp-$version.mcpb" >"$out.sha256"
 echo "$out"

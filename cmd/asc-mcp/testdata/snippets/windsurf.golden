@@ -1,0 +1,9 @@
+// ~/.codeium/windsurf/mcp_config.json
+{
+  "mcpServers": {
+    "asc-mcp": {
+      "args": [],
+      "command": "/ABS/PATH/asc-mcp"
+    }
+  }
+}

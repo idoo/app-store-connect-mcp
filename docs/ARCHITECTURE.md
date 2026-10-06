@@ -6,8 +6,8 @@ One Go binary on the official MCP Go SDK and a pinned index of Apple's OpenAPI s
 
 | Package | Job |
 |---|---|
-| `cmd/hamn` | CLI: `serve`, `auth`, `doctor`, `config`, `skills`, `version` |
-| `cmd/hamn-record` | Dev-only fixture recorder (`-tags dev`), GET-only |
+| `cmd/asc-mcp` | CLI: `serve`, `auth`, `doctor`, `config`, `skills`, `version` |
+| `cmd/asc-mcp-record` | Dev-only fixture recorder (`-tags dev`), GET-only |
 | `internal/tool` | The contract: tool meta, classes, toolsets, confirm gate, registry. `tooltest` is its test kit |
 | `internal/tools/*` | One package per toolset. `docsgen` writes `docs/TOOLS.md` and `docs/tools.json` |
 | `internal/mcpserver` | Registry to MCP: toolsets, read-only hiding, plans, approvals, resources, prompts, stdio and HTTP |
@@ -42,14 +42,14 @@ sequenceDiagram
     A->>Apple: spec-checked, signed request
     Apple-->>A: JSON:API
     A-->>H: flattened, untrusted text wrapped, redacted, capped
-    H-->>C: structuredContent + text, _meta.hamn
+    H-->>C: structuredContent + text, _meta.asc-mcp
 ```
 
 ## Spec index
 
 `internal/spec/gen` turns Apple's `openapi.oas*.json` into a gzipped index plus `PROVENANCE.json`, embedded in the binary. It feeds `asc_api_search` and `asc_api_describe`, validates raw API calls before Apple sees them, supplies enum hints and the list of free-text fields, and lets the fake server reject made-up requests. `spec-drift.yml` checks for a new spec weekly and opens a PR.
 
-By hand: `HAMN_SPEC=/path/to/openapi.oas.json make spec`.
+By hand: `ASC_MCP_SPEC=/path/to/openapi.oas.json make spec`.
 
 ## Tests
 

@@ -1,21 +1,21 @@
 #!/bin/sh
-# hamn installer: downloads a release binary from GitHub, verifies its
+# asc-mcp installer: downloads a release binary from GitHub, verifies its
 # sha256 against checksums.txt, the cosign signature of checksums.txt (if
 # `cosign` is installed) and the build provenance (if `gh` is installed),
 # and installs it to ~/.local/bin.
 #
-#   curl -fsSL https://raw.githubusercontent.com/idoo/hamn/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh
 #
 # Environment:
-#   HAMN_VERSION         release to install, e.g. 0.1.0 (default: latest)
-#   HAMN_INSTALL_DIR     target directory (default: ~/.local/bin)
-#   HAMN_REQUIRE_COSIGN  1 = refuse to install unless cosign verifies checksums.txt
+#   ASC_MCP_VERSION         release to install, e.g. 0.1.0 (default: latest)
+#   ASC_MCP_INSTALL_DIR     target directory (default: ~/.local/bin)
+#   ASC_MCP_REQUIRE_COSIGN  1 = refuse to install unless cosign verifies checksums.txt
 set -eu
 
-repo=idoo/hamn
-install_dir=${HAMN_INSTALL_DIR:-$HOME/.local/bin}
+repo=idoo/app-store-connect-mcp
+install_dir=${ASC_MCP_INSTALL_DIR:-$HOME/.local/bin}
 
-say() { printf 'hamn-install: %s\n' "$*" >&2; }
+say() { printf 'asc-mcp-install: %s\n' "$*" >&2; }
 die() {
 	say "error: $*"
 	exit 1
@@ -50,25 +50,25 @@ if [ "$os" = darwin ] && [ "$arch" = amd64 ] && [ "$(sysctl -n hw.optional.arm64
 	arch=arm64
 fi
 
-version=${HAMN_VERSION:-}
+version=${ASC_MCP_VERSION:-}
 if [ -z "$version" ]; then
 	# The releases/latest page redirects to .../releases/tag/vX.Y.Z; no API
 	# call, so no 60-requests-per-hour limit.
 	latest=$(resolve "https://github.com/$repo/releases/latest") || latest=
 	case $latest in
 	*/releases/tag/*) version=${latest##*/releases/tag/} ;;
-	*) die "could not determine the latest release (set HAMN_VERSION)" ;;
+	*) die "could not determine the latest release (set ASC_MCP_VERSION)" ;;
 	esac
 fi
 version=${version#v}
 
-archive="hamn_${version}_${os}_${arch}.tar.gz"
+archive="asc-mcp_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/$repo/releases/download/v$version"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-say "downloading hamn $version ($os/$arch)"
+say "downloading asc-mcp $version ($os/$arch)"
 fetch "$base/$archive" "$tmp/$archive"
 fetch "$base/checksums.txt" "$tmp/checksums.txt"
 
@@ -81,8 +81,8 @@ if command -v cosign >/dev/null 2>&1; then
 		"$tmp/checksums.txt" >/dev/null 2>&1 ||
 		die "cosign could not verify checksums.txt; refusing to install"
 	say "checksums.txt signature verified (cosign)"
-elif [ "${HAMN_REQUIRE_COSIGN:-0}" = 1 ]; then
-	die "HAMN_REQUIRE_COSIGN=1 but cosign is not installed"
+elif [ "${ASC_MCP_REQUIRE_COSIGN:-0}" = 1 ]; then
+	die "ASC_MCP_REQUIRE_COSIGN=1 but cosign is not installed"
 else
 	say "warning: cosign not installed; skipping the checksums.txt signature check"
 fi
@@ -109,11 +109,11 @@ else
 	die "gh attestation verify failed for $archive; refusing to install"
 fi
 
-tar -xzf "$tmp/$archive" -C "$tmp" hamn
+tar -xzf "$tmp/$archive" -C "$tmp" asc-mcp
 mkdir -p "$install_dir"
-dest="$install_dir/hamn"
-# Install via a temp name + rename so a running hamn is not truncated.
-cp "$tmp/hamn" "$dest.new"
+dest="$install_dir/asc-mcp"
+# Install via a temp name + rename so a running asc-mcp is not truncated.
+cp "$tmp/asc-mcp" "$dest.new"
 chmod 0755 "$dest.new"
 if [ "$os" = darwin ]; then
 	xattr -d com.apple.quarantine "$dest.new" 2>/dev/null || true
@@ -130,5 +130,5 @@ case ":$PATH:" in
 	;;
 esac
 
-say "next: create an API key (App Store Connect > Users and Access > Integrations), then add hamn to Claude Code:"
+say "next: create an API key (App Store Connect > Users and Access > Integrations), then add asc-mcp to Claude Code:"
 "$dest" config snippet claude-code || true

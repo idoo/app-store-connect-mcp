@@ -5,7 +5,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 .PHONY: build test vet lint spec smoke tidy tidy-check vuln docs snapshot mcpb
 
 build:
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/hamn ./cmd/hamn
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/asc-mcp ./cmd/asc-mcp
 
 test:
 	$(GO) test -race ./...
@@ -16,7 +16,7 @@ vet:
 lint:
 	golangci-lint run ./...
 
-# Regenerates the embedded spec index; gen fails without HAMN_SPEC (path to
+# Regenerates the embedded spec index; gen fails without ASC_MCP_SPEC (path to
 # Apple's openapi.oas.json).
 spec:
 	$(GO) generate ./internal/spec

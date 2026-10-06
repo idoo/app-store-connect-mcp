@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // itunesBase is Apple's public iTunes Search/Lookup API (no auth).
@@ -41,7 +41,7 @@ type lookupIn struct {
 	Limit   int    `json:"limit,omitempty" jsonschema:"search depth 1-200; default 50"`
 }
 
-// itunesApp is the subset of an iTunes result hamn reads.
+// itunesApp is the subset of an iTunes result asc-mcp reads.
 type itunesApp struct {
 	TrackID           int64    `json:"trackId"`
 	TrackName         string   `json:"trackName"`

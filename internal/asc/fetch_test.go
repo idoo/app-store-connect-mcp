@@ -123,7 +123,7 @@ func TestFetchSuccessAndLimits(t *testing.T) {
 		_, _ = w.Write([]byte("hello world"))
 	}))
 	defer srv.Close()
-	f := newTestFetcher(t, srv, FetchOptions{UserAgent: "hamn/test"})
+	f := newTestFetcher(t, srv, FetchOptions{UserAgent: "asc-mcp/test"})
 
 	resp, err := f.Fetch(context.Background(), "PUT", srv.URL+"/part?sig=1", http.Header{"Content-Type": {"application/octet-stream"}}, bytes.NewReader([]byte("part")), 0)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestFetchSuccessAndLimits(t *testing.T) {
 	if resp.Status != http.StatusAccepted || string(resp.Body) != "hello world" || resp.Header.Get("X-Test") != "1" {
 		t.Fatalf("resp = %+v", resp)
 	}
-	if got.Get("Authorization") != "" || got.Get("User-Agent") != "hamn/test" || got.Get("Content-Type") != "application/octet-stream" {
+	if got.Get("Authorization") != "" || got.Get("User-Agent") != "asc-mcp/test" || got.Get("Content-Type") != "application/octet-stream" {
 		t.Fatalf("request headers = %v", got)
 	}
 	if string(gotBody) != "part" {

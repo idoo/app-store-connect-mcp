@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // errWrongState is returned when an object is not in a state that allows the

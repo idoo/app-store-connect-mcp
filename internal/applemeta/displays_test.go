@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 func loadSpecEnums(t *testing.T) (displays, previews []string) {

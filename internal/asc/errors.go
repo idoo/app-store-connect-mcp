@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Error hints keyed by situation.

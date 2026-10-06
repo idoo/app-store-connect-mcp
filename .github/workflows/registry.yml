@@ -36,7 +36,7 @@ jobs:
           version="${TAG#v}"
           dir="$RUNNER_TEMP/mcpb"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$dir" \
-            --pattern "hamn-${version}.mcpb" --pattern "hamn-${version}.mcpb.sha256"
-          (cd "$dir" && sha256sum -c "hamn-${version}.mcpb.sha256")
-          sha=$(awk '{print $1}' "$dir/hamn-${version}.mcpb.sha256")
+            --pattern "asc-mcp-${version}.mcpb" --pattern "asc-mcp-${version}.mcpb.sha256"
+          (cd "$dir" && sha256sum -c "asc-mcp-${version}.mcpb.sha256")
+          sha=$(awk '{print $1}' "$dir/asc-mcp-${version}.mcpb.sha256")
           scripts/publish-registry.sh "$TAG" "$sha"

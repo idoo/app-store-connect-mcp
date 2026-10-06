@@ -9,8 +9,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/asc"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/asc"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 var (
@@ -20,7 +20,7 @@ var (
 	rejectionsDoc string
 )
 
-const specOpPrefix = "hamn://spec/operations/"
+const specOpPrefix = "asc-mcp://spec/operations/"
 
 func (s *session) addResources() {
 	staticDoc := func(uri, name, title, text string) {
@@ -29,10 +29,10 @@ func (s *session) addResources() {
 				return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: uri, MIMEType: "text/markdown", Text: text}}}, nil
 			})
 	}
-	staticDoc("hamn://docs/limits", "limits", "App Store Connect limits", limitsDoc)
-	staticDoc("hamn://docs/rejections", "rejections", "Common App Review rejections", rejectionsDoc)
+	staticDoc("asc-mcp://docs/limits", "limits", "App Store Connect limits", limitsDoc)
+	staticDoc("asc-mcp://docs/rejections", "rejections", "Common App Review rejections", rejectionsDoc)
 
-	s.srv.AddResource(&mcp.Resource{URI: "hamn://apps", Name: "apps", Title: "Apps", MIMEType: "application/json"}, s.readApps)
+	s.srv.AddResource(&mcp.Resource{URI: "asc-mcp://apps", Name: "apps", Title: "Apps", MIMEType: "application/json"}, s.readApps)
 	s.srv.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: specOpPrefix + "{operationId}", Name: "spec-operation",
 		Title: "App Store Connect API operation", MIMEType: "application/json",
@@ -41,14 +41,14 @@ func (s *session) addResources() {
 
 func (s *session) readApps(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 	if s.deps.Env.ASC == nil {
-		return nil, fmt.Errorf("hamn://apps: %w", tool.ErrUnavailable)
+		return nil, fmt.Errorf("asc-mcp://apps: %w", tool.ErrUnavailable)
 	}
 	res, err := s.deps.Env.ASC.List(ctx, "/v1/apps", tool.ListOptions{
 		Fields:   map[string][]string{"apps": {"name", "bundleId", "sku", "primaryLocale"}},
 		MaxItems: 200,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("hamn://apps: %w", err)
+		return nil, fmt.Errorf("asc-mcp://apps: %w", err)
 	}
 	return jsonContents(req.Params.URI, res)
 }

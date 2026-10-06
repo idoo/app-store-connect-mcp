@@ -245,7 +245,7 @@ const MaxApprovalPrompt = 6000
 // [ErrInvalidArgs] when the prompt exceeds [MaxApprovalPrompt] bytes.
 func ApprovalPrompt(toolName string, p PlanPreview) (string, error) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "hamn %s wants to: %s", toolName, p.Summary)
+	fmt.Fprintf(&b, "asc-mcp %s wants to: %s", toolName, p.Summary)
 	if len(p.Affected) > 0 {
 		b.WriteString("\nTargets: " + strings.Join(p.Affected, ", "))
 	}

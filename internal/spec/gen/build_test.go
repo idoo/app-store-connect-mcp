@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/idoo/hamn/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
 )
 
 const tinySpec = `{

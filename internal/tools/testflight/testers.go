@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Per-tester outcomes of testflight_testers_add.

@@ -14,7 +14,7 @@ type Truncation struct {
 	Hint    string `json:"hint"`
 }
 
-// Approval sources reported as _meta.hamn.approved_by.
+// Approval sources reported as _meta.asc-mcp.approved_by.
 const (
 	// ApprovedHuman means the human accepted an elicitation for this call.
 	ApprovedHuman = "human"
@@ -25,7 +25,7 @@ const (
 	ApprovedNone = "none"
 )
 
-// ResultMeta is reported under _meta.hamn on every result.
+// ResultMeta is reported under _meta.asc-mcp on every result.
 type ResultMeta struct {
 	Profile   string      `json:"profile,omitempty"`
 	PinSource string      `json:"pin_source,omitempty"`
@@ -38,7 +38,7 @@ type ResultMeta struct {
 
 // Result is a tool outcome. The server renders Data as structuredContent and
 // as compact JSON text (or Text when set), appends Images, applies redaction
-// and the byte cap, and reports Meta and Next under _meta.hamn.
+// and the byte cap, and reports Meta and Next under _meta.asc-mcp.
 type Result struct {
 	// Data is the structured payload; it should marshal to a JSON object.
 	Data any

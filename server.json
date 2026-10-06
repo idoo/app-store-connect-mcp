@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.idoo/hamn",
-  "title": "Hamn",
+  "name": "io.github.idoo/app-store-connect-mcp",
+  "title": "App Store Connect MCP",
   "description": "MCP server for App Store Connect: releases, TestFlight, reviews, reports. Read-only by default.",
   "repository": {
-    "url": "https://github.com/idoo/hamn",
+    "url": "https://github.com/idoo/app-store-connect-mcp",
     "source": "github"
   },
-  "websiteUrl": "https://github.com/idoo/hamn",
+  "websiteUrl": "https://github.com/idoo/app-store-connect-mcp",
   "version": "0.0.0",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/idoo/hamn/releases/download/v0.0.0/hamn-0.0.0.mcpb",
+      "identifier": "https://github.com/idoo/app-store-connect-mcp/releases/download/v0.0.0/asc-mcp-0.0.0.mcpb",
       "version": "0.0.0",
       "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "transport": {
@@ -21,7 +21,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/idoo/hamn:0.0.0",
+      "identifier": "ghcr.io/idoo/app-store-connect-mcp:0.0.0",
       "transport": {
         "type": "stdio"
       },
@@ -46,7 +46,7 @@
           "description": "Vendor number for sales and finance reports"
         },
         {
-          "name": "HAMN_ALLOW_WRITES",
+          "name": "ASC_MCP_ALLOW_WRITES",
           "description": "Set to 1 to expose write and destructive tools",
           "default": "0"
         }

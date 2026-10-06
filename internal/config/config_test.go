@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // envMap returns a getenv backed by m.
@@ -141,9 +141,9 @@ func TestDefaultPath(t *testing.T) {
 		env  map[string]string
 		want string
 	}{
-		{map[string]string{"HOME": "/h"}, "/h/.config/hamn/config.toml"},
-		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "/x"}, "/x/hamn/config.toml"},
-		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "rel"}, "/h/.config/hamn/config.toml"},
+		{map[string]string{"HOME": "/h"}, "/h/.config/asc-mcp/config.toml"},
+		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "/x"}, "/x/asc-mcp/config.toml"},
+		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "rel"}, "/h/.config/asc-mcp/config.toml"},
 	}
 	for _, tt := range tests {
 		got, err := DefaultPath(envMap(tt.env))

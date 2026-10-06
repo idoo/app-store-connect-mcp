@@ -1,0 +1,7 @@
+# ~/.codex/config.toml
+[mcp_servers.asc-mcp]
+command = "/ABS/PATH/asc-mcp"
+args = []
+startup_timeout_sec = 20
+tool_timeout_sec = 330
+env = { ASC_MCP_PROFILE = "work" }

@@ -13,8 +13,8 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/asc"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/asc"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Deps configures one MCP server (one per client session).
@@ -26,7 +26,7 @@ type Deps struct {
 	Env tool.Env
 	// Profile is the active profile; Profile.AllowWrites is the start mode.
 	Profile tool.ProfileInfo
-	// WritesLocked forbids toolsets enable_writes (e.g. a .hamn.toml pin with
+	// WritesLocked forbids toolsets enable_writes (e.g. a .asc-mcp.toml pin with
 	// allow_writes=false).
 	WritesLocked bool
 	// Toolsets enabled at start; nil means [tool.DefaultToolsets].
@@ -108,7 +108,7 @@ func newSession(deps Deps) (*session, error) {
 		seen[t.Name()] = true
 		s.tools = append(s.tools, t)
 	}
-	s.srv = mcp.NewServer(&mcp.Implementation{Name: "hamn", Title: "hamn", Version: deps.Version}, &mcp.ServerOptions{
+	s.srv = mcp.NewServer(&mcp.Implementation{Name: "asc-mcp", Title: "asc-mcp", Version: deps.Version}, &mcp.ServerOptions{
 		Instructions:              Instructions,
 		Logger:                    deps.Logger,
 		Capabilities:              &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}},
@@ -181,7 +181,7 @@ func (s *session) mcpTool(t tool.Tool, writes bool) *mcp.Tool {
 
 // legacyProtocolVersions is every SDK protocol version older than
 // mrtrProtocol. On 2026-07-28 a server may no longer send elicitation/create
-// mid-request, which is how hamn asks the human to approve, so hamn caps
+// mid-request, which is how asc-mcp asks the human to approve, so asc-mcp caps
 // sessions at 2025-11-25: a 2026-07-28 client is told the supported list and
 // falls back to the initialize handshake at 2025-11-25.
 func legacyProtocolVersions() []string {
@@ -294,7 +294,7 @@ func (s *session) enableWrites() {
 var errWritesLocked = &tool.Error{
 	Code:    "writes_locked",
 	Message: "writes are pinned off for this project or profile",
-	Hint:    "writes are pinned off for this project or profile; remove allow_writes=false or add the pin's directory to trusted_pins, then restart hamn",
+	Hint:    "writes are pinned off for this project or profile; remove allow_writes=false or add the pin's directory to trusted_pins, then restart asc-mcp",
 }
 
 // isElicitUnavailable reports whether err means the client cannot elicit.

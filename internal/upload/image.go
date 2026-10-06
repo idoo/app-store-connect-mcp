@@ -8,8 +8,8 @@ import (
 	"image/jpeg"
 	"io"
 
-	"github.com/idoo/hamn/internal/applemeta"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 var pngSignature = []byte("\x89PNG\r\n\x1a\n")

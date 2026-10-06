@@ -13,24 +13,24 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // KeySourceKeychain is the only accepted non-empty value of Profile.KeySource.
 const KeySourceKeychain = "keychain"
 
-// Config is the user's config file (~/.config/hamn/config.toml).
+// Config is the user's config file (~/.config/asc-mcp/config.toml).
 type Config struct {
 	// DefaultProfile names the profile used when nothing else selects one.
 	DefaultProfile string `toml:"default_profile,omitempty"`
-	// TrustedPins lists absolute directories whose .hamn.toml may select any profile.
+	// TrustedPins lists absolute directories whose .asc-mcp.toml may select any profile.
 	TrustedPins []string `toml:"trusted_pins,omitempty"`
 	// AllowProfileSwitch exposes a per-call profile argument on tools.
 	AllowProfileSwitch bool `toml:"allow_profile_switch,omitempty"`
 	// Profiles maps profile names to credentials references.
 	Profiles map[string]Profile `toml:"profiles,omitempty"`
 	// Env holds settings for the "env" profile built from ASC_* variables,
-	// used when the matching variable is unset (`hamn auth set env ...`).
+	// used when the matching variable is unset (`asc-mcp auth set env ...`).
 	Env *EnvSettings `toml:"env,omitempty"`
 }
 
@@ -96,16 +96,16 @@ func (p Profile) ResolvedKind() (tool.KeyKind, bool) {
 	}
 }
 
-// DefaultPath returns the config file path: $XDG_CONFIG_HOME/hamn/config.toml,
-// ~/.config/hamn/config.toml, or %AppData%\hamn\config.toml on Windows.
+// DefaultPath returns the config file path: $XDG_CONFIG_HOME/asc-mcp/config.toml,
+// ~/.config/asc-mcp/config.toml, or %AppData%\asc-mcp\config.toml on Windows.
 func DefaultPath(getenv func(string) string) (string, error) {
 	if runtime.GOOS == "windows" {
 		if d := getenv("AppData"); d != "" {
-			return filepath.Join(d, "hamn", "config.toml"), nil
+			return filepath.Join(d, "asc-mcp", "config.toml"), nil
 		}
 	}
 	if d := getenv("XDG_CONFIG_HOME"); d != "" && filepath.IsAbs(d) {
-		return filepath.Join(d, "hamn", "config.toml"), nil
+		return filepath.Join(d, "asc-mcp", "config.toml"), nil
 	}
 	home := getenv("HOME")
 	if home == "" {
@@ -115,7 +115,7 @@ func DefaultPath(getenv func(string) string) (string, error) {
 		}
 		home = h
 	}
-	return filepath.Join(home, ".config", "hamn", "config.toml"), nil
+	return filepath.Join(home, ".config", "asc-mcp", "config.toml"), nil
 }
 
 // Load reads the config at path. A missing file yields an empty Config.

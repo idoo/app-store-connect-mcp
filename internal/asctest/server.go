@@ -14,8 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // AppleBaseURL is rewritten to the fake server's URL in every served body,

@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
+Hamn is now **app-store-connect-mcp**, and the binary is `asc-mcp`. Update your setup:
+
+- **Homebrew:** `brew uninstall hamn && brew install idoo/tap/asc-mcp`.
+- **Client config:** run `asc-mcp config install <client>` again. The server name is now `asc-mcp`.
+- **Renamed:** env vars `HAMN_*` → `ASC_MCP_*`, `.hamn.toml` → `.asc-mcp.toml`, `~/.config/hamn` → `~/.config/asc-mcp`, keychain service `hamn` → `asc-mcp`. Move your config or run `asc-mcp auth import` again.
+
 - Promotional text on a live version, removing IAP or subscription territories, `release_phased remove` and registering new devices now need your approval in the client.
 - Approval forms: pressing Accept approves. Clients that only support URL elicitation get setup instructions instead of an error.
 - `screenshots_sync` defaults to `add` and deletes nothing unless you pass `mode: replace`.
@@ -33,6 +41,7 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/hamn/compare/v0.1.3...HEAD
-[0.1.3]: https://github.com/idoo/hamn/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/idoo/hamn/releases/tag/v0.1.2
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/idoo/app-store-connect-mcp/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/idoo/app-store-connect-mcp/releases/tag/v0.1.2

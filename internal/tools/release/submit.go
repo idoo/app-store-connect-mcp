@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/ascrules"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/ascrules"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type submitIn struct {

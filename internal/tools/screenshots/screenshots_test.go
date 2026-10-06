@@ -13,10 +13,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
-	"github.com/idoo/hamn/internal/upload"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/upload"
 )
 
 var (

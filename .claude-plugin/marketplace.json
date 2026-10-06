@@ -1,16 +1,16 @@
 {
-  "name": "hamn",
+  "name": "asc-mcp",
   "owner": {
     "name": "Ivan Verevkin"
   },
   "metadata": {
-    "description": "hamn: the secure App Store Connect MCP server and its agent skills."
+    "description": "asc-mcp: the secure App Store Connect MCP server and its agent skills."
   },
   "plugins": [
     {
-      "name": "hamn",
+      "name": "asc-mcp",
       "source": "./",
-      "description": "App Store Connect MCP server (hamn binary on PATH required) plus release, TestFlight, reviews, metadata, screenshots and sales skills.",
+      "description": "App Store Connect MCP server (asc-mcp binary on PATH required) plus release, TestFlight, reviews, metadata, screenshots and sales skills.",
       "version": "0.1.0",
       "license": "MIT"
     }

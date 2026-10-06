@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // FakeResolver is a data-driven [tool.Resolver]. Fill its fields with the

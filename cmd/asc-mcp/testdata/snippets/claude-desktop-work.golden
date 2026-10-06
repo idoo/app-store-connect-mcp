@@ -1,0 +1,12 @@
+// Claude Desktop: Settings > Developer > Edit Config (claude_desktop_config.json)
+{
+  "mcpServers": {
+    "asc-mcp": {
+      "args": [],
+      "command": "/ABS/PATH/asc-mcp",
+      "env": {
+        "ASC_MCP_PROFILE": "work"
+      }
+    }
+  }
+}

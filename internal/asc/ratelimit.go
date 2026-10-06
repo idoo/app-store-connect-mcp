@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // RateLimitHeader is Apple's quota header, e.g.

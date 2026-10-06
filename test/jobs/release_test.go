@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 // res is one JSON:API resource; Rels values are "type:id" or []"type:id".

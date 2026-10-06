@@ -1,7 +1,0 @@
-# ~/.codex/config.toml
-[mcp_servers.hamn]
-command = "/ABS/PATH/hamn"
-args = []
-startup_timeout_sec = 20
-tool_timeout_sec = 330
-env = { HAMN_PROFILE = "work" }

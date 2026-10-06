@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/reports"
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/reports"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 // fixedNow is Thursday 2026-10-22 12:00 Pacific: this_week = Mon 19 … Thu 22.
@@ -170,11 +170,11 @@ func TestSalesReportVendorMissing(t *testing.T) {
 	k := reportsKit(t)
 	k.Env.Profile.VendorNumber = ""
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_missing")
-	if !strings.Contains(body.Hint, "hamn auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
+	if !strings.Contains(body.Hint, "asc-mcp auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
 		t.Errorf("body = %+v", body)
 	}
 	// Env-configured users get the command that works for them.
-	if h := tool.BodyFor(vendorNumberMissing("env")).Hint; !strings.Contains(h, "hamn auth set env vendor_number=<number>") {
+	if h := tool.BodyFor(vendorNumberMissing("env")).Hint; !strings.Contains(h, "asc-mcp auth set env vendor_number=<number>") {
 		t.Errorf("env hint = %q", h)
 	}
 	if n := len(k.ASC.Requests()); n != 0 {

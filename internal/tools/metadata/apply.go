@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/idoo/hamn/internal/metadata"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/metadata"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type applyIn struct {
