@@ -162,25 +162,25 @@ func clientName(ctx context.Context) string {
 	return ""
 }
 
-// writesInstructions returns copy-paste steps to restart asc-mcp with writes on
+// writesInstructions returns copy-paste steps to restart app-store-connect-mcp with writes on
 // for the detected MCP client.
 func writesInstructions(client string) string {
-	const tail = " Then restart the client. Alternatively set allow_writes = true in the profile in ~/.config/asc-mcp/config.toml."
+	const tail = " Then restart the client. Alternatively set allow_writes = true in the profile in ~/.config/app-store-connect-mcp/config.toml."
 	c := strings.ToLower(client)
 	switch {
 	case strings.Contains(c, "claude-code") || strings.Contains(c, "claude code"):
-		return "Ask the user to run: claude mcp remove asc-mcp -s user && claude mcp add asc-mcp -s user -e ASC_MCP_ALLOW_WRITES=1 <existing -e ASC_* flags> -- asc-mcp." + tail
+		return "Ask the user to run: claude mcp remove app-store-connect-mcp -s user && claude mcp add app-store-connect-mcp -s user -e ASC_MCP_ALLOW_WRITES=1 <existing -e ASC_* flags> -- app-store-connect-mcp." + tail
 	case strings.Contains(c, "claude"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.asc-mcp.env in claude_desktop_config.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.app-store-connect-mcp.env in claude_desktop_config.json.` + tail
 	case strings.Contains(c, "cursor"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.asc-mcp.env in ~/.cursor/mcp.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.app-store-connect-mcp.env in ~/.cursor/mcp.json.` + tail
 	case strings.Contains(c, "codex"):
-		return `Ask the user to add ASC_MCP_ALLOW_WRITES = "1" to env of [mcp_servers.asc-mcp] in ~/.codex/config.toml.` + tail
+		return `Ask the user to add ASC_MCP_ALLOW_WRITES = "1" to env of [mcp_servers.app-store-connect-mcp] in ~/.codex/config.toml.` + tail
 	case strings.Contains(c, "visual studio code") || strings.Contains(c, "vscode"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to servers.asc-mcp.env in .vscode/mcp.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to servers.app-store-connect-mcp.env in .vscode/mcp.json.` + tail
 	case strings.Contains(c, "windsurf"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.asc-mcp.env in ~/.codeium/windsurf/mcp_config.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.app-store-connect-mcp.env in ~/.codeium/windsurf/mcp_config.json.` + tail
 	default:
-		return "Ask the user to set the environment variable ASC_MCP_ALLOW_WRITES=1 in this client's asc-mcp server config (or start asc-mcp with --allow-writes)." + tail
+		return "Ask the user to set the environment variable ASC_MCP_ALLOW_WRITES=1 in this client's app-store-connect-mcp server config (or start app-store-connect-mcp with --allow-writes)." + tail
 	}
 }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# asc-mcp installer: downloads a release binary from GitHub, verifies its
+# app-store-connect-mcp installer: downloads a release binary from GitHub, verifies its
 # sha256 against checksums.txt, the cosign signature of checksums.txt (if
 # `cosign` is installed) and the build provenance (if `gh` is installed),
 # and installs it to ~/.local/bin.
@@ -15,7 +15,7 @@ set -eu
 repo=idoo/app-store-connect-mcp
 install_dir=${ASC_MCP_INSTALL_DIR:-$HOME/.local/bin}
 
-say() { printf 'asc-mcp-install: %s\n' "$*" >&2; }
+say() { printf 'app-store-connect-mcp-install: %s\n' "$*" >&2; }
 die() {
 	say "error: $*"
 	exit 1
@@ -62,13 +62,13 @@ if [ -z "$version" ]; then
 fi
 version=${version#v}
 
-archive="asc-mcp_${version}_${os}_${arch}.tar.gz"
+archive="app-store-connect-mcp_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/$repo/releases/download/v$version"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-say "downloading asc-mcp $version ($os/$arch)"
+say "downloading app-store-connect-mcp $version ($os/$arch)"
 fetch "$base/$archive" "$tmp/$archive"
 fetch "$base/checksums.txt" "$tmp/checksums.txt"
 
@@ -109,11 +109,11 @@ else
 	die "gh attestation verify failed for $archive; refusing to install"
 fi
 
-tar -xzf "$tmp/$archive" -C "$tmp" asc-mcp
+tar -xzf "$tmp/$archive" -C "$tmp" app-store-connect-mcp
 mkdir -p "$install_dir"
-dest="$install_dir/asc-mcp"
-# Install via a temp name + rename so a running asc-mcp is not truncated.
-cp "$tmp/asc-mcp" "$dest.new"
+dest="$install_dir/app-store-connect-mcp"
+# Install via a temp name + rename so a running app-store-connect-mcp is not truncated.
+cp "$tmp/app-store-connect-mcp" "$dest.new"
 chmod 0755 "$dest.new"
 if [ "$os" = darwin ]; then
 	xattr -d com.apple.quarantine "$dest.new" 2>/dev/null || true
@@ -130,5 +130,5 @@ case ":$PATH:" in
 	;;
 esac
 
-say "next: create an API key (App Store Connect > Users and Access > Integrations), then add asc-mcp to Claude Code:"
+say "next: create an API key (App Store Connect > Users and Access > Integrations), then add app-store-connect-mcp to Claude Code:"
 "$dest" config snippet claude-code || true

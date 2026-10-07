@@ -465,7 +465,7 @@ func TestResourcesAndPrompts(t *testing.T) {
 		uris = append(uris, r.URI)
 	}
 	slices.Sort(uris)
-	if want := []string{"asc-mcp://apps", "asc-mcp://docs/limits", "asc-mcp://docs/rejections"}; !slices.Equal(uris, want) {
+	if want := []string{"app-store-connect-mcp://apps", "app-store-connect-mcp://docs/limits", "app-store-connect-mcp://docs/rejections"}; !slices.Equal(uris, want) {
 		t.Fatalf("resources = %v", uris)
 	}
 	var templates []string
@@ -475,10 +475,10 @@ func TestResourcesAndPrompts(t *testing.T) {
 		}
 		templates = append(templates, r.URITemplate)
 	}
-	if !slices.Equal(templates, []string{"asc-mcp://spec/operations/{operationId}"}) {
+	if !slices.Equal(templates, []string{"app-store-connect-mcp://spec/operations/{operationId}"}) {
 		t.Fatalf("templates = %v", templates)
 	}
-	rr, err := h.cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "asc-mcp://docs/rejections"})
+	rr, err := h.cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "app-store-connect-mcp://docs/rejections"})
 	if err != nil || !strings.Contains(rr.Contents[0].Text, "5.1.1") {
 		t.Fatalf("read rejections: %v", err)
 	}

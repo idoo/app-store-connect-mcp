@@ -34,12 +34,12 @@ var prompts = []promptDef{
 	{
 		"rejection_triage", "Rejection triage", "Explain an App Review rejection and plan fixes.",
 		[]promptArg{argApp},
-		"%[1]s was rejected. Call release_review_status, read asc-mcp://docs/rejections, and map each issue to a fix checklist. Say which fixes asc-mcp can apply and which need the ASC web site. Do not resubmit without asking me.",
+		"%[1]s was rejected. Call release_review_status, read app-store-connect-mcp://docs/rejections, and map each issue to a fix checklist. Say which fixes app-store-connect-mcp can apply and which need the ASC web site. Do not resubmit without asking me.",
 	},
 	{
 		"translate_metadata", "Translate metadata", "Translate store metadata into other locales.",
 		[]promptArg{argApp, {name: "from_locale", desc: "source ASC locale, e.g. en-US"}, {name: "to_locales", desc: "comma-separated ASC locales, e.g. de-DE,fr-FR"}},
-		"Translate the App Store metadata of %[1]s from %[2]s into %[3]s. Use metadata_pull, translate naturally within the character limits in asc-mcp://docs/limits, then metadata_plan and show me the diff. Apply with metadata_apply only after I approve.",
+		"Translate the App Store metadata of %[1]s from %[2]s into %[3]s. Use metadata_pull, translate naturally within the character limits in app-store-connect-mcp://docs/limits, then metadata_plan and show me the diff. Apply with metadata_apply only after I approve.",
 	},
 	{
 		"reply_to_reviews", "Reply to reviews", "Draft replies to customer reviews.",

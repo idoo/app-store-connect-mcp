@@ -3,16 +3,16 @@
 #   goreleaser release --snapshot --clean --skip=publish,sign,docker
 version: 2
 
-project_name: asc-mcp
+project_name: app-store-connect-mcp
 
 before:
   hooks:
     - go mod download
 
 builds:
-  - id: asc-mcp
-    main: ./cmd/asc-mcp
-    binary: asc-mcp
+  - id: app-store-connect-mcp
+    main: ./cmd/app-store-connect-mcp
+    binary: app-store-connect-mcp
     env:
       - CGO_ENABLED=0
     goos: [darwin, linux, windows]
@@ -26,17 +26,17 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 # Fat darwin binary for the .mcpb bundle only (mcpb platform overrides are
-# per-OS, not per-arch). Archives below take only the per-arch `asc-mcp` builds.
+# per-OS, not per-arch). Archives below take only the per-arch `app-store-connect-mcp` builds.
 universal_binaries:
-  - id: asc-mcp-universal
-    ids: [asc-mcp]
-    name_template: asc-mcp
+  - id: app-store-connect-mcp-universal
+    ids: [app-store-connect-mcp]
+    name_template: app-store-connect-mcp
     replace: false
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - id: asc-mcp
-    ids: [asc-mcp]
+  - id: app-store-connect-mcp
+    ids: [app-store-connect-mcp]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
@@ -69,8 +69,8 @@ signs:
 
 # Docker image, distroless static, multi-arch: stdio by default; HTTP needs --allow-remote and TLS.
 dockers_v2:
-  - id: asc-mcp
-    ids: [asc-mcp]
+  - id: app-store-connect-mcp
+    ids: [app-store-connect-mcp]
     images:
       - ghcr.io/idoo/app-store-connect-mcp
     tags:
@@ -81,7 +81,7 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     labels:
-      org.opencontainers.image.title: asc-mcp
+      org.opencontainers.image.title: app-store-connect-mcp
       org.opencontainers.image.description: MCP server for App Store Connect, read-only by default
       org.opencontainers.image.source: https://github.com/idoo/app-store-connect-mcp
       org.opencontainers.image.version: "{{ .Version }}"
@@ -126,10 +126,10 @@ release:
   replace_existing_draft: false
   mode: keep-existing
   footer: |
-    **Install:** `brew install idoo/tap/asc-mcp`, `curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh`,
-    `go install github.com/idoo/app-store-connect-mcp/cmd/asc-mcp@{{ .Tag }}`, `docker pull ghcr.io/idoo/app-store-connect-mcp:{{ .Version }}`,
-    or `asc-mcp-{{ .Version }}.mcpb` for Claude Desktop.
+    **Install:** `brew install idoo/tap/app-store-connect-mcp`, `curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh`,
+    `go install github.com/idoo/app-store-connect-mcp/cmd/app-store-connect-mcp@{{ .Tag }}`, `docker pull ghcr.io/idoo/app-store-connect-mcp:{{ .Version }}`,
+    or `app-store-connect-mcp-{{ .Version }}.mcpb` for Claude Desktop.
 
-    **Verify:** `gh attestation verify asc-mcp_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp`, or
+    **Verify:** `gh attestation verify app-store-connect-mcp_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp`, or
     `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
-    The .mcpb is listed in `asc-mcp-{{ .Version }}.mcpb.sha256`.
+    The .mcpb is listed in `app-store-connect-mcp-{{ .Version }}.mcpb.sha256`.

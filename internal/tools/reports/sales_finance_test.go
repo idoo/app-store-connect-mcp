@@ -170,11 +170,11 @@ func TestSalesReportVendorMissing(t *testing.T) {
 	k := reportsKit(t)
 	k.Env.Profile.VendorNumber = ""
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_missing")
-	if !strings.Contains(body.Hint, "asc-mcp auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
+	if !strings.Contains(body.Hint, "app-store-connect-mcp auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
 		t.Errorf("body = %+v", body)
 	}
 	// Env-configured users get the command that works for them.
-	if h := tool.BodyFor(vendorNumberMissing("env")).Hint; !strings.Contains(h, "asc-mcp auth set env vendor_number=<number>") {
+	if h := tool.BodyFor(vendorNumberMissing("env")).Hint; !strings.Contains(h, "app-store-connect-mcp auth set env vendor_number=<number>") {
 		t.Errorf("env hint = %q", h)
 	}
 	if n := len(k.ASC.Requests()); n != 0 {

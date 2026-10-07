@@ -68,7 +68,7 @@ func (s *session) markLocked(r *tool.Result) {
 	}
 }
 
-// writesHint is the one way asc-mcp tells an agent to turn writes on.
+// writesHint is the one way app-store-connect-mcp tells an agent to turn writes on.
 const writesHint = `call toolsets with action "enable_writes"; it asks the user to approve writes for this session`
 
 // unifyWritesHint rewrites a writes_disabled error, whatever tool raised it,

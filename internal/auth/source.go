@@ -10,9 +10,9 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
-// KeychainService is the OS keychain service name under which asc-mcp stores
+// KeychainService is the OS keychain service name under which app-store-connect-mcp stores
 // .p8 keys; the account is the App Store Connect key id.
-const KeychainService = "asc-mcp"
+const KeychainService = "app-store-connect-mcp"
 
 // ErrKeyNotInKeychain means no key is stored in the keychain for the key id.
 var ErrKeyNotInKeychain = errors.New("key not found in keychain")

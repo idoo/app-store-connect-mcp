@@ -128,8 +128,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --dir "$RUNNER_TEMP"
-          scripts/brew-formula.sh "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/checksums.txt" > "$RUNNER_TEMP/asc-mcp.rb"
-      - name: Push Formula/asc-mcp.rb to idoo/homebrew-tap
+          scripts/brew-formula.sh "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/checksums.txt" > "$RUNNER_TEMP/app-store-connect-mcp.rb"
+      - name: Push Formula/app-store-connect-mcp.rb to idoo/homebrew-tap
         env:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         run: |
@@ -142,15 +142,15 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts"
           git clone --depth 1 git@github.com:idoo/homebrew-tap.git "$RUNNER_TEMP/tap"
           mkdir -p "$RUNNER_TEMP/tap/Formula"
-          cp "$RUNNER_TEMP/asc-mcp.rb" "$RUNNER_TEMP/tap/Formula/asc-mcp.rb"
+          cp "$RUNNER_TEMP/app-store-connect-mcp.rb" "$RUNNER_TEMP/tap/Formula/app-store-connect-mcp.rb"
           cd "$RUNNER_TEMP/tap"
-          git add Formula/asc-mcp.rb
+          git add Formula/app-store-connect-mcp.rb
           if git diff --cached --quiet; then
             echo "formula already up to date"
             exit 0
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -m "asc-mcp ${GITHUB_REF_NAME#v}"
+            commit -m "app-store-connect-mcp ${GITHUB_REF_NAME#v}"
           git push origin HEAD
 
   registry:

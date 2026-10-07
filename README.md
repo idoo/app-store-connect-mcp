@@ -2,7 +2,7 @@
 
 # app-store-connect-mcp
 
-MCP server for App Store Connect. Read-only by default, and it asks before anything goes public. The binary is `asc-mcp`.
+MCP server for App Store Connect. Read-only by default, and it asks before anything goes public. The binary is `app-store-connect-mcp`.
 
 [![CI](https://github.com/idoo/app-store-connect-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/idoo/app-store-connect-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/idoo/app-store-connect-mcp)](https://github.com/idoo/app-store-connect-mcp/releases)
@@ -17,7 +17,7 @@ Paste this into whatever AI is writing your app right now (we won't tell):
 Set up the app-store-connect-mcp server for me: https://github.com/idoo/app-store-connect-mcp/blob/main/docs/INSTALL.md
 ```
 
-Or with Homebrew: `brew install idoo/tap/asc-mcp`, then follow [docs/INSTALL.md](docs/INSTALL.md).
+Or with Homebrew: `brew install idoo/tap/app-store-connect-mcp`, then follow [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Compared
 

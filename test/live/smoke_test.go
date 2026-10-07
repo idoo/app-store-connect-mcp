@@ -1,7 +1,7 @@
 //go:build live
 
 // Package live is a read-only smoke test against the real App Store Connect
-// API. It uses the credentials asc-mcp would use (ASC_* env, ASC_MCP_PROFILE or the
+// API. It uses the credentials app-store-connect-mcp would use (ASC_* env, ASC_MCP_PROFILE or the
 // config file), forces read-only mode and refuses every non-GET request at
 // the HTTP transport, so a bug can at worst fail the test, never touch Apple.
 //

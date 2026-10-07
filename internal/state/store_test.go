@@ -10,7 +10,7 @@ import (
 )
 
 // TestCursorsSurviveConcurrentProcesses uses one Store per goroutine (as
-// separate asc-mcp processes would, with no shared mutex) and checks no
+// separate app-store-connect-mcp processes would, with no shared mutex) and checks no
 // cursor update is lost.
 func TestCursorsSurviveConcurrentProcesses(t *testing.T) {
 	dir := t.TempDir()
@@ -109,7 +109,7 @@ func TestStoreFilesAre0600AndAtomic(t *testing.T) {
 }
 
 func TestStoreRoundTripAndPerms(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "asc-mcp")
+	dir := filepath.Join(t.TempDir(), "app-store-connect-mcp")
 	s, err := New(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestDefaultDirXDG(t *testing.T) {
 	}
 	t.Setenv("XDG_STATE_HOME", "/tmp/xdg")
 	d, err := DefaultDir()
-	if err != nil || d != filepath.Join("/tmp/xdg", "asc-mcp") {
+	if err != nil || d != filepath.Join("/tmp/xdg", "app-store-connect-mcp") {
 		t.Fatalf("DefaultDir = %q, %v", d, err)
 	}
 }

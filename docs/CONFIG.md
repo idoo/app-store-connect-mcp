@@ -1,26 +1,26 @@
 # Configuration
 
-Credentials come from env vars or named profiles. Only a human at a terminal manages them with `asc-mcp auth`. No MCP tool can read or change them, however nicely it asks.
+Credentials come from env vars or named profiles. Only a human at a terminal manages them with `app-store-connect-mcp auth`. No MCP tool can read or change them, however nicely it asks.
 
 ## Commands
 
-`asc-mcp --help` lists them all, and every subcommand takes `--help`. The ones worth knowing:
+`app-store-connect-mcp --help` lists them all, and every subcommand takes `--help`. The ones worth knowing:
 
 ```text
-asc-mcp [serve]                      MCP over stdio (default)
-asc-mcp auth add|import              add a key; asks team or individual (--kind), tests it first (--no-verify skips)
-asc-mcp auth list|test|remove
-asc-mcp auth set [NAME] key=value    vendor_number, default_app, allow_writes, issuer_id, key_kind
-asc-mcp doctor [--profile NAME]
-asc-mcp config snippet|install CLIENT [--profile NAME]
-asc-mcp skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--force]
+app-store-connect-mcp [serve]                      MCP over stdio (default)
+app-store-connect-mcp auth add|import              add a key; asks team or individual (--kind), tests it first (--no-verify skips)
+app-store-connect-mcp auth list|test|remove
+app-store-connect-mcp auth set [NAME] key=value    vendor_number, default_app, allow_writes, issuer_id, key_kind
+app-store-connect-mcp doctor [--profile NAME]
+app-store-connect-mcp config snippet|install CLIENT [--profile NAME]
+app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--force]
 ```
 
 `auth set` without a name targets `env` when `ASC_KEY_ID` is set (stored under `[env]`), otherwise the default profile. Setting `issuer_id=` or `key_kind=individual` turns a profile into an individual key.
 
-`config install` merges asc-mcp into the client's file and keeps a backup: `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.codex/config.toml`, or `Claude/claude_desktop_config.json` and `Code/User/mcp.json` under your app-support dir. For `claude-code` it runs `claude mcp add`, or prints the command if `claude` isn't on your PATH. It writes the `asc-mcp` on your PATH, so `brew upgrade` doesn't break anything.
+`config install` merges app-store-connect-mcp into the client's file and keeps a backup: `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `~/.codex/config.toml`, or `Claude/claude_desktop_config.json` and `Code/User/mcp.json` under your app-support dir. For `claude-code` it runs `claude mcp add`, or prints the command if `claude` isn't on your PATH. It writes the `app-store-connect-mcp` on your PATH, so `brew upgrade` doesn't break anything.
 
-## `asc-mcp serve` flags
+## `app-store-connect-mcp serve` flags
 
 | Flag | Meaning |
 |---|---|
@@ -51,15 +51,15 @@ asc-mcp skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] 
 
 fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `ASC_MCP_VERSION` and `ASC_MCP_INSTALL_DIR`.
 
-Profile picked: `--profile` > `ASC_MCP_PROFILE` > `ASC_*` env > `.asc-mcp.toml` > `default_profile` > the only profile. Writes: `--allow-writes` > `ASC_MCP_ALLOW_WRITES` > profile `allow_writes`, and a pin can still switch them off.
+Profile picked: `--profile` > `ASC_MCP_PROFILE` > `ASC_*` env > `.app-store-connect-mcp.toml` > `default_profile` > the only profile. Writes: `--allow-writes` > `ASC_MCP_ALLOW_WRITES` > profile `allow_writes`, and a pin can still switch them off.
 
 ## Config file
 
-`~/.config/asc-mcp/config.toml` (or `$XDG_CONFIG_HOME`, `%AppData%` on Windows). asc-mcp refuses it if group or others can write it, and complains if they can read it. Unknown keys are errors, so typos don't vanish quietly.
+`~/.config/app-store-connect-mcp/config.toml` (or `$XDG_CONFIG_HOME`, `%AppData%` on Windows). app-store-connect-mcp refuses it if group or others can write it, and complains if they can read it. Unknown keys are errors, so typos don't vanish quietly.
 
 ```toml
 default_profile = "personal"
-trusted_pins = ["/Users/me/code/hjul"]   # dirs whose .asc-mcp.toml may pick any profile
+trusted_pins = ["/Users/me/code/hjul"]   # dirs whose .app-store-connect-mcp.toml may pick any profile
 allow_profile_switch = false              # adds a per-call `profile` argument
 
 [profiles.personal]
@@ -85,7 +85,7 @@ Individual keys have no issuer id and get their user's permissions. Some endpoin
 
 ## Per-project pin
 
-asc-mcp looks for `.asc-mcp.toml` from the working directory up to the git root:
+app-store-connect-mcp looks for `.app-store-connect-mcp.toml` from the working directory up to the git root:
 
 ```toml
 profile = "personal"
@@ -104,15 +104,15 @@ Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (default
 ## HTTP mode
 
 ```sh
-ASC_MCP_HTTP_TOKEN=$(openssl rand -hex 32) asc-mcp serve --http 127.0.0.1:8765
+ASC_MCP_HTTP_TOKEN=$(openssl rand -hex 32) app-store-connect-mcp serve --http 127.0.0.1:8765
 ```
 
-Every request needs `Authorization: Bearer <token>`. Without `ASC_MCP_HTTP_TOKEN` asc-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected. `/healthz` needs no token and says nothing. Each session gets its own server, so toolsets and `enable_writes` don't leak between sessions. Past the session cap you get `503` with `Retry-After`. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
+Every request needs `Authorization: Bearer <token>`. Without `ASC_MCP_HTTP_TOKEN` app-store-connect-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected. `/healthz` needs no token and says nothing. Each session gets its own server, so toolsets and `enable_writes` don't leak between sessions. Past the session cap you get `503` with `Retry-After`. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
 
 ## Files and state
 
 File tools work inside one root: `--root`, `ASC_MCP_ROOT`, the client's first `file://` MCP root, then the git root. An automatic pick of `/` or your home dir is refused. `doctor` shows it as `file_root`.
 
-asc-mcp advertises MCP protocol versions up to `2025-11-25`, because newer ones forbid asking the user mid-call and that's how approvals work.
+app-store-connect-mcp advertises MCP protocol versions up to `2025-11-25`, because newer ones forbid asking the user mid-call and that's how approvals work.
 
-Review and feedback cursors and upload resume files live in `~/.local/state/asc-mcp` (or `$XDG_STATE_HOME`, `%LocalAppData%` on Windows). Plans live in memory only.
+Review and feedback cursors and upload resume files live in `~/.local/state/app-store-connect-mcp` (or `$XDG_STATE_HOME`, `%LocalAppData%` on Windows). Plans live in memory only.

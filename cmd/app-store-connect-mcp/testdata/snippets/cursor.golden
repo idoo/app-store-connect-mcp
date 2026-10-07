@@ -1,0 +1,9 @@
+// ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "app-store-connect-mcp": {
+      "args": [],
+      "command": "/ABS/PATH/app-store-connect-mcp"
+    }
+  }
+}

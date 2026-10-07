@@ -21,16 +21,16 @@ import (
 )
 
 // ErrNoProfile means no credentials profile is configured.
-var ErrNoProfile = errors.New("no App Store Connect profile configured (run `asc-mcp auth add` or set ASC_KEY_ID)")
+var ErrNoProfile = errors.New("no App Store Connect profile configured (run `app-store-connect-mcp auth add` or set ASC_KEY_ID)")
 
 // errNoCredentials is what every App Store Connect call returns when no
-// credentials are configured. GUI clients hide asc-mcp's stderr, so the tool
+// credentials are configured. GUI clients hide app-store-connect-mcp's stderr, so the tool
 // error itself carries the setup steps.
 var errNoCredentials = &tool.Error{
 	Code:    "no_credentials",
-	Message: "no App Store Connect API key is configured for asc-mcp",
-	Hint: "in a terminal run `asc-mcp auth add` (or `asc-mcp auth import` to copy ASC_* env vars into a profile), then restart this client; " +
-		"or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH in this client's asc-mcp server env. " +
+	Message: "no App Store Connect API key is configured for app-store-connect-mcp",
+	Hint: "in a terminal run `app-store-connect-mcp auth add` (or `app-store-connect-mcp auth import` to copy ASC_* env vars into a profile), then restart this client; " +
+		"or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH in this client's app-store-connect-mcp server env. " +
 		"GUI clients (Claude Desktop, Cursor, Windsurf) do not see your shell environment",
 }
 
@@ -108,7 +108,7 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 		MaxRetries:  r.MaxRetries,
 		AllowWrites: p.AllowWrites,
 		Clock:       tool.SystemClock{},
-		UserAgent:   "asc-mcp/" + version,
+		UserAgent:   "app-store-connect-mcp/" + version,
 	}
 	if idx != nil {
 		opts.Spec = idx
@@ -162,7 +162,7 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*too
 	env := &tool.Env{
 		Spec:      idx,
 		State:     store,
-		Fetch:     asc.NewFetcher(asc.FetchOptions{UserAgent: "asc-mcp/" + version}),
+		Fetch:     asc.NewFetcher(asc.FetchOptions{UserAgent: "app-store-connect-mcp/" + version}),
 		Files:     files,
 		Clock:     tool.SystemClock{},
 		Profile:   r.Profile.Info(),

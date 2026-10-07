@@ -294,7 +294,7 @@ func requestPreview(method, path, opName string, q url.Values, body map[string]a
 		irreversible = []string{"destructive or public action (review, release, pricing, people or external endpoints)"}
 	}
 	if !listed {
-		irreversible = append(irreversible, "operation is not in the pinned spec; asc-mcp could not validate it")
+		irreversible = append(irreversible, "operation is not in the pinned spec; app-store-connect-mcp could not validate it")
 	}
 	return tool.PlanPreview{
 		Summary:      fmt.Sprintf("%s %s (%s)", method, path, opName),

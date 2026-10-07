@@ -1,10 +1,10 @@
-/asc-mcp
+/app-store-connect-mcp
 /bin/
 /dist/
 *.test
 *.out
 coverage.*
 *.p8
-.asc-mcp.toml
+.app-store-connect-mcp.toml
 .env
 .DS_Store

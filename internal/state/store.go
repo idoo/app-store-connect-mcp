@@ -35,22 +35,22 @@ type Store struct {
 
 var _ tool.StateStore = (*Store)(nil)
 
-// DefaultDir returns asc-mcp's state directory: %LocalAppData%\asc-mcp on Windows,
-// otherwise $XDG_STATE_HOME/asc-mcp or ~/.local/state/asc-mcp.
+// DefaultDir returns app-store-connect-mcp's state directory: %LocalAppData%\app-store-connect-mcp on Windows,
+// otherwise $XDG_STATE_HOME/app-store-connect-mcp or ~/.local/state/app-store-connect-mcp.
 func DefaultDir() (string, error) {
 	if runtime.GOOS == "windows" {
 		if d := os.Getenv("LocalAppData"); d != "" {
-			return filepath.Join(d, "asc-mcp"), nil
+			return filepath.Join(d, "app-store-connect-mcp"), nil
 		}
 	}
 	if d := os.Getenv("XDG_STATE_HOME"); d != "" && filepath.IsAbs(d) {
-		return filepath.Join(d, "asc-mcp"), nil
+		return filepath.Join(d, "app-store-connect-mcp"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("state: home dir: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "asc-mcp"), nil
+	return filepath.Join(home, ".local", "state", "app-store-connect-mcp"), nil
 }
 
 // New returns a Store rooted at dir, creating it with mode 0700.
@@ -65,7 +65,7 @@ func New(dir string) (*Store, error) {
 func (s *Store) Dir() string { return s.dir }
 
 // Cursor returns the stored cursor for profile/app/name, or "". Values
-// written by asc-mcp 0.1.0 into the shared cursors.json are still read when no
+// written by app-store-connect-mcp 0.1.0 into the shared cursors.json are still read when no
 // per-key record exists yet.
 func (s *Store) Cursor(profile, app, name string) (string, error) {
 	var rec cursorRecord
@@ -83,7 +83,7 @@ func (s *Store) Cursor(profile, app, name string) (string, error) {
 }
 
 // SetCursor stores a cursor value for profile/app/name. Each cursor is its
-// own atomically replaced file, so concurrent asc-mcp processes updating
+// own atomically replaced file, so concurrent app-store-connect-mcp processes updating
 // different cursors never overwrite each other.
 func (s *Store) SetCursor(profile, app, name, value string) error {
 	return s.Save(cursorKind, cursorFile(profile, app, name), cursorRecord{
@@ -159,7 +159,7 @@ func (s *Store) recordPath(kind, key string) (string, error) {
 	return filepath.Join(s.dir, kind, key+".json"), nil
 }
 
-// readLegacyCursors reads the cursors.json map written by asc-mcp 0.1.0.
+// readLegacyCursors reads the cursors.json map written by app-store-connect-mcp 0.1.0.
 func (s *Store) readLegacyCursors() (map[string]string, error) {
 	m := map[string]string{}
 	b, err := os.ReadFile(filepath.Join(s.dir, legacyCursorsDB))

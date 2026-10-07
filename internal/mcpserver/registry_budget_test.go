@@ -60,7 +60,7 @@ func logLargestTools(t *testing.T, srv *mcp.Server, top int) {
 		t.Fatal(err)
 	}
 	defer func() { _ = ss.Close() }()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "asc-mcp-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "app-store-connect-mcp-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

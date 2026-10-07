@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/idoo/app-store-connect-mcp/releases/download/v0.0.0/asc-mcp-0.0.0.mcpb",
+      "identifier": "https://github.com/idoo/app-store-connect-mcp/releases/download/v0.0.0/app-store-connect-mcp-0.0.0.mcpb",
       "version": "0.0.0",
       "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "transport": {

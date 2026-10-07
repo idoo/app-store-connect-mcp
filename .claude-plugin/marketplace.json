@@ -1,16 +1,16 @@
 {
-  "name": "asc-mcp",
+  "name": "app-store-connect-mcp",
   "owner": {
     "name": "Ivan Verevkin"
   },
   "metadata": {
-    "description": "asc-mcp: the secure App Store Connect MCP server and its agent skills."
+    "description": "app-store-connect-mcp: the secure App Store Connect MCP server and its agent skills."
   },
   "plugins": [
     {
-      "name": "asc-mcp",
+      "name": "app-store-connect-mcp",
       "source": "./",
-      "description": "App Store Connect MCP server (asc-mcp binary on PATH required) plus release, TestFlight, reviews, metadata, screenshots and sales skills.",
+      "description": "App Store Connect MCP server (app-store-connect-mcp binary on PATH required) plus release, TestFlight, reviews, metadata, screenshots and sales skills.",
       "version": "0.1.0",
       "license": "MIT"
     }

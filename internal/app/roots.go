@@ -52,7 +52,7 @@ func NewProjectFiles(explicit, cwd, home string) (*ProjectFiles, error) {
 // open confines to dir unless it is / or the home directory.
 func (pf *ProjectFiles) open(dir string) (*Files, error) {
 	if unsafeRoot(dir, pf.home) {
-		return nil, fmt.Errorf("%w: file access is off because the project folder resolved to %s (the disk root, a top-level folder, or your home folder or one containing it); start asc-mcp with --root <project folder> or set ASC_MCP_ROOT",
+		return nil, fmt.Errorf("%w: file access is off because the project folder resolved to %s (the disk root, a top-level folder, or your home folder or one containing it); start app-store-connect-mcp with --root <project folder> or set ASC_MCP_ROOT",
 			tool.ErrUnavailable, dir)
 	}
 	f, err := NewFiles(dir)

@@ -1,4 +1,4 @@
-// Package tool is the contract every asc-mcp tool is written against: tool
+// Package tool is the contract every app-store-connect-mcp tool is written against: tool
 // declaration (Meta, Class, Toolset, ConfirmMode), the registry, the Env of
 // dependencies a handler may use (all interfaces, implemented elsewhere),
 // result and error helpers, and the confirm/plan gates.
@@ -64,7 +64,7 @@
 //     args) is refused if the state changed.
 //   - Meta.RequireHuman (with either gate) makes the elicitation accept
 //     mandatory; without elicitation the call is refused unless the profile
-//     sets AllowNoElicit. Results report _meta.asc-mcp.approved_by.
+//     sets AllowNoElicit. Results report _meta.app-store-connect-mcp.approved_by.
 //   - [Unconfirmed] lets a Flag/Plan tool write on a branch it has determined
 //     is purely additive.
 //

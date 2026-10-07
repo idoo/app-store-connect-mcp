@@ -1,17 +1,17 @@
 name: Bug report
-description: asc-mcp doesn't do what the docs say
+description: app-store-connect-mcp doesn't do what the docs say
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Don't paste API keys, .p8 contents, JWTs or signed URLs. `asc-mcp doctor` output is redacted and safe.
+        Don't paste API keys, .p8 contents, JWTs or signed URLs. `app-store-connect-mcp doctor` output is redacted and safe.
         Security holes go through private vulnerability reporting (Security tab), not here.
   - type: input
     id: version
     attributes:
-      label: asc-mcp version
-      description: Output of `asc-mcp version`
+      label: app-store-connect-mcp version
+      description: Output of `app-store-connect-mcp version`
     validations:
       required: true
   - type: dropdown
@@ -25,7 +25,7 @@ body:
     id: tool
     attributes:
       label: Tool or subcommand
-      placeholder: release_status, asc-mcp auth add, ...
+      placeholder: release_status, app-store-connect-mcp auth add, ...
   - type: textarea
     id: what
     attributes:
@@ -36,10 +36,10 @@ body:
     id: repro
     attributes:
       label: Tool call arguments and result
-      description: The JSON arguments and the (redacted) result or error, including `_meta.asc-mcp` if present.
+      description: The JSON arguments and the (redacted) result or error, including `_meta.app-store-connect-mcp` if present.
       render: json
   - type: textarea
     id: doctor
     attributes:
-      label: asc-mcp doctor output
+      label: app-store-connect-mcp doctor output
       render: text

@@ -22,7 +22,7 @@ func newResolveFixture(t *testing.T) resolveFixture {
 	home := t.TempDir()
 	f := resolveFixture{
 		home:      home,
-		cfgPath:   filepath.Join(home, ".config", "asc-mcp", "config.toml"),
+		cfgPath:   filepath.Join(home, ".config", "app-store-connect-mcp", "config.toml"),
 		trusted:   filepath.Join(home, "trusted"),
 		untrusted: filepath.Join(home, "untrusted"),
 		plain:     filepath.Join(home, "plain"),
@@ -206,7 +206,7 @@ func TestResolveEnvCredentials(t *testing.T) {
 		},
 		{
 			name: "ASC_KEY_PATH named", env: map[string]string{EnvKeyID: "K1", EnvIssuerID: "I", "ASC_KEY_PATH": "/k.p8"},
-			kind: tool.KeyTeam, problem: `ASC_KEY_PATH is set but asc-mcp reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run asc-mcp auth import`,
+			kind: tool.KeyTeam, problem: `ASC_KEY_PATH is set but app-store-connect-mcp reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run app-store-connect-mcp auth import`,
 		},
 		{
 			name: "fastlane names", env: map[string]string{FastlaneKeyID: "F1", FastlaneIssuerID: "I", FastlaneKeyPath: "/f.p8"},

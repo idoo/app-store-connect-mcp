@@ -19,7 +19,7 @@ import (
 
 func testHTTPHandler(t *testing.T) http.Handler {
 	t.Helper()
-	srv := mcp.NewServer(&mcp.Implementation{Name: "asc-mcp", Version: "test"}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "app-store-connect-mcp", Version: "test"}, nil)
 	h, err := HTTPHandler(HTTPOptions{
 		Token:          "s3cret",
 		AllowedOrigins: []string{"https://app.example"},
@@ -163,7 +163,7 @@ func TestSessionFactoryServesInitialize(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := doHTTP(t, h, "/mcp", "Bearer t", "")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"asc-mcp"`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"app-store-connect-mcp"`) {
 		t.Errorf("initialize = %d %q", rec.Code, rec.Body.String())
 	}
 }
@@ -247,7 +247,7 @@ func TestHTTPBuildsOneServerPerSession(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	// The probe, the session server, and one throwaway Build for the
-	// client's server/discover attempt (rejected: asc-mcp caps at 2025-11-25).
+	// client's server/discover attempt (rejected: app-store-connect-mcp caps at 2025-11-25).
 	// Before the fix, every request built a server (~13 here).
 	live := 0
 	for s := range seen {

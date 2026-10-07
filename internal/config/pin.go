@@ -9,9 +9,9 @@ import (
 )
 
 // PinFileName is the per-project pin file.
-const PinFileName = ".asc-mcp.toml"
+const PinFileName = ".app-store-connect-mcp.toml"
 
-// Pin is a per-project .asc-mcp.toml. It never holds key material and can only
+// Pin is a per-project .app-store-connect-mcp.toml. It never holds key material and can only
 // narrow permissions.
 type Pin struct {
 	Profile string `toml:"profile,omitempty"`
@@ -26,7 +26,7 @@ type Pin struct {
 // Dir returns the directory holding the pin.
 func (p *Pin) Dir() string { return filepath.Dir(p.Path) }
 
-// FindPin walks up from cwd looking for .asc-mcp.toml. It stops after the git
+// FindPin walks up from cwd looking for .app-store-connect-mcp.toml. It stops after the git
 // root (a directory containing .git), at home (exclusive of anything above
 // it) or at the filesystem root. It returns nil when no pin exists.
 func FindPin(cwd, home string) (*Pin, error) {
