@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -336,7 +337,7 @@ func (p *Plan) lockToPromo(remote *Listing, code string, lf, rf *LocaleFields) {
 	}
 }
 
-// lintKeywords warns about keyword bytes wasted on spaces after commas,
+// lintKeywords warns about keyword characters wasted on spaces after commas,
 // empty or duplicate tokens, and words the name or subtitle already index.
 func (p *Plan) lintKeywords(code, v string, lf, rf *LocaleFields) {
 	if v == "" {
@@ -376,22 +377,22 @@ func (p *Plan) lintKeywords(code, v string, lf, rf *LocaleFields) {
 		}
 	}
 	norm := strings.Join(kept, ",")
-	saved := len(v) - len(norm)
+	saved := utf8.RuneCountInString(v) - utf8.RuneCountInString(norm)
 	if spaces {
-		p.warnf(code, "keywords", IssueKeywordsSpaces, "spaces around commas waste bytes; use %q (saves %d bytes)", norm, saved)
+		p.warnf(code, "keywords", IssueKeywordsSpaces, "spaces around commas waste characters; use %q (saves %d)", norm, saved)
 	}
 	if empty > 0 {
-		p.warnf(code, "keywords", IssueKeywordsEmpty, "%d empty keyword(s) (double or trailing commas); use %q (saves %d bytes)", empty, norm, saved)
+		p.warnf(code, "keywords", IssueKeywordsEmpty, "%d empty keyword(s) (double or trailing commas); use %q (saves %d characters)", empty, norm, saved)
 	}
 	if len(dups) > 0 {
-		p.warnf(code, "keywords", IssueKeywordsDup, "duplicate keyword(s) %s; use %q (saves %d bytes)", strings.Join(dups, ", "), norm, saved)
+		p.warnf(code, "keywords", IssueKeywordsDup, "duplicate keyword(s) %s; use %q (saves %d characters)", strings.Join(dups, ", "), norm, saved)
 	}
 	if len(inName) > 0 {
 		n := 0
 		for _, t := range inName {
-			n += len(t) + 1
+			n += utf8.RuneCountInString(t) + 1
 		}
-		p.warnf(code, "keywords", IssueKeywordsInName, "%s already in the name or subtitle, which Apple indexes too; dropping frees %d bytes", strings.Join(inName, ", "), n)
+		p.warnf(code, "keywords", IssueKeywordsInName, "%s already in the name or subtitle, which Apple indexes too; dropping frees %d characters", strings.Join(inName, ", "), n)
 	}
 }
 

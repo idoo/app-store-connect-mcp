@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/idoo/app-store-connect-mcp/internal/asc"
@@ -57,13 +58,21 @@ func (s *session) readSpecOp(_ context.Context, req *mcp.ReadResourceRequest) (*
 	uri := req.Params.URI
 	id := strings.TrimPrefix(uri, specOpPrefix)
 	if id == uri || id == "" || s.deps.Env.Spec == nil {
-		return nil, mcp.ResourceNotFoundError(uri)
+		return nil, resourceNotFound(uri)
 	}
 	d, err := s.deps.Env.Spec.Describe(id)
 	if err != nil {
-		return nil, mcp.ResourceNotFoundError(uri)
+		return nil, resourceNotFound(uri)
 	}
 	return jsonContents(uri, d)
+}
+
+// resourceNotFound is the -32002 error that protocol versions up to
+// 2025-11-25 (our session cap) specify; the SDK's ResourceNotFoundError uses
+// -32602 for newer versions. Revisit when the protocol cap lifts.
+func resourceNotFound(uri string) error {
+	data, _ := json.Marshal(map[string]string{"uri": uri})
+	return &jsonrpc.Error{Code: -32002, Message: "Resource not found", Data: data}
 }
 
 func jsonContents(uri string, v any) (*mcp.ReadResourceResult, error) {

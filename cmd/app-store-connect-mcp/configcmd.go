@@ -295,10 +295,17 @@ var runClaude = func(ctx context.Context, args []string, stdout, stderr io.Write
 	return cmd.Run()
 }
 
+// installClaudeCode registers the server with `claude mcp add`. An existing
+// registration is never replaced, since that would drop the user's -e flags;
+// the replace command is printed instead.
 func installClaudeCode(bin, profile string, stdout io.Writer) error {
 	args := claudeAddArgs(bin, profile)
 	ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 	defer cancel()
+	if runClaude(ctx, []string{"claude", "mcp", "get", serverName}, io.Discard, io.Discard) == nil {
+		fmt.Fprintf(stdout, "%s is already registered in Claude Code; to replace it:\n  claude mcp remove %s -s user && %s\n", serverName, serverName, shellJoin(args...))
+		return nil
+	}
 	err := runClaude(ctx, args, stdout, os.Stderr)
 	switch {
 	case err == nil:

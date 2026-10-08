@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -95,6 +96,7 @@ type infoItem struct {
 	Op      string `json:"op"`
 	Outcome string `json:"outcome"`
 	Error   string `json:"error,omitempty"`
+	Code    string `json:"code,omitempty"`
 }
 
 type appinfoOut struct {
@@ -183,24 +185,50 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 	if res != nil {
 		return res, nil
 	}
-	failed := 0
+	var unknown, failed []error
 	for _, w := range writes {
 		it := infoItem{Target: w.label, Op: strings.ToLower(w.req.Method), Outcome: "ok"}
 		if r, err := env.ASC.Do(wctx, w.req); err != nil {
-			it.Outcome, it.Error = "error", err.Error()
-			failed++
+			it.Outcome, it.Error, it.Code = "error", err.Error(), tool.BodyFor(err).Error
+			e := fmt.Errorf("%s: %w", w.label, err)
+			if errors.Is(err, tool.ErrOutcomeUnknown) {
+				unknown = append(unknown, e)
+			} else {
+				failed = append(failed, e)
+			}
 		} else if first, ok := r.First(); ok {
 			it.ID = first.ID
 		}
 		out.Items = append(out.Items, it)
 	}
-	out.Status = "applied"
-	r := tool.OK(&out)
-	if failed > 0 {
-		out.Status = "partial"
-		r.Warn(fmt.Sprintf("%d request(s) failed; call again without confirm to see what remains", failed))
+	nFailed := len(unknown) + len(failed)
+	if nFailed == 0 {
+		out.Status = "applied"
+		return tool.OK(&out), nil
 	}
-	return r, nil
+	replan := tool.NextStep{Tool: "appinfo_update", Args: appinfoReplanArgs(in, app.ID)}
+	if nFailed == len(writes) {
+		// Outcome-unknown items first, so the result reports outcome_unknown
+		// whenever any request may have been applied.
+		return nil, tool.WithNext(errors.Join(append(unknown, failed...)...), replan)
+	}
+	out.Status = "partial"
+	return tool.OK(&out).Warn(fmt.Sprintf("%d request(s) failed; call again without confirm to see what remains", nFailed)).Then(replan), nil
+}
+
+// appinfoReplanArgs is in without confirm and the demo password (never
+// echoed back; the agent passes it again).
+func appinfoReplanArgs(in appinfoIn, appID string) map[string]any {
+	in.Confirm, in.App = false, tool.AppRef(appID)
+	b, err := json.Marshal(in)
+	args := map[string]any{}
+	if err != nil || json.Unmarshal(b, &args) != nil {
+		return map[string]any{"app": appID}
+	}
+	if rv, ok := args["review"].(map[string]any); ok {
+		delete(rv, "demo_account_password")
+	}
+	return args
 }
 
 // planAppInfo diffs categories and the age rating declaration of the

@@ -11,6 +11,11 @@ import (
 // PinFileName is the per-project pin file.
 const PinFileName = ".app-store-connect-mcp.toml"
 
+// legacyPinNames are pin file names of earlier releases. They are no longer
+// read; one that decodes as a Pin stops resolution so a read-only pin can
+// never be silently dropped.
+var legacyPinNames = []string{".asc-mcp.toml", ".hamn.toml"}
+
 // Pin is a per-project .app-store-connect-mcp.toml. It never holds key material and can only
 // narrow permissions.
 type Pin struct {
@@ -28,7 +33,9 @@ func (p *Pin) Dir() string { return filepath.Dir(p.Path) }
 
 // FindPin walks up from cwd looking for .app-store-connect-mcp.toml. It stops after the git
 // root (a directory containing .git), at home (exclusive of anything above
-// it) or at the filesystem root. It returns nil when no pin exists.
+// it) or at the filesystem root. It returns nil when no pin exists. A
+// directory with only a legacy-named pin in our schema is an error naming
+// the rename; a legacy-named file in another schema is ignored.
 func FindPin(cwd, home string) (*Pin, error) {
 	dir, err := filepath.Abs(cwd)
 	if err != nil {
@@ -38,6 +45,9 @@ func FindPin(cwd, home string) (*Pin, error) {
 		pin, err := loadPin(filepath.Join(dir, PinFileName))
 		if err != nil || pin != nil {
 			return pin, err
+		}
+		if err := checkLegacyPins(dir); err != nil {
+			return nil, err
 		}
 		if (home != "" && sameDir(dir, home)) || exists(filepath.Join(dir, ".git")) {
 			return nil, nil
@@ -64,6 +74,25 @@ func loadPin(path string) (*Pin, error) {
 	}
 	pin.Path = path
 	return &pin, nil
+}
+
+// checkLegacyPins refuses a legacy-named pin in dir that decodes as our Pin
+// schema, giving the exact rename.
+func checkLegacyPins(dir string) error {
+	newPath := filepath.Join(dir, PinFileName)
+	for _, name := range legacyPinNames {
+		old := filepath.Join(dir, name)
+		data, err := os.ReadFile(old) //nolint:gosec // fixed file name in a directory on the pin walk
+		if err != nil {
+			continue
+		}
+		var pin Pin
+		if decodeStrict(data, &pin) != nil {
+			continue
+		}
+		return fmt.Errorf("pin %s: this file name is no longer read; rename it: mv %q %q", old, old, newPath)
+	}
+	return nil
 }
 
 func exists(path string) bool {

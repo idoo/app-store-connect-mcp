@@ -368,3 +368,49 @@ func TestReplyTooManyRejected(t *testing.T) {
 		t.Fatal("requests made")
 	}
 }
+
+// A fan-out where app A has more unseen reviews than its page keeps A's
+// cursor and points at a max-limit rerun; app B, fully read, advances.
+func TestListMarkSeenKeepsCursorWhenMoreUnseen(t *testing.T) {
+	k := listKit(t)
+	k.ASC.Handle("GET", "/v1/apps", 200,
+		`{"data":[{"type":"apps","id":"a1","attributes":{"name":"Alpha"}},{"type":"apps","id":"a2","attributes":{"name":"Beta"}}]}`)
+	many := make([]string, 30)
+	for i := range many {
+		many[i] = review(fmt.Sprintf("x%02d", i), 3, fmt.Sprintf("2026-10-%02dT10:00:00Z", 30-i), "USA", "")
+	}
+	k.ASC.Handle("GET", "/v1/apps/a1/customerReviews", 200, page("", nil, many...))
+	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews", 200, page("", nil, review("b2", 4, d16, "SWE", ""), review("b1", 1, d14, "SWE", "")))
+	if err := k.State.SetCursor("test", "a1", cursorName, "2026-09-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"app":"all","limit":20,"mark_seen":true}`))
+	if cur, _ := k.State.Cursor("test", "a1", cursorName); cur != "2026-09-01T00:00:00Z" {
+		t.Fatalf("app a1 cursor moved to %q", cur)
+	}
+	if cur, _ := k.State.Cursor("test", "a2", cursorName); cur != d16 {
+		t.Fatalf("app a2 cursor = %q, want %q", cur, d16)
+	}
+	found := false
+	for _, n := range res.Next {
+		if n.Tool == "reviews_list" && n.Args["app"] == "a1" && n.Args["since"] == lastSeen && n.Args["mark_seen"] == true {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("next = %+v", res.Next)
+	}
+}
+
+// Multi-app groups list the app with the most recent review first.
+func TestListFanOutGroupsNewestFirst(t *testing.T) {
+	k := listKit(t)
+	k.ASC.Handle("GET", "/v1/apps", 200,
+		`{"data":[{"type":"apps","id":"a1","attributes":{"name":"Lesoma"}},{"type":"apps","id":"a2","attributes":{"name":"Lidflow"}}]}`)
+	k.ASC.Handle("GET", "/v1/apps/a1/customerReviews", 200, page("", nil, review("l1", 4, "2026-05-01T10:00:00Z", "USA", "")))
+	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews", 200, page("", nil, review("f1", 4, "2026-10-01T10:00:00Z", "USA", "")))
+	o := tooltest.Decode[listOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"app":"all"}`)))
+	if got := strings.Join(ids(o), ","); got != "a2/f1,a1/l1" {
+		t.Fatalf("order = %s", got)
+	}
+}

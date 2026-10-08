@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -81,6 +82,10 @@ var (
 	ErrElicitationUnavailable = &Error{
 		Code:    "elicitation_unavailable",
 		Message: "the MCP client does not support elicitation",
+	}
+	ErrCancelled = &Error{
+		Code:    "cancelled",
+		Message: "the request was cancelled",
 	}
 	ErrHumanRequired = &Error{
 		Code:    "human_approval_required",
@@ -179,6 +184,8 @@ func BodyFor(err error) ErrorBody {
 		if b.Hint == "" {
 			b.Hint = te.Hint
 		}
+	} else if api == nil && errors.Is(err, context.Canceled) {
+		b.Error = ErrCancelled.Code
 	}
 	var nf *ErrNotFound
 	if errors.As(err, &nf) {

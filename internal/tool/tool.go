@@ -30,7 +30,8 @@ type Meta struct {
 	// must match the name's verb (see TestRegistryNamingAndMeta).
 	Class Class
 	// Idempotent sets idempotentHint: repeating the call with the same input
-	// has no further effect. Every Read tool must set it.
+	// has no further effect. Every Read tool must set it, except cursor-writing
+	// reads (mark_seen).
 	Idempotent bool
 	// Local tools never call Apple or the network (openWorldHint=false).
 	Local bool

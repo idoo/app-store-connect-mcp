@@ -3,6 +3,8 @@ package webhooks
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -110,8 +112,18 @@ func TestWebhooksCreateGeneratesSecretOnce(t *testing.T) {
 		t.Fatalf("relationships = %v", data["relationships"])
 	}
 	out := tooltest.Decode[upsertOut](t, res)
-	if out.Action != "created" || out.Secret != secret || !strings.Contains(out.SecretNote, "sensitive") || out.Webhook.ID != "W9" {
+	if out.Action != "created" || !strings.Contains(out.SecretNote, "sensitive") || out.Webhook.ID != "W9" {
 		t.Fatalf("out = %+v", out)
+	}
+	if js := tooltest.JSON(t, res.Data); regexp.MustCompile(`[0-9a-f]{64}`).MatchString(js) {
+		t.Fatalf("generated secret in result: %s", js)
+	}
+	saved, err := os.ReadFile(filepath.Join(k.Files.Root, "webhook-secrets", "W9.txt"))
+	if err != nil || strings.TrimSpace(string(saved)) != secret {
+		t.Fatalf("secret file = %q, %v", saved, err)
+	}
+	if fi, err := os.Stat(filepath.Join(k.Files.Root, "webhook-secrets", "W9.txt")); err != nil || fi.Mode().Perm() != 0o600 || out.SecretFile == "" {
+		t.Fatalf("secret file mode = %v, %v; secret_file = %q", fi, err, out.SecretFile)
 	}
 	if len(*asked) != 1 || strings.Contains((*asked)[0], secret) || !strings.Contains((*asked)[0], "https://hooks.example.org/x") {
 		t.Fatalf("prompt = %v", *asked)
@@ -126,6 +138,24 @@ func TestWebhooksCreateGeneratesSecretOnce(t *testing.T) {
 		`{"name":"slack","url":"https://hooks.example.org/x","event_types":["BUILD_UPLOAD_STATE_UPDATED"],"secret":"s3cr3t-value","confirm":true}`))
 	if strings.Contains(tooltest.JSON(t, res.Data), "s3cr3t-value") {
 		t.Fatal("provided secret echoed")
+	}
+}
+
+// Without a writable file root a generated secret could not be saved, so the
+// create is refused before anything reaches Apple.
+func TestWebhooksCreateWithoutFileRootRefused(t *testing.T) {
+	k := kit(t)
+	k.Elicit(true)
+	notDir := filepath.Join(k.Files.Root, "file")
+	if err := os.WriteFile(notDir, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	k.Env.Files = &tooltest.FakeFiles{Root: notDir}
+	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, emptyDoc)
+	k.ASC.Handle(http.MethodPost, "/v1/webhooks", http.StatusCreated, createdDoc)
+	tooltest.MustFail(t, tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env, createArgs), tool.ErrInvalidArgs.Code)
+	if n := len(k.ASC.Mutations()); n != 0 {
+		t.Fatalf("mutations = %d", n)
 	}
 }
 
@@ -206,7 +236,7 @@ func TestWebhooksUpdateByNameAndPing(t *testing.T) {
 		t.Fatalf("ping = %v", ping)
 	}
 	out := tooltest.Decode[upsertOut](t, res)
-	if out.Action != "updated" || out.PingID != "P1" || out.Secret != "" {
+	if out.Action != "updated" || out.PingID != "P1" || out.SecretFile != "" {
 		t.Fatalf("out = %+v", out)
 	}
 }

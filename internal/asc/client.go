@@ -292,11 +292,11 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 	for attempt := 0; ; {
 		raw, err := c.exchange(ctx, method, u, body, ctype, accept)
 		if err != nil {
+			if errors.Is(err, errNotSent) {
+				return nil, fmt.Errorf("asc: %s: %w", label, err)
+			}
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return nil, c.unknownIf(method, fmt.Errorf("asc: %s: %w", label, ctxErr))
-			}
-			if errors.Is(err, errToken) {
-				return nil, fmt.Errorf("asc: %s: %w", label, err)
 			}
 			retry, wait := c.retry.shouldRetry(method, 0, err, attempt)
 			if !retry {
@@ -365,11 +365,19 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 // errToken marks token-source failures, which are never retried.
 var errToken = errors.New("sign token")
 
+// errNotSent marks failures before the request left this process (token,
+// request construction, slot wait). Such requests are never outcome_unknown.
+var errNotSent = errors.New("request not sent")
+
 // exchange performs one HTTP round trip under the concurrency semaphore.
 func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body []byte, ctype, accept string) (*rawResponse, error) {
 	tok, err := c.tokens.Token(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", errToken, Redact(err.Error()))
+		tokErr := fmt.Errorf("%w: %s", errToken, Redact(err.Error()))
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("%w: %w: %w", errNotSent, tokErr, ctxErr)
+		}
+		return nil, fmt.Errorf("%w: %w", errNotSent, tokErr)
 	}
 	var rd io.Reader
 	if body != nil {
@@ -377,7 +385,7 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), rd)
 	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("%w: build request: %w", errNotSent, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Accept", accept)
@@ -388,7 +396,7 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 	select {
 	case c.sem <- struct{}{}:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("wait for a request slot: %w", ctx.Err())
+		return nil, fmt.Errorf("%w: wait for a request slot: %w", errNotSent, ctx.Err())
 	}
 	defer func() { <-c.sem }()
 	resp, err := c.http.Do(req)

@@ -37,7 +37,7 @@ docker run -d --name app-store-connect-mcp -p 8765:8765 \
 Keys never pass through the agent. Ask the user to:
 
 1. Create a key in App Store Connect under *Users and Access → Integrations → App Store Connect API* and download the `.p8`. Team keys show an issuer ID above the list. Individual keys don't have one.
-2. Run `app-store-connect-mcp auth import` (finds fastlane, `ASC_*` env vars or `~/.appstoreconnect/private_keys/AuthKey_*.p8`) or `app-store-connect-mcp auth add` in their own terminal. In Claude Code that's `!app-store-connect-mcp auth add`. Both test the key against Apple before saving.
+2. Run `app-store-connect-mcp auth add` in a separate terminal (it asks questions), or `auth import` with `ASC_*` set (it also finds fastlane and `~/.appstoreconnect/private_keys/AuthKey_*.p8`). Both test the key against Apple before saving.
 3. Sales and finance reports need your vendor number: App Store Connect → Payments and Financial Reports, top left under the account name. Add it with `app-store-connect-mcp auth set <profile> vendor_number=…`.
 
 Then run `app-store-connect-mcp doctor`. Everything should say ok.

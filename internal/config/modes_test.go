@@ -163,3 +163,50 @@ func TestFindPin(t *testing.T) {
 		t.Fatalf("walk escaped home: %+v %v", pin, err)
 	}
 }
+
+func TestFindPinLegacyNames(t *testing.T) {
+	cfg := "[profiles.w]\nkey_id = \"K\"\nissuer_id = \"iss\"\nkey_path = \"/k.p8\"\nallow_writes = true\n"
+	for _, name := range legacyPinNames {
+		t.Run(name, func(t *testing.T) {
+			setup := func(t *testing.T) (home, repo string) {
+				home = t.TempDir()
+				repo = filepath.Join(home, "repo")
+				if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, filepath.Join(home, "config.toml"), cfg, 0o600)
+				return home, repo
+			}
+			resolve := func(home, repo string) (*Resolved, error) {
+				return Resolve(Options{Getenv: envMap(nil), ConfigPath: filepath.Join(home, "config.toml"), Cwd: repo, Home: home})
+			}
+
+			t.Run("our schema refuses with the rename", func(t *testing.T) {
+				home, repo := setup(t)
+				old := filepath.Join(repo, name)
+				writeFile(t, old, "allow_writes = false\n", 0o600)
+				_, err := resolve(home, repo)
+				if err == nil || !strings.Contains(err.Error(), "mv") || !strings.Contains(err.Error(), old) || !strings.Contains(err.Error(), filepath.Join(repo, PinFileName)) {
+					t.Fatalf("err = %v", err)
+				}
+			})
+			t.Run("foreign schema is ignored", func(t *testing.T) {
+				home, repo := setup(t)
+				writeFile(t, filepath.Join(repo, name), "[server]\nx = 1\n", 0o600)
+				r, err := resolve(home, repo)
+				if err != nil || r.Profile.PinSource != "" || !r.Profile.AllowWrites {
+					t.Fatalf("r = %+v err = %v", r, err)
+				}
+			})
+			t.Run("new pin wins over legacy", func(t *testing.T) {
+				home, repo := setup(t)
+				writeFile(t, filepath.Join(repo, name), "allow_writes = true\n", 0o600)
+				writeFile(t, filepath.Join(repo, PinFileName), "allow_writes = false\n", 0o600)
+				r, err := resolve(home, repo)
+				if err != nil || r.Profile.PinSource != filepath.Join(repo, PinFileName) || r.Profile.AllowWrites {
+					t.Fatalf("r = %+v err = %v", r, err)
+				}
+			})
+		})
+	}
+}

@@ -2,10 +2,13 @@ package tool
 
 import "encoding/json"
 
-// Image is binary image content returned alongside structured data.
+// Image is binary image content returned alongside structured data. Untrusted
+// images come from third parties (tester screenshots); the server labels them
+// as data, not instructions, before the first one.
 type Image struct {
-	MIMEType string
-	Data     []byte
+	MIMEType  string
+	Data      []byte
+	Untrusted bool
 }
 
 // Truncation describes what the response byte cap dropped.
@@ -57,6 +60,12 @@ func OK(v any) *Result { return &Result{Data: v} }
 // WithImage appends an image to r and returns r.
 func (r *Result) WithImage(mime string, data []byte) *Result {
 	r.Images = append(r.Images, Image{MIMEType: mime, Data: data})
+	return r
+}
+
+// WithUntrustedImage appends a third-party image to r and returns r.
+func (r *Result) WithUntrustedImage(mime string, data []byte) *Result {
+	r.Images = append(r.Images, Image{MIMEType: mime, Data: data, Untrusted: true})
 	return r
 }
 

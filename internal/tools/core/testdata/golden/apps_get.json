@@ -26,7 +26,11 @@
         "version": "3.0",
         "app_version_state": "WAITING_FOR_REVIEW",
         "release_type": "MANUAL",
-        "created_date": "2026-10-25T00:00:00-07:00"
+        "created_date": "2026-10-25T00:00:00-07:00",
+        "build": {
+          "number": "42",
+          "processing_state": "VALID"
+        }
       },
       {
         "id": "m1",

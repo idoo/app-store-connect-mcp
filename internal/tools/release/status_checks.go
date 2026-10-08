@@ -263,9 +263,6 @@ func limitIssue(locale string, f applemeta.Field, v string) string {
 
 func checkListing(s *statusSnapshot) check {
 	c := check{ID: "listing", Status: statusOK, FixVia: fixTool("metadata_plan")}
-	// stored lists over-limit keywords Apple already accepted: app-store-connect-mcp refuses to
-	// write such a value, but the stored one is not a submit blocker.
-	var stored []string
 	for _, l := range s.Version.localizations() {
 		loc := l.Str("locale")
 		for _, req := range []struct{ attr, label string }{{"description", "description"}, {"keywords", "keywords"}, {"supportUrl", "support URL"}} {
@@ -274,12 +271,7 @@ func checkListing(s *statusSnapshot) check {
 			}
 		}
 		for f, attr := range map[applemeta.Field]string{applemeta.FieldKeywords: "keywords", applemeta.FieldPromotionalText: "promotionalText", applemeta.FieldDescription: "description", applemeta.FieldWhatsNew: "whatsNew"} {
-			msg := limitIssue(loc, f, l.Str(attr))
-			switch {
-			case msg == "":
-			case f == applemeta.FieldKeywords:
-				stored = append(stored, msg+" (stored value accepted by Apple; app-store-connect-mcp will not write values over the limit)")
-			default:
+			if msg := limitIssue(loc, f, l.Str(attr)); msg != "" {
 				c.Items = append(c.Items, msg)
 			}
 		}
@@ -298,17 +290,11 @@ func checkListing(s *statusSnapshot) check {
 			c.Items = append(c.Items, loc+": privacy policy URL missing")
 		}
 	}
-	blocking := slices.Clone(c.Items)
-	slices.Sort(blocking)
-	c.Items = append(c.Items, stored...)
 	slices.Sort(c.Items)
 	c.FixVia.Args = map[string]any{"app": s.App.ID, "platform": string(s.Platform)}
-	switch {
-	case len(blocking) > 0:
-		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d listing problem(s); first: %s", len(c.Items), blocking[0])
-	case len(stored) > 0:
-		c.Status, c.Detail = statusWarn, "stored keywords exceed the documented 100-byte limit; Apple accepted them"
-	default:
+	if len(c.Items) > 0 {
+		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d listing problem(s); first: %s", len(c.Items), c.Items[0])
+	} else {
 		c.Detail, c.FixVia = "every locale has the required fields within limits", nil
 	}
 	return c

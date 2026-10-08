@@ -214,7 +214,7 @@ func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) 
 		c.approvedBy = ApprovedAgent
 		return nil
 	}
-	prompt, err := ApprovalPrompt(c.meta.Name, p)
+	prompt, err := ApprovalPrompt(c.meta.Name, env.Profile.Name, p)
 	if err != nil {
 		return Fail(err)
 	}
@@ -239,13 +239,19 @@ func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) 
 // a larger prompt refuses approval so the human always sees everything.
 const MaxApprovalPrompt = 6000
 
-// ApprovalPrompt renders the human approval question for a preview: targets
-// (method, path, URLs, emails) first, then the full intended payload, then
-// any untrusted third-party text fenced and labeled. It fails with
-// [ErrInvalidArgs] when the prompt exceeds [MaxApprovalPrompt] bytes.
-func ApprovalPrompt(toolName string, p PlanPreview) (string, error) {
+// ApprovalPrompt renders the human approval question for a preview: the
+// account (when profile is set), targets (method, path, URLs, emails), then
+// the full intended payload, then any untrusted third-party text fenced and
+// labeled. The prompt is never redacted or truncated, so the human approves
+// exactly what Apple receives; it renders only agent-supplied preview fields,
+// never Current. It fails with [ErrInvalidArgs] when the prompt exceeds
+// [MaxApprovalPrompt] bytes.
+func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "app-store-connect-mcp %s wants to: %s", toolName, p.Summary)
+	if profile != "" {
+		fmt.Fprintf(&b, "\nAccount: profile %q", profile)
+	}
 	if len(p.Affected) > 0 {
 		b.WriteString("\nTargets: " + strings.Join(p.Affected, ", "))
 	}

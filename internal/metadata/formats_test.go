@@ -66,12 +66,12 @@ func TestToFastlaneRoundTrip(t *testing.T) {
 		},
 		"fr-FR": {Description: ptr("FR")},
 	}}
-	written, err := ToFastlane(files, "out", in)
+	written, conflicts, err := ToFastlane(files, "out", in)
 	if err != nil {
 		t.Fatalf("ToFastlane: %v", err)
 	}
-	if len(written) != 11 {
-		t.Errorf("wrote %d files: %v", len(written), written)
+	if len(written) != 11 || len(conflicts) != 0 {
+		t.Errorf("wrote %d files: %v, conflicts %v", len(written), written, conflicts)
 	}
 	out, err := FromFastlane(files, "out")
 	if err != nil {
@@ -80,8 +80,17 @@ func TestToFastlaneRoundTrip(t *testing.T) {
 	if diff := cmp.Diff(in.Locales, out.Locales); diff != "" {
 		t.Errorf("round trip (-in +out):\n%s", diff)
 	}
-	if _, err := ToFastlane(files, "out", &Listing{Locales: map[string]*LocaleFields{"English": {}}}); err == nil {
+	if _, _, err := ToFastlane(files, "out", &Listing{Locales: map[string]*LocaleFields{"English": {}}}); err == nil {
 		t.Error("want error for non-ASC locale key")
+	}
+	// A second export with an edited file keeps the edit.
+	writeFile(t, files.Root, "out/fr-FR/description.txt", "local edit\n")
+	written, conflicts, err = ToFastlane(files, "out", in)
+	if err != nil || len(written) != 0 || len(conflicts) != 1 || conflicts[0] != filepath.Join("out", "fr-FR", "description.txt") {
+		t.Errorf("re-export written=%v conflicts=%v err=%v", written, conflicts, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(files.Root, "out/fr-FR/description.txt")); string(b) != "local edit\n" {
+		t.Errorf("edited file overwritten: %q", b)
 	}
 }
 

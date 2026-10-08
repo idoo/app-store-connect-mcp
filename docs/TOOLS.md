@@ -48,7 +48,7 @@
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
 |[`appinfo_update`](#appinfo_update)|W|flag|Set categories, age rating, App Review contact/demo/notes, content rights, copyright. Without confirm:true previews current→new. Listing text: metadata_plan.|
-|[`metadata_apply`](#metadata_apply)|W|plan|Apply a metadata_plan: same arguments plus plan_id; refused if the listing changed since. Creates missing locales; deletes only locales in remove.|
+|[`metadata_apply`](#metadata_apply)|D|plan|Apply a metadata_plan: same arguments plus plan_id; refused if the listing changed since. Creates missing locales; deletes only locales in remove.|
 |[`metadata_plan`](#metadata_plan)|R|none|Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay. version:live changes promotionalText only.|
 |[`metadata_pull`](#metadata_pull)|R|none|Every locale's listing (app info and version text) of the editable version, else live. export_dir writes a fastlane metadata dir. Edit with metadata_plan.|
 
@@ -76,7 +76,7 @@
 |[`previews_upload`](#previews_upload)|W|none|Uploads one app preview video to a locale's preview set of the editable version, creating the set if needed; optional poster frame time code. Same checksum already present = no-op. Max 3 previews per set.|
 |[`screenshots_list`](#screenshots_list)|R|none|Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back to the primary). thumbnails:true attaches up to 4 small images.|
 |[`screenshots_plan`](#screenshots_plan)|R|none|Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. Display: <display> subdir, file-name hint or pixels.|
-|[`screenshots_sync`](#screenshots_sync)|W|plan|Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.|
+|[`screenshots_sync`](#screenshots_sync)|D|plan|Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.|
 
 ## uploads
 
@@ -126,7 +126,7 @@
 |---|---|---|---|
 |[`webhooks_delete`](#webhooks_delete)|D|human|Delete an app's webhook by id or name; deliveries stop immediately and the secret is lost. Needs confirm:true and human approval.|
 |[`webhooks_list`](#webhooks_list)|R|none|An app's App Store Connect webhooks: name, URL host, event types, enabled, and the last 10 deliveries with state and HTTP status. Use before webhooks_upsert/webhooks_delete. Full URLs and secrets are never shown.|
-|[`webhooks_upsert`](#webhooks_upsert)|D|human|Create a webhook (name, https url, event_types) or update one matched by id or name; optional ping. Without a secret one is generated and returned ONCE: store it, Apple never shows it again. Needs confirm:true and human approval.|
+|[`webhooks_upsert`](#webhooks_upsert)|D|human|Create a webhook (name, https url, event_types) or update one matched by id or name; optional ping. Without a secret one is generated into webhook-secrets/<id>.txt (path returned, never the value). Needs confirm:true and human approval.|
 
 ## admin
 
@@ -352,7 +352,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`export_dir`|string|||fastlane dir to write (new, empty or named metadata)|
+|`export_dir`|string|||fastlane dir; never overwrites edited files|
 |`fields`|string[]||`name`, `subtitle`, `privacyPolicyUrl`, `privacyChoicesUrl`, `privacyPolicyText`, `description`, `keywords`, `marketingUrl`, `promotionalText`, `supportUrl`, `whatsNew`|only these fields, e.g. ["subtitle","keywords"]; default all|
 |`locales`|string[]|||locales or aliases; default all|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
@@ -840,7 +840,7 @@ No arguments.
 |`event_types`|string[]||`ALTERNATIVE_DISTRIBUTION_PACKAGE_AVAILABLE_UPDATED`, `ALTERNATIVE_DISTRIBUTION_PACKAGE_VERSION_CREATED`, `ALTERNATIVE_DISTRIBUTION_TERRITORY_AVAILABILITY_UPDATED`, `APP_STORE_VERSION_APP_VERSION_STATE_UPDATED`, `BACKGROUND_ASSET_VERSION_APP_STORE_RELEASE_STATE_UPDATED`, `BACKGROUND_ASSET_VERSION_EXTERNAL_BETA_RELEASE_STATE_UPDATED`, `BACKGROUND_ASSET_VERSION_INTERNAL_BETA_RELEASE_CREATED`, `BACKGROUND_ASSET_VERSION_STATE_UPDATED`, `BETA_FEEDBACK_CRASH_SUBMISSION_CREATED`, `BETA_FEEDBACK_SCREENSHOT_SUBMISSION_CREATED`, `BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED`, `BUILD_UPLOAD_STATE_UPDATED`|events to deliver (required to create)|
 |`name`|string|||webhook name (required to create)|
 |`ping`|boolean|||send a test ping after saving|
-|`secret`|string|||signing secret; omit to generate one on create (returned once), set to rotate on update|
+|`secret`|string|||signing secret; omit to generate one on create (written to webhook-secrets/), set to rotate on update|
 |`url`|string|||https endpoint (required to create)|
 |`webhook`|string|||id or name of an existing webhook to update; default: match by name, else create|
 

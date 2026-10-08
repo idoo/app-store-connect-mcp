@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -58,12 +59,19 @@ type appsGetIn struct {
 }
 
 type versionSummary struct {
-	ID       string `json:"id"`
-	Platform string `json:"platform"`
-	Version  string `json:"version"`
-	State    string `json:"app_version_state"`
-	Release  string `json:"release_type,omitempty"`
-	Created  string `json:"created_date,omitempty"`
+	ID       string        `json:"id"`
+	Platform string        `json:"platform"`
+	Version  string        `json:"version"`
+	State    string        `json:"app_version_state"`
+	Release  string        `json:"release_type,omitempty"`
+	Created  string        `json:"created_date,omitempty"`
+	Build    *versionBuild `json:"build,omitempty"`
+}
+
+// versionBuild is the build attached to an in-flight version.
+type versionBuild struct {
+	Number          string `json:"number"`
+	ProcessingState string `json:"processing_state,omitempty"`
 }
 
 type buildSummary struct {
@@ -327,7 +335,48 @@ func appsGet(ctx context.Context, env *tool.Env, in appsGetIn) (*tool.Result, er
 		Builds: summarizeBuilds(builds), Locales: localesOf(infos),
 	}
 	out.Live, out.InFlight = splitVersions(versions)
+	if err := attachBuilds(ctx, env, app.ID, out.InFlight); err != nil {
+		return nil, err
+	}
 	return tool.OK(out), nil
+}
+
+// attachBuilds sets the attached build on each in-flight version with one
+// GET of those versions including their builds.
+func attachBuilds(ctx context.Context, env *tool.Env, appID string, inFlight []versionSummary) error {
+	if len(inFlight) == 0 {
+		return nil
+	}
+	ids := make([]string, len(inFlight))
+	for i, v := range inFlight {
+		ids[i] = v.ID
+	}
+	resp, err := env.ASC.Get(ctx, "/v1/apps/"+url.PathEscape(appID)+"/appStoreVersions", url.Values{
+		"filter[id]":               {strings.Join(ids, ",")},
+		"include":                  {"build"},
+		"fields[appStoreVersions]": {"build"},
+		"fields[builds]":           {"version,processingState"},
+		"limit":                    {strconv.Itoa(len(ids))},
+	})
+	if err != nil {
+		return fmt.Errorf("get in-flight version builds: %w", err)
+	}
+	builds := map[string]tool.Resource{}
+	for _, inc := range resp.Included {
+		if inc.Type == "builds" {
+			builds[inc.ID] = inc
+		}
+	}
+	buildOf := map[string]*versionBuild{}
+	for _, v := range resp.Data {
+		if b, ok := builds[v.RelID("build")]; ok {
+			buildOf[v.ID] = &versionBuild{Number: b.Str("version"), ProcessingState: b.Str("processingState")}
+		}
+	}
+	for i := range inFlight {
+		inFlight[i].Build = buildOf[inFlight[i].ID]
+	}
+	return nil
 }
 
 // splitVersions returns the newest live version per platform and every

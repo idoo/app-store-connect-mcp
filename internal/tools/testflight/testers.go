@@ -116,13 +116,21 @@ func testersList(ctx context.Context, env *tool.Env, in testersListIn) (*tool.Re
 	}
 	out["testers"] = testers
 	out["returned"] = len(testers)
-	if list.Total > 0 {
+	// Apple's total counts every tester; a client-side state filter only
+	// saw this page, so report what was scanned instead.
+	if in.State != "" {
+		out["scanned"], out["state_filtered"] = len(list.Data), true
+	} else if list.Total > 0 {
 		out["total"] = list.Total
 	}
 	if list.NextCursor != "" {
 		out["next_cursor"] = list.NextCursor
 	}
-	return tool.OK(out), nil
+	res := tool.OK(out)
+	if in.State != "" && list.NextCursor != "" {
+		res.Warn(fmt.Sprintf("only %d scanned; follow next_cursor for more", len(list.Data)))
+	}
+	return res, nil
 }
 
 // --- testflight_testers_add ---

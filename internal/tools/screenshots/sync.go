@@ -46,6 +46,19 @@ type itemOut struct {
 	ID      string                `json:"id,omitempty"`
 	State   string                `json:"state,omitempty"`
 	Error   string                `json:"error,omitempty"`
+	Code    string                `json:"code,omitempty"`
+	// err is the typed failure behind Error, joined into the error result
+	// when nothing was applied.
+	err error
+}
+
+// failedItem is a failed step whose typed error class is kept.
+func failedItem(file, id, step string, err error) itemOut {
+	if step != "" {
+		err = fmt.Errorf("%s: %w", step, err)
+	}
+	b := tool.BodyFor(err)
+	return itemOut{Action: actionFailed, File: file, ID: id, Error: b.Message, Code: b.Error, err: err}
 }
 
 type syncOut struct {
@@ -64,7 +77,7 @@ type syncOut struct {
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "screenshots_sync", Toolset: tool.Screenshots, Class: tool.Write, Confirm: tool.ConfirmByPlan,
+		Name: "screenshots_sync", Toolset: tool.Screenshots, Class: tool.Destructive, Confirm: tool.ConfirmByPlan,
 		Title: "Sync screenshots",
 		Description: "Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). " +
 			"Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
@@ -130,6 +143,8 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 		}
 		pending = append(pending, syncSet(wctx, env, deps, sp, &out, step)...)
 	}
+	var unknown, failed []error
+	applied := 0
 	for _, it := range out.Items {
 		switch it.Action {
 		case actionUploaded:
@@ -141,6 +156,22 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 		case actionFailed, actionNotAttempted:
 			out.Failed++
 		}
+		switch {
+		case it.Action == actionUploaded || it.Action == actionDeleted || it.Action == actionSetCreated || it.Action == actionReordered:
+			applied++
+		case it.err == nil:
+		case errors.Is(it.err, tool.ErrOutcomeUnknown):
+			unknown = append(unknown, fmt.Errorf("%s %s: %w", it.Locale, it.Display, it.err))
+		default:
+			failed = append(failed, fmt.Errorf("%s %s: %w", it.Locale, it.Display, it.err))
+		}
+	}
+	replan := tool.NextStep{Tool: "screenshots_plan", Args: p.nextArgs()}
+	if out.Failed > 0 && applied == 0 {
+		// Nothing changed remotely, so no upload is pending. Outcome-unknown
+		// items first, so the result reports outcome_unknown whenever any
+		// step may have been applied.
+		return nil, tool.WithNext(errors.Join(append(unknown, failed...)...), replan)
 	}
 	if len(pending) > 0 {
 		pending, err = waitDelivery(ctx, env, &out, pending, time.Duration(wait)*time.Second)
@@ -154,7 +185,7 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 	case out.Failed > 0:
 		out.Status = "partial"
 		return tool.OK(out).Warn(fmt.Sprintf("%d step(s) failed; run screenshots_plan again to see what remains", out.Failed)).
-			Then(tool.NextStep{Tool: "screenshots_plan", Args: p.nextArgs()}), nil
+			Then(replan), nil
 	case out.Pending > 0:
 		out.Status = "uploaded"
 		return tool.StillProcessing(out, "Apple is still processing the uploads; check delivery states with screenshots_list").Then(listNext), nil
@@ -201,7 +232,7 @@ func syncSet(ctx context.Context, env *tool.Env, deps upload.Deps, sp *setPlan, 
 			err = errors.New("create set: response has no resource")
 		}
 		if err != nil {
-			add(itemOut{Action: actionFailed, Error: tool.BodyFor(err).Message})
+			add(failedItem("", "", "create set", err))
 			abandon(0, sp.Deletes)
 			return nil
 		}
@@ -214,7 +245,7 @@ func syncSet(ctx context.Context, env *tool.Env, deps upload.Deps, sp *setPlan, 
 			_, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodDelete, Path: "/v1/appScreenshots/" + d.ID, Write: true})
 			var api *tool.APIError
 			if err != nil && (!errors.As(err, &api) || api.Status != http.StatusNotFound) {
-				add(itemOut{Action: actionFailed, File: d.FileName, ID: d.ID, Error: tool.BodyFor(err).Message})
+				add(failedItem(d.FileName, d.ID, "delete", err))
 				abandon(0, sp.Deletes[i+1:])
 				return false
 			}
@@ -233,7 +264,7 @@ func syncSet(ctx context.Context, env *tool.Env, deps upload.Deps, sp *setPlan, 
 	for i, f := range sp.Uploads {
 		r, err := uploadFile(ctx, env, deps, setID, f)
 		if err != nil {
-			idx := add(itemOut{Action: actionFailed, File: f.Rel, Error: tool.BodyFor(err).Message})
+			idx := add(failedItem(f.Rel, "", "", err))
 			if r != nil {
 				out.Items[idx].ID, out.Items[idx].State = r.ID, r.State
 			}
@@ -268,7 +299,7 @@ func syncSet(ctx context.Context, env *tool.Env, deps upload.Deps, sp *setPlan, 
 			Body: map[string]any{"data": ids},
 		})
 		if err != nil {
-			add(itemOut{Action: actionFailed, ID: setID, Error: "reorder: " + tool.BodyFor(err).Message})
+			add(failedItem("", setID, "reorder", err))
 			return pending
 		}
 		add(itemOut{Action: actionReordered, ID: setID})

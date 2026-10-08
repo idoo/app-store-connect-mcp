@@ -108,6 +108,7 @@
       "phase": "preparing",
       "ready": true
     },
-    "app_store_connect": "https://appstoreconnect.apple.com/apps/100/distribution/ios/version/inflight"
+    "app_store_connect": "https://appstoreconnect.apple.com/apps/100/distribution/ios/version/inflight",
+    "platform_inferred": true
   }
 }
