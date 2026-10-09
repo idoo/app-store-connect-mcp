@@ -179,7 +179,7 @@ func legacyConfigWarnings(path string) []string {
 		if err != nil || !hasKeyedProfile(cfg) {
 			continue
 		}
-		out = append(out, fmt.Sprintf("config %s is no longer read; move it: mkdir -p %q && mv %q %q", old, newDir, old, path))
+		out = append(out, fmt.Sprintf(`config %s is no longer read; move it: mkdir -p "%s" && mv "%s" "%s"`, old, newDir, old, path))
 	}
 	return out
 }
