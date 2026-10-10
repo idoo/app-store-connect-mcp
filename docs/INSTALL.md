@@ -32,6 +32,8 @@ docker run -d --name app-store-connect-mcp -p 8765:8765 \
   ghcr.io/idoo/app-store-connect-mcp serve --http 0.0.0.0:8765 --allow-remote --tls-cert /tls/cert.pem --tls-key /tls/key.pem
 ```
 
+Browser-based clients send an `Origin` header; loopback origins are always allowed. Allow others with `--allow-origin https://app.example` (repeatable) or `ASC_MCP_HTTP_ALLOWED_ORIGINS=https://a.example,https://b.example`. Both need `--allow-remote` and take exact origins (`scheme://host[:port]`, no path).
+
 ## 2. API key (the user does this, not you)
 
 Keys never pass through the agent. Ask the user to:

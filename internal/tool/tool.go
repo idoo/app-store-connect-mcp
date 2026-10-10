@@ -35,6 +35,9 @@ type Meta struct {
 	Idempotent bool
 	// Local tools never call Apple or the network (openWorldHint=false).
 	Local bool
+	// UI is the screen name an MCP Apps client may render the result in
+	// (e.g. "release"); "" means none.
+	UI string
 	// NeedsTeamKey tools are withheld and refused for Individual API keys.
 	NeedsTeamKey bool
 	// AvailableReadOnly keeps a Write/Destructive tool listed in read-only

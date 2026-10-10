@@ -50,6 +50,10 @@ type session struct {
 	srv   *mcp.Server
 	tools []tool.Tool
 	plans *Planner
+	// artifacts holds this session's large outputs (resource template
+	// app-store-connect-mcp://artifacts/{id}).
+	artifacts *artifactStore
+	appsCache appsCache
 
 	syncMu sync.Mutex // serializes sync against the SDK
 	mu     sync.Mutex
@@ -88,11 +92,12 @@ func newSession(deps Deps) (*session, error) {
 		initial = []tool.Toolset{tool.Core}
 	}
 	s := &session{
-		deps:   deps,
-		plans:  NewPlanner(deps.Now),
-		on:     map[tool.Toolset]bool{tool.Core: true},
-		writes: deps.Profile.AllowWrites,
-		listed: map[string]bool{},
+		deps:      deps,
+		plans:     NewPlanner(deps.Now),
+		artifacts: newArtifactStore(deps.Now),
+		on:        map[tool.Toolset]bool{tool.Core: true},
+		writes:    deps.Profile.AllowWrites,
+		listed:    map[string]bool{},
 	}
 	for _, ts := range initial {
 		if !ts.Valid() {
@@ -111,7 +116,8 @@ func newSession(deps Deps) (*session, error) {
 	s.srv = mcp.NewServer(&mcp.Implementation{Name: "app-store-connect-mcp", Title: "app-store-connect-mcp", Version: deps.Version}, &mcp.ServerOptions{
 		Instructions:              Instructions,
 		Logger:                    deps.Logger,
-		Capabilities:              &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}},
+		CompletionHandler:         s.complete,
+		Capabilities:              &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}, Completions: &mcp.CompletionCapabilities{}},
 		SupportedProtocolVersions: legacyProtocolVersions(),
 	})
 	s.srv.AddReceivingMiddleware(s.hiddenToolMiddleware)

@@ -26,9 +26,9 @@ const (
 var platformEnum = []any{string(tool.IOS), string(tool.MacOS), string(tool.TVOS), string(tool.VisionOS)}
 
 type appsListIn struct {
-	Query    string `json:"query,omitempty" jsonschema:"fuzzy name, bundle id, SKU or id; empty lists all"`
+	Query    string `json:"query,omitempty" jsonschema:"fuzzy; empty lists all"`
 	Platform string `json:"platform,omitempty" jsonschema:"only apps on this platform"`
-	State    string `json:"state,omitempty" jsonschema:"only apps with an in-flight version in this state"`
+	State    string `json:"state,omitempty" jsonschema:"in-flight version state"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"max apps returned (default 50, max 200)"`
 }
 

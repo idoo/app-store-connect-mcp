@@ -11,6 +11,8 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -197,6 +199,34 @@ func TestNewEnvNoCredentialsErrorExplainsSetup(t *testing.T) {
 				t.Errorf("error body %s lacks %q", b, want)
 			}
 		}
+	}
+}
+
+// An unwritable state dir must not stop the server: the env builds without a
+// store (tool.Env installs its unavailable stand-in) and reads still work.
+func TestNewEnvUnwritableStateDir(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs unix permissions as a non-root user")
+	}
+	srv := asctest.New(t)
+	srv.Handle("GET", "/v1/customerReviews/{id}", 200, reviewJSON)
+	r := testResolved(t, srv, tool.KeyTeam)
+	ro := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(ro, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(ro, 0o700) })
+	t.Setenv("XDG_STATE_HOME", ro)
+	env := newTestEnv(t, r)
+	if env.State != nil {
+		t.Fatalf("State = %T, want nil so the unavailable stand-in is used", env.State)
+	}
+	want := StateDirProblem(filepath.Join(ro, "app-store-connect-mcp"))
+	if !slices.Contains(r.Profile.Problems, want) {
+		t.Errorf("Problems = %q, want %q", r.Profile.Problems, want)
+	}
+	if _, err := env.ASC.Get(context.Background(), "/v1/customerReviews/r1", nil); err != nil {
+		t.Fatalf("read with unwritable state dir: %v", err)
 	}
 }
 

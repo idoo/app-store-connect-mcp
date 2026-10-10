@@ -121,8 +121,13 @@ type rawResponse struct {
 	status int
 	header http.Header
 	body   []byte
-	token  string // bearer JWT the request carried
+	token  string         // bearer JWT the request carried
+	doc    *tool.Document // parsed body when send was asked to parse
 }
+
+// maxResponseBytes caps any response body read by exchange; a variable so
+// tests can lower it.
+var maxResponseBytes = MaxBodyBytes
 
 // Do implements [tool.ASC]. Non-GET requests need Request.Write, a write
 // context (tool.IsWrite) and writes enabled ([Options.AllowWrites], then
@@ -151,14 +156,11 @@ func (c *Client) Do(ctx context.Context, req tool.Request) (*tool.Response, erro
 	if accept == "" {
 		accept = "application/json"
 	}
-	raw, err := c.send(ctx, method, u, body, ctype, accept)
+	raw, err := c.send(ctx, method, u, body, ctype, accept, true)
 	if err != nil {
 		return nil, err
 	}
-	doc, err := tool.ParseDocument(raw.body)
-	if err != nil {
-		return nil, fmt.Errorf("asc: %s %s: %w", method, req.Path, err)
-	}
+	doc := raw.doc
 	c.wrap(doc)
 	return &tool.Response{
 		Status:     raw.status,
@@ -221,14 +223,11 @@ func (c *Client) fetchPage(ctx context.Context, rawURL string) (*tool.Document, 
 	if err != nil {
 		return nil, fmt.Errorf("asc: page URL: %w", err)
 	}
-	raw, err := c.send(ctx, http.MethodGet, u, nil, "", "application/json")
+	raw, err := c.send(ctx, http.MethodGet, u, nil, "", "application/json", true)
 	if err != nil {
 		return nil, err
 	}
-	doc, err := tool.ParseDocument(raw.body)
-	if err != nil {
-		return nil, fmt.Errorf("asc: GET %s: %w", u.Path, err)
-	}
+	doc := raw.doc
 	c.wrap(doc)
 	return doc, nil
 }
@@ -244,7 +243,7 @@ func (c *Client) Download(ctx context.Context, req tool.Request) ([]byte, http.H
 	if accept == "" {
 		accept = "application/a-gzip"
 	}
-	raw, err := c.send(ctx, http.MethodGet, u, nil, "", accept)
+	raw, err := c.send(ctx, http.MethodGet, u, nil, "", accept, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -282,7 +281,15 @@ func (c *Client) resolve(path string, query url.Values) (*url.URL, error) {
 
 // send performs one logical request with auth, retries, the 401 refresh and
 // eventual-consistency handling, returning the 2xx response or a typed error.
-func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, ctype, accept string) (*rawResponse, error) {
+// With parse set, a 2xx body must be a JSON:API document (stored in
+// rawResponse.doc); an unparsable one is tool.ErrUpstreamInvalid, retried
+// like a 502 for GET/HEAD and outcome_unknown for every other method.
+//
+// Replay safety and a known outcome are separate: PUT/DELETE are replayed
+// per the retry table, but once retries are exhausted their outcome is as
+// unknown as a POST's. A 404 on a replayed DELETE means an earlier attempt
+// was applied and is reported as tool.ErrAlreadyGone.
+func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, ctype, accept string, parse bool) (*rawResponse, error) {
 	label := method + " " + u.Path
 	refreshed := false
 	if err := c.quotaExhausted(label); err != nil {
@@ -315,7 +322,26 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 		c.observe(raw.header)
 		status := raw.status
 		if status >= 200 && status < 300 {
-			return raw, nil
+			if !parse {
+				return raw, nil
+			}
+			doc, perr := tool.ParseDocument(raw.body)
+			if perr == nil {
+				raw.doc = doc
+				return raw, nil
+			}
+			invalid := fmt.Errorf("asc: %s: HTTP %d body (Content-Type %q): %w: %s",
+				label, status, raw.header.Get("Content-Type"), tool.ErrUpstreamInvalid, Redact(perr.Error()))
+			if outcomeKnown(method) {
+				if retry, wait := c.retry.shouldRetry(method, http.StatusBadGateway, nil, attempt); retry && c.fits(ctx, wait) {
+					if err := c.sleep(ctx, wait); err != nil {
+						return nil, fmt.Errorf("asc: %s: %w", label, err)
+					}
+					attempt++
+					continue
+				}
+			}
+			return nil, c.unknownIf(method, invalid)
 		}
 		if status == http.StatusUnauthorized && !refreshed {
 			if skew, ok := c.ClockSkew(); ok && (skew > maxAuthSkew || skew < -maxAuthSkew) {
@@ -335,6 +361,9 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 			continue
 		}
 		apiErr := c.apiError(status, raw.body, method, u.Path)
+		if status == http.StatusNotFound && method == http.MethodDelete && attempt > 0 {
+			return nil, fmt.Errorf("asc: %s: %w: %w", label, tool.ErrAlreadyGone, apiErr)
+		}
 		retry, wait := c.retry.shouldRetry(method, status, nil, attempt)
 		if status == http.StatusTooManyRequests {
 			if ra, ok := parseRetryAfter(raw.header.Get("Retry-After"), c.clock.Now()); ok {
@@ -404,20 +433,21 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 		return nil, fmt.Errorf("transport: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // read-only body; close errors carry no information
-	b, err := io.ReadAll(io.LimitReader(resp.Body, MaxBodyBytes+1))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxResponseBytes)+1))
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
-	if len(b) > MaxBodyBytes {
-		return nil, fmt.Errorf("response body exceeds %d bytes: %w", MaxBodyBytes, tool.ErrInvalidArgs)
+	if len(b) > maxResponseBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes: %w", maxResponseBytes, tool.ErrResponseTooLarge)
 	}
 	return &rawResponse{status: resp.StatusCode, header: resp.Header, body: b, token: tok}, nil
 }
 
-// unknownIf wraps err with tool.ErrOutcomeUnknown for methods that are not
-// safe to replay, since Apple may have applied them.
+// unknownIf wraps err with tool.ErrOutcomeUnknown for every method whose
+// outcome is not known after a failure (all but GET/HEAD), since Apple may
+// have applied it. Replay-safe PUT/DELETE are wrapped too.
 func (c *Client) unknownIf(method string, err error) error {
-	if idempotent(method) {
+	if outcomeKnown(method) {
 		return err
 	}
 	return fmt.Errorf("%w: %w", tool.ErrOutcomeUnknown, err)

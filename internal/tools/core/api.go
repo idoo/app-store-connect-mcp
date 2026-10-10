@@ -22,34 +22,34 @@ const (
 )
 
 type searchIn struct {
-	Query         string `json:"query" jsonschema:"keywords, resource type, tag or operation id"`
+	Query         string `json:"query" jsonschema:"keywords, type, tag or operation id"`
 	Limit         int    `json:"limit,omitempty" jsonschema:"max hits (default 10, max 50)"`
 	IncludeWrites bool   `json:"include_writes,omitempty" jsonschema:"in read-only mode, also list mutations"`
 }
 
 type describeIn struct {
-	OperationID string `json:"operation_id,omitempty" jsonschema:"from asc_api_search, e.g. apps_getCollection"`
+	OperationID string `json:"operation_id,omitempty" jsonschema:"e.g. apps_getCollection"`
 	Method      string `json:"method,omitempty" jsonschema:"with path, instead of operation_id"`
-	Path        string `json:"path,omitempty" jsonschema:"concrete or template path, e.g. /v1/apps/123"`
+	Path        string `json:"path,omitempty" jsonschema:"e.g. /v1/apps/123 or /v1/apps/{id}"`
 }
 
 type getIn struct {
-	Path           string            `json:"path" jsonschema:"concrete path, e.g. /v1/apps/123/builds"`
-	Query          map[string]string `json:"query,omitempty" jsonschema:"query params, e.g. {\"sort\":\"-createdDate\"}"`
-	Fields         map[string]string `json:"fields,omitempty" jsonschema:"sparse fieldsets: type → comma-separated fields"`
-	Include        []string          `json:"include,omitempty" jsonschema:"relationships to include"`
-	Limit          int               `json:"limit,omitempty" jsonschema:"items across pages (default 200, max 5000)"`
-	Cursor         string            `json:"cursor,omitempty" jsonschema:"next_cursor from a previous call (same path)"`
-	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow a path missing from the pinned spec"`
+	Path           string            `json:"path" jsonschema:"e.g. /v1/apps/123/builds"`
+	Query          map[string]string `json:"query,omitempty" jsonschema:"e.g. {\"sort\":\"-createdDate\"}"`
+	Fields         map[string]string `json:"fields,omitempty" jsonschema:"type → comma-separated fields"`
+	Include        []string          `json:"include,omitempty"`
+	Limit          int               `json:"limit,omitempty" jsonschema:"default 200, max 5000"`
+	Cursor         string            `json:"cursor,omitempty" jsonschema:"next_cursor (same path)"`
+	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow a path not in the spec"`
 }
 
 type requestIn struct {
 	tool.ConfirmFlag
-	Method         string            `json:"method" jsonschema:"POST, PATCH or DELETE (reads: asc_api_get)"`
-	Path           string            `json:"path" jsonschema:"concrete path, e.g. /v1/appStoreVersions/123"`
-	Query          map[string]string `json:"query,omitempty" jsonschema:"query params"`
+	Method         string            `json:"method" jsonschema:"reads: asc_api_get"`
+	Path           string            `json:"path" jsonschema:"e.g. /v1/appStoreVersions/123"`
+	Query          map[string]string `json:"query,omitempty"`
 	Body           map[string]any    `json:"body,omitempty" jsonschema:"JSON:API {data:{type,attributes,relationships}}"`
-	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"allow an op missing from the pinned spec; always confirms"`
+	UnsafeUnlisted bool              `json:"unsafe_unlisted,omitempty" jsonschema:"op not in the spec; always confirms"`
 }
 
 func init() {

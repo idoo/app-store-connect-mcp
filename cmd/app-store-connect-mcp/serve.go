@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/app"
 	"github.com/idoo/app-store-connect-mcp/internal/config"
@@ -49,6 +53,44 @@ func (s *optionalString) String() string {
 
 func (s *optionalString) Set(v string) error { s.v = &v; return nil }
 
+// stringList is a repeatable string flag.
+type stringList []string
+
+func (l *stringList) String() string { return strings.Join(*l, ",") }
+
+func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
+
+// envHTTPAllowedOrigins lists extra allowed Origin values, comma-separated.
+const envHTTPAllowedOrigins = "ASC_MCP_HTTP_ALLOWED_ORIGINS"
+
+// parseOrigins validates exact origins (scheme://host[:port]) from the
+// --allow-origin flags and envHTTPAllowedOrigins. They are accepted only
+// with --allow-remote, since loopback origins are always allowed.
+func parseOrigins(flags []string, env string, allowRemote bool) ([]string, error) {
+	raw := slices.Clone(flags)
+	for _, v := range strings.Split(env, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			raw = append(raw, v)
+		}
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	if !allowRemote {
+		return nil, errors.New("--allow-origin and " + envHTTPAllowedOrigins + " need --allow-remote")
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+			u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+			return nil, fmt.Errorf("allowed origin %q: want an exact origin scheme://host[:port]", v)
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 // serveArgs is the parsed `app-store-connect-mcp serve` command line.
 type serveArgs struct {
 	flags    config.Flags
@@ -75,6 +117,8 @@ func parseServeArgs(args []string, out io.Writer) (*serveArgs, error) {
 	tlsKey := fs.String("tls-key", "", "TLS private key PEM for --http")
 	sessionTimeout := fs.Duration("http-session-timeout", 0, "close idle --http sessions after this long, e.g. 30m; negative never (default "+mcpserver.EnvHTTPSessionTimeout+" or "+mcpserver.DefaultSessionTimeout.String()+")")
 	maxSessions := fs.Int("http-max-sessions", 0, "cap open --http sessions; negative is unlimited (default "+mcpserver.EnvHTTPMaxSessions+" or "+strconv.Itoa(mcpserver.DefaultMaxSessions)+")")
+	var origins stringList
+	fs.Var(&origins, "allow-origin", "extra allowed browser Origin scheme://host[:port] for --http (repeatable; needs --allow-remote; also "+envHTTPAllowedOrigins+")")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil, nil
@@ -83,6 +127,10 @@ func parseServeArgs(args []string, out io.Writer) (*serveArgs, error) {
 	}
 	if fs.NArg() > 0 {
 		return nil, usageErr("serve takes no arguments")
+	}
+	allowed, err := parseOrigins(origins, os.Getenv(envHTTPAllowedOrigins), *allowRemote)
+	if err != nil {
+		return nil, err
 	}
 	return &serveArgs{
 		flags: config.Flags{
@@ -99,6 +147,7 @@ func parseServeArgs(args []string, out io.Writer) (*serveArgs, error) {
 			AllowRemote:    *allowRemote,
 			TLSCert:        *tlsCert,
 			TLSKey:         *tlsKey,
+			AllowedOrigins: allowed,
 			SessionTimeout: *sessionTimeout,
 			MaxSessions:    *maxSessions,
 		},

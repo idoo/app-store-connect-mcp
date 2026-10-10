@@ -148,25 +148,25 @@
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`access_type`|string||`ONGOING`, `ONE_TIME_SNAPSHOT`|default ONGOING, else ONE_TIME_SNAPSHOT|
+|`access_type`|string||`ONGOING`, `ONE_TIME_SNAPSHOT`|default ONGOING|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`category`|string||`APP_USAGE`, `APP_STORE_ENGAGEMENT`, `COMMERCE`, `FRAMEWORK_USAGE`, `PERFORMANCE`|only reports of this category|
-|`dimensions`|string[]|||columns to group by (see result columns)|
-|`from`|string|||first processing date YYYY-MM-DD|
+|`category`|string||`APP_USAGE`, `APP_STORE_ENGAGEMENT`, `COMMERCE`, `FRAMEWORK_USAGE`, `PERFORMANCE`||
+|`dimensions`|string[]|||columns to group by|
+|`from`|string|||YYYY-MM-DD|
 |`granularity`|string||`DAILY`, `WEEKLY`, `MONTHLY`|default DAILY|
-|`max_segments`|integer|||newest segments to download; default 3, max 10|
-|`metrics`|string[]|||columns to sum; default all numeric|
-|`raw_rows`|integer|||also return up to this many raw rows (max 500)|
-|`report`|string|||report id or name (unique substring); omit to list|
-|`to`|string|||last processing date YYYY-MM-DD|
-|`top_n`|integer|||groups kept, default 20, max 200|
+|`max_segments`|integer|||newest; default 3, max 10|
+|`metrics`|string[]|||columns to sum; default numeric|
+|`raw_rows`|integer|||max 500|
+|`report`|string|||id or name; omit to list|
+|`to`|string|||YYYY-MM-DD|
+|`top_n`|integer|||default 20, max 200|
 
 ### analytics_setup
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`one_time_snapshot`|boolean|||also request a ONE_TIME_SNAPSHOT (history)|
+|`one_time_snapshot`|boolean|||also ONE_TIME_SNAPSHOT (history)|
 
 ### appinfo_update
 
@@ -195,28 +195,28 @@
 |---|---|---|---|---|
 |`limit`|integer|||max apps returned (default 50, max 200)|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`|only apps on this platform|
-|`query`|string|||fuzzy name, bundle id, SKU or id; empty lists all|
-|`state`|string|||only apps with an in-flight version in this state|
+|`query`|string|||fuzzy; empty lists all|
+|`state`|string|||in-flight version state|
 
 ### asc_api_describe
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`method`|string|||with path, instead of operation_id|
-|`operation_id`|string|||from asc_api_search, e.g. apps_getCollection|
-|`path`|string|||concrete or template path, e.g. /v1/apps/123|
+|`operation_id`|string|||e.g. apps_getCollection|
+|`path`|string|||e.g. /v1/apps/123 or /v1/apps/{id}|
 
 ### asc_api_get
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`cursor`|string|||next_cursor from a previous call (same path)|
-|`fields`|object|||sparse fieldsets: type → comma-separated fields|
-|`include`|string[]|||relationships to include|
-|`limit`|integer|||items across pages (default 200, max 5000)|
-|`path`|string|yes||concrete path, e.g. /v1/apps/123/builds|
-|`query`|object|||query params, e.g. {"sort":"-createdDate"}|
-|`unsafe_unlisted`|boolean|||allow a path missing from the pinned spec|
+|`cursor`|string|||next_cursor (same path)|
+|`fields`|object|||type → comma-separated fields|
+|`include`|string[]||||
+|`limit`|integer|||default 200, max 5000|
+|`path`|string|yes||e.g. /v1/apps/123/builds|
+|`query`|object|||e.g. {"sort":"-createdDate"}|
+|`unsafe_unlisted`|boolean|||allow a path not in the spec|
 
 ### asc_api_request
 
@@ -224,10 +224,10 @@
 |---|---|---|---|---|
 |`body`|object|||JSON:API {data:{type,attributes,relationships}}|
 |`confirm`|boolean|||true after reviewing the preview|
-|`method`|string|yes||POST, PATCH or DELETE (reads: asc_api_get)|
-|`path`|string|yes||concrete path, e.g. /v1/appStoreVersions/123|
-|`query`|object|||query params|
-|`unsafe_unlisted`|boolean|||allow an op missing from the pinned spec; always confirms|
+|`method`|string|yes||reads: asc_api_get|
+|`path`|string|yes||e.g. /v1/appStoreVersions/123|
+|`query`|object||||
+|`unsafe_unlisted`|boolean|||op not in the spec; always confirms|
 
 ### asc_api_search
 
@@ -235,7 +235,7 @@
 |---|---|---|---|---|
 |`include_writes`|boolean|||in read-only mode, also list mutations|
 |`limit`|integer|||max hits (default 10, max 50)|
-|`query`|string|yes||keywords, resource type, tag or operation id|
+|`query`|string|yes||keywords, type, tag or operation id|
 
 ### builds_expire
 
@@ -273,9 +273,9 @@
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`build`|string|||latest (default), build number or build id|
+|`build`|string|||latest (default), number or id|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
-|`timeout_seconds`|integer|||how long to wait (default 45, max 300; 50 when the client sends no progress token)|
+|`timeout_seconds`|integer|||default 45, max 300 (50 without progress token)|
 
 ### doctor
 
@@ -285,8 +285,8 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`month`|string|||Apple fiscal month YYYY-MM; default: newest published of the last two closed months|
-|`region`|string|||default ZZ (FINANCIAL) or Z1 (FINANCE_DETAIL)|
+|`month`|string|||fiscal YYYY-MM; default newest closed|
+|`region`|string|||default ZZ, or Z1 for detail|
 |`report_type`|string||`FINANCIAL`, `FINANCE_DETAIL`|default FINANCIAL|
 |`top_n`|integer|||products kept, default 10, max 100|
 
@@ -319,8 +319,8 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`app`|string|||name, bundle id, SKU or id; default: pinned, else sales of all apps|
-|`period`|string||`yesterday`, `this_week`, `last_week`, `last_7_days`, `month_to_date`, `last_month`|preset in Pacific time; default last_7_days|
+|`app`|string|||default: pinned, else all apps|
+|`period`|string||`yesterday`, `this_week`, `last_week`, `last_7_days`, `month_to_date`, `last_month`|Pacific; default last_7_days|
 
 ### metadata_apply
 
@@ -472,7 +472,7 @@ No arguments.
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`confirm`|boolean|||true after reviewing the preview|
-|`items`|string[]|||draft only: item ids to remove; default: all|
+|`items`|string[]|||draft only; default all|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 
 ### release_phased
@@ -483,22 +483,22 @@ No arguments.
 |`app`|string|||name, bundle id, SKU or id; default pinned|
 |`confirm`|boolean|||true after reviewing the preview|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
-|`version`|string|||default: newest version with a phased release|
+|`version`|string|||default: newest phased|
 
 ### release_prepare
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`build`|string|||latest, latest-valid, build number or id|
-|`earliest_release_date`|string|||RFC 3339, for SCHEDULED|
-|`phased`|boolean|||7-day phased release|
+|`build`|string|||latest, latest-valid, number or id|
+|`earliest_release_date`|string|||RFC 3339 (SCHEDULED)|
+|`phased`|boolean|||7-day phased|
 |`plan_id`|string|||from the preview call|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 |`release_type`|string||`MANUAL`, `AFTER_APPROVAL`, `SCHEDULED`||
-|`uses_non_exempt_encryption`|boolean|||export compliance answer|
-|`version`|string|||version to prepare or create, e.g. 1.4; default: editable|
-|`whats_new`|object|||What's New per locale; * = all existing|
+|`uses_non_exempt_encryption`|boolean|||export compliance|
+|`version`|string|||e.g. 1.4; default: editable|
+|`whats_new`|object|||per locale; * = all existing|
 
 ### release_publish
 
@@ -522,18 +522,18 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`desired`|object|||intended release; yields plan_ids for release_prepare/release_submit|
+|`desired`|object|||yields plan_ids for release_prepare/release_submit|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
-|`version`|string|||editable (default), live or a version string|
+|`version`|string|||editable (default), live or a version|
 
 ### release_submit
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`attach_first_time_products`|boolean|||attach every ready IAP/subscription (default true)|
-|`include_iaps`|string[]|||IAPs to submit with it: product id, name or id|
-|`include_subscriptions`|string[]|||subscriptions to submit with it: product id, name or id|
+|`attach_first_time_products`|boolean|||default true|
+|`include_iaps`|string[]|||product id, name or id|
+|`include_subscriptions`|string[]|||product id, name or id|
 |`plan_id`|string|||from the preview call|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 |`version`|string|||version string; default: editable|
@@ -562,16 +562,16 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`app`|string|||only this app's rows; default: all apps|
-|`frequency`|string||`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`|single report of this frequency (with report_date)|
-|`from`|string|||first day YYYY-MM-DD (with to)|
-|`group_by`|string[]||`app`, `sku`, `country`, `date`, `product_category`, `currency`|SALES grouping dimensions|
-|`period`|string||`yesterday`, `this_week`, `last_week`, `last_7_days`, `month_to_date`, `last_month`|preset in Pacific time; default yesterday|
-|`report_date`|string|||DAILY YYYY-MM-DD, WEEKLY its Sunday, MONTHLY YYYY-MM, YEARLY YYYY|
-|`report_subtype`|string||`SUMMARY`, `DETAILED`, `SUMMARY_INSTALL_TYPE`, `SUMMARY_TERRITORY`, `SUMMARY_CHANNEL`|default: first subtype valid for report_type|
+|`app`|string|||default: all apps|
+|`frequency`|string||`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`|with report_date|
+|`from`|string|||YYYY-MM-DD (with to)|
+|`group_by`|string[]||`app`, `sku`, `country`, `date`, `product_category`, `currency`||
+|`period`|string||`yesterday`, `this_week`, `last_week`, `last_7_days`, `month_to_date`, `last_month`|Pacific time; default yesterday|
+|`report_date`|string|||YYYY-MM-DD (WEEKLY: Sunday), MONTHLY YYYY-MM, YEARLY YYYY|
+|`report_subtype`|string||`SUMMARY`, `DETAILED`, `SUMMARY_INSTALL_TYPE`, `SUMMARY_TERRITORY`, `SUMMARY_CHANNEL`|default: first valid|
 |`report_type`|string||`SALES`, `PRE_ORDER`, `NEWSSTAND`, `SUBSCRIPTION`, `SUBSCRIPTION_EVENT`, `SUBSCRIBER`, `SUBSCRIPTION_OFFER_CODE_REDEMPTION`, `INSTALLS`, `FIRST_ANNUAL`, `WIN_BACK_ELIGIBILITY`|default SALES|
-|`to`|string|||last day YYYY-MM-DD, inclusive|
-|`top_n`|integer|||groups kept, default 10, max 100|
+|`to`|string|||YYYY-MM-DD, inclusive|
+|`top_n`|integer|||default 10, max 100|
 
 ### screenshots_list
 
@@ -786,7 +786,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`action`|string|yes|`list`, `enable`, `disable`, `enable_writes`|what to do|
-|`toolsets`|string[]||`core`, `release`, `testflight`, `metadata`, `reviews`, `reports`, `screenshots`, `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store`|toolsets for enable/disable|
+|`toolsets`|string[]||`core`, `release`, `testflight`, `metadata`, `reviews`, `reports`, `screenshots`, `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store`, `insights`|toolsets for enable/disable|
 
 ### users_invite
 

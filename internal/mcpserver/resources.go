@@ -38,6 +38,10 @@ func (s *session) addResources() {
 		URITemplate: specOpPrefix + "{operationId}", Name: "spec-operation",
 		Title: "App Store Connect API operation", MIMEType: "application/json",
 	}, s.readSpecOp)
+	s.srv.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: artifactPrefix + "{id}", Name: "artifact",
+		Title: "Tool output artifact (this session)",
+	}, s.readArtifact)
 }
 
 func (s *session) readApps(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

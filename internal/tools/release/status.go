@@ -20,8 +20,8 @@ const productsMax = 5000
 type statusIn struct {
 	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform tool.Platform   `json:"platform,omitempty"`
-	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default), live or a version string"`
-	Desired  *releaseDesired `json:"desired,omitempty" jsonschema:"intended release; yields plan_ids for release_prepare/release_submit"`
+	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default), live or a version"`
+	Desired  *releaseDesired `json:"desired,omitempty" jsonschema:"yields plan_ids for release_prepare/release_submit"`
 }
 
 func init() {

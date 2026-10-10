@@ -20,13 +20,13 @@ import (
 type prepareIn struct {
 	App                     tool.AppRef       `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform                tool.Platform     `json:"platform,omitempty"`
-	Version                 tool.VersionRef   `json:"version,omitempty" jsonschema:"version to prepare or create, e.g. 1.4; default: editable"`
-	Build                   tool.BuildRef     `json:"build,omitempty" jsonschema:"latest, latest-valid, build number or id"`
-	WhatsNew                map[string]string `json:"whats_new,omitempty" jsonschema:"What's New per locale; * = all existing"`
+	Version                 tool.VersionRef   `json:"version,omitempty" jsonschema:"e.g. 1.4; default: editable"`
+	Build                   tool.BuildRef     `json:"build,omitempty" jsonschema:"latest, latest-valid, number or id"`
+	WhatsNew                map[string]string `json:"whats_new,omitempty" jsonschema:"per locale; * = all existing"`
 	ReleaseType             string            `json:"release_type,omitempty"`
-	EarliestReleaseDate     string            `json:"earliest_release_date,omitempty" jsonschema:"RFC 3339, for SCHEDULED"`
-	Phased                  *bool             `json:"phased,omitempty" jsonschema:"7-day phased release"`
-	UsesNonExemptEncryption *bool             `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer"`
+	EarliestReleaseDate     string            `json:"earliest_release_date,omitempty" jsonschema:"RFC 3339 (SCHEDULED)"`
+	Phased                  *bool             `json:"phased,omitempty" jsonschema:"7-day phased"`
+	UsesNonExemptEncryption *bool             `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance"`
 	tool.ConfirmPlan
 }
 

@@ -39,9 +39,20 @@ type ResultMeta struct {
 	ApprovedBy string `json:"approved_by,omitempty"`
 }
 
+// Link is a resource link rendered after the text content (MCP
+// resource_link), typically to a full artifact from [Artifacts.Put].
+type Link struct {
+	URI      string
+	Name     string
+	Title    string
+	MIMEType string
+	Size     int64
+}
+
 // Result is a tool outcome. The server renders Data as structuredContent and
-// as compact JSON text (or Text when set), appends Images, applies redaction
-// and the byte cap, and reports Meta and Next under _meta.app-store-connect-mcp.
+// as compact JSON text (or Text when set), appends Images and Links, applies
+// redaction and the byte cap, and reports Meta and Next under
+// _meta.app-store-connect-mcp.
 type Result struct {
 	// Data is the structured payload; it should marshal to a JSON object.
 	Data any
@@ -52,6 +63,14 @@ type Result struct {
 	// Next lists machine-readable follow-up calls the agent may make.
 	Next []NextStep
 	Meta ResultMeta
+	// Links are rendered as resource_link content after the text.
+	Links []Link
+}
+
+// WithLink appends a resource link to r and returns r.
+func (r *Result) WithLink(l Link) *Result {
+	r.Links = append(r.Links, l)
+	return r
 }
 
 // OK returns a successful result carrying v.

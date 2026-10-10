@@ -16,17 +16,17 @@ type submitIn struct {
 	App                  tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform             tool.Platform   `json:"platform,omitempty"`
 	Version              tool.VersionRef `json:"version,omitempty" jsonschema:"version string; default: editable"`
-	IncludeIAPs          []string        `json:"include_iaps,omitempty" jsonschema:"IAPs to submit with it: product id, name or id"`
-	IncludeSubscriptions []string        `json:"include_subscriptions,omitempty" jsonschema:"subscriptions to submit with it: product id, name or id"`
+	IncludeIAPs          []string        `json:"include_iaps,omitempty" jsonschema:"product id, name or id"`
+	IncludeSubscriptions []string        `json:"include_subscriptions,omitempty" jsonschema:"product id, name or id"`
 	// AttachFirstTimeProducts nil means true.
-	AttachFirstTimeProducts *bool `json:"attach_first_time_products,omitempty" jsonschema:"attach every ready IAP/subscription (default true)"`
+	AttachFirstTimeProducts *bool `json:"attach_first_time_products,omitempty" jsonschema:"default true"`
 	tool.ConfirmPlan
 }
 
 type cancelIn struct {
 	App      tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform tool.Platform `json:"platform,omitempty"`
-	Items    []string      `json:"items,omitempty" jsonschema:"draft only: item ids to remove; default: all"`
+	Items    []string      `json:"items,omitempty" jsonschema:"draft only; default all"`
 	tool.ConfirmFlag
 }
 

@@ -21,7 +21,14 @@ const (
 	EnvMaxRetries       = "ASC_MCP_MAX_RETRIES"
 	EnvBaseURL          = "ASC_MCP_BASE_URL"
 	EnvCI               = "ASC_MCP_CI"
+	// EnvAllowNoElicit lets agents approve human gates in CI; it is
+	// honoured only together with EnvCI.
+	EnvAllowNoElicit = "ASC_MCP_ALLOW_NO_ELICIT"
 )
+
+// ProblemEmptyKey is the profile problem reported when ASC_PRIVATE_KEY is
+// set to an empty value, usually a CI secret that isn't available to the job.
+const ProblemEmptyKey = EnvKey + " is set but empty (missing CI secret?)"
 
 // Defaults and bounds for limits.
 const (
@@ -47,6 +54,9 @@ type Options struct {
 	Flags Flags
 	// Getenv defaults to os.Getenv.
 	Getenv func(string) string
+	// LookupEnv distinguishes set-but-empty variables; it defaults to
+	// os.LookupEnv when Getenv is nil, otherwise to treating "" as unset.
+	LookupEnv func(string) (string, bool)
 	// ConfigPath defaults to DefaultPath.
 	ConfigPath string
 	// Cwd defaults to the working directory; Home to the user's home.
@@ -81,6 +91,7 @@ func (p ResolvedProfile) Info() tool.ProfileInfo {
 		AllowWrites:   p.AllowWrites,
 		PinSource:     p.PinSource,
 		AllowNoElicit: p.AllowNoElicit,
+		Problems:      p.Problems,
 	}
 }
 
@@ -136,10 +147,48 @@ func Resolve(opts Options) (*Resolved, error) {
 	if err := r.resolveProfile(opts.Flags, getenv, cfg, pin); err != nil {
 		return nil, err
 	}
+	r.emptyKeyProblem(opts, getenv)
 	if err := r.resolveModes(opts.Flags, getenv); err != nil {
 		return nil, err
 	}
+	if err := r.resolveNoElicit(getenv); err != nil {
+		return nil, err
+	}
 	return r, nil
+}
+
+// emptyKeyProblem flags an env profile whose inline key variable is present
+// but blank, which env credentials otherwise treat as unset.
+func (r *Resolved) emptyKeyProblem(opts Options, getenv func(string) string) {
+	if r.Profile.Name != EnvProfileName || r.Profile.Key.Source != "" {
+		return
+	}
+	lookup := opts.LookupEnv
+	if lookup == nil {
+		if opts.Getenv == nil {
+			lookup = os.LookupEnv
+		} else {
+			lookup = func(k string) (string, bool) { v := getenv(k); return v, v != "" }
+		}
+	}
+	if v, set := lookup(EnvKey); set && strings.TrimSpace(v) == "" {
+		r.Profile.Problems = append(r.Profile.Problems, ProblemEmptyKey)
+	}
+}
+
+// resolveNoElicit applies ASC_MCP_ALLOW_NO_ELICIT, which takes effect only
+// with ASC_MCP_CI; a pin never widens it.
+func (r *Resolved) resolveNoElicit(getenv func(string) string) error {
+	v, set, err := envBool(getenv, EnvAllowNoElicit)
+	if err != nil || !set || !v {
+		return err
+	}
+	if !r.CI {
+		r.Profile.Problems = append(r.Profile.Problems, EnvAllowNoElicit+" ignored: it takes effect only with "+EnvCI+"=1")
+		return nil
+	}
+	r.Profile.AllowNoElicit = true
+	return nil
 }
 
 func dirs(opts Options, getenv func(string) string) (home, cwd string, err error) {

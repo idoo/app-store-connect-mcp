@@ -31,6 +31,9 @@ type ProfileInfo struct {
 	// AllowNoElicit lets RequireHuman tools proceed on an agent confirmation
 	// when the client cannot elicit (config opt-in).
 	AllowNoElicit bool `json:"allow_no_elicit,omitempty"`
+	// Problems are configuration problems found while resolving the profile
+	// (e.g. an unwritable state dir); doctor reports them.
+	Problems []string `json:"problems,omitempty"`
 }
 
 // PlanTTL is how long a proposed plan stays valid. Planner implementations
@@ -116,7 +119,21 @@ type Files interface {
 	Stat(path string) (fs.FileInfo, error)
 	// WalkDir walks root like [fs.WalkDir]; callback paths are absolute.
 	WalkDir(root string, fn fs.WalkDirFunc) error
+	// Rename moves oldPath to newPath; both must be inside the root.
+	Rename(oldPath, newPath string) error
 }
+
+// Artifacts stores large outputs for the session and links to them.
+type Artifacts interface {
+	// Put stores redacted bytes for this session and returns a resource link.
+	Put(ctx context.Context, name, mimeType string, b []byte) (Link, error)
+}
+
+// Transports reported in [Env.Transport].
+const (
+	TransportStdio = "stdio"
+	TransportHTTP  = "http"
+)
 
 // Clock abstracts time so wait loops are testable.
 type Clock interface {
@@ -159,6 +176,11 @@ type Env struct {
 	Files    Files
 	Clock    Clock
 	Profile  ProfileInfo
+	// Artifacts stores large outputs as session resources; nil fails with
+	// [ErrUnavailable].
+	Artifacts Artifacts
+	// Transport is TransportStdio or TransportHTTP ("" in tests).
+	Transport string
 	// Version is the app-store-connect-mcp build version.
 	Version string
 	// NoConfirm skips the preview step (CI only: --no-confirm with ASC_MCP_CI=1).
@@ -211,6 +233,9 @@ func (e *Env) complete() *Env {
 	}
 	if c.Toolsets == nil {
 		c.Toolsets = noToolsets{}
+	}
+	if c.Artifacts == nil {
+		c.Artifacts = noArtifacts{}
 	}
 	if c.Fetch == nil {
 		c.Fetch = noFetcher{}

@@ -29,22 +29,22 @@ var analyticsCategories = []any{"APP_USAGE", "APP_STORE_ENGAGEMENT", "COMMERCE",
 
 type analyticsSetupIn struct {
 	App             tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
-	OneTimeSnapshot bool        `json:"one_time_snapshot,omitempty" jsonschema:"also request a ONE_TIME_SNAPSHOT (history)"`
+	OneTimeSnapshot bool        `json:"one_time_snapshot,omitempty" jsonschema:"also ONE_TIME_SNAPSHOT (history)"`
 }
 
 type analyticsReportIn struct {
 	App         tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
-	AccessType  string      `json:"access_type,omitempty" jsonschema:"default ONGOING, else ONE_TIME_SNAPSHOT"`
-	Category    string      `json:"category,omitempty" jsonschema:"only reports of this category"`
-	Report      string      `json:"report,omitempty" jsonschema:"report id or name (unique substring); omit to list"`
+	AccessType  string      `json:"access_type,omitempty" jsonschema:"default ONGOING"`
+	Category    string      `json:"category,omitempty"`
+	Report      string      `json:"report,omitempty" jsonschema:"id or name; omit to list"`
 	Granularity string      `json:"granularity,omitempty" jsonschema:"default DAILY"`
-	From        string      `json:"from,omitempty" jsonschema:"first processing date YYYY-MM-DD"`
-	To          string      `json:"to,omitempty" jsonschema:"last processing date YYYY-MM-DD"`
-	Dimensions  []string    `json:"dimensions,omitempty" jsonschema:"columns to group by (see result columns)"`
-	Metrics     []string    `json:"metrics,omitempty" jsonschema:"columns to sum; default all numeric"`
-	TopN        int         `json:"top_n,omitempty" jsonschema:"groups kept, default 20, max 200"`
-	MaxSegments int         `json:"max_segments,omitempty" jsonschema:"newest segments to download; default 3, max 10"`
-	RawRows     int         `json:"raw_rows,omitempty" jsonschema:"also return up to this many raw rows (max 500)"`
+	From        string      `json:"from,omitempty" jsonschema:"YYYY-MM-DD"`
+	To          string      `json:"to,omitempty" jsonschema:"YYYY-MM-DD"`
+	Dimensions  []string    `json:"dimensions,omitempty" jsonschema:"columns to group by"`
+	Metrics     []string    `json:"metrics,omitempty" jsonschema:"columns to sum; default numeric"`
+	TopN        int         `json:"top_n,omitempty" jsonschema:"default 20, max 200"`
+	MaxSegments int         `json:"max_segments,omitempty" jsonschema:"newest; default 3, max 10"`
+	RawRows     int         `json:"raw_rows,omitempty" jsonschema:"max 500"`
 }
 
 func init() {

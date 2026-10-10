@@ -17,7 +17,7 @@ import (
 
 // TestRegistryBudget measures the real tools/list payload for the shipped
 // registry and enforces the context-budget caps (default toolsets with writes
-// on ≤ 40 KB).
+// on ≤ 40 KB, kept defaultHeadroom below it so planned schema growth fits).
 func TestRegistryBudget(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct {
@@ -27,7 +27,7 @@ func TestRegistryBudget(t *testing.T) {
 		limit    int
 	}{
 		{"default read-only", false, nil, 40 << 10},
-		{"default writes", true, nil, 40 << 10},
+		{"default writes", true, nil, 40<<10 - defaultHeadroom},
 		{"all writes", true, tool.AllToolsets, 110 << 10},
 	}
 	for _, c := range cases {
@@ -49,6 +49,10 @@ func TestRegistryBudget(t *testing.T) {
 		}
 	}
 }
+
+// defaultHeadroom is reserved under the 40 KB default cap for schema growth
+// already planned (accessibility and age-rating fields).
+const defaultHeadroom = 1200
 
 // logLargestTools logs the top listed tools by marshalled size, largest first.
 func logLargestTools(t *testing.T, srv *mcp.Server, top int) {
@@ -112,9 +116,9 @@ var (
 		"signing_capabilities_set": tool.Destructive, // can disable capabilities
 		"webhooks_upsert":          tool.Destructive, // sends App Store events to an external URL
 	}
-	// nonIdempotentReads are the Read tools whose mark_seen writes a cursor,
-	// so a repeat call returns different data.
-	nonIdempotentReads = []string{"reviews_list", "testflight_feedback_list"}
+	// nonIdempotentReads are the Read tools whose mark_seen or history writes
+	// state, so a repeat call returns different data.
+	nonIdempotentReads = []string{"reviews_list", "testflight_feedback_list", "digest_summary", "store_ranks_report"}
 )
 
 // expectedClass returns the class the name's verb implies, or false when the

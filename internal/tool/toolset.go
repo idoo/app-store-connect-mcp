@@ -21,12 +21,13 @@ const (
 	Webhooks     Toolset = "webhooks"
 	Admin        Toolset = "admin"
 	Store        Toolset = "store"
+	Insights     Toolset = "insights"
 )
 
 // AllToolsets lists every toolset in display order.
 var AllToolsets = []Toolset{
 	Core, Release, TestFlight, Metadata, Reviews, Reports,
-	Screenshots, Uploads, Monetization, Signing, XcodeCloud, Webhooks, Admin, Store,
+	Screenshots, Uploads, Monetization, Signing, XcodeCloud, Webhooks, Admin, Store, Insights,
 }
 
 // DefaultToolsets lists the toolsets enabled when no selection is given.

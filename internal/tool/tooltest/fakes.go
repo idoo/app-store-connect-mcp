@@ -281,6 +281,22 @@ func (f *FakeFiles) WalkDir(root string, fn fs.WalkDirFunc) error {
 	return filepath.WalkDir(p, fn)
 }
 
+// Rename implements tool.Files; both paths must resolve inside Root.
+func (f *FakeFiles) Rename(oldPath, newPath string) error {
+	from, err := f.Resolve(oldPath)
+	if err != nil {
+		return err
+	}
+	to, err := f.Resolve(newPath)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0o750); err != nil {
+		return fmt.Errorf("rename %s: %w", newPath, err)
+	}
+	return os.Rename(from, to)
+}
+
 // FakeFetcher is a [tool.Fetcher] serving canned responses by exact URL. It
 // enforces https and the forbidden-header rule and fails the test on
 // unknown URLs.

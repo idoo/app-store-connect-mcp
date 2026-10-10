@@ -71,13 +71,21 @@ func (p retryPolicy) backoff(attempt int) time.Duration {
 	return d + time.Duration(float64(d)*jitterFraction*j)
 }
 
-// idempotent reports whether method may be replayed after an unknown outcome.
+// idempotent reports whether method may be replayed by the retry table.
+// Replay safety does not make a failed request's outcome known; see
+// [outcomeKnown].
 func idempotent(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete:
 		return true
 	}
 	return false
+}
+
+// outcomeKnown reports whether a failed request with method certainly
+// changed nothing at Apple (GET/HEAD), so it is never outcome_unknown.
+func outcomeKnown(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
 }
 
 // parseRetryAfter parses a Retry-After header in seconds or as an HTTP-date.
