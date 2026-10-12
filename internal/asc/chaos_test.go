@@ -97,7 +97,7 @@ func TestChaosDeleteFirstTry404StaysError(t *testing.T) {
 // outcome; a GET does not.
 func TestChaosIdempotent5xxExhaustedIsOutcomeUnknown(t *testing.T) {
 	for _, m := range []string{http.MethodDelete, http.MethodPut, http.MethodGet} {
-		hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 			writeAPIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "x", "")
 		}, nil)
 		req := tool.Request{Method: m, Path: "/v1/betaGroups/G1"}
@@ -123,7 +123,7 @@ func TestChaosResponseTooLarge(t *testing.T) {
 	old := maxResponseBytes
 	maxResponseBytes = 1024
 	t.Cleanup(func() { maxResponseBytes = old })
-	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"data":[],"pad":"`+strings.Repeat("x", 2048)+`"}`)
 	}, nil)
@@ -145,7 +145,7 @@ func TestChaosResponseTooLarge(t *testing.T) {
 // A GET 200 with an HTML maintenance page is retried like a 502.
 func TestChaosGetHTML200Retried(t *testing.T) {
 	var n atomic.Int32
-	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		if n.Add(1) == 1 {
 			w.Header().Set("Content-Type", "text/html")
 			_, _ = io.WriteString(w, "<html>maintenance</html>")
