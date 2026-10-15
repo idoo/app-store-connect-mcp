@@ -544,7 +544,7 @@ No arguments.
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; "all" = every app|
 |`limit`|integer|||max reviews overall (default 50, max 500)|
-|`mark_seen`|boolean|||advance the stored cursor to the newest returned|
+|`mark_seen`|boolean|||advance the stored cursor to the newest returned (kept when rating/territory/unanswered filter)|
 |`rating`|integer[]||`1`, `2`, `3`, `4`, `5`|only these star ratings|
 |`since`|string|||"last_seen" or ISO date/time; only newer|
 |`territory`|string[]|||alpha-3 territory codes, e.g. USA, DEU|
@@ -554,7 +554,7 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`app`|string|||the reviews' app (advances its cursor); default: pinned|
+|`app`|string|||the reviews' app (named in the result); default: pinned|
 |`confirm`|boolean|||true after reviewing the preview|
 |`replies`|object[]|yes||1-20 replies; an existing response is replaced|
 

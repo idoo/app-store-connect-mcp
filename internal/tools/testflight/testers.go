@@ -253,13 +253,25 @@ func testersAdd(ctx context.Context, env *tool.Env, in testersAddIn) (*tool.Resu
 	if counts[outcomeAlready] == len(outcomes) {
 		return tool.Already(out), nil
 	}
-	res := tool.OK(out)
+	var errs []error
+	for _, o := range outcomes {
+		switch o.Outcome {
+		case outcomeUnknown:
+			errs = append(errs, fmt.Errorf("%w: %s: %s", tool.ErrOutcomeUnknown, o.Email, o.Detail))
+		case outcomeError:
+			errs = append(errs, fmt.Errorf("%s: %s", o.Email, o.Detail))
+		}
+	}
+	var next []tool.NextStep
+	if counts[outcomeUnknown] > 0 {
+		next = append(next, tool.NextStep{Tool: "testflight_testers_list", Args: map[string]any{"app": app.ID, "group": g.ID}})
+	}
+	res := tool.Batch(out, counts[outcomeAdded], counts[outcomeAlready], errs, next...)
 	if g.Internal {
 		res.Warn("internal groups accept only App Store Connect users of the team; other emails fail")
 	}
 	if counts[outcomeUnknown] > 0 {
 		res.Warn("some requests have an unknown outcome; check with testflight_testers_list before retrying")
-		res.Then(tool.NextStep{Tool: "testflight_testers_list", Args: map[string]any{"app": app.ID, "group": g.ID}})
 	}
 	return res, nil
 }
@@ -272,8 +284,8 @@ func gateTestersAdd(ctx context.Context, env *tool.Env, app tool.App, g tool.Gro
 		return tool.Unconfirmed(ctx, env)
 	}
 	return tool.RequireHumanConfirm(ctx, env, confirm, tool.PlanPreview{
-		Summary:      fmt.Sprintf("add or invite %d tester(s) to external beta group %s of app %s", len(emails), g.Name, app.ID),
-		Affected:     append([]string{"group " + g.Name + " (" + g.ID + "), external"}, emails...),
+		Summary:      fmt.Sprintf("add or invite %d tester(s) to external beta group %q of app %s", len(emails), g.Name, app.ID),
+		Affected:     append([]string{fmt.Sprintf("group %q (%s), external", g.Name, g.ID)}, emails...),
 		Intended:     map[string]any{"group": g, "invite": emails},
 		Irreversible: []string{"invitation emails are sent; invitees can install the group's approved builds"},
 	})
@@ -341,7 +353,7 @@ func createTester(ctx context.Context, env *tool.Env, groupID string, t testerIn
 	}
 	members, rerr := findTesters(ctx, env, url.Values{"filter[betaGroups]": {groupID}}, "filter[email]", []string{t.Email})
 	if rerr != nil {
-		set(t.Email, outcomeUnknown, "", errText(err)+"; read-back failed: "+errText(rerr))
+		set(t.Email, outcomeUnknown, "", err.Error()+"; read-back failed: "+rerr.Error())
 		return
 	}
 	if m, ok := byEmail(members)[emailKey(t.Email)]; ok {
@@ -350,7 +362,7 @@ func createTester(ctx context.Context, env *tool.Env, groupID string, t testerIn
 	}
 	existing, rerr := findTesters(ctx, env, nil, "filter[email]", []string{t.Email})
 	if rerr != nil {
-		set(t.Email, outcomeUnknown, "", errText(err)+"; read-back failed: "+errText(rerr))
+		set(t.Email, outcomeUnknown, "", err.Error()+"; read-back failed: "+rerr.Error())
 		return
 	}
 	existBy := byEmail(existing)
@@ -358,7 +370,7 @@ func createTester(ctx context.Context, env *tool.Env, groupID string, t testerIn
 		linkTesters(ctx, env, groupID, []testerInput{t}, existBy, set)
 		return
 	}
-	set(t.Email, outcomeError, "", errText(err))
+	set(t.Email, outcomeError, "", err.Error())
 }
 
 // readBackMembers settles a conflicting link request by membership read-back.
@@ -370,7 +382,7 @@ func readBackMembers(ctx context.Context, env *tool.Env, groupID string, ts []te
 	members, err := findTesters(ctx, env, url.Values{"filter[betaGroups]": {groupID}}, "filter[email]", es)
 	if err != nil {
 		for _, t := range ts {
-			set(t.Email, outcomeUnknown, "", errText(cause)+"; read-back failed: "+errText(err))
+			set(t.Email, outcomeUnknown, "", cause.Error()+"; read-back failed: "+err.Error())
 		}
 		return
 	}
@@ -379,7 +391,7 @@ func readBackMembers(ctx context.Context, env *tool.Env, groupID string, ts []te
 		if m, ok := by[emailKey(t.Email)]; ok {
 			set(t.Email, outcomeAlready, m.ID, "")
 		} else {
-			set(t.Email, outcomeError, "", errText(cause))
+			set(t.Email, outcomeError, "", cause.Error())
 		}
 	}
 }
@@ -392,7 +404,7 @@ func failAll(ts []testerInput, err error, set setOutcome) {
 		outcome = outcomeUnknown
 	}
 	for _, t := range ts {
-		set(t.Email, outcome, "", errText(err))
+		set(t.Email, outcome, "", err.Error())
 	}
 }
 
@@ -463,11 +475,11 @@ func testersRemove(ctx context.Context, env *tool.Env, in testersRemoveIn) (*too
 		Affected: affected,
 	}
 	if scope == "group" {
-		p.Summary = fmt.Sprintf("remove %d tester(s) from beta group %q of %s", len(targets), g.Name, app.Name)
+		p.Summary = fmt.Sprintf("remove %d tester(s) from beta group %q of %q", len(targets), g.Name, app.Name)
 		p.Intended = "testers leave the group; their other groups are unchanged"
 		p.Irreversible = []string{"testers lose access to builds shared only through this group; re-adding sends a new invitation"}
 	} else {
-		p.Summary = fmt.Sprintf("remove %d tester(s) from every beta group and build of %s", len(targets), app.Name)
+		p.Summary = fmt.Sprintf("remove %d tester(s) from every beta group and build of %q", len(targets), app.Name)
 		p.Intended = "testers lose all TestFlight access to the app"
 		p.Irreversible = []string{"testers lose access to every build of the app immediately; re-adding needs a new invitation"}
 	}
@@ -476,7 +488,12 @@ func testersRemove(ctx context.Context, env *tool.Env, in testersRemoveIn) (*too
 		return res, nil
 	}
 	if _, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodDelete, Path: path, Body: testerLinkage(ids), Write: true}); err != nil {
-		return nil, fmt.Errorf("remove beta testers: %w", err)
+		if !errors.Is(err, tool.ErrAlreadyGone) {
+			return nil, fmt.Errorf("remove beta testers: %w", err)
+		}
+		// A replayed DELETE found the linkage gone: the first attempt applied.
+		out["removed"] = affected
+		return tool.Already(out), nil
 	}
 	out["removed"] = affected
 	return tool.OK(out), nil

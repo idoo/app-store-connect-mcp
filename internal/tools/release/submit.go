@@ -177,7 +177,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 		return nil, err
 	}
 	wctx, res := tool.Preview(ctx, env, in.PlanID, key, fp, tool.PlanPreview{
-		Summary:      fmt.Sprintf("submit %s %s %s for App Review", app.Name, platform, out.Version.String),
+		Summary:      fmt.Sprintf("submit %q %s %s for App Review", app.Name, platform, out.Version.String),
 		Current:      out.Submission,
 		Intended:     intended,
 		Affected:     []string{app.ID, ver.ID},

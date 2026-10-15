@@ -87,7 +87,7 @@ func metadataApply(ctx context.Context, env *tool.Env, in applyIn) (*tool.Result
 	if ao.Failed > 0 && ao.Applied+ao.Already == 0 {
 		// Outcome-unknown items first, so the result reports outcome_unknown
 		// whenever any change may have been applied.
-		return nil, tool.WithNext(errors.Join(append(unknown, failed...)...), replan)
+		return tool.Batch(ao, 0, 0, append(unknown, failed...), replan), nil
 	}
 	if ao.Failed > 0 {
 		ao.Status = "partial"

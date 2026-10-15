@@ -171,7 +171,7 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 		// Nothing changed remotely, so no upload is pending. Outcome-unknown
 		// items first, so the result reports outcome_unknown whenever any
 		// step may have been applied.
-		return nil, tool.WithNext(errors.Join(append(unknown, failed...)...), replan)
+		return tool.Batch(out, 0, 0, append(unknown, failed...), replan), nil
 	}
 	if len(pending) > 0 {
 		pending, err = waitDelivery(ctx, env, &out, pending, time.Duration(wait)*time.Second)

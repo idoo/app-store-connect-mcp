@@ -38,8 +38,8 @@ var prompts = []promptDef{
 	},
 	{
 		"translate_metadata", "Translate metadata", "Translate store metadata into other locales.",
-		[]promptArg{argApp, {name: "from_locale", desc: "source ASC locale, e.g. en-US"}, {name: "to_locales", desc: "comma-separated ASC locales, e.g. de-DE,fr-FR"}},
-		"Translate the App Store metadata of %[1]s from %[2]s into %[3]s. Use metadata_pull, translate naturally within the character limits in app-store-connect-mcp://docs/limits, then metadata_plan and show me the diff. Apply with metadata_apply only after I approve.",
+		[]promptArg{argApp, {name: "from_locale", desc: "source ASC locale, e.g. en-US"}, {name: "to_locales", desc: "comma-separated ASC locales, e.g. de-DE,fr-FR"}, {name: "platform", desc: "IOS, MAC_OS, TV_OS or VISION_OS (default: the app's main platform)", def: "the app's main platform"}},
+		"Translate the App Store metadata of %[1]s (platform: %[4]s) from %[2]s into %[3]s. Use metadata_pull, translate naturally within the character limits in app-store-connect-mcp://docs/limits, then metadata_plan and show me the diff. Apply with metadata_apply only after I approve. Version text is per platform: pass platform to each call and repeat for each platform the app ships on.",
 	},
 	{
 		"reply_to_reviews", "Reply to reviews", "Draft replies to customer reviews.",

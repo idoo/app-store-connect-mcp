@@ -210,7 +210,7 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 	if nFailed == len(writes) {
 		// Outcome-unknown items first, so the result reports outcome_unknown
 		// whenever any request may have been applied.
-		return nil, tool.WithNext(errors.Join(append(unknown, failed...)...), replan)
+		return tool.Batch(&out, 0, 0, append(unknown, failed...), replan), nil
 	}
 	out.Status = "partial"
 	return tool.OK(&out).Warn(fmt.Sprintf("%d request(s) failed; call again without confirm to see what remains", nFailed)).Then(replan), nil

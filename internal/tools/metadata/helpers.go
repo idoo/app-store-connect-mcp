@@ -249,6 +249,66 @@ type planned struct {
 	remote    *metadata.Listing
 	plan      *metadata.Plan
 	key       applyKey
+	// notes are result warnings, e.g. other platforms with active versions.
+	notes []string
+}
+
+// activeVersion is an editable or in-flight App Store version.
+type activeVersion struct {
+	ID, Platform, Version, State string
+}
+
+// activeVersionStates are the states of versions that are being prepared or
+// are submitted but not yet released.
+var activeVersionStates = append(slices.Clone(infoEditable), append([]string{"METADATA_REJECTED", "INVALID_BINARY"}, inFlightLocked...)...)
+
+// activeVersions lists the app's editable and in-flight versions on every
+// platform with one GET.
+func activeVersions(ctx context.Context, env *tool.Env, appID string) ([]activeVersion, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/apps/"+appID+"/appStoreVersions", url.Values{
+		"filter[appVersionState]":  {strings.Join(activeVersionStates, ",")},
+		"fields[appStoreVersions]": {"platform,versionString,appVersionState"},
+		"limit":                    {"10"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list active versions: %w", err)
+	}
+	out := make([]activeVersion, 0, len(resp.Data))
+	for _, v := range resp.Data {
+		out = append(out, activeVersion{ID: v.ID, Platform: v.Str("platform"), Version: v.Str("versionString"), State: v.Str("appVersionState")})
+	}
+	return out, nil
+}
+
+// otherPlatformNotes warns about active versions on platforms other than
+// platform: version text is per platform.
+func otherPlatformNotes(vs []activeVersion, platform tool.Platform) []string {
+	var notes []string
+	for _, v := range vs {
+		if v.Platform != "" && v.Platform != string(platform) {
+			notes = append(notes, fmt.Sprintf("%s also has %s (%s); version text is per platform; run again with platform", v.Platform, v.Version, v.State))
+		}
+	}
+	return notes
+}
+
+// lockBlocker names the in-flight version holding the app-info lock, e.g.
+// "MAC_OS 3.6", preferring the other platforms; "" when none is listed.
+func lockBlocker(vs []activeVersion, platform tool.Platform) string {
+	found := ""
+	for _, v := range vs {
+		if !slices.Contains(inFlightLocked, v.State) {
+			continue
+		}
+		name := strings.TrimSpace(v.Platform + " " + v.Version)
+		if v.Platform != string(platform) {
+			return name
+		}
+		if found == "" {
+			found = name
+		}
+	}
+	return found
 }
 
 // computePlan pulls the remote listing and diffs the desired one against it.
@@ -273,17 +333,31 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 		return nil, err
 	}
 	p := &planned{t: t, source: source}
+	var versions []activeVersion
+	if len(t.App.Platforms) > 1 && (in.Platform == "" || (infos.Editable == nil && infos.Locked != nil)) {
+		if versions, err = activeVersions(ctx, env, t.App.ID); err != nil {
+			p.notes = append(p.notes, "other platforms not checked: "+err.Error())
+		}
+		if in.Platform == "" {
+			p.notes = append(p.notes, otherPlatformNotes(versions, t.Platform)...)
+		}
+	}
 	opts := metadata.DiffOptions{FirstVersion: t.FirstVersion}
+	pullInfo := ""
 	switch {
 	case infos.Editable != nil:
 		p.appInfoID, p.infoState = infos.Editable.ID, infos.Editable.Str("state")
+		pullInfo = p.appInfoID
 	case infos.Locked != nil:
-		opts.AppInfoState = infos.lockedState()
+		// Read-only: unchanged app-info fields pass, changes are errors.
+		opts.AppInfoLocked = infos.lockedState()
+		opts.Blocker = lockBlocker(versions, t.Platform)
+		pullInfo = infos.Locked.ID
 	case infos.Live != nil:
 		opts.AppInfoState = infos.Live.Str("state")
 	}
 	opts.PromoOnly = t.Version.State == versionStateLive || slices.Contains(inFlightLocked, t.Version.State)
-	remote, err := metadata.Pull(ctx, env.ASC, t.Version.ID, p.appInfoID)
+	remote, err := metadata.Pull(ctx, env.ASC, t.Version.ID, pullInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -411,12 +485,12 @@ func (p *planned) preview() tool.PlanPreview {
 	return pv
 }
 
-// nextArgs echoes the caller's source arguments with resolved ids.
+// nextArgs echoes the caller's source arguments with resolved ids. An inline
+// listing is not echoed: the caller resends the listing it planned (the plan
+// is bound to its digest), which keeps big plans out of the result.
 func (p *planned) nextArgs(in sourceIn) map[string]any {
 	a := map[string]any{"app": p.t.App.ID, "platform": string(p.t.Platform), "version": p.t.Version.String}
 	switch {
-	case in.Listing != nil:
-		a["listing"] = in.Listing
 	case in.FastlaneDir != "":
 		a["fastlane_dir"] = in.FastlaneDir
 	case in.ExpoConfig != "":

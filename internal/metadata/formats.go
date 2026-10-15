@@ -142,6 +142,15 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 			Message: fmt.Sprintf("%s not read here; set copyright, categories and review details with appinfo_update", strings.Join(appInfoFiles, ", ")),
 		})
 	}
+	switch {
+	case def != nil && len(raw) == 0:
+		l.Notes = append(l.Notes, Issue{Locale: fastlaneDefault, Code: IssueDefaultOnly, Message: "no locale dirs; nothing planned (default/ applies only to locale dirs present locally)"})
+	case def != nil:
+		l.Notes = append(l.Notes, Issue{
+			Locale: fastlaneDefault, Code: IssueDefaultApplied,
+			Message: fmt.Sprintf("default/ applied to %d local locale dirs only; remote locales without a dir are unchanged", len(raw)),
+		})
+	}
 	if def != nil {
 		for _, lf := range raw {
 			for _, f := range Fields {

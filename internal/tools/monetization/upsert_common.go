@@ -48,7 +48,19 @@ type upsertItem struct {
 	Action  string   `json:"action"`
 	Changed []string `json:"changed,omitempty"`
 	Note    string   `json:"note,omitempty"`
-	Error   string   `json:"error,omitempty"`
+	// Outcome is "error", or "unknown" when a failed write may have been applied.
+	Outcome string `json:"outcome,omitempty"`
+	// Error is the structured error of a failed item (code, hint, api).
+	Error *tool.ErrorBody `json:"error,omitempty"`
+	err   error
+}
+
+// fail marks it failed with err's outcome and structured error.
+func (it *upsertItem) fail(err error) {
+	b := tool.ErrorBody{}
+	it.Action, it.err = actionFailed, err
+	it.Outcome, b = tool.ItemError(err)
+	it.Error = &b
 }
 
 // versionOut describes the version localizations were written to.
@@ -315,12 +327,12 @@ func upsertLocs(ctx context.Context, env *tool.Env, k versionKind, versionID str
 			changed, names, err := attrDiff(cur, attrs)
 			switch {
 			case err != nil:
-				it.Action, it.Error = actionFailed, err.Error()
+				it.fail(err)
 			case len(changed) == 0:
 				it.Action = actionUnchanged
 			default:
 				if err := patch(ctx, env, k.LocPath+"/"+url.PathEscape(cur.ID), k.LocType, cur.ID, changed); err != nil {
-					it.Action, it.Error = actionFailed, err.Error()
+					it.fail(err)
 				} else {
 					it.Action, it.Changed = actionUpdated, names
 				}
@@ -339,7 +351,7 @@ func upsertLocs(ctx context.Context, env *tool.Env, k versionKind, versionID str
 		case tool.IsConflict(err):
 			it.Action, it.Note = actionAlready, "Apple reports this locale exists; rerun to update it"
 		default:
-			it.Action, it.Error = actionFailed, err.Error()
+			it.fail(err)
 		}
 		items = append(items, it)
 	}
@@ -376,18 +388,18 @@ func uploadScreenshot(ctx context.Context, env *tool.Env, k screenshotKind, pare
 	it := upsertItem{Kind: k.Type}
 	f, err := env.Files.Open(path)
 	if err != nil {
-		it.Action, it.Error = actionFailed, err.Error()
+		it.fail(err)
 		return it
 	}
 	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil {
-		it.Action, it.Error = actionFailed, err.Error()
+		it.fail(err)
 		return it
 	}
 	sum, err := upload.FileMD5(io.NewSectionReader(f, 0, fi.Size()))
 	if err != nil {
-		it.Action, it.Error = actionFailed, err.Error()
+		it.fail(err)
 		return it
 	}
 	if cur.ID != "" {
@@ -410,7 +422,7 @@ func uploadScreenshot(ctx context.Context, env *tool.Env, k screenshotKind, pare
 	}
 	switch {
 	case err != nil:
-		it.Action, it.Error = actionFailed, err.Error()
+		it.fail(err)
 	case res.StillProcessing:
 		it.Action, it.Note = actionCreated, "uploaded; Apple is still processing it"
 	default:
@@ -438,4 +450,23 @@ func failures(items []upsertItem) int {
 		}
 	}
 	return n
+}
+
+// upsertResult reports items as a [tool.Batch]: created/updated items took
+// effect, already items were no-ops, and unchanged items were not written.
+// When every write failed the result is an error carrying each item's code.
+func upsertResult(data any, items []upsertItem, next ...tool.NextStep) *tool.Result {
+	applied, already := 0, 0
+	var errs []error
+	for _, it := range items {
+		switch it.Action {
+		case actionCreated, actionUpdated:
+			applied++
+		case actionAlready:
+			already++
+		case actionFailed:
+			errs = append(errs, fmt.Errorf("%s %s: %w", it.Kind, it.Locale+it.ID, it.err))
+		}
+	}
+	return tool.Batch(data, applied, already, errs, next...)
 }

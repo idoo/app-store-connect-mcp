@@ -85,6 +85,8 @@ type feedbackOut struct {
 	CrashLogNote      string          `json:"crash_log_note,omitempty"`
 	// urls are the signed screenshot URLs; fetched, never returned.
 	urls []string
+	// dropped counts device fields removed by cleanDeviceField.
+	dropped int
 }
 
 type cursorOut struct {
@@ -112,6 +114,9 @@ type feedbackListOut struct {
 	Cursors map[string]cursorOut `json:"cursors"`
 	Hint    string               `json:"hint,omitempty"`
 	Empty   *emptyOut            `json:"empty,omitempty"`
+	// DroppedDeviceFields counts device model, OS version and locale values
+	// left out because they did not have the expected shape.
+	DroppedDeviceFields int `json:"dropped_device_fields,omitempty"`
 }
 
 func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.Result, error) {
@@ -187,7 +192,9 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 		}
 		newest := ""
 		for _, r := range items {
-			out.Items = append(out.Items, feedbackFromResource(r, k, builds))
+			fo := feedbackFromResource(r, k, builds)
+			out.DroppedDeviceFields += fo.dropped
+			out.Items = append(out.Items, fo)
 			if c := r.Str("createdDate"); newest == "" || laterThan(c, newest) {
 				newest = c
 			}
@@ -349,10 +356,11 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 	o := feedbackOut{
 		ID: r.ID, Kind: k.name, Created: r.Str("createdDate"),
 		Build: builds[r.RelID("build")], Platform: r.Str("appPlatform"),
-		Device: cleanDeviceField(r.Str("deviceModel")), OSVersion: cleanDeviceField(r.Str("osVersion")),
-		Locale: cleanDeviceField(r.Str("locale")),
-		Tester: tool.Untrusted(r.Str("email")), Comment: tool.Untrusted(r.Str("comment")),
 	}
+	o.Device = o.cleanDeviceField(deviceModelRE, r.Str("deviceModel"))
+	o.OSVersion = o.cleanDeviceField(osVersionRE, r.Str("osVersion"))
+	o.Locale = o.cleanDeviceField(localeRE, r.Str("locale"))
+	o.Tester, o.Comment = tool.Untrusted(r.Str("email")), tool.Untrusted(r.Str("comment"))
 	shots, _ := tool.Unwrap(r.Attributes["screenshots"]).([]any)
 	for _, s := range shots {
 		m, _ := s.(map[string]any)
@@ -365,13 +373,25 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 	return o
 }
 
-// deviceFieldRE matches plausible device model, OS version and locale values.
-var deviceFieldRE = regexp.MustCompile(`^[A-Za-z0-9 ,._()+-]{1,40}$`)
+// Shapes of the tester-device-controlled feedback fields.
+var (
+	// localeRE matches BCP-47-like locales such as en, en-US, zh_Hans_CN.
+	localeRE = regexp.MustCompile(`^[a-z]{2,3}([-_][A-Za-z0-9]{2,8}){0,2}$`)
+	// osVersionRE matches versions such as 18.1, 17.4.1 or 26.0 (23A341).
+	osVersionRE = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,3}){0,3}( \([0-9A-Za-z]{1,10}\))?$`)
+	// deviceModelRE matches hardware identifiers such as iPhone17,1.
+	deviceModelRE = regexp.MustCompile(`^[A-Za-z]{2,12}[0-9]{1,3},[0-9]{1,3}$`)
+)
 
-// cleanDeviceField drops tester-device-controlled values that don't look like
-// a device field, so they can't carry instructions.
-func cleanDeviceField(s string) string {
-	if !deviceFieldRE.MatchString(s) {
+// cleanDeviceField keeps s when it has the field's shape and drops it
+// otherwise (counting the drop), so a tester's device can't carry
+// instructions. Empty values are neither kept nor counted.
+func (o *feedbackOut) cleanDeviceField(shape *regexp.Regexp, s string) string {
+	if s == "" {
+		return ""
+	}
+	if !shape.MatchString(s) {
+		o.dropped++
 		return ""
 	}
 	return s
@@ -449,7 +469,7 @@ func attachCrashLogs(ctx context.Context, env *tool.Env, out *feedbackListOut) {
 			if tool.IsNotFound(err) {
 				it.CrashLogNote = "no crash log available"
 			} else {
-				it.CrashLogNote = "not fetched: " + errText(err)
+				it.CrashLogNote = "not fetched: " + err.Error()
 			}
 			continue
 		}

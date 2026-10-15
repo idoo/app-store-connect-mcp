@@ -270,6 +270,10 @@ func apiRequest(ctx context.Context, env *tool.Env, in requestIn) (*tool.Result,
 		return gate, nil
 	}
 	resp, err := env.ASC.Do(wctx, req)
+	if method == http.MethodDelete && errors.Is(err, tool.ErrAlreadyGone) {
+		// A replayed DELETE found the object gone: the first attempt applied.
+		return tool.Already(map[string]any{"operation": opName, "method": method, "path": path}), nil
+	}
 	if err != nil {
 		return nil, err
 	}

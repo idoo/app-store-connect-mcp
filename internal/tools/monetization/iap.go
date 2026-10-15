@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
@@ -319,12 +318,12 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 	if allUnchanged(items) {
 		return tool.Already(out), nil
 	}
-	res := tool.OK(out).Then(
+	res := upsertResult(out, items,
 		tool.NextStep{Tool: "iap_list", Args: map[string]any{"app": app.ID}},
 		tool.NextStep{Tool: "pricing_plan", Args: map[string]any{"app": app.ID, "kind": "iap", "product_id": in.ProductID}},
 	)
-	if out.Failed > 0 {
-		res.Warn(strconv.Itoa(out.Failed) + " item(s) failed; see the error fields and rerun (the upsert is idempotent)")
+	if out.Failed > 0 && !res.IsError {
+		res.Warn("rerun to retry the failed items (the upsert is idempotent)")
 	}
 	return res, nil
 }

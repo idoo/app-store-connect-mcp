@@ -34,10 +34,10 @@ type expireIn struct {
 
 type expireBuildOut struct {
 	buildOut
-	Platform string `json:"platform,omitempty"`
-	Uploaded string `json:"uploaded,omitempty"`
-	Outcome  string `json:"outcome,omitempty"` // expired|already|error
-	Error    string `json:"error,omitempty"`
+	Platform string          `json:"platform,omitempty"`
+	Uploaded string          `json:"uploaded,omitempty"`
+	Outcome  string          `json:"outcome,omitempty"` // expired|already|error|unknown
+	Error    *tool.ErrorBody `json:"error,omitempty"`
 }
 
 func (b expireBuildOut) label() string {
@@ -119,7 +119,7 @@ func buildsExpire(ctx context.Context, env *tool.Env, in expireIn) (*tool.Result
 	}
 
 	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
-		Summary:  "expire " + strconv.Itoa(len(todo)) + " build(s) of " + app.Name + ": " + strings.Join(affected, ", "),
+		Summary:  fmt.Sprintf("expire %d build(s) of %q: %s", len(todo), app.Name, strings.Join(affected, ", ")),
 		Current:  out.Builds,
 		Intended: "expired:true on " + strconv.Itoa(len(todo)) + " build(s)",
 		Affected: affected,
@@ -131,16 +131,18 @@ func buildsExpire(ctx context.Context, env *tool.Env, in expireIn) (*tool.Result
 	if res != nil {
 		return res, nil
 	}
+	var errs []error
 	for _, i := range todo {
 		b := &out.Builds[i]
 		_, err := write(wctx, env, http.MethodPatch, "/v1/builds/"+b.ID, patchBody("builds", b.ID, map[string]any{"expired": true}))
 		if err != nil {
-			b.Outcome, b.Error = outcomeError, errText(err)
+			b.Outcome, b.Error = itemError(err)
 			out.Failed++
+			errs = append(errs, err)
 			continue
 		}
 		b.Outcome = "expired"
 		out.Expired++
 	}
-	return tool.OK(out), nil
+	return tool.Batch(out, out.Expired, out.Already, errs), nil
 }

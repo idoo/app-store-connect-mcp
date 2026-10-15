@@ -30,16 +30,22 @@ func TestPricingApplyAllFailIsTypedError(t *testing.T) {
 	prcSubCurrentFixture(k)
 	prcSubPostsFailing(t, k, func(string) bool { return true })
 	_, res := prcPlanThenApply(t, k, prcSubArgs)
-	body := tooltest.MustFail(t, res, "api_error")
-	if body.Code != "STATE_ERROR" {
-		t.Errorf("code = %q, want STATE_ERROR", body.Code)
+	if !res.IsError {
+		t.Fatalf("want error, got %s", tooltest.JSON(t, res.Data))
+	}
+	body := tooltest.Decode[struct {
+		tool.ErrorBody
+		Items pricingApplyOut `json:"items"`
+	}](t, res)
+	if body.Error != "api_error" || body.Code != "STATE_ERROR" || len(body.Items.Failed) != 3 {
+		t.Errorf("body = %+v", body)
 	}
 	found := false
-	for _, n := range body.Next {
+	for _, n := range res.Next {
 		found = found || n.Tool == "pricing_plan"
 	}
 	if !found {
-		t.Errorf("next = %+v, want pricing_plan", body.Next)
+		t.Errorf("next = %+v, want pricing_plan", res.Next)
 	}
 	if n := len(k.ASC.Mutations()); n != 3 {
 		t.Errorf("mutations = %d, want 3", n)

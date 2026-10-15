@@ -24,18 +24,23 @@ func metadataPlan(ctx context.Context, env *tool.Env, in sourceIn) (*tool.Result
 		return nil, err
 	}
 	out := p.out()
+	res := tool.OK(out)
+	for _, n := range p.notes {
+		res.Warn(n)
+	}
 	switch out.Status {
 	case statusInvalid:
-		return tool.OK(out).Warn("fix the errors and plan again; no plan was issued"), nil
+		return res.Warn("fix the errors and plan again; no plan was issued"), nil
 	case statusNoChanges:
-		return tool.OK(out), nil
+		return res, nil
 	}
 	id, err := env.Plans.Propose(ctx, "metadata_apply", p.key, p.plan.Fingerprint(), p.preview())
 	if err != nil {
 		return nil, fmt.Errorf("propose metadata_apply: %w", err)
 	}
 	out.PlanID = id
+	res.Data = out
 	args := p.nextArgs(in)
 	args["plan_id"] = id
-	return tool.OK(out).Then(tool.NextStep{Tool: "metadata_apply", Args: args}), nil
+	return res.Then(tool.NextStep{Tool: "metadata_apply", Args: args}), nil
 }

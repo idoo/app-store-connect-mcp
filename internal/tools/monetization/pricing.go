@@ -3,7 +3,6 @@ package monetization
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -632,7 +631,7 @@ func pricingApply(ctx context.Context, env *tool.Env, in pricingApplyIn) (*tool.
 		return prcInterrupted(err, out, replan), nil
 	}
 	if len(out.Failed) > 0 && len(out.Applied) == 0 && n == 0 {
-		return nil, tool.WithNext(errors.Join(errs...), replan)
+		return tool.Batch(out, 0, 0, errs, replan), nil
 	}
 	r := tool.OK(out)
 	if len(out.Failed) > 0 {

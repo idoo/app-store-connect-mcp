@@ -43,9 +43,15 @@ func TestSyncAllFailIsOutcomeUnknownFirst(t *testing.T) {
 		"loc-en": {Err: fmt.Errorf("%w: %w", tool.ErrOutcomeUnknown, &tool.APIError{Status: http.StatusInternalServerError})},
 		"loc-de": setConflict,
 	})
-	b := tooltest.MustFail(t, call(t, k, "screenshots_sync", `{"dir":"shots","mode":"add"}`), "outcome_unknown")
-	if len(b.Next) == 0 || b.Next[0].Tool != "screenshots_plan" {
-		t.Errorf("next = %+v, want screenshots_plan", b.Next)
+	res := call(t, k, "screenshots_sync", `{"dir":"shots","mode":"add"}`)
+	if !res.IsError {
+		t.Fatalf("want error, got %s", tooltest.JSON(t, res.Data))
+	}
+	if b := tooltest.Decode[tool.ErrorBody](t, res); b.Error != "outcome_unknown" {
+		t.Errorf("error = %q, want outcome_unknown", b.Error)
+	}
+	if len(res.Next) == 0 || res.Next[0].Tool != "screenshots_plan" {
+		t.Errorf("next = %+v, want screenshots_plan", res.Next)
 	}
 	if n := len(k.ASC.Mutations()); n != 2 {
 		t.Errorf("mutations = %v", mutations(k))

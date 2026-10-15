@@ -83,20 +83,26 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 	if err != nil {
 		return nil, err
 	}
-	locs, err := localizations(ctx, env, t.Version.ID)
+	locs, err := localizationsWithSets(ctx, env, t.Version.ID)
 	if err != nil {
 		return nil, err
 	}
-	codes, err := selectLocales(ctx, env, t.App.ID, in.Locales, locs)
+	byCode := make(map[string]localization, len(locs))
+	for code, l := range locs {
+		byCode[code] = l.localization
+	}
+	codes, err := selectLocales(ctx, env, t.App.ID, in.Locales, byCode)
 	if err != nil {
 		return nil, err
 	}
 	out := listOut{App: t.appOut(), Platform: t.Platform, Version: t.versionOut(), Locales: []localeOut{}}
 	for _, code := range codes {
 		loc := locs[code]
-		sets, err := screenshotSets(ctx, env, loc.ID)
-		if err != nil {
-			return nil, err
+		sets := []remoteSet{}
+		if loc.screenshotSets > 0 {
+			if sets, err = screenshotSets(ctx, env, loc.ID); err != nil {
+				return nil, err
+			}
 		}
 		pvType := ""
 		if display != "" {
@@ -111,7 +117,7 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 			pvType = string(spec.Preview)
 		}
 		var previews []remotePreviewSet
-		if display == "" || pvType != "" {
+		if loc.previewSets > 0 && (display == "" || pvType != "") {
 			if previews, err = previewSets(ctx, env, loc.ID, pvType); err != nil {
 				return nil, err
 			}
@@ -131,6 +137,48 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 		addThumbnails(ctx, env, res, out.Locales)
 	}
 	return res, nil
+}
+
+// localizationSets is a version localization with how many screenshot and
+// preview sets it has.
+type localizationSets struct {
+	localization
+	screenshotSets, previewSets int
+}
+
+// setsPerLocalization caps the sets included per localization; a version
+// localization has at most about 40 display and preview types.
+const setsPerLocalization = 50
+
+// localizationsWithSets lists the version's localizations with their set ids
+// in one request (include=appScreenshotSets,appPreviewSets), so per-locale
+// set requests are made only for locales that have sets. A localization at
+// the include cap is counted as having sets, so the per-locale request still
+// reads them all.
+func localizationsWithSets(ctx context.Context, env *tool.Env, versionID string) (map[string]localizationSets, error) {
+	perLoc := strconv.Itoa(setsPerLocalization)
+	resp, err := env.ASC.Get(ctx, "/v1/appStoreVersions/"+versionID+"/appStoreVersionLocalizations", url.Values{
+		"fields[appStoreVersionLocalizations]": {"locale,appScreenshotSets,appPreviewSets"},
+		"fields[appScreenshotSets]":            {"screenshotDisplayType"},
+		"fields[appPreviewSets]":               {"previewType"},
+		"include":                              {"appScreenshotSets,appPreviewSets"},
+		"limit[appScreenshotSets]":             {perLoc},
+		"limit[appPreviewSets]":                {perLoc},
+		"limit":                                {"200"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list localizations: %w", err)
+	}
+	out := make(map[string]localizationSets, len(resp.Data))
+	for _, r := range resp.Data {
+		l := r.Str("locale")
+		out[l] = localizationSets{
+			localization:   localization{ID: r.ID, Locale: l},
+			screenshotSets: len(r.RelIDs("appScreenshotSets")),
+			previewSets:    len(r.RelIDs("appPreviewSets")),
+		}
+	}
+	return out, nil
 }
 
 // coverage checks the required display types per shown locale, mirroring

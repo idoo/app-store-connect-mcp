@@ -33,7 +33,7 @@ type listIn struct {
 	Territory  []string    `json:"territory,omitempty" jsonschema:"alpha-3 territory codes, e.g. USA, DEU"`
 	Unanswered bool        `json:"unanswered,omitempty" jsonschema:"only reviews without a response"`
 	Since      string      `json:"since,omitempty" jsonschema:"\"last_seen\" or ISO date/time; only newer"`
-	MarkSeen   bool        `json:"mark_seen,omitempty" jsonschema:"advance the stored cursor to the newest returned"`
+	MarkSeen   bool        `json:"mark_seen,omitempty" jsonschema:"advance the stored cursor to the newest returned (kept when rating/territory/unanswered filter)"`
 	Limit      int         `json:"limit,omitempty" jsonschema:"max reviews overall (default 50, max 500)"`
 }
 
@@ -121,6 +121,12 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 	}
 	trimOverall(groups, limit)
 	res := &tool.Result{}
+	// A filtered list hides the reviews it skipped, so advancing the cursor
+	// past them would lose them for good.
+	filtered := len(in.Rating) > 0 || len(in.Territory) > 0 || in.Unanswered
+	if in.MarkSeen && filtered {
+		res.Warn("mark_seen ignored: rating/territory/unanswered filters hide reviews, so the cursor was kept; rerun without filters to mark seen")
+	}
 	total, unanswered := 0, 0
 	for i := range groups {
 		g := &groups[i]
@@ -130,7 +136,7 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 				unanswered++
 			}
 		}
-		if in.MarkSeen && len(g.Reviews) > 0 {
+		if in.MarkSeen && !filtered && len(g.Reviews) > 0 {
 			// Advancing past reviews that were not returned would lose them,
 			// so the cursor stays put unless limit is already the maximum.
 			if g.More && limit < listMax {

@@ -95,8 +95,15 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 	case slices.Contains(inFlightLocked, t.Version.State):
 		out.Source = "in_flight"
 	}
+	var versions []activeVersion
+	var versionsErr error
+	if in.Platform == "" && len(t.App.Platforms) > 1 {
+		versions, versionsErr = activeVersions(ctx, env, t.App.ID)
+	}
 	if t.FellBack {
-		if out.InFlight, err = inFlightVersion(ctx, env, t.App.ID, t.Platform); err != nil {
+		if versions != nil && versionsErr == nil {
+			out.InFlight = inFlightOf(versions, t.Platform)
+		} else if out.InFlight, err = inFlightVersion(ctx, env, t.App.ID, t.Platform); err != nil {
 			return nil, err
 		}
 		out.Reason = "no editable version"
@@ -138,6 +145,12 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 	out.Locales = listing.Locales
 
 	res := tool.OK(&out)
+	if versionsErr != nil {
+		res.Warn("other platforms not checked: " + versionsErr.Error())
+	}
+	for _, n := range otherPlatformNotes(versions, t.Platform) {
+		res.Warn(n)
+	}
 	if len(out.MissingLocales) > 0 {
 		res.Warn(fmt.Sprintf("version %s has no listing for %s (available: %s); add one via metadata_plan with listing.locales.<locale>",
 			t.Version.String, strings.Join(out.MissingLocales, ", "), strings.Join(out.AvailableLocales, ", ")))
@@ -189,6 +202,17 @@ func inFlightVersion(ctx context.Context, env *tool.Env, appID string, platform 
 		return nil, nil
 	}
 	return &versionOut{ID: v.ID, Version: v.Str("versionString"), State: v.Str("appVersionState")}, nil
+}
+
+// inFlightOf returns the first submitted-but-unreleased version of platform
+// in vs, or nil.
+func inFlightOf(vs []activeVersion, platform tool.Platform) *versionOut {
+	for _, v := range vs {
+		if v.Platform == string(platform) && slices.Contains(inFlightLocked, v.State) {
+			return &versionOut{ID: v.ID, Version: v.Version, State: v.State}
+		}
+	}
+	return nil
 }
 
 // checkExportDir refuses to write into an existing non-empty directory unless

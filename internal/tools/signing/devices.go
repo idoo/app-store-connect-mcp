@@ -40,6 +40,7 @@ const (
 	devRegistered = "registered"
 	devAlready    = "already"
 	devFailed     = "failed"
+	devUnknown    = "unknown" // the registration may have been applied
 )
 
 type deviceResult struct {
@@ -112,8 +113,9 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 		}
 	}
 	out := devicesRegisterOut{Items: make([]deviceResult, 0, len(in.Devices))}
+	var errs []error
 	for _, d := range in.Devices {
-		item := registerOne(wctx, env, d, existing)
+		item, err := registerOne(wctx, env, d, existing)
 		switch item.Action {
 		case devRegistered:
 			out.Registered++
@@ -121,10 +123,11 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 			out.Already++
 		default:
 			out.Failed++
+			errs = append(errs, err)
 		}
 		out.Items = append(out.Items, item)
 	}
-	res := tool.OK(out)
+	res := tool.Batch(out, out.Registered, out.Already, errs)
 	if out.Registered == 0 && out.Failed == 0 {
 		res = tool.Already(out)
 	}
@@ -139,15 +142,16 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 	return res, nil
 }
 
-// registerOne registers one device unless its UDID is already known.
-func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[string]tool.Resource) deviceResult {
+// registerOne registers one device unless its UDID is already known. A failed
+// item also returns its error.
+func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[string]tool.Resource) (deviceResult, error) {
 	item := deviceResult{UDID: d.UDID, Name: d.Name, Platform: d.Platform}
-	already := func(r tool.Resource) deviceResult {
+	already := func(r tool.Resource) (deviceResult, error) {
 		item.Action, item.ID, item.Status, item.Platform = devAlready, r.ID, r.Str("status"), r.Str("platform")
 		if n := r.Str("name"); n != "" {
 			item.Name = n
 		}
-		return item
+		return item, nil
 	}
 	if r, ok := existing[strings.ToLower(d.UDID)]; ok {
 		return already(r)
@@ -171,12 +175,16 @@ func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[st
 			err = fmt.Errorf("%w: empty response", tool.ErrInternal)
 		} else {
 			item.Action, item.ID, item.Status = devRegistered, r.ID, r.Str("status")
-			return item
+			return item, nil
 		}
 	}
-	b := tool.BodyFor(fmt.Errorf("register device %s: %w", d.UDID, err))
+	err = fmt.Errorf("register device %s: %w", d.UDID, err)
+	outcome, b := tool.ItemError(err)
 	item.Action, item.Error = devFailed, &b
-	return item
+	if outcome == "unknown" {
+		item.Action = devUnknown
+	}
+	return item, err
 }
 
 // devicesByUDID returns registered devices keyed by lower-case UDID.
