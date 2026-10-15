@@ -64,7 +64,7 @@ func (f *fixture) tools() []tool.Tool {
 				if err != nil {
 					return nil, err
 				}
-				wctx, res := tool.Preview(ctx, env, in.Confirm, in, fp, tool.PlanPreview{Summary: "set value to " + in.Value})
+				wctx, res := tool.Preview(ctx, env, in.PlanID, in, fp, tool.PlanPreview{Summary: "set value to " + in.Value})
 				if res != nil {
 					return res, nil
 				}
@@ -232,12 +232,18 @@ func TestEnableWrites(t *testing.T) {
 	args := map[string]any{"action": "enable_writes"}
 
 	t.Run("accept", func(t *testing.T) {
-		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", accept(true))
+		var flipped []bool
+		deps := Deps{Tools: (&fixture{}).tools(), Profile: team(false)}
+		deps.Env.SetWrites = func(on bool) { flipped = append(flipped, on) }
+		h := connect(t, deps, "test", accept(true))
 		if res, _ := h.call(t, "toolsets", args); res.IsError {
 			t.Fatalf("enable_writes failed: %+v", res.Content)
 		}
 		if got := h.names(t); !slices.Contains(got, "release_submit") {
 			t.Fatalf("write tools not listed: %v", got)
+		}
+		if !slices.Equal(flipped, []bool{true}) {
+			t.Fatalf("SetWrites calls = %v, want [true]", flipped)
 		}
 	})
 	t.Run("decline", func(t *testing.T) {
@@ -290,19 +296,19 @@ func TestPlanConfirmRoundTrip(t *testing.T) {
 	if f.writes.Load() != 0 {
 		t.Fatal("preview wrote")
 	}
-	if res, _ := h.call(t, "value_set", map[string]any{"value": "y", "confirm": id}); !res.IsError {
+	if res, _ := h.call(t, "value_set", map[string]any{"value": "y", "plan_id": id}); !res.IsError {
 		t.Fatal("confirm with different args succeeded")
 	}
 	id = plan()
 	f.remote.Store("v2")
-	if res, body := h.call(t, "value_set", map[string]any{"value": "x", "confirm": id}); !res.IsError || dataOf(body)["error"] != "stale_plan" {
+	if res, body := h.call(t, "value_set", map[string]any{"value": "x", "plan_id": id}); !res.IsError || dataOf(body)["error"] != "stale_plan" {
 		t.Fatalf("stale state accepted: %v", body)
 	}
 	id = plan()
-	if res, body := h.call(t, "value_set", map[string]any{"value": "x", "confirm": id}); res.IsError {
+	if res, body := h.call(t, "value_set", map[string]any{"value": "x", "plan_id": id}); res.IsError {
 		t.Fatalf("confirm failed: %v", body)
 	}
-	if res, _ := h.call(t, "value_set", map[string]any{"value": "x", "confirm": id}); !res.IsError {
+	if res, _ := h.call(t, "value_set", map[string]any{"value": "x", "plan_id": id}); !res.IsError {
 		t.Fatal("plan reused")
 	}
 	if f.writes.Load() != 1 {
@@ -337,46 +343,40 @@ func TestRenderRedactsAndCaps(t *testing.T) {
 	}
 }
 
-type budgetIn struct {
-	App      string   `json:"app" jsonschema:"app name, bundle id or numeric id"`
-	Version  string   `json:"version,omitempty" jsonschema:"version string or editable/live"`
-	Locales  []string `json:"locales,omitempty" jsonschema:"locale codes such as en-US; omit for all"`
-	Platform string   `json:"platform,omitempty" jsonschema:"target platform"`
-	MaxItems int      `json:"max_items,omitempty" jsonschema:"maximum items to return (default 200)"`
-}
-
-type budgetConfirmIn struct {
-	tool.ConfirmFlag
-	budgetIn
-}
-
-func TestBudgetDefaultToolsList(t *testing.T) {
-	desc := strings.Repeat("Describe what this workflow tool does, which App Store Connect objects it reads or changes, and when to prefer it. ", 3)[:270]
-	var tools []tool.Tool
-	for i := range 35 {
-		ts := tool.DefaultToolsets[i%len(tool.DefaultToolsets)]
-		c := []tool.Class{tool.Read, tool.Read, tool.Write, tool.Destructive}[i%4]
-		m := tool.Meta{
-			Name: fmt.Sprintf("stub_tool_%02d", i), Toolset: ts, Title: "Stub tool", Description: desc, Class: c,
-			Enums: map[string][]any{"platform": {"IOS", "MAC_OS", "TV_OS", "VISION_OS"}},
-		}
-		if c == tool.Destructive {
-			m.Confirm = tool.ConfirmByFlag
-			tools = append(tools, tool.New(m, func(context.Context, *tool.Env, budgetConfirmIn) (*tool.Result, error) { return nil, nil }))
-			continue
-		}
-		tools = append(tools, tool.New(m, func(context.Context, *tool.Env, budgetIn) (*tool.Result, error) { return nil, nil }))
-	}
-	srv, err := Build(context.Background(), Deps{Tools: tools, Profile: team(true)})
+func TestRenderMarksWriteLockedSteps(t *testing.T) {
+	s, err := newSession(Deps{Tools: (&fixture{}).tools(), Profile: team(false)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	n, err := ListBytes(context.Background(), srv)
-	if err != nil {
+	r := tool.OK(map[string]any{
+		"checks": []any{map[string]any{"id": "x", "fix_via": map[string]any{"tool": "release_submit"}}},
+	}).Then(tool.NextStep{Tool: "release_submit"}, tool.NextStep{Tool: "builds_list"})
+	text := s.render(r).Content[0].(*mcp.TextContent).Text
+	var got struct {
+		Data struct {
+			Checks []struct {
+				FixVia tool.NextStep `json:"fix_via"`
+			} `json:"checks"`
+		} `json:"data"`
+		Next []tool.NextStep `json:"next"`
+	}
+	if err := json.Unmarshal([]byte(text), &got); err != nil {
 		t.Fatal(err)
 	}
-	if n == 0 || n > 40<<10 {
-		t.Fatalf("tools/list = %d bytes, budget 40 KB", n)
+	unlock := func(st tool.NextStep) bool {
+		return st.Locked == "writes_disabled" && st.Unlock != nil && st.Unlock.Tool == "toolsets" && st.Unlock.Args["action"] == "enable_writes"
+	}
+	if !unlock(got.Next[0]) || got.Next[1].Locked != "" || got.Next[1].Unlock != nil {
+		t.Errorf("next = %+v", got.Next)
+	}
+	if len(got.Data.Checks) != 1 || !unlock(got.Data.Checks[0].FixVia) {
+		t.Errorf("fix_via = %+v", got.Data.Checks)
+	}
+	// In write mode nothing is locked.
+	s.enableWrites()
+	text = s.render(tool.OK(nil).Then(tool.NextStep{Tool: "release_submit"})).Content[0].(*mcp.TextContent).Text
+	if strings.Contains(text, "writes_disabled") {
+		t.Errorf("write mode marked a step locked: %s", text)
 	}
 }
 

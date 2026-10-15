@@ -437,7 +437,7 @@ func TestPlanFastlaneLayoutDetectsDisplay(t *testing.T) {
 	if s.Display != "APP_IPHONE_67" || s.Locale != "en-US" || !s.CreateSet || len(s.Uploads) != 1 || s.Uploads[0].Rel != "en-US/01-home.png" {
 		t.Errorf("set = %+v", s)
 	}
-	if p.PlanID == "" || len(res.Next) != 1 || res.Next[0].Tool != "screenshots_sync" || res.Next[0].Args["confirm"] != p.PlanID {
+	if p.PlanID == "" || len(res.Next) != 1 || res.Next[0].Tool != "screenshots_sync" || res.Next[0].Args["plan_id"] != p.PlanID {
 		t.Errorf("plan id / next = %q %+v", p.PlanID, res.Next)
 	}
 	if len(k.ASC.Mutations()) != 0 {
@@ -537,14 +537,14 @@ func TestPlanSyncRoundTripAndStaleRefusal(t *testing.T) {
 
 	// The remote set changes: the first plan is stale.
 	f.addShot("loc-en", "APP_IPHONE_67", "other.png", "cafe")
-	body := tooltest.MustFail(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","confirm":%q}`, p.PlanID)), "stale_plan")
+	body := tooltest.MustFail(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","plan_id":%q}`, p.PlanID)), "stale_plan")
 	_ = body
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatalf("stale sync mutated: %v", mutations(k))
 	}
 
 	p = tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots"}`)))
-	res = tooltest.MustOK(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","confirm":%q}`, p.PlanID)))
+	res = tooltest.MustOK(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","plan_id":%q}`, p.PlanID)))
 	out := tooltest.Decode[syncOut](t, res)
 	if out.Status != "synced" || out.Uploaded != 2 || out.Deleted != 2 || out.Skipped != 1 || out.Failed != 0 || out.Pending != 0 {
 		t.Fatalf("sync out = %+v", out)

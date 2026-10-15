@@ -11,7 +11,8 @@ import (
 )
 
 // TestRegistryBudget measures the real tools/list payload for the shipped
-// registry and enforces the context-budget caps.
+// registry and enforces the context-budget caps (default toolsets with writes
+// on ≤ 40 KB).
 func TestRegistryBudget(t *testing.T) {
 	ctx := context.Background()
 	cases := []struct {
@@ -21,7 +22,7 @@ func TestRegistryBudget(t *testing.T) {
 		limit    int
 	}{
 		{"default read-only", false, nil, 40 << 10},
-		{"default writes", true, nil, 45 << 10},
+		{"default writes", true, nil, 40 << 10},
 		{"all writes", true, tool.AllToolsets, 110 << 10},
 	}
 	for _, c := range cases {
@@ -38,7 +39,7 @@ func TestRegistryBudget(t *testing.T) {
 		}
 		t.Logf("%s: tools/list = %d bytes (cap %d)", c.name, n, c.limit)
 		if n > c.limit {
-			t.Errorf("%s: tools/list = %d bytes, cap %d", c.name, n, c.limit)
+			t.Errorf("%s: tools/list = %d bytes, cap %d (over by %d)", c.name, n, c.limit, n-c.limit)
 		}
 	}
 }

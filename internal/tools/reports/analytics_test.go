@@ -60,7 +60,7 @@ func TestAnalyticsSetupAlready(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, ongoingList)
 	r := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "analytics_setup"), k.Env, `{"app":"Example Notes"}`))
 	got := tooltest.Decode[map[string]any](t, r)
-	if got["already"] != true || !strings.Contains(tooltest.JSON(t, got["result"]), `"status":"already"`) {
+	if got["already"] != true || !strings.Contains(tooltest.JSON(t, got["requests"]), `"status":"already"`) {
 		t.Errorf("got = %s", tooltest.JSON(t, got))
 	}
 	if m := k.ASC.Mutations(); len(m) != 0 {

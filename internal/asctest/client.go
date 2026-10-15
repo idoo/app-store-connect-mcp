@@ -13,21 +13,10 @@ import (
 // TestToken is the bearer token the client from [Server.NewClient] sends.
 const TestToken = "asctest-token"
 
-// ClientOption adjusts the [asc.Options] used by [Server.NewClient].
-type ClientOption func(*asc.Options)
-
-// WithWrites lets the client send non-GET requests (they still need a write
-// context and Request.Write).
-func WithWrites() ClientOption { return func(o *asc.Options) { o.AllowWrites = true } }
-
-// WithOptions applies fn to the client options, e.g. to set MaxRetries.
-func WithOptions(fn func(*asc.Options)) ClientOption { return ClientOption(fn) }
-
-// NewClient returns an *asc.Client pointed at the fake, read-only unless
-// [WithWrites] is given. It uses a static token, the spec index for hints
-// and untrusted wrapping, and a clock whose Sleep returns at once so retry
-// backoff does not slow tests.
-func (s *Server) NewClient(t testing.TB, opts ...ClientOption) *asc.Client {
+// NewClient returns a read-only *asc.Client pointed at the fake. It uses a
+// static token, the spec index for hints and untrusted wrapping, and a clock
+// whose Sleep returns at once so retry backoff does not slow tests.
+func (s *Server) NewClient(t testing.TB) *asc.Client {
 	t.Helper()
 	base, err := url.Parse(s.URL)
 	if err != nil {
@@ -46,9 +35,6 @@ func (s *Server) NewClient(t testing.TB, opts ...ClientOption) *asc.Client {
 		Clock:     instantClock{},
 		UserAgent: "hamn/asctest",
 		Jitter:    func() float64 { return 0 },
-	}
-	for _, opt := range opts {
-		opt(&o)
 	}
 	c, err := asc.New(o)
 	if err != nil {

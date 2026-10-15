@@ -23,19 +23,18 @@ func IsWrite(ctx context.Context) bool {
 	return v
 }
 
-func withMeta(ctx context.Context, m *Meta) context.Context {
-	return context.WithValue(ctx, metaKey, m)
+// call is the per-call state the confirm gates read and update.
+type call struct {
+	meta Meta
+	// approvedBy is "human", "agent" or "" (none), set by the confirm gates.
+	approvedBy string
 }
 
-func metaFrom(ctx context.Context) *Meta {
-	m, _ := ctx.Value(metaKey).(*Meta)
-	return m
+func withCall(ctx context.Context, c *call) context.Context {
+	return context.WithValue(ctx, metaKey, c)
 }
 
-// Name returns the name of the tool executing in ctx, or "".
-func Name(ctx context.Context) string {
-	if m := metaFrom(ctx); m != nil {
-		return m.Name
-	}
-	return ""
+func callFrom(ctx context.Context) *call {
+	c, _ := ctx.Value(metaKey).(*call)
+	return c
 }

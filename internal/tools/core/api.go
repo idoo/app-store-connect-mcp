@@ -22,8 +22,9 @@ const (
 )
 
 type searchIn struct {
-	Query string `json:"query" jsonschema:"keywords, resource type, tag or operation id, e.g. \"list builds of app\""`
-	Limit int    `json:"limit,omitempty" jsonschema:"max hits (default 10, max 50)"`
+	Query         string `json:"query" jsonschema:"keywords, resource type, tag or operation id, e.g. \"list builds of app\""`
+	Limit         int    `json:"limit,omitempty" jsonschema:"max hits (default 10, max 50)"`
+	IncludeWrites bool   `json:"include_writes,omitempty" jsonschema:"in read-only mode, also list POST/PATCH/DELETE operations"`
 }
 
 type describeIn struct {
@@ -71,11 +72,10 @@ func init() {
 			"problems and the skeleton, Apple is not called). Collections auto-paginate to max_items and return next_cursor.",
 	}, apiGet))
 	tool.Register(tool.New(tool.Meta{
-		Name: "asc_api_request", Toolset: tool.Core, Class: tool.Destructive, Confirm: tool.ConfirmByFlag,
+		Name: "asc_api_request", Toolset: tool.Core, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Call any API mutation",
-		Description: "POST/PATCH/DELETE any App Store Connect operation, validated against the spec. Deletes and " +
-			"destructive or public ops (review, release, money, people, webhooks) preview first and need confirm:true. " +
-			"Prefer workflow tools; reads go to asc_api_get.",
+		Description: "POST/PATCH/DELETE any App Store Connect operation, validated against the spec. Every call " +
+			"previews first and needs confirm:true plus human approval. Prefer workflow tools; reads go to asc_api_get.",
 	}, apiRequest))
 }
 
@@ -90,11 +90,24 @@ func apiSearch(_ context.Context, env *tool.Env, in searchIn) (*tool.Result, err
 	if strings.TrimSpace(in.Query) == "" {
 		return nil, fmt.Errorf("%w: query is empty", tool.ErrInvalidArgs)
 	}
-	hits := env.Spec.Search(in.Query, limit)
-	if hits == nil {
-		hits = []tool.SearchHit{}
+	readOnly := !env.Profile.AllowWrites && !in.IncludeWrites
+	n := limit
+	if readOnly {
+		n = searchMax // over-fetch, then drop mutations
+	}
+	hits := []tool.SearchHit{}
+	for _, h := range env.Spec.Search(in.Query, n) {
+		if readOnly && h.Method != http.MethodGet {
+			continue
+		}
+		if len(hits) < limit {
+			hits = append(hits, h)
+		}
 	}
 	res := tool.OK(map[string]any{"query": in.Query, "spec_version": env.Spec.Version(), "operations": hits})
+	if readOnly {
+		res.Warn("read-only mode: only GET operations listed; pass include_writes:true to see mutations")
+	}
 	if len(hits) > 0 {
 		res.Then(tool.NextStep{Tool: "asc_api_describe", Args: map[string]any{"operation_id": hits[0].ID}})
 	}
@@ -138,6 +151,9 @@ func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) 
 	}
 	path, q, err := splitPath(in.Path)
 	if err != nil {
+		return nil, err
+	}
+	if path, err = resolveAppPath(ctx, env, path); err != nil {
 		return nil, err
 	}
 	if err := mergeQuery(q, in.Query); err != nil {
@@ -226,19 +242,15 @@ func apiRequest(ctx context.Context, env *tool.Env, in requestIn) (*tool.Result,
 		if res := validation(env.Spec.Validate(req)); res != nil {
 			return res, nil
 		}
-		sensitive = method == http.MethodDelete || env.Spec.Sensitive(method, path)
+		sensitive = method == http.MethodDelete || env.Spec.Sensitive(method, path) || touchesPublicAttrs(in.Body)
 		opName = op.ID
 	case !in.UnsafeUnlisted:
 		return unlisted(env, req), nil
 	}
 
-	var wctx context.Context
-	var gate *tool.Result
-	if sensitive {
-		wctx, gate = tool.RequireConfirm(ctx, env, in.Confirm, requestPreview(method, path, opName, q, in.Body, listed))
-	} else {
-		wctx, gate = tool.Unconfirmed(ctx, env)
-	}
+	// Every generic mutation needs a reviewed preview and a human: the spec
+	// cannot tell which writes are public, paid or irreversible.
+	wctx, gate := tool.RequireConfirm(ctx, env, in.Confirm, requestPreview(method, path, opName, q, in.Body, listed, sensitive))
 	if gate != nil {
 		return gate, nil
 	}
@@ -251,7 +263,7 @@ func apiRequest(ctx context.Context, env *tool.Env, in requestIn) (*tool.Result,
 	return tool.OK(out), nil
 }
 
-func requestPreview(method, path, opName string, q url.Values, body map[string]any, listed bool) tool.PlanPreview {
+func requestPreview(method, path, opName string, q url.Values, body map[string]any, listed, sensitive bool) tool.PlanPreview {
 	intended := map[string]any{"method": method, "path": path, "operation": opName}
 	if len(q) > 0 {
 		intended["query"] = q.Encode()
@@ -259,9 +271,12 @@ func requestPreview(method, path, opName string, q url.Values, body map[string]a
 	if body != nil {
 		intended["body"] = body
 	}
-	irreversible := []string{"destructive or public action (review, release, pricing, people or external endpoints)"}
-	if method == http.MethodDelete {
+	var irreversible []string
+	switch {
+	case method == http.MethodDelete:
 		irreversible = []string{"deletes the object; App Store Connect has no undo"}
+	case sensitive:
+		irreversible = []string{"destructive or public action (review, release, pricing, people or external endpoints)"}
 	}
 	if !listed {
 		irreversible = append(irreversible, "operation is not in the pinned spec; hamn could not validate it")
@@ -296,12 +311,17 @@ func validation(err error) *tool.Result {
 	if !errors.As(err, &ve) {
 		return tool.Fail(err)
 	}
+	problems := ve.Problems
 	body := map[string]any{
-		"error":    tool.ErrInvalidArgs.Code,
-		"message":  ve.Error(),
-		"problems": ve.Problems,
-		"hint":     "fix the request to match the skeleton, or find the right operation with asc_api_search",
+		"error":   tool.ErrInvalidArgs.Code,
+		"message": ve.Error(),
+		"hint":    "fix the request to match the skeleton, or find the right operation with asc_api_search",
 	}
+	if len(problems) > maxProblems {
+		body["problems_omitted"] = len(problems) - maxProblems
+		problems = problems[:maxProblems]
+	}
+	body["problems"] = problems
 	if ve.Skeleton != nil {
 		body["skeleton"] = ve.Skeleton
 	}
@@ -310,6 +330,63 @@ func validation(err error) *tool.Result {
 		res.Next = []tool.NextStep{{Tool: "asc_api_search"}}
 	}
 	return res
+}
+
+// publicAttrs are attributes whose change is public, paid or redirects data
+// even on otherwise plain update endpoints.
+var publicAttrs = []string{"subscriptionStatusUrl", "publicLinkEnabled", "familySharable", "releaseType", "promotionalText"}
+
+// touchesPublicAttrs reports whether a JSON:API body sets one of publicAttrs
+// (prefix match, so subscriptionStatusUrlVersion and ...ForSandbox count).
+func touchesPublicAttrs(body map[string]any) bool {
+	data, _ := body["data"].(map[string]any)
+	attrs, _ := data["attributes"].(map[string]any)
+	for k := range attrs {
+		for _, p := range publicAttrs {
+			if strings.HasPrefix(k, p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// maxProblems caps the validation problems returned to the agent.
+const maxProblems = 5
+
+// resolveAppPath lets the app id segment of /v1/apps/{id}... be any app
+// reference (bundle id, SKU, name, or "{app}" for the pinned app); Apple's
+// app ids are numeric, so anything else is resolved.
+func resolveAppPath(ctx context.Context, env *tool.Env, path string) (string, error) {
+	segs := strings.Split(path, "/")
+	if len(segs) < 4 || segs[2] != "apps" || isDigits(segs[3]) {
+		return path, nil
+	}
+	ref, err := url.PathUnescape(segs[3])
+	if err != nil {
+		return "", fmt.Errorf("%w: bad app segment %q", tool.ErrInvalidArgs, segs[3])
+	}
+	if ref == "{app}" {
+		ref = ""
+	}
+	app, err := env.Resolve.App(ctx, tool.AppRef(ref))
+	if err != nil {
+		return "", err
+	}
+	segs[3] = app.ID
+	return strings.Join(segs, "/"), nil
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // isCollection reports whether a GET operation returns a list, per Apple's
@@ -329,7 +406,7 @@ func addDocument(out map[string]any, resp *tool.Response) {
 	case len(resp.Data) == 1:
 		out["data"] = resp.Data[0]
 	case len(resp.Body) > 0 && json.Valid(resp.Body):
-		out["raw"] = json.RawMessage(resp.Body)
+		out["raw"] = tool.Untrusted(resp.Body)
 	}
 	if len(resp.Included) > 0 {
 		out["included"] = resp.Included

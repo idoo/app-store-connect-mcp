@@ -30,7 +30,7 @@ type Client struct {
 	http        *http.Client
 	retry       retryPolicy
 	sem         chan struct{}
-	allowWrites bool
+	allowWrites atomic.Bool
 	spec        SpecHints
 	freeText    func(string) []string
 	clock       tool.Clock
@@ -59,21 +59,20 @@ func New(opts Options) (*Client, error) {
 		return nil, fmt.Errorf("asc: new client: %w", err)
 	}
 	c := &Client{
-		base:        base,
-		tokens:      opts.Tokens,
-		http:        opts.HTTP,
-		allowWrites: opts.AllowWrites,
-		spec:        opts.Spec,
-		freeText:    opts.FreeText,
-		clock:       opts.Clock,
-		userAgent:   opts.UserAgent,
-		retry:       retryPolicy{max: opts.MaxRetries, jitter: opts.Jitter},
+		base:      base,
+		tokens:    opts.Tokens,
+		http:      opts.HTTP,
+		spec:      opts.Spec,
+		freeText:  opts.FreeText,
+		clock:     opts.Clock,
+		userAgent: opts.UserAgent,
+		retry:     retryPolicy{max: opts.MaxRetries, jitter: opts.Jitter},
 	}
 	if c.http == nil {
 		c.http = &http.Client{Timeout: DefaultRequestTimeout}
 	}
 	if c.clock == nil {
-		c.clock = systemClock{}
+		c.clock = tool.SystemClock{}
 	}
 	if c.userAgent == "" {
 		c.userAgent = DefaultUserAgent
@@ -92,8 +91,14 @@ func New(opts Options) (*Client, error) {
 		n = DefaultMaxConcurrent
 	}
 	c.sem = make(chan struct{}, n)
+	c.allowWrites.Store(opts.AllowWrites)
 	return c, nil
 }
+
+// SetAllowWrites switches the client's read-only guard at runtime (e.g. when
+// the session enables writes). Non-GET requests still need Request.Write and
+// a write context.
+func (c *Client) SetAllowWrites(on bool) { c.allowWrites.Store(on) }
 
 // checkBaseURL accepts https URLs, or http on a loopback host.
 func checkBaseURL(u *url.URL) error {
@@ -119,14 +124,15 @@ type rawResponse struct {
 }
 
 // Do implements [tool.ASC]. Non-GET requests need Request.Write, a write
-// context (tool.IsWrite) and Options.AllowWrites, otherwise they fail with
+// context (tool.IsWrite) and writes enabled ([Options.AllowWrites], then
+// [Client.SetAllowWrites]), otherwise they fail with
 // tool.ErrWritesDisabled before anything is sent.
 func (c *Client) Do(ctx context.Context, req tool.Request) (*tool.Response, error) {
 	method := strings.ToUpper(req.Method)
 	if method == "" {
 		method = http.MethodGet
 	}
-	if method != http.MethodGet && (!req.Write || !c.allowWrites || !tool.IsWrite(ctx)) {
+	if method != http.MethodGet && (!req.Write || !c.allowWrites.Load() || !tool.IsWrite(ctx)) {
 		return nil, fmt.Errorf("asc: %s %s: %w", method, req.Path, tool.ErrWritesDisabled)
 	}
 	u, err := c.resolve(req.Path, req.Query)
@@ -246,8 +252,8 @@ func (c *Client) Download(ctx context.Context, req tool.Request) ([]byte, http.H
 
 // wrap marks free-text attributes of doc as untrusted.
 func (c *Client) wrap(doc *tool.Document) {
-	WrapUntrusted(doc.Data, c.freeText)
-	WrapUntrusted(doc.Included, c.freeText)
+	tool.WrapUntrusted(doc.Data, c.freeText)
+	tool.WrapUntrusted(doc.Included, c.freeText)
 }
 
 // resolve joins path (and query) onto the base URL, refusing anything that

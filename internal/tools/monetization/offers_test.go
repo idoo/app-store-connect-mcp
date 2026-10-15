@@ -118,7 +118,7 @@ func TestOffersCreatePromoRepeatIsAlready(t *testing.T) {
 		t.Fatalf("repeat must not write: %+v", m)
 	}
 	got := tooltest.Decode[map[string]any](t, res)
-	if got["already"] != true || got["result"].(map[string]any)["offer"].(map[string]any)["id"] != "po1" {
+	if got["already"] != true || got["offer"].(map[string]any)["id"] != "po1" {
 		t.Fatalf("result = %v", got)
 	}
 }

@@ -15,13 +15,15 @@ const appsPage = `{
   {"type":"apps","id":"200","attributes":{"name":"Sikt","bundleId":"se.jvcr.sift","sku":"SIFT","primaryLocale":"sv"},
    "relationships":{"appStoreVersions":{"data":[{"type":"appStoreVersions","id":"v2"},{"type":"appStoreVersions","id":"v3"}]}}},
   {"type":"apps","id":"300","attributes":{"name":"Planera","bundleId":"com.idoo.planera","sku":"PLAN","primaryLocale":"en-US"},
-   "relationships":{"appStoreVersions":{"data":[{"type":"appStoreVersions","id":"v4"}]}}}
+   "relationships":{"appStoreVersions":{"data":[{"type":"appStoreVersions","id":"v4"}]}}},
+  {"type":"apps","id":"400","attributes":{"name":"Hejul","bundleId":"se.other.hejul","sku":"HEJ","primaryLocale":"en-US"},
+   "relationships":{"appStoreVersions":{"data":[]}}}
  ],
  "included": [
-  {"type":"appStoreVersions","id":"v1","attributes":{"platform":"IOS"}},
-  {"type":"appStoreVersions","id":"v2","attributes":{"platform":"MAC_OS"}},
-  {"type":"appStoreVersions","id":"v3","attributes":{"platform":"IOS"}},
-  {"type":"appStoreVersions","id":"v4","attributes":{"platform":"IOS"}}
+  {"type":"appStoreVersions","id":"v1","attributes":{"platform":"IOS","versionString":"3.0","appVersionState":"PREPARE_FOR_SUBMISSION"}},
+  {"type":"appStoreVersions","id":"v2","attributes":{"platform":"MAC_OS","versionString":"1.2","appVersionState":"WAITING_FOR_REVIEW"}},
+  {"type":"appStoreVersions","id":"v3","attributes":{"platform":"IOS","versionString":"1.1","appVersionState":"READY_FOR_DISTRIBUTION"}},
+  {"type":"appStoreVersions","id":"v4","attributes":{"platform":"IOS","versionString":"2.0","appVersionState":"READY_FOR_DISTRIBUTION"}}
  ],
  "links": {"self":"https://api.appstoreconnect.apple.com/v1/apps"}
 }`
@@ -31,15 +33,19 @@ func TestAppsListFuzzy(t *testing.T) {
 		args string
 		want []string
 	}{
-		{`{}`, []string{"Hjul", "Planera", "Sikt"}},
-		{`{"query":"hjl"}`, []string{"Hjul"}},
+		{`{}`, []string{"Hejul", "Hjul", "Planera", "Sikt"}},
+		{`{"query":"hjl"}`, []string{"Hejul", "Hjul"}},
+		// The letters-in-order tier (Hejul) is dropped when a stronger tier matched.
+		{`{"query":"hjul"}`, []string{"Hjul"}},
 		{`{"query":"SIFT"}`, []string{"Sikt"}},
 		{`{"query":"idoo"}`, []string{"Hjul", "Planera"}},
 		{`{"query":"plan"}`, []string{"Planera"}},
 		{`{"query":"idoo hjul"}`, []string{"Hjul"}},
 		{`{"query":"zzz"}`, []string{}},
 		{`{"platform":"MAC_OS"}`, []string{"Sikt"}},
-		{`{"limit":1}`, []string{"Hjul"}},
+		{`{"state":"WAITING_FOR_REVIEW"}`, []string{"Sikt"}},
+		{`{"state":"PREPARE_FOR_SUBMISSION"}`, []string{"Hjul"}},
+		{`{"limit":1}`, []string{"Hejul"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.args, func(t *testing.T) {

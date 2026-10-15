@@ -66,7 +66,7 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "screenshots_sync", Toolset: tool.Screenshots, Class: tool.Write, Confirm: tool.ConfirmByPlan,
 		Title: "Sync screenshots",
-		Description: "Applies a screenshots_plan: same arguments plus confirm=plan_id (required when anything is deleted). " +
+		Description: "Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). " +
 			"Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
 		Enums: map[string][]any{"platform": platformEnum, "mode": modeEnum},
 	}, screenshotsSync))
@@ -99,10 +99,10 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 	}
 	var wctx context.Context
 	var res *tool.Result
-	if in.Confirm == "" && p.deletes() == 0 {
+	if in.PlanID == "" && p.deletes() == 0 {
 		wctx, res = tool.Unconfirmed(ctx, env)
 	} else {
-		wctx, res = tool.Preview(ctx, env, in.Confirm, p.key, fp, p.preview())
+		wctx, res = tool.Preview(ctx, env, in.PlanID, p.key, fp, p.preview())
 	}
 	if res != nil {
 		return res, nil

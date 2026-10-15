@@ -37,6 +37,11 @@ type Meta struct {
 	// ReadOnlyEnums) and receives no write capability.
 	AvailableReadOnly bool
 	Confirm           ConfirmMode
+	// RequireHuman makes the confirm gate demand a human accept via
+	// elicitation (public, irreversible or money actions). Without
+	// elicitation the call is refused with [ErrHumanRequired] unless the
+	// profile sets AllowNoElicit. Requires a Confirm mode.
+	RequireHuman bool
 	// Enums adds enum constraints to input properties; keys are property paths
 	// with "." between levels (array items are traversed implicitly).
 	Enums map[string][]any
@@ -129,19 +134,20 @@ func (m Meta) check() error {
 		return fmt.Errorf("read tools cannot require confirmation")
 	case m.Class == Destructive && m.Confirm == ConfirmNone && !m.AvailableReadOnly:
 		return fmt.Errorf("destructive tools must use ConfirmByFlag or ConfirmByPlan")
+	case m.RequireHuman && m.Confirm == ConfirmNone:
+		return fmt.Errorf("RequireHuman needs ConfirmByFlag or ConfirmByPlan")
 	}
 	return nil
 }
 
 func checkConfirmField(mode ConfirmMode, s *jsonschema.Schema) error {
-	p := s.Properties["confirm"]
 	switch mode {
-	case ConfirmByFlag, ConfirmByHuman:
-		if p == nil || p.Type != "boolean" {
-			return fmt.Errorf("ConfirmByFlag/ConfirmByHuman tools must embed tool.ConfirmFlag")
+	case ConfirmByFlag:
+		if p := s.Properties["confirm"]; p == nil || p.Type != "boolean" {
+			return fmt.Errorf("ConfirmByFlag tools must embed tool.ConfirmFlag")
 		}
 	case ConfirmByPlan:
-		if p == nil || p.Type != "string" {
+		if p := s.Properties["plan_id"]; p == nil || p.Type != "string" {
 			return fmt.Errorf("ConfirmByPlan tools must embed tool.ConfirmPlan")
 		}
 	}
@@ -210,6 +216,7 @@ func (t Tool) ListedIn(p ProfileInfo) bool {
 // tools obtain it from their confirm gate. It never returns nil.
 func (t Tool) Call(ctx context.Context, env *Env, raw json.RawMessage) (res *Result) {
 	env = env.complete()
+	c := &call{meta: t.meta}
 	defer func() {
 		if p := recover(); p != nil {
 			res = Fail(fmt.Errorf("%s: %w: panic: %v", t.meta.Name, ErrInternal, p))
@@ -219,6 +226,10 @@ func (t Tool) Call(ctx context.Context, env *Env, raw json.RawMessage) (res *Res
 		}
 		res.Meta.Profile = env.Profile.Name
 		res.Meta.PinSource = env.Profile.PinSource
+		res.Meta.ApprovedBy = ApprovedNone
+		if c.approvedBy != "" {
+			res.Meta.ApprovedBy = c.approvedBy
+		}
 		if rl := env.ASC.RateLimit(); rl.Known {
 			res.Meta.RateLimit = &rl
 			if rl.Remaining < RateLimitWarnBelow {
@@ -226,7 +237,7 @@ func (t Tool) Call(ctx context.Context, env *Env, raw json.RawMessage) (res *Res
 			}
 		}
 	}()
-	return t.call(ctx, env, raw)
+	return t.call(withCall(ctx, c), env, raw)
 }
 
 func (t Tool) call(ctx context.Context, env *Env, raw json.RawMessage) *Result {
@@ -240,7 +251,6 @@ func (t Tool) call(ctx context.Context, env *Env, raw json.RawMessage) *Result {
 	if m.Class == Write && m.Confirm == ConfirmNone && env.Profile.AllowWrites {
 		ctx = withWrite(ctx)
 	}
-	ctx = withMeta(ctx, &m)
 	schema, resolved := t.schema, t.resolved
 	if !env.Profile.AllowWrites {
 		schema, resolved = t.roSchema, t.roResolved

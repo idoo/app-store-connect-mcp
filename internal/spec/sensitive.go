@@ -45,6 +45,14 @@ var destructiveRoots = []string{
 	"/v1/gameCenterPlayerAchievementSubmissions", "/v1/gameCenterScoreModerations",
 	// Irreversible sandbox reset.
 	"/v2/sandboxTestersClearPurchaseHistoryRequest",
+	// Signing identity and distribution keys: credentials that sign or ship builds.
+	"/v1/certificates", "/v1/alternativeDistributionKeys",
+	// Testers: emails real people and grants access to unreleased builds.
+	"/v1/betaTesters", "/v1/betaTesterInvitations",
+	// Offers and codes: money (free or discounted access) handed out.
+	"/v1/inAppPurchaseOfferCodes", "/v1/inAppPurchaseOfferCodeCustomCodes", "/v1/inAppPurchaseOfferCodeOneTimeUseCodes",
+	"/v1/subscriptionOfferCodes", "/v1/subscriptionOfferCodeCustomCodes", "/v1/subscriptionOfferCodeOneTimeUseCodes",
+	"/v1/subscriptionIntroductoryOffers", "/v1/subscriptionPromotionalOffers", "/v1/winBackOffers",
 }
 
 // writeRoots are resources whose POST/PATCH operations (including their
@@ -53,7 +61,7 @@ var destructiveRoots = []string{
 // fails generation and tests so new Apple endpoints get a deliberate class.
 var writeRoots = []string{
 	"/v1/accessibilityDeclarations", "/v1/ageRatingDeclarations", "/v1/alternativeDistributionDomains",
-	"/v1/alternativeDistributionKeys", "/v1/alternativeDistributionPackages", "/v1/analyticsReportRequests",
+	"/v1/alternativeDistributionPackages", "/v1/analyticsReportRequests",
 	"/v1/androidToIosAppMappingDetails", "/v1/appAssetLibraryImages", "/v1/appAssetLibraryPlacementOrderingRequests",
 	"/v1/appAssetLibraryPlacements", "/v1/appAssetLibraryVideos", "/v1/appClipAdvancedExperienceImages",
 	"/v1/appClipAdvancedExperiences", "/v1/appClipAppStoreReviewDetails", "/v1/appClipDefaultExperienceLocalizations",
@@ -69,10 +77,10 @@ var writeRoots = []string{
 	"/v1/backgroundAssets", "/v1/backgroundAssetUploadFiles", "/v1/backgroundAssetVersions",
 	"/v1/betaAppClipInvocationLocalizations", "/v1/betaAppClipInvocations", "/v1/betaAppLocalizations",
 	"/v1/betaAppReviewDetails", "/v1/betaBuildLocalizations", "/v1/betaGroups",
-	"/v1/betaLicenseAgreements", "/v1/betaRecruitmentCriteria", "/v1/betaTesterInvitations",
-	"/v1/betaTesters", "/v1/buildBetaDetails", "/v1/buildBetaNotifications",
+	"/v1/betaLicenseAgreements", "/v1/betaRecruitmentCriteria",
+	"/v1/buildBetaDetails", "/v1/buildBetaNotifications",
 	"/v1/builds", "/v1/buildUploadFiles", "/v1/buildUploads",
-	"/v1/bundleIdCapabilities", "/v1/bundleIds", "/v1/certificates",
+	"/v1/bundleIdCapabilities", "/v1/bundleIds",
 	"/v1/ciBuildRuns", "/v1/ciWorkflows", "/v1/devices",
 	"/v1/gameCenterAchievementImages", "/v1/gameCenterAchievementLocalizations", "/v1/gameCenterAchievements",
 	"/v1/gameCenterActivities", "/v1/gameCenterActivityImages", "/v1/gameCenterActivityLocalizations",
@@ -84,16 +92,15 @@ var writeRoots = []string{
 	"/v1/gameCenterLeaderboardSetMemberLocalizations", "/v1/gameCenterLeaderboardSets", "/v1/gameCenterMatchmakingQueues",
 	"/v1/gameCenterMatchmakingRules", "/v1/gameCenterMatchmakingRuleSets", "/v1/gameCenterMatchmakingRuleSetTests",
 	"/v1/gameCenterMatchmakingTeams", "/v1/inAppPurchaseAppStoreReviewScreenshots", "/v1/inAppPurchaseImages",
-	"/v1/inAppPurchaseLocalizations", "/v1/inAppPurchaseOfferCodeCustomCodes", "/v1/inAppPurchaseOfferCodeOneTimeUseCodes",
-	"/v1/inAppPurchaseOfferCodes", "/v1/inAppPurchaseVersions", "/v1/marketplaceSearchDetails",
+	"/v1/inAppPurchaseLocalizations",
+	"/v1/inAppPurchaseVersions", "/v1/marketplaceSearchDetails",
 	"/v1/merchantIds", "/v1/nominations", "/v1/passTypeIds",
 	"/v1/profiles", "/v1/promotedPurchases", "/v1/routingAppCoverages",
 	"/v1/subscriptionAppStoreReviewScreenshots", "/v1/subscriptionGracePeriods", "/v1/subscriptionGroupLocalizations",
 	"/v1/subscriptionGroups", "/v1/subscriptionGroupVersions", "/v1/subscriptionImages",
-	"/v1/subscriptionIntroductoryOffers", "/v1/subscriptionLocalizations", "/v1/subscriptionOfferCodeCustomCodes",
-	"/v1/subscriptionOfferCodeOneTimeUseCodes", "/v1/subscriptionOfferCodes", "/v1/subscriptionPromotionalOffers",
+	"/v1/subscriptionLocalizations",
 	"/v1/subscriptions", "/v1/subscriptionVersions", "/v1/webhookDeliveries",
-	"/v1/webhookPings", "/v1/winBackOffers", "/v2/appStoreVersionExperiments",
+	"/v1/webhookPings", "/v2/appStoreVersionExperiments",
 	"/v2/gameCenterAchievementImages", "/v2/gameCenterAchievementLocalizations", "/v2/gameCenterAchievements",
 	"/v2/gameCenterAchievementVersions", "/v2/gameCenterLeaderboardImages", "/v2/gameCenterLeaderboardLocalizations",
 	"/v2/gameCenterLeaderboards", "/v2/gameCenterLeaderboardSetImages", "/v2/gameCenterLeaderboardSetLocalizations",
@@ -112,8 +119,7 @@ func buildRules() []rule {
 		{Methods: []string{http.MethodDelete}, Path: "/", Class: tool.Destructive},
 		// builds update is how builds are expired.
 		{Methods: []string{http.MethodPatch}, Path: "/v1/builds/{id}", Exact: true, Class: tool.Destructive},
-		// certificates update deactivates a certificate.
-		{Methods: []string{http.MethodPatch}, Path: "/v1/certificates/{id}", Exact: true, Class: tool.Destructive},
+		// PATCH /v1/certificates/{id} deactivates a certificate (covered by its destructive root).
 	}
 	for _, p := range destructiveRoots {
 		rs = append(rs, rule{Path: p, Class: tool.Destructive})

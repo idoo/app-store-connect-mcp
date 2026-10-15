@@ -14,8 +14,8 @@ import (
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "signing_revoke", Toolset: tool.Signing, Class: tool.Destructive, NeedsTeamKey: true,
-		Confirm: tool.ConfirmByHuman,
-		Title:   "Revoke a certificate or delete a profile",
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
+		Title: "Revoke a certificate or delete a profile",
 		Description: "Revoke a signing certificate or delete a provisioning profile by id. Without confirm returns a preview " +
 			"(name, type, expiry; for certificates the profiles it invalidates). confirm:true asks the human; irreversible.",
 		Enums: map[string][]any{"kind": {"certificate", "profile"}},

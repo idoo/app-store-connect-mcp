@@ -58,13 +58,14 @@ type Options struct {
 	MaxRetries int
 	// MaxConcurrent defaults to [DefaultMaxConcurrent].
 	MaxConcurrent int
-	// AllowWrites enables non-GET requests (which also need a write context
-	// from tool.Call and Request.Write).
+	// AllowWrites is the initial state of the read-only guard (see
+	// [Client.SetAllowWrites]); non-GET requests also need a write context
+	// from tool.Call and Request.Write.
 	AllowWrites bool
 	// Spec enriches error hints with valid enum values; optional.
 	Spec SpecHints
 	// FreeText returns the free-text attributes of a resource type for
-	// [WrapUntrusted]; nil uses [UntrustedFallback].
+	// [tool.WrapUntrusted]; nil uses [tool.UntrustedFallback].
 	FreeText func(resourceType string) []string
 	// Clock defaults to the system clock.
 	Clock tool.Clock
@@ -73,27 +74,6 @@ type Options struct {
 	// Jitter returns a value in [0,1) scaling the backoff jitter; defaults
 	// to math/rand/v2.
 	Jitter func() float64
-}
-
-// systemClock is the real-time [tool.Clock].
-type systemClock struct{}
-
-// Now implements tool.Clock.
-func (systemClock) Now() time.Time { return time.Now() }
-
-// Sleep implements tool.Clock.
-func (systemClock) Sleep(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
 }
 
 // defaultJitter is the production jitter source.

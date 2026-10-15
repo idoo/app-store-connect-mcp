@@ -14,60 +14,11 @@ import (
 	"github.com/idoo/hamn/internal/spec"
 )
 
-// FixturesDir is the fixture directory relative to the module root.
-const FixturesDir = "testdata/fixtures"
-
 var (
-	rootOnce sync.Once
-	rootDir  string
-	errRoot  error
-
 	opsOnce sync.Once
 	opsByID map[string]spec.Op
 	errOps  error
 )
-
-// ModuleRoot returns the directory holding go.mod, found by walking up from
-// the working directory (a test's package directory).
-func ModuleRoot(t testing.TB) string {
-	t.Helper()
-	rootOnce.Do(func() { rootDir, errRoot = findModuleRoot() })
-	if errRoot != nil {
-		t.Fatalf("asctest: %v", errRoot)
-	}
-	return rootDir
-}
-
-func findModuleRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("module root: %w", err)
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("module root: no go.mod above the working directory")
-		}
-		dir = parent
-	}
-}
-
-// Fixture returns the bytes of a fixture. A relative path is resolved
-// against <module root>/testdata/fixtures; an absolute path is used as is.
-func Fixture(t testing.TB, path string) []byte {
-	t.Helper()
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(ModuleRoot(t), FixturesDir, path)
-	}
-	b, err := readFile(path)
-	if err != nil {
-		t.Fatalf("asctest: fixture: %v", err)
-	}
-	return b
-}
 
 // ValidateFixture checks that body is a JSON:API response document fitting
 // operation opID: a "data" object (or null) for single-resource responses,
@@ -171,7 +122,10 @@ func errorsProblems(raw json.RawMessage) []string {
 // the spec package embeds.
 func lookupOp(t testing.TB, opID string) (spec.Op, bool) {
 	t.Helper()
-	root := ModuleRoot(t)
+	root, err := findModuleRoot()
+	if err != nil {
+		t.Fatalf("asctest: %v", err)
+	}
 	opsOnce.Do(func() { opsByID, errOps = loadOps(filepath.Join(root, "internal", "spec", "index.json.gz")) })
 	if errOps != nil {
 		t.Fatalf("asctest: %v", errOps)
@@ -199,4 +153,23 @@ func loadOps(path string) (map[string]spec.Op, error) {
 		out[op.ID] = op
 	}
 	return out, nil
+}
+
+// findModuleRoot returns the directory holding go.mod, walking up from the
+// working directory (a test's package directory).
+func findModuleRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("module root: %w", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("module root: no go.mod above the working directory")
+		}
+		dir = parent
+	}
 }

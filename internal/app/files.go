@@ -1,10 +1,13 @@
 package app
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -15,10 +18,12 @@ import (
 // including through symlinks.
 var ErrOutsideRoot = errors.New("path is outside the allowed root")
 
-// Files is the confined [tool.Files]: every path, after resolving symlinks,
-// must stay inside Root.
+// Files is the confined [tool.Files]. Every access goes through an [os.Root],
+// so the kernel-level lookup cannot escape Root even through symlinks or a
+// path swapped between check and use.
 type Files struct {
 	root string
+	r    *os.Root
 }
 
 var _ tool.Files = (*Files)(nil)
@@ -40,7 +45,11 @@ func NewFiles(root string) (*Files, error) {
 	if !fi.IsDir() {
 		return nil, fmt.Errorf("files: root %q is not a directory", root)
 	}
-	return &Files{root: resolved}, nil
+	r, err := os.OpenRoot(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("files: root %q: %w", root, err)
+	}
+	return &Files{root: resolved, r: r}, nil
 }
 
 // DefaultRoot returns the git root containing cwd (the nearest ancestor with a
@@ -108,13 +117,27 @@ func within(root, p string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
 
+// rel maps p to a path relative to the root for the [os.Root] methods. The
+// lexical check here only produces the name; os.Root enforces confinement.
+func (f *Files) rel(p string) (string, error) {
+	resolved, err := f.Resolve(p)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(f.root, resolved)
+	if err != nil {
+		return "", fmt.Errorf("files: %q: %w", p, ErrOutsideRoot)
+	}
+	return rel, nil
+}
+
 // ReadFile reads a confined file.
 func (f *Files) ReadFile(p string) ([]byte, error) {
-	resolved, err := f.Resolve(p)
+	rel, err := f.rel(p)
 	if err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(resolved) //nolint:gosec // path confined by Resolve.
+	b, err := f.r.ReadFile(rel)
 	if err != nil {
 		return nil, fmt.Errorf("files: %w", err)
 	}
@@ -124,32 +147,27 @@ func (f *Files) ReadFile(p string) ([]byte, error) {
 // WriteFile writes data atomically (temp file + rename), creating parent
 // directories. perm 0 means 0644.
 func (f *Files) WriteFile(p string, data []byte, perm fs.FileMode) error {
-	resolved, err := f.Resolve(p)
+	rel, err := f.rel(p)
 	if err != nil {
 		return err
 	}
 	if perm == 0 {
 		perm = 0o644
 	}
-	dir := filepath.Dir(resolved)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	dir := filepath.Dir(rel)
+	if err := f.r.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("files: %w", err)
 	}
-	// Re-check after creating directories: a racing symlink must not escape.
-	if again, err := f.Resolve(resolved); err != nil || again != resolved {
-		if err == nil {
-			err = fmt.Errorf("files: %q: %w", p, ErrOutsideRoot)
-		}
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(resolved)+".tmp-*")
+	var suffix [8]byte
+	_, _ = rand.Read(suffix[:])
+	name := filepath.Join(dir, "."+filepath.Base(rel)+".tmp-"+hex.EncodeToString(suffix[:]))
+	tmp, err := f.r.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return fmt.Errorf("files: %w", err)
 	}
-	name := tmp.Name()
 	fail := func(err error) error {
 		_ = tmp.Close()
-		_ = os.Remove(name)
+		_ = f.r.Remove(name)
 		return fmt.Errorf("files: write %q: %w", p, err)
 	}
 	if _, err := tmp.Write(data); err != nil {
@@ -162,11 +180,11 @@ func (f *Files) WriteFile(p string, data []byte, perm fs.FileMode) error {
 		return fail(err)
 	}
 	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
+		_ = f.r.Remove(name)
 		return fmt.Errorf("files: write %q: %w", p, err)
 	}
-	if err := os.Rename(name, resolved); err != nil {
-		_ = os.Remove(name)
+	if err := f.r.Rename(name, rel); err != nil {
+		_ = f.r.Remove(name)
 		return fmt.Errorf("files: write %q: %w", p, err)
 	}
 	return nil
@@ -174,11 +192,11 @@ func (f *Files) WriteFile(p string, data []byte, perm fs.FileMode) error {
 
 // Open opens a confined file for reading.
 func (f *Files) Open(p string) (*os.File, error) {
-	resolved, err := f.Resolve(p)
+	rel, err := f.rel(p)
 	if err != nil {
 		return nil, err
 	}
-	fh, err := os.Open(resolved) //nolint:gosec // path confined by Resolve.
+	fh, err := f.r.Open(rel)
 	if err != nil {
 		return nil, fmt.Errorf("files: %w", err)
 	}
@@ -187,26 +205,29 @@ func (f *Files) Open(p string) (*os.File, error) {
 
 // Stat stats a confined path (following symlinks inside the root).
 func (f *Files) Stat(p string) (fs.FileInfo, error) {
-	resolved, err := f.Resolve(p)
+	rel, err := f.rel(p)
 	if err != nil {
 		return nil, err
 	}
-	fi, err := os.Stat(resolved)
+	fi, err := f.r.Stat(rel)
 	if err != nil {
 		return nil, fmt.Errorf("files: %w", err)
 	}
 	return fi, nil
 }
 
-// WalkDir walks a confined directory like [filepath.WalkDir]; callback paths
-// are absolute. Symlinks are reported but not followed; reading through them
-// goes through Resolve again.
+// WalkDir walks a confined directory like [fs.WalkDir] over the root's
+// [os.Root.FS]; callback paths are absolute. Symlinks are reported but not
+// followed.
 func (f *Files) WalkDir(root string, fn fs.WalkDirFunc) error {
-	resolved, err := f.Resolve(root)
+	rel, err := f.rel(root)
 	if err != nil {
 		return err
 	}
-	if err := filepath.WalkDir(resolved, fn); err != nil {
+	err = fs.WalkDir(f.r.FS(), filepath.ToSlash(rel), func(p string, d fs.DirEntry, err error) error {
+		return fn(filepath.Join(f.root, filepath.FromSlash(path.Clean(p))), d, err)
+	})
+	if err != nil {
 		return fmt.Errorf("files: walk %q: %w", root, err)
 	}
 	return nil

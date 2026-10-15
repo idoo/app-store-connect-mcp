@@ -30,7 +30,7 @@ func (s *session) toolsetsTool() tool.Tool {
 		names[i] = string(ts)
 	}
 	return tool.New(tool.Meta{
-		Name:        "toolsets",
+		Name:        toolsetsName,
 		Toolset:     tool.Core,
 		Title:       "Toolsets",
 		Description: "List toolsets, enable or disable them for this session (tool list refreshes), or ask the user to allow App Store Connect writes for this session.",
@@ -108,6 +108,7 @@ func (s *session) enableWritesAction(ctx context.Context, env *tool.Env) (*tool.
 		return nil, fmt.Errorf("enable_writes: %w", tool.ErrDeclined)
 	}
 	s.enableWrites()
+	env.SetWrites(true)
 	return tool.OK(map[string]any{"writes": true, "toolsets": s.listDetailed()}), nil
 }
 

@@ -63,7 +63,7 @@ func TestSensitive(t *testing.T) {
 		{"DELETE", "/v1/certificates/1", tool.Destructive},
 		{"DELETE", "/v1/profiles/1", tool.Destructive},
 		{"PATCH", "/v1/certificates/1", tool.Destructive},
-		{"POST", "/v1/certificates", tool.Write},
+		{"POST", "/v1/certificates", tool.Destructive},
 		{"POST", "/v1/reviewSubmissions", tool.Destructive},
 		{"PATCH", "/v1/reviewSubmissions/1", tool.Destructive},
 		{"POST", "/v1/reviewSubmissionItems", tool.Destructive},
@@ -80,7 +80,13 @@ func TestSensitive(t *testing.T) {
 		{"PATCH", "/v1/territoryAvailabilities/1", tool.Destructive},
 		{"POST", "/v2/appAvailabilities", tool.Destructive},
 		{"PATCH", "/v1/endUserLicenseAgreements/1", tool.Destructive},
-		{"POST", "/v1/betaTesters", tool.Write},
+		{"POST", "/v1/betaTesters", tool.Destructive},
+		{"POST", "/v1/betaTesterInvitations", tool.Destructive},
+		{"POST", "/v1/subscriptionOfferCodes", tool.Destructive},
+		{"POST", "/v1/subscriptionOfferCodeOneTimeUseCodes", tool.Destructive},
+		{"POST", "/v1/winBackOffers", tool.Destructive},
+		{"POST", "/v1/alternativeDistributionKeys", tool.Destructive},
+		{"PATCH", "/v1/subscriptions/1", tool.Write},
 		// Unknown non-GET paths fail closed.
 		{"POST", "/v1/futureThings", tool.Destructive},
 	}

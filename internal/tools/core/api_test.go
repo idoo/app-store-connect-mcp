@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,6 +25,27 @@ func TestAPISearchRanking(t *testing.T) {
 		t.Errorf("next = %+v", res.Next)
 	}
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "asc_api_search"), k.Env, `{"query":"  "}`), "invalid_arguments")
+}
+
+func TestAPISearchReadOnlyHidesWrites(t *testing.T) {
+	k := kit(t).ReadOnly()
+	tl := mustTool(t, "asc_api_search")
+	methods := func(args string) []string {
+		out := tooltest.Decode[struct {
+			Operations []tool.SearchHit `json:"operations"`
+		}](t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, args)))
+		var ms []string
+		for _, h := range out.Operations {
+			ms = append(ms, h.Method)
+		}
+		return ms
+	}
+	if ms := methods(`{"query":"delete beta tester"}`); len(ms) == 0 || slices.ContainsFunc(ms, func(m string) bool { return m != "GET" }) {
+		t.Errorf("read-only methods = %v, want only GET", ms)
+	}
+	if ms := methods(`{"query":"delete beta tester","include_writes":true}`); !slices.Contains(ms, "DELETE") {
+		t.Errorf("include_writes methods = %v, want a DELETE", ms)
+	}
 }
 
 func TestAPIDescribe(t *testing.T) {
@@ -142,18 +164,39 @@ func TestAPIRequestSensitiveNeedsConfirm(t *testing.T) {
 	}
 }
 
-func TestAPIRequestPlainWriteProceeds(t *testing.T) {
+func TestAPIRequestPlainWriteNeedsHuman(t *testing.T) {
 	k := kit(t)
 	k.ASC.Handle("PATCH", "/v1/appStoreVersionLocalizations/{id}", 200,
 		`{"data":{"type":"appStoreVersionLocalizations","id":"L1","attributes":{"whatsNew":"Fixes"}}}`)
-	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_request"), k.Env,
-		`{"method":"PATCH","path":"/v1/appStoreVersionLocalizations/L1","body":{"data":{"type":"appStoreVersionLocalizations","id":"L1","attributes":{"whatsNew":"Fixes"}}}}`))
-	out := data(t, res)
+	tl := mustTool(t, "asc_api_request")
+	args := `{"method":"PATCH","path":"/v1/appStoreVersionLocalizations/L1","body":{"data":{"type":"appStoreVersionLocalizations","id":"L1","attributes":{"whatsNew":"Fixes"}}}}`
+	preview := data(t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, args)))
+	if preview["status"] != "needs_confirm" || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("plain write without confirm = %v", preview)
+	}
+	confirmed := strings.Replace(args, "{", `{"confirm":true,`, 1)
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, confirmed), "human_approval_required")
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatal("mutated without a human")
+	}
+	k.Elicit(true)
+	out := data(t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, confirmed)))
 	if out["operation"] != "appStoreVersionLocalizations_updateInstance" || len(k.ASC.Mutations()) != 1 {
 		t.Errorf("out = %v", out)
 	}
 	if m := k.ASC.Mutations()[0]; !m.Write || m.Body == nil {
 		t.Errorf("mutation = %+v", m)
+	}
+}
+
+func TestAPIGetResolvesAppRef(t *testing.T) {
+	k := kit(t)
+	k.Resolve.Apps = []tool.App{{ID: "7", BundleID: "se.jvcr.hjul", Name: "Hjul"}}
+	k.ASC.Handle("GET", "/v1/apps/{id}", 200, `{"data":{"type":"apps","id":"7","attributes":{"name":"Hjul"}}}`)
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_get"), k.Env, `{"path":"/v1/apps/{app}"}`))
+	reqs := k.ASC.Requests()
+	if len(reqs) != 1 || strings.Contains(reqs[0].Path, "{app}") {
+		t.Errorf("requests = %+v", reqs)
 	}
 }
 
