@@ -164,8 +164,11 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 	out.Release = releaseSection(ctx, env, app.ID)
 	out.TestFlight = feedbackSection(ctx, env, app.ID, from)
 	out.Analytics = analyticsSection(ctx, env, app.ID)
-	if out.Analytics.Status != "ok" && out.Analytics.Reason == analyticsMissingReason {
+	switch {
+	case out.Analytics.Status != "ok" && out.Analytics.Reason == analyticsMissingReason:
 		res.Then(tool.NextStep{Tool: "analytics_setup", Args: appIDArgs(app.ID)})
+	case out.Analytics.Status == "ok":
+		res.Then(tool.NextStep{Tool: "analytics_funnel_report", Args: map[string]any{"app": app.ID}})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -455,6 +458,6 @@ func analyticsSection(ctx context.Context, env *tool.Env, appID string) analytic
 	if len(out.AccessTypes) == 0 {
 		return analyticsInsight{section: unavailable(analyticsMissingReason)}
 	}
-	out.Reason = "use analytics_report for impressions, conversion, sessions and crashes"
+	out.Reason = "use analytics_funnel_report (toolset insights) for impressions → page views → downloads, sessions and crashes"
 	return out
 }

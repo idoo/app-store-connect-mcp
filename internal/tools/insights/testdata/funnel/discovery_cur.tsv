@@ -1,0 +1,7 @@
+Date	App Apple Identifier	Event	Source Type	Territory	Device	Counts	Unique Counts
+2026-10-20	1000000001	Impression	App Store search	US	iPhone	1000	800
+2026-10-20	1000000001	Impression	App Store browse	US	iPhone	500	400
+2026-10-21	1000000001	Impression	App Store search	DE	iPad	300	250
+2026-10-20	1000000001	Page view	App Store search	US	iPhone	200	150
+2026-10-20	1000000001	Page view	App Store browse	US	iPhone	50	40
+2026-10-21	1000000001	Page view	App Store search	DE	iPad	30	25
