@@ -203,7 +203,7 @@
     "toolset": "metadata",
     "class": "W",
     "title": "Update app info and review details",
-    "description": "Set categories, age rating, App Review contact/demo/notes, content rights, copyright. Without confirm:true previews current→new. Listing text: metadata_plan.",
+    "description": "Set categories, age rating, accessibility labels, App Review contact/demo/notes, content rights, copyright. Without confirm:true previews current→new. Listing text: metadata_plan.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
@@ -214,6 +214,49 @@
     "input_schema": {
       "additionalProperties": false,
       "properties": {
+        "accessibility": {
+          "additionalProperties": false,
+          "description": "Accessibility Nutrition Labels",
+          "properties": {
+            "device_family": {
+              "enum": [
+                "IPHONE",
+                "IPAD",
+                "APPLE_TV",
+                "APPLE_WATCH",
+                "MAC",
+                "VISION"
+              ],
+              "type": "string"
+            },
+            "publish": {
+              "description": "make public (human approval)",
+              "type": "boolean"
+            },
+            "supports": {
+              "description": "all supported features; unlisted become false",
+              "items": {
+                "enum": [
+                  "voiceover",
+                  "voice_control",
+                  "larger_text",
+                  "dark_interface",
+                  "differentiate_without_color",
+                  "sufficient_contrast",
+                  "reduced_motion",
+                  "captions",
+                  "audio_descriptions"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "device_family"
+          ],
+          "type": "object"
+        },
         "age_rating": {
           "additionalProperties": true,
           "description": "ageRatingDeclaration attributes, e.g. {\"gambling\":false}",
@@ -1928,6 +1971,79 @@
     "default_toolset": true,
     "needs_team_key": false,
     "confirm": "human"
+  },
+  {
+    "name": "release_health_report",
+    "toolset": "insights",
+    "class": "R",
+    "title": "Release health vs previous version",
+    "description": "Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach; breach with an active phased release suggests pause.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Release health vs previous version"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "IOS",
+            "MAC_OS",
+            "TV_OS",
+            "VISION_OS"
+          ],
+          "type": "string"
+        },
+        "thresholds": {
+          "additionalProperties": false,
+          "properties": {
+            "crash_feedback_breach": {
+              "description": "TestFlight crash reports for breach; default 10",
+              "type": "integer"
+            },
+            "crash_feedback_watch": {
+              "description": "TestFlight crash reports for watch; default 3",
+              "type": "integer"
+            },
+            "rating_drop_breach": {
+              "description": "average rating drop for breach; default 0.8",
+              "type": "number"
+            },
+            "rating_drop_watch": {
+              "description": "average rating drop for watch; default 0.3",
+              "type": "number"
+            },
+            "regressions_breach": {
+              "description": "perf regressions for breach (1+ is watch); default 2",
+              "type": "integer"
+            },
+            "signature_breach_pct": {
+              "description": "weight growth % for breach; default 100",
+              "type": "number"
+            },
+            "signature_watch_pct": {
+              "description": "weight growth % per diagnostic type for watch; default 25",
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "version": {
+          "description": "version string; default live",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
   },
   {
     "name": "release_phased",

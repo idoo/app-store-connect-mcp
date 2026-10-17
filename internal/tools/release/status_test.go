@@ -3,6 +3,7 @@ package release
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -38,6 +39,11 @@ type fixture struct {
 	subtitle string
 	// macOS adds an editable MAC_OS 3.6 version next to the iOS one.
 	macOS bool
+	// a11y is "" (IPHONE and IPAD published), "none" or "draft" (IPHONE
+	// draft only).
+	a11y string
+	// age overrides age rating declaration attributes.
+	age map[string]any
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -191,6 +197,7 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 	if f.ageUnanswered {
 		age["messagingAndChat"] = nil
 	}
+	maps.Copy(age, f.age)
 	if f.korea != nil {
 		age["gracRatingClassificationNumber"] = nil
 		k.ASC.Handle("GET", "/v2/appAvailabilities/{id}/territoryAvailabilities", 200, doc(t, []jres{
@@ -236,6 +243,21 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 			jres{Type: "inAppPurchaseVersions", ID: "iv1", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}}))
 	}
 	k.ASC.Handle("GET", "/v1/apps/{id}/subscriptionGroups", 200, `{"data":[]}`)
+	decls := []jres{
+		{Type: "accessibilityDeclarations", ID: "ad1", Attrs: map[string]any{"deviceFamily": "IPHONE", "state": "PUBLISHED"}},
+		{Type: "accessibilityDeclarations", ID: "ad2", Attrs: map[string]any{"deviceFamily": "IPAD", "state": "PUBLISHED"}},
+	}
+	switch f.a11y {
+	case "none":
+		decls = nil
+	case "draft":
+		decls = []jres{{Type: "accessibilityDeclarations", ID: "ad1", Attrs: map[string]any{"deviceFamily": "IPHONE", "state": "DRAFT"}}}
+	}
+	if decls == nil {
+		k.ASC.Handle("GET", "/v1/apps/{id}/accessibilityDeclarations", 200, `{"data":[]}`)
+	} else {
+		k.ASC.Handle("GET", "/v1/apps/{id}/accessibilityDeclarations", 200, doc(t, decls))
+	}
 	return k
 }
 
@@ -349,8 +371,8 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 		t.Errorf("15-locale fixture not ready: %+v", out.Checks)
 	}
 	reqs := k.ASC.Requests()
-	if len(reqs) > 25 {
-		t.Fatalf("%d requests for 15 locales, want ≤ 25", len(reqs))
+	if len(reqs) > 26 {
+		t.Fatalf("%d requests for 15 locales, want ≤ 26", len(reqs))
 	}
 	for _, r := range reqs {
 		if r.Method != http.MethodGet {

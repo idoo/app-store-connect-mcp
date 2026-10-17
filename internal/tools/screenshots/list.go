@@ -62,7 +62,7 @@ type coverageOut struct {
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "screenshots_list", Toolset: tool.Screenshots, Class: tool.Read, Idempotent: true,
-		Title: "List screenshots and previews",
+		Title: "List screenshots and previews", UI: "screenshots",
 		Description: "Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, " +
 			"file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back " +
 			"to the primary). thumbnails:true attaches up to 4 small images.",

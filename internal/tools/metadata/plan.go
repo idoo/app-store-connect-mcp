@@ -10,7 +10,7 @@ import (
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "metadata_plan", Toolset: tool.Metadata, Class: tool.Read, Idempotent: true,
-		Title: "Plan store listing changes",
+		Title: "Plan store listing changes", UI: "metadata",
 		Description: "Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config " +
 			"against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay. version:live " +
 			"changes promotionalText only.",

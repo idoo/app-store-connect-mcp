@@ -50,9 +50,9 @@ func TestRegistryBudget(t *testing.T) {
 	}
 }
 
-// defaultHeadroom is reserved under the 40 KB default cap for schema growth
-// already planned (accessibility and age-rating fields).
-const defaultHeadroom = 700
+// defaultHeadroom is kept free under the 40 KB default cap so the next
+// default-tool schema change has to account for its size.
+const defaultHeadroom = 500
 
 // logLargestTools logs the top listed tools by marshalled size, largest first.
 func logLargestTools(t *testing.T, srv *mcp.Server, top int) {

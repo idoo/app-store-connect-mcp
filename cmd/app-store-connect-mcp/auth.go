@@ -97,8 +97,8 @@ func runAuth(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 			return usageErr(authUsage)
 		}
 		name := ""
-		if len(args) == 2 {
-			name = args[1]
+		if rest := args[1:]; len(rest) == 1 {
+			name = rest[0]
 		}
 		return authTest(ctx, name, stdout)
 	case "remove":

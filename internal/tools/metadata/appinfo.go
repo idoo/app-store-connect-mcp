@@ -59,17 +59,20 @@ type appinfoIn struct {
 	Review            *reviewIn       `json:"review,omitempty" jsonschema:"App Review contact, demo account and notes"`
 	ContentRights     string          `json:"content_rights,omitempty"`
 	Copyright         *string         `json:"copyright,omitempty" jsonschema:"e.g. 2026 Example AB"`
+	Accessibility     *a11yIn         `json:"accessibility,omitempty" jsonschema:"Accessibility Nutrition Labels"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "appinfo_update", Toolset: tool.Metadata, Class: tool.Write, Confirm: tool.ConfirmByFlag,
 		Title: "Update app info and review details",
-		Description: "Set categories, age rating, App Review contact/demo/notes, content rights, copyright. Without " +
-			"confirm:true previews current→new. Listing text: metadata_plan.",
+		Description: "Set categories, age rating, accessibility labels, App Review contact/demo/notes, content rights, " +
+			"copyright. Without confirm:true previews current→new. Listing text: metadata_plan.",
 		Enums: map[string][]any{
-			"platform":       platformEnum,
-			"content_rights": {"DOES_NOT_USE_THIRD_PARTY_CONTENT", "USES_THIRD_PARTY_CONTENT"},
+			"platform":                    platformEnum,
+			"content_rights":              {"DOES_NOT_USE_THIRD_PARTY_CONTENT", "USES_THIRD_PARTY_CONTENT"},
+			"accessibility.device_family": {"IPHONE", "IPAD", "APPLE_TV", "APPLE_WATCH", "MAC", "VISION"},
+			"accessibility.supports":      a11yFeatureEnum,
 		},
 	}, appinfoUpdate))
 }
@@ -87,6 +90,8 @@ type infoChange struct {
 type infoWrite struct {
 	label string
 	req   tool.Request
+	// then, when set, builds a follow-up request from the created id.
+	then func(createdID string) tool.Request
 }
 
 // infoItem reports one sent request.
@@ -113,8 +118,8 @@ const maskedSecret = "(hidden)" //nolint:gosec // a mask, not a credential
 func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Result, error) {
 	needInfo := in.PrimaryCategory != "" || in.SecondaryCategory != nil || len(in.AgeRating) > 0
 	needVersion := in.Review != nil || in.Copyright != nil
-	if !needInfo && !needVersion && in.ContentRights == "" {
-		return nil, fmt.Errorf("%w: nothing to update; pass categories, age_rating, review, content_rights or copyright", tool.ErrInvalidArgs)
+	if !needInfo && !needVersion && in.ContentRights == "" && in.Accessibility == nil {
+		return nil, fmt.Errorf("%w: nothing to update; pass categories, age_rating, review, content_rights, copyright or accessibility", tool.ErrInvalidArgs)
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
@@ -162,6 +167,14 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 				map[string]any{"contentRightsDeclaration": in.ContentRights}, nil)})
 		}
 	}
+	publish := false
+	if in.Accessibility != nil {
+		w, ch, pub, err := planAccessibility(ctx, env, app.ID, in.Accessibility)
+		if err != nil {
+			return nil, err
+		}
+		writes, out.Changes, publish = append(writes, w...), append(out.Changes, ch...), pub
+	}
 
 	if len(writes) == 0 {
 		out.Status = "unchanged"
@@ -176,12 +189,18 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 	if out.Version != nil {
 		affected = append(affected, out.Version.ID)
 	}
-	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
+	preview := tool.PlanPreview{
 		Summary:  fmt.Sprintf("update %d app info field(s) of %s", len(out.Changes), app.Name),
 		Current:  currentOf(out.Changes),
 		Intended: out.Changes,
 		Affected: affected,
-	})
+	}
+	gate := tool.RequireConfirm
+	if publish {
+		preview.Summary += "; publishes Accessibility Nutrition Labels on the public product page"
+		gate = tool.RequireHumanConfirm
+	}
+	wctx, res := gate(ctx, env, in.Confirm, preview)
 	if res != nil {
 		return res, nil
 	}
@@ -198,6 +217,21 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 			}
 		} else if first, ok := r.First(); ok {
 			it.ID = first.ID
+			if w.then != nil {
+				next := w.then(first.ID)
+				nit := infoItem{Target: w.label, ID: first.ID, Op: "publish", Outcome: "ok"}
+				if _, err := env.ASC.Do(wctx, next); err != nil {
+					nit.Outcome, nit.Error, nit.Code = "error", err.Error(), tool.BodyFor(err).Error
+					e := fmt.Errorf("%s publish: %w", w.label, err)
+					if errors.Is(err, tool.ErrOutcomeUnknown) {
+						unknown = append(unknown, e)
+					} else {
+						failed = append(failed, e)
+					}
+				}
+				out.Items = append(out.Items, it, nit)
+				continue
+			}
 		}
 		out.Items = append(out.Items, it)
 	}
@@ -207,7 +241,7 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 		return tool.OK(&out), nil
 	}
 	replan := tool.NextStep{Tool: "appinfo_update", Args: appinfoReplanArgs(in, app.ID)}
-	if nFailed == len(writes) {
+	if nFailed == len(out.Items) {
 		// Outcome-unknown items first, so the result reports outcome_unknown
 		// whenever any request may have been applied.
 		return tool.Batch(&out, 0, 0, append(unknown, failed...), replan), nil

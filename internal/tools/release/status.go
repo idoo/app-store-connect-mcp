@@ -295,7 +295,7 @@ func phaseFor(state string) string {
 	}
 }
 
-// loadStatusSnapshot reads everything the preflight needs: 8 GETs plus one
+// loadStatusSnapshot reads everything the preflight needs: 9 GETs plus one
 // per version localization (screenshot sets).
 func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, ref tool.VersionRef) (*statusSnapshot, error) {
 	s := &statusSnapshot{App: app, Platform: platform, VersionRef: ref, Screenshots: map[string][]screenshotSet{}, IAPs: map[string]string{}, Subscriptions: map[string]string{}}
@@ -366,6 +366,7 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 	} else if ok {
 		s.Submission = &sub
 	}
+	fetchAccessibility(ctx, env, s)
 	if err := loadProducts(ctx, env, s); err != nil {
 		return nil, err
 	}
@@ -393,6 +394,12 @@ func loadAppInfo(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 			break
 		}
 	}
+	for _, i := range resp.Data {
+		if i.Str("state") == "READY_FOR_DISTRIBUTION" && i.ID != info.ID {
+			s.LiveAgeTier = i.Str("appStoreAgeRating")
+		}
+	}
+	s.AgeTier = info.Str("appStoreAgeRating")
 	locIDs := info.RelIDs("appInfoLocalizations")
 	ageID := info.RelID("ageRatingDeclaration")
 	for _, r := range resp.Included {
