@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -269,7 +269,7 @@ func planAppInfo(ctx context.Context, env *tool.Env, appID string, platform tool
 			}
 		}
 		attrs := map[string]any{}
-		for _, k := range sortedKeys(in.AgeRating) {
+		for _, k := range slices.Sorted(maps.Keys(in.AgeRating)) {
 			if old, ok := cur.Attributes[k]; ok && reflect.DeepEqual(old, in.AgeRating[k]) {
 				continue
 			}
@@ -316,7 +316,7 @@ func planVersion(ctx context.Context, env *tool.Env, versionID string, in appinf
 	}
 	want := in.Review.attrs()
 	attrs := map[string]any{}
-	for _, k := range sortedKeys(want) {
+	for _, k := range slices.Sorted(maps.Keys(want)) {
 		old, had := detail.Attributes[k]
 		if s, isStr := want[k].(string); isStr {
 			if had && attrStr(old) == s {
@@ -419,13 +419,4 @@ func nullable(s string) any {
 		return nil
 	}
 	return s
-}
-
-func sortedKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

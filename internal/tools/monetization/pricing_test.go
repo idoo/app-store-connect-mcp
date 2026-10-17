@@ -81,6 +81,7 @@ func prcPlanThenApply(t *testing.T, k *tooltest.Kit, args string) (prcPlanResult
 		t.Fatal("pricing_plan mutated")
 	}
 	confirmed := strings.TrimSuffix(strings.TrimSpace(args), "}") + `,"plan_id":"` + plan.PlanID + `"}`
+	k.Elicit(true) // pricing_apply requires a human accept
 	return plan, tooltest.Call(t, s12aTool(t, "pricing_apply"), k.Env, confirmed)
 }
 
@@ -116,11 +117,65 @@ func TestPricingGetApp(t *testing.T) {
 	if out.BaseTerritory != "USA" || out.TerritoryCount != 3 || len(out.Prices) != 3 || out.Prices[0].Territory != "USA" {
 		t.Fatalf("out = %+v", out)
 	}
-	if out.Prices[0].CustomerPrice != "0.99" || out.Prices[0].Currency != "USD" || !out.Prices[0].Manual {
+	if out.Prices[0].Price != "0.99" || out.Prices[0].Currency != "USD" || !out.Prices[0].Manual || out.Prices[0].PointID != "" {
 		t.Fatalf("USA = %+v", out.Prices[0])
 	}
 	if a := out.Availability; a == nil || a.AvailableTerritories != 2 || a.UnavailableTerritories != 1 || !a.AvailableInNewTerritories {
 		t.Fatalf("availability = %+v", out.Availability)
+	}
+}
+
+// prcIAPCatalog registers two IAPs and their IAP schedules (base USA).
+func prcIAPCatalog(k *tooltest.Kit) {
+	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, s12aDoc(
+		`[{"type":"inAppPurchases","id":"6826637877","attributes":{"productId":"ivan.Sift.tip.bulle"}},
+		  {"type":"inAppPurchases","id":"6826637878","attributes":{"productId":"ivan.Sift.tip.big"}}]`))
+	k.ASC.Handle(http.MethodGet, "/v2/inAppPurchases/{id}/iapPriceSchedule", http.StatusOK,
+		`{"data":{"type":"inAppPurchasePriceSchedules","id":"is1","relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}},"included":[`+prcTerr("USA", "USD")+`]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePriceSchedules/{id}/manualPrices", http.StatusOK, s12aDoc(
+		`[`+prcRow("inAppPurchasePrices", "m1", "inAppPurchasePricePoint", "inAppPurchasePricePoints", "iUSA099", "USA", "", true)+`]`,
+		prcPt("inAppPurchasePricePoints", "iUSA099", "USA", "0.99"), prcTerr("USA", "USD")))
+	k.ASC.Handle(http.MethodGet, "/v1/inAppPurchasePriceSchedules/{id}/automaticPrices", http.StatusOK, s12aDoc(
+		`[`+prcRow("inAppPurchasePrices", "a1", "inAppPurchasePricePoint", "inAppPurchasePricePoints", "iGBR099", "GBR", "", false)+`]`,
+		prcPt("inAppPurchasePricePoints", "iGBR099", "GBR", "0.99"), prcTerr("GBR", "GBP")))
+}
+
+func TestPricingGetIAPByResourceID(t *testing.T) {
+	k := s12aKit(t)
+	prcIAPCatalog(k)
+	out := tooltest.Decode[pricingGetOut](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env,
+		`{"kind":"iap","product_id":"6826637877","for_plan":true}`)))
+	if out.Target.ID != "6826637877" || out.Target.ProductID != "ivan.Sift.tip.bulle" || out.TerritoryCount != 2 {
+		t.Fatalf("out = %+v", out)
+	}
+	if out.Prices[0].Territory != "USA" || out.Prices[0].PointID != "iUSA099" || out.Note != "" {
+		t.Fatalf("prices = %+v", out.Prices)
+	}
+}
+
+func TestPricingGetProducts(t *testing.T) {
+	k := s12aKit(t)
+	prcIAPCatalog(k)
+	out := tooltest.Decode[pricingGetProductsOut](t, tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env,
+		`{"kind":"iap","products":["6826637877","ivan.Sift.tip.big","nope"]}`)))
+	if len(out.Products) != 3 {
+		t.Fatalf("out = %+v", out)
+	}
+	for i, want := range []string{"ivan.Sift.tip.bulle", "ivan.Sift.tip.big"} {
+		p := out.Products[i]
+		if p.ProductID != want || p.Territory != "USA" || p.Price != "0.99" || p.Currency != "USD" || p.TerritoryCount != 2 || p.Error != "" {
+			t.Fatalf("product %d = %+v", i, p)
+		}
+	}
+	if out.Products[2].Error == "" || out.Products[2].Ref != "nope" {
+		t.Fatalf("unknown = %+v", out.Products[2])
+	}
+	if n := strings.Count(strings.Join(s12aLog(k.ASC.Requests()), "\n"), "inAppPurchasesV2"); n != 1 {
+		t.Fatalf("catalog listed %d times", n)
+	}
+	res := tooltest.Call(t, s12aTool(t, "pricing_get"), k.Env, `{"kind":"iap","products":["a","b","c","d","e","f","g","h","i","j","k"]}`)
+	if !res.IsError {
+		t.Fatal("11 products accepted")
 	}
 }
 

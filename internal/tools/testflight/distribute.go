@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -26,10 +27,11 @@ var submittedExternalStates = []string{
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_distribute", Toolset: tool.TestFlight, Class: tool.Write, Idempotent: true,
-		Title: "Distribute a TestFlight build",
+		Confirm: tool.ConfirmByFlag,
+		Title:   "Distribute a TestFlight build",
 		Description: "Give a build (default latest) to beta groups: answers export compliance, sets What to Test " +
-			"per locale (* = all), beta review contact and beta app info, adds it to groups, submits external " +
-			"beta review. Processing builds or unanswered compliance return without writing.",
+			"per locale (* = all), beta review info, adds it to groups, submits external beta review. External or " +
+			"public distribution and compliance answers need confirm:true and human approval.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, distribute))
 }
@@ -43,6 +45,7 @@ type distributeIn struct {
 	UsesNonExemptEncryption *bool                    `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer; required when the build has none (ask the user, never guess)"`
 	BetaReview              *betaReviewIn            `json:"beta_review,omitempty" jsonschema:"beta App Review contact, demo account and notes (used for external groups)"`
 	BetaAppLocalizations    map[string]betaAppInfoIn `json:"beta_app_localizations,omitempty" jsonschema:"beta app info by locale code; key * = every existing localization (else the primary locale)"`
+	tool.ConfirmFlag
 }
 
 type betaReviewIn struct {
@@ -311,7 +314,7 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 
 	// Reads the writes depend on, before any write.
 	primary := primaryLocale(ctx, env, app.ID)
-	wtt, wttLocales, err := localeTargets(wttAll, wttBy, sortedKeys(d.st.whatToTest), primary)
+	wtt, wttLocales, err := localeTargets(wttAll, wttBy, slices.Sorted(maps.Keys(d.st.whatToTest)), primary)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +325,7 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 		if infoCur, err = betaAppLocalizations(ctx, env, app.ID); err != nil {
 			return nil, err
 		}
-		if info, infoLocales, err = localeTargets(infoAll, infoBy, sortedKeys(infoCur), primary); err != nil {
+		if info, infoLocales, err = localeTargets(infoAll, infoBy, slices.Sorted(maps.Keys(infoCur)), primary); err != nil {
 			return nil, err
 		}
 	}
@@ -337,6 +340,15 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 		}
 	}
 
+	var reviewDiff map[string]any
+	if reviewAttrs != nil {
+		reviewDiff = changedAttrs(reviewDetail, reviewAttrs)
+	}
+	gctx, gres := d.gate(ctx, in, reviewDiff)
+	if gres != nil {
+		return gres, nil
+	}
+	ctx = gctx
 	if err := d.compliance(ctx, in.UsesNonExemptEncryption); err != nil {
 		return nil, err
 	}
@@ -365,6 +377,61 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 		res.Warn(fmt.Sprintf("%d step(s) failed; see error fields. Calling again retries only what is missing", d.out.Errors))
 	}
 	return res, nil
+}
+
+// gate lets additive internal distributions (and repeats that change nothing
+// public) through unconfirmed. It demands confirm:true and a human when the
+// call would add the build to an external (possibly public-link) group, submit
+// it for beta App Review, answer export compliance or overwrite beta review
+// details.
+func (d *distribution) gate(ctx context.Context, in distributeIn, review map[string]any) (context.Context, *tool.Result) {
+	answer := d.st.encryption == nil && in.UsesNonExemptEncryption != nil
+	var newExternal []string
+	external := false
+	for _, g := range d.groups {
+		if !g.Internal {
+			external = true
+			if !slices.Contains(d.st.groups, g.ID) {
+				newExternal = append(newExternal, g.Name)
+			}
+		}
+	}
+	submit := external && d.st.reviewState == "" && !slices.Contains(submittedExternalStates, d.st.externalState)
+	if len(newExternal) == 0 && !submit && !answer && len(review) == 0 {
+		return tool.Unconfirmed(ctx, d.env)
+	}
+	groups := make([]string, 0, len(d.groups))
+	for _, g := range d.groups {
+		kind := "internal"
+		if !g.Internal {
+			kind = "external (may have a public link)"
+		}
+		groups = append(groups, fmt.Sprintf("group %s (%s): %s", g.Name, g.ID, kind))
+	}
+	intended := map[string]any{"build": d.out.Build, "groups": groups}
+	var irreversible []string
+	if answer {
+		intended["uses_non_exempt_encryption"] = *in.UsesNonExemptEncryption
+		irreversible = append(irreversible, "the export compliance answer cannot be changed on this build once set")
+	}
+	if len(newExternal) > 0 {
+		irreversible = append(irreversible, "external testers (and anyone with the group's public link) get the build once Beta App Review approves it")
+	}
+	if submit {
+		intended["beta_review_submission"] = "submit build " + d.out.Build.Number + " to beta App Review"
+	}
+	if len(review) > 0 {
+		intended["beta_review_detail_overwrite"] = review
+	}
+	if len(in.WhatToTest) > 0 {
+		intended["what_to_test"] = in.WhatToTest
+	}
+	return tool.RequireHumanConfirm(ctx, d.env, in.Confirm, tool.PlanPreview{
+		Summary:      fmt.Sprintf("distribute build %s of %s to %d group(s)", d.out.Build.Number, d.app.ID, len(d.groups)),
+		Affected:     groups,
+		Intended:     intended,
+		Irreversible: irreversible,
+	})
 }
 
 // compliance answers export compliance when the build has no answer.
@@ -475,7 +542,7 @@ func (d *distribution) reviewDetail(ctx context.Context, cur tool.Resource, want
 		d.out.BetaReviewDetail = &reviewDetailOut{Outcome: outcomeUnchanged}
 		return
 	}
-	out := &reviewDetailOut{Outcome: outcomeUpdated, Fields: sortedKeys(diff)}
+	out := &reviewDetailOut{Outcome: outcomeUpdated, Fields: slices.Sorted(maps.Keys(diff))}
 	if _, err := write(ctx, d.env, http.MethodPatch, "/v1/betaAppReviewDetails/"+cur.ID,
 		patchBody("betaAppReviewDetails", cur.ID, diff)); err != nil {
 		out.Outcome, out.Error = outcomeError, errText(err)

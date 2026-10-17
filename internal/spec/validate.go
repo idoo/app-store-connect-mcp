@@ -3,6 +3,7 @@ package spec
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -75,7 +76,7 @@ func (v *validator) query(q url.Values) {
 			params[p.Name] = p
 		}
 	}
-	for _, key := range sortedKeys(q) {
+	for _, key := range slices.Sorted(maps.Keys(q)) {
 		p, ok := params[key]
 		if !ok {
 			if key == "cursor" && v.op.Method == http.MethodGet {
@@ -94,7 +95,7 @@ func (v *validator) query(q url.Values) {
 			}
 		}
 	}
-	for _, name := range sortedKeys(params) {
+	for _, name := range slices.Sorted(maps.Keys(params)) {
 		if params[name].Required && len(q[name]) == 0 {
 			v.addf("missing required query parameter %q", name)
 		}
@@ -209,7 +210,7 @@ func (v *validator) attributes(b *Body, raw any) {
 	if raw != nil && attrs == nil {
 		v.addf("data.attributes must be an object")
 	}
-	for _, name := range sortedKeys(attrs) {
+	for _, name := range slices.Sorted(maps.Keys(attrs)) {
 		a, ok := b.Attrs[name]
 		if !ok {
 			v.addf("unknown attribute data.attributes.%s for %s", name, b.Type)
@@ -219,7 +220,7 @@ func (v *validator) attributes(b *Body, raw any) {
 			v.attrEnum(name, a.Enum, attrs[name])
 		}
 	}
-	for _, name := range sortedKeys(b.Attrs) {
+	for _, name := range slices.Sorted(maps.Keys(b.Attrs)) {
 		if _, ok := attrs[name]; b.Attrs[name].Required && !ok {
 			v.addf("missing required attribute data.attributes.%s", name)
 		}
@@ -245,7 +246,7 @@ func (v *validator) relationships(b *Body, raw any) {
 	if raw != nil && rels == nil {
 		v.addf("data.relationships must be an object")
 	}
-	for _, name := range sortedKeys(rels) {
+	for _, name := range slices.Sorted(maps.Keys(rels)) {
 		r, ok := b.Rels[name]
 		if !ok {
 			v.addf("unknown relationship data.relationships.%s for %s", name, b.Type)
@@ -259,7 +260,7 @@ func (v *validator) relationships(b *Body, raw any) {
 		}
 		v.linkage("data.relationships."+name+".data", r.Type, r.Many, data)
 	}
-	for _, name := range sortedKeys(b.Rels) {
+	for _, name := range slices.Sorted(maps.Keys(b.Rels)) {
 		if _, ok := rels[name]; b.Rels[name].Required && !ok {
 			v.addf("missing required relationship data.relationships.%s (type %s)", name, b.Rels[name].Type)
 		}

@@ -74,10 +74,24 @@ type previewBody struct {
 //
 // Without confirm the result is a needs_confirm preview and nothing changes.
 func RequireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) (context.Context, *Result) {
+	return requireConfirm(ctx, env, confirm, p, false)
+}
+
+// RequireHumanConfirm is [RequireConfirm] with human approval forced for this
+// call, as if the tool declared [Meta.RequireHuman]: for branches of a
+// [ConfirmByFlag] tool that make things public or irreversible while its
+// other branches proceed via [Unconfirmed]. Without elicitation it is refused
+// unless the profile sets AllowNoElicit.
+func RequireHumanConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) (context.Context, *Result) {
+	return requireConfirm(ctx, env, confirm, p, true)
+}
+
+func requireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview, human bool) (context.Context, *Result) {
 	c, res := gateCall(ctx, env, ConfirmByFlag)
 	if res != nil {
 		return nil, res
 	}
+	human = human || c.meta.RequireHuman
 	if !confirm && !env.NoConfirm {
 		return nil, OK(previewBody{
 			Status:  ErrNeedsConfirm.Code,
@@ -85,7 +99,7 @@ func RequireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) 
 			Next:    "nothing was changed; call again with the same arguments and confirm:true to apply",
 		})
 	}
-	if res := approve(ctx, env, c, p); res != nil {
+	if res := approve(ctx, env, c, p, human); res != nil {
 		return nil, res
 	}
 	return withWrite(ctx), nil
@@ -124,7 +138,7 @@ func Preview(ctx context.Context, env *Env, planID string, args any, fingerprint
 	if err := env.Plans.Verify(ctx, planID, c.meta.Name, args, fingerprint); err != nil {
 		return nil, Fail(err)
 	}
-	if res := approve(ctx, env, c, p); res != nil {
+	if res := approve(ctx, env, c, p, c.meta.RequireHuman); res != nil {
 		return nil, res
 	}
 	return withWrite(ctx), nil
@@ -162,10 +176,10 @@ func gateCall(ctx context.Context, env *Env, modes ...ConfirmMode) (*call, *Resu
 }
 
 // approve asks the human with a framework-built prompt and records who
-// approved. RequireHuman tools need an accept unless the profile allows
-// proceeding without elicitation.
-func approve(ctx context.Context, env *Env, c *call, p PlanPreview) *Result {
-	if env.NoConfirm && !c.meta.RequireHuman {
+// approved. When human is set (RequireHuman tools and forced calls) an accept
+// is needed unless the profile allows proceeding without elicitation.
+func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) *Result {
+	if env.NoConfirm && !human {
 		c.approvedBy = ApprovedAgent
 		return nil
 	}
@@ -176,7 +190,7 @@ func approve(ctx context.Context, env *Env, c *call, p PlanPreview) *Result {
 	ok, err := env.Elicit(ctx, prompt)
 	switch {
 	case errors.Is(err, ErrElicitationUnavailable):
-		if c.meta.RequireHuman && !env.Profile.AllowNoElicit {
+		if human && !env.Profile.AllowNoElicit {
 			return Fail(fmt.Errorf("%s: %w", c.meta.Name, ErrHumanRequired))
 		}
 		c.approvedBy = ApprovedAgent

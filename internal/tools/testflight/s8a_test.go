@@ -167,9 +167,19 @@ func TestTestersAddIdempotent(t *testing.T) {
 	})
 	k.ASC.Handle(http.MethodPost, "/v1/betaGroups/{id}/relationships/betaTesters", http.StatusNoContent, "")
 
-	res := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_testers_add"), k.Env, `{"group":"External Testers","testers":[
+	args := `{"group":"External Testers","testers":[
 		{"email":"new@example.com","first_name":"Nia"},{"email":"existing@example.com"},{"email":"racy@example.com"},
-		{"email":"member@example.com"},{"email":"MEMBER@example.com"},{"email":"not-an-email"}]}`))
+		{"email":"member@example.com"},{"email":"MEMBER@example.com"},{"email":"not-an-email"}]`
+	// External group: a preview first, nothing invited.
+	prev := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_testers_add"), k.Env, args+`}`))
+	if !strings.Contains(tooltest.JSON(t, prev.Data), `"needs_confirm"`) || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("external add without confirm = %s, mutations %d", tooltest.JSON(t, prev.Data), len(k.ASC.Mutations()))
+	}
+	asked := k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_testers_add"), k.Env, args+`,"confirm":true}`))
+	if len(*asked) != 1 || res.Meta.ApprovedBy != tool.ApprovedHuman {
+		t.Fatalf("asked = %v, approved_by = %q", *asked, res.Meta.ApprovedBy)
+	}
 	tooltest.AssertGolden(t, "testdata/s8a/golden/testers_add.json", map[string]any{
 		"requests": k.ASC.Requests(), "data": res.Data,
 	})
@@ -283,6 +293,10 @@ func TestTestersRemove(t *testing.T) {
 	// App scope uses the app linkage and the apps filter.
 	k4 := s8aKit(t)
 	setup(k4)
+	// RequireHuman: the agent's confirm alone is not enough without elicitation.
+	tooltest.MustFail(t, tooltest.Call(t, s8aTool(t, "testflight_testers_remove"), k4.Env,
+		`{"scope":"app","testers":["ann@example.com"],"confirm":true}`), "human_approval_required")
+	k4.Elicit(true)
 	k4.ASC.Handle(http.MethodDelete, "/v1/apps/{id}/relationships/betaTesters", http.StatusNoContent, "")
 	tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_testers_remove"), k4.Env,
 		`{"scope":"app","testers":["ann@example.com"],"confirm":true}`))

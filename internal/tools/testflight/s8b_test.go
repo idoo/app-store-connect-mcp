@@ -108,10 +108,29 @@ func TestDistributeExternalWithReview(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/betaAppReviewSubmissions", http.StatusCreated,
 		`{"data":{"type":"betaAppReviewSubmissions","id":"sub1","attributes":{"betaReviewState":"WAITING_FOR_REVIEW"}}}`)
 
-	res := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_distribute"), k.Env, `{
+	args := `{
 		"groups":["External Testers"],"uses_non_exempt_encryption":false,"what_to_test":{"*":"New maps"},
 		"beta_review":{"contact_email":"ivan@example.com","contact_phone":"+46700000000","demo_account_required":false,"notes":"no login"},
-		"beta_app_localizations":{"en-US":{"feedback_email":"beta@example.com","description":"Hjul"}}}`))
+		"beta_app_localizations":{"en-US":{"feedback_email":"beta@example.com","description":"Hjul"}}`
+	// External + compliance + review submission: preview first, nothing written.
+	pk := s8bKit(t, s8bBuild{processing: "VALID", encryption: "null", external: "READY_FOR_BETA_SUBMISSION"})
+	pk.ASC.Handle(http.MethodGet, "/v1/apps/{id}", http.StatusOK, `{"data":{"type":"apps","id":"app1","attributes":{"primaryLocale":"en-US"}}}`)
+	pk.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaAppLocalizations", http.StatusOK, `{"data":[]}`)
+	pk.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaAppReviewDetail", http.StatusOK,
+		`{"data":{"type":"betaAppReviewDetails","id":"rd1","attributes":{}}}`)
+	pr := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_distribute"), pk.Env, args+`}`))
+	if pv := tooltest.JSON(t, pr.Data); !strings.Contains(pv, `"needs_confirm"`) || !strings.Contains(pv, "beta_review_submission") ||
+		!strings.Contains(pv, "uses_non_exempt_encryption") || len(pk.ASC.Mutations()) != 0 {
+		t.Fatalf("preview = %s, mutations %v", pv, paths(pk.ASC.Mutations()))
+	}
+	// Without elicitation the agent's confirm alone is refused.
+	tooltest.MustFail(t, tooltest.Call(t, s8aTool(t, "testflight_distribute"), pk.Env, args+`,"confirm":true}`), "human_approval_required")
+
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_distribute"), k.Env, args+`,"confirm":true}`))
+	if res.Meta.ApprovedBy != tool.ApprovedHuman {
+		t.Fatalf("approved_by = %q", res.Meta.ApprovedBy)
+	}
 	tooltest.AssertGolden(t, "testdata/s8b/golden/distribute_external.json", map[string]any{
 		"requests": k.ASC.Requests(), "data": res.Data,
 	})
@@ -234,6 +253,7 @@ func feedbackKit(t *testing.T) *tooltest.Kit {
 type feedbackDecoded struct {
 	Items   []map[string]any     `json:"items"`
 	Cursors map[string]cursorOut `json:"cursors"`
+	Empty   *emptyOut            `json:"empty"`
 }
 
 func TestFeedbackListImagesAndCursor(t *testing.T) {
@@ -297,6 +317,23 @@ func TestFeedbackListImagesAndCursor(t *testing.T) {
 	}
 }
 
+func TestFeedbackListEmptyHasContext(t *testing.T) {
+	k := feedbackKit(t)
+	res := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_feedback_list"), k.Env, `{"since":"2026-01-05"}`))
+	d := tooltest.Decode[feedbackDecoded](t, res)
+	if len(d.Items) != 0 || d.Empty == nil || d.Empty.Window != "after 2026-01-05" || d.Empty.Builds != "all builds" {
+		t.Fatalf("empty = %s", tooltest.JSON(t, d))
+	}
+	if d.Cursors["screenshots"].NewestAvailable != "2026-01-03T10:00:00Z" || d.Cursors["crashes"].NewestAvailable != "2026-01-02T12:00:00Z" ||
+		!strings.Contains(d.Empty.Note, "2026-01-03T10:00:00Z") {
+		t.Fatalf("newest available = %s", tooltest.JSON(t, d))
+	}
+	res = tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_feedback_list"), k.Env, `{"since":"2026-01-01"}`))
+	if d := tooltest.Decode[feedbackDecoded](t, res); d.Empty != nil {
+		t.Fatalf("non-empty result has empty context: %s", tooltest.JSON(t, d))
+	}
+}
+
 func TestBuildsExpire(t *testing.T) {
 	setup := func(k *tooltest.Kit) {
 		k.Resolve.Builds = map[tool.BuildRef]tool.Build{
@@ -324,6 +361,8 @@ func TestBuildsExpire(t *testing.T) {
 
 	k2 := s8aKit(t)
 	setup(k2)
+	tooltest.MustFail(t, tooltest.Call(t, s8aTool(t, "builds_expire"), k2.Env, strings.Replace(args, "{", `{"confirm":true,`, 1)), "human_approval_required")
+	k2.Elicit(true)
 	k2.ASC.Handle(http.MethodPatch, "/v1/builds/{id}", http.StatusOK, `{"data":{"type":"builds","id":"b0","attributes":{"expired":true}}}`)
 	res = tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "builds_expire"), k2.Env, strings.Replace(args, "{", `{"confirm":true,`, 1)))
 	if m := paths(k2.ASC.Mutations()); !slices.Equal(m, []string{"PATCH /v1/builds/b0", "PATCH /v1/builds/b1"}) {

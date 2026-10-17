@@ -232,6 +232,7 @@ func submitTwice(t *testing.T, k *tooltest.Kit, args string) *tool.Result {
 		t.Fatal(err)
 	}
 	a["plan_id"] = id
+	k.Elicit(true)
 	return tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, argsJSON(t, a)))
 }
 
@@ -305,6 +306,7 @@ func TestReleaseCancelInReview(t *testing.T) {
 	if prev["status"] != tool.ErrNeedsConfirm.Code || len(k.ASC.Mutations()) != 0 {
 		t.Fatalf("preview = %+v", prev)
 	}
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"Hjul","confirm":true}`))
 	out := tooltest.Decode[cancelOut](t, res)
 	if out.Action != "cancel" || out.Submission.State != "CANCELING" {
@@ -319,6 +321,7 @@ func TestReleaseCancelDraftDeletesItems(t *testing.T) {
 		jres{Type: "reviewSubmissionItems", ID: "it1", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}, Rels: map[string]any{"appStoreVersion": "appStoreVersions:v1"}},
 		jres{Type: "reviewSubmissionItems", ID: "it2", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}, Rels: map[string]any{"inAppPurchaseVersion": "inAppPurchaseVersions:iv1"}})
 	k.ASC.Handle("DELETE", "/v1/reviewSubmissionItems/{id}", 204, "")
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_cancel"), k.Env, `{"app":"Hjul","confirm":true}`))
 	out := tooltest.Decode[cancelOut](t, res)
 	if out.Action != "remove_draft_items" || !slices.Equal(out.Removed, []string{"it1", "it2"}) {

@@ -149,16 +149,6 @@ func changedAttrs(cur tool.Resource, want map[string]any) map[string]any {
 	return out
 }
 
-// sortedKeys returns the keys of m in order.
-func sortedKeys[T any](m map[string]T) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
-}
-
 // includedByID indexes included resources by type and id.
 func includedByID(rs []tool.Resource) map[string]tool.Resource {
 	m := make(map[string]tool.Resource, len(rs))

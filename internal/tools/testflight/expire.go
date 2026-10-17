@@ -17,8 +17,8 @@ const maxExpireBuilds = 50
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "builds_expire", Toolset: tool.TestFlight, Class: tool.Destructive,
-		Confirm: tool.ConfirmByFlag,
-		Title:   "Expire builds",
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
+		Title: "Expire builds",
 		Description: "Expire up to 50 builds (numbers, ids or latest) so testers can no longer install them. " +
 			"Without confirm:true returns a preview listing build numbers and versions; nothing changes. " +
 			"Already expired builds are skipped. Irreversible.",

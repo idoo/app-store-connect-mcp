@@ -32,10 +32,11 @@ func init() {
 	}, offersList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "offers_create", Toolset: tool.Monetization, Class: tool.Write, Idempotent: true,
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Create a subscription offer",
-		Description: "Create an intro (one per territory), promotional, win-back or offer-code offer on a subscription. " +
-			"Prices by customer price or price_point_id; equalize:true expands one price to all territories. An offer " +
-			"with the same name/identifier (intro: territory) is reported as already.",
+		Description: "Create an intro (per territory), promotional, win-back or offer-code offer on a subscription. " +
+			"Prices by customer price or price_point_id; equalize:true expands one price to all territories. Needs " +
+			"confirm:true and human approval; a same-name offer is already.",
 		Enums: map[string][]any{
 			"kind": {offerKindIntro, offerKindPromo, offerKindWinBack, offerKindCode}, "mode": offerModes,
 			"duration": offerDurations, "customer_eligibilities": offerEligibles, "offer_eligibility": offerStacking,
@@ -379,6 +380,7 @@ type offersCreateIn struct {
 	LapsedMaxMonths int    `json:"lapsed_max_months,omitempty" jsonschema:"win-back: maximum months since the subscription lapsed"`
 	WaitMonths      *int   `json:"wait_months,omitempty" jsonschema:"win-back: months between two win-back offers"`
 	Priority        string `json:"priority,omitempty" jsonschema:"win-back: default NORMAL"`
+	tool.ConfirmFlag
 }
 
 type offersCreateOut struct {
@@ -431,11 +433,15 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	if err != nil {
 		return nil, err
 	}
+	wctx, gres := offerConfirm(ctx, env, in, out.Subscription, attrs, prices)
+	if gres != nil {
+		return gres, nil
+	}
 	rels, included := offerInlinePrices(sp.priceType, prices)
 	doc := offerDoc(sp.typ, attrs, map[string]any{
 		"subscription": offerOne("subscriptions", sub.ID), "prices": rels,
 	}, included)
-	created, err := offerPostDoc(ctx, env, sp.path, sp.typ, doc)
+	created, err := offerPostDoc(wctx, env, sp.path, sp.typ, doc)
 	if err != nil {
 		if s12aConflict(err) {
 			if r, ok, rerr := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); rerr == nil && ok {
@@ -459,6 +465,27 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 		res.Then(tool.NextStep{Tool: "offer_codes_generate", Args: map[string]any{"offer_code_id": created.ID}})
 	}
 	return res, nil
+}
+
+// offerConfirm is the human gate of offers_create: offers change what
+// customers pay. The preview lists the offer terms and every territory price.
+func offerConfirm(ctx context.Context, env *tool.Env, in offersCreateIn, sub offerSub, attrs map[string]any, prices []offerPrice) (context.Context, *tool.Result) {
+	terr := make(map[string]string, len(prices))
+	for _, p := range prices {
+		v := p.CustomerPrice
+		switch {
+		case v == "" && p.PricePoint != "":
+			v = "price point " + p.PricePoint
+		case v == "":
+			v = "free"
+		}
+		terr[p.Territory] = v
+	}
+	return tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
+		Summary:  fmt.Sprintf("create a %s offer on subscription %s in %d territories", in.Kind, in.ProductID, len(prices)),
+		Affected: []string{"subscription " + in.ProductID + " (" + sub.ID + ")"},
+		Intended: map[string]any{"terms": attrs, "prices": terr},
+	})
 }
 
 // offerExisting finds an existing offer of kind matching an identity.
@@ -618,6 +645,10 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 	if rl := env.ASC.RateLimit(); rl.Known && rl.Remaining < len(todo)+tool.RateLimitWarnBelow {
 		return nil, fmt.Errorf("%w: %d intro offers need %d requests, %d remain this hour", tool.ErrRateLimited, len(todo), len(todo), rl.Remaining)
 	}
+	wctx, gres := offerConfirm(ctx, env, in, out.Subscription, attrs, todo)
+	if gres != nil {
+		return gres, nil
+	}
 	for _, p := range todo {
 		rels := map[string]any{
 			"subscription": offerOne("subscriptions", out.Subscription.ID),
@@ -626,7 +657,7 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		if p.PricePoint != "" {
 			rels["subscriptionPricePoint"] = offerOne("subscriptionPricePoints", p.PricePoint)
 		}
-		r, err := offerPostDoc(ctx, env, "/v1/subscriptionIntroductoryOffers", "subscriptionIntroductoryOffers",
+		r, err := offerPostDoc(wctx, env, "/v1/subscriptionIntroductoryOffers", "subscriptionIntroductoryOffers",
 			offerDoc("subscriptionIntroductoryOffers", attrs, rels, nil))
 		if err != nil {
 			if s12aConflict(err) {

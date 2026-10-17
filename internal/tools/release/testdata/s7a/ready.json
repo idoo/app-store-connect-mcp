@@ -11,7 +11,7 @@
     "version": {
       "id": "v1",
       "string": "1.4",
-      "appVersionState": "PREPARE_FOR_SUBMISSION",
+      "app_version_state": "PREPARE_FOR_SUBMISSION",
       "platform": "IOS",
       "release_type": "AFTER_APPROVAL",
       "exists": true
@@ -83,8 +83,8 @@
       },
       {
         "id": "app_privacy",
-        "status": "ok",
-        "detail": "not readable via the API; confirm App Privacy answers are current",
+        "status": "manual",
+        "detail": "not readable via the API; confirm App Privacy answers are current in App Store Connect",
         "fix_via": {
           "manual": "https://appstoreconnect.apple.com/apps/100/distribution/privacy"
         }
@@ -101,9 +101,11 @@
       }
     ],
     "summary": {
-      "ok": 14,
+      "ok": 13,
       "warn": 0,
       "block": 0,
+      "manual": 1,
+      "phase": "preparing",
       "ready": true
     },
     "app_store_connect": "https://appstoreconnect.apple.com/apps/100/distribution/ios/version/inflight"
