@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -68,8 +70,8 @@ func TestDoctorEmptyInlineKeyFails(t *testing.T) {
 }
 
 func TestDoctorStateDirLine(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores permissions")
+	if os.Geteuid() == 0 || runtime.GOOS == "windows" {
+		t.Skip("needs POSIX directory permissions as a non-root user")
 	}
 	home, _ := sandbox(t)
 	ro := filepath.Join(home, "ro")
@@ -100,7 +102,10 @@ func TestDoctorJSONGolden(t *testing.T) {
 	if err == nil {
 		t.Error("doctor --json without credentials should exit non-zero")
 	}
-	got := strings.ReplaceAll(out, home, "$HOME")
+	// JSON escapes Windows backslashes, so match the encoded home path too.
+	escHome, _ := json.Marshal(home)
+	got := strings.ReplaceAll(out, strings.Trim(string(escHome), `"`), "$HOME")
+	got = strings.ReplaceAll(got, home, "$HOME")
 	got = strings.ReplaceAll(got, buildVersion(), "$VERSION")
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
