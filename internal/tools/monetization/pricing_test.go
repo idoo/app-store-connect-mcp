@@ -80,7 +80,7 @@ func prcPlanThenApply(t *testing.T, k *tooltest.Kit, args string) (prcPlanResult
 	if len(k.ASC.Mutations()) != before {
 		t.Fatal("pricing_plan mutated")
 	}
-	confirmed := strings.TrimSuffix(strings.TrimSpace(args), "}") + `,"confirm":"` + plan.PlanID + `"}`
+	confirmed := strings.TrimSuffix(strings.TrimSpace(args), "}") + `,"plan_id":"` + plan.PlanID + `"}`
 	return plan, tooltest.Call(t, s12aTool(t, "pricing_apply"), k.Env, confirmed)
 }
 
@@ -289,7 +289,7 @@ func TestPricingRateLimitBlocks(t *testing.T) {
 	if out.Status != "blocked" || out.PlanID != "" || len(out.Blockers) != 1 || len(k.Plans.Proposed) != 0 {
 		t.Fatalf("out = %+v", out)
 	}
-	res := tooltest.Call(t, s12aTool(t, "pricing_apply"), k.Env, `{"kind":"subscription","product_id":"se.jvcr.hjul.pro","price":"9.99","confirm":"x"}`)
+	res := tooltest.Call(t, s12aTool(t, "pricing_apply"), k.Env, `{"kind":"subscription","product_id":"se.jvcr.hjul.pro","price":"9.99","plan_id":"x"}`)
 	tooltest.MustFail(t, res, "rate_limited")
 	if len(k.ASC.Mutations()) != 0 {
 		t.Fatal("mutated despite rate limit")

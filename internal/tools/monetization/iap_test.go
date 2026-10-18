@@ -189,7 +189,7 @@ func TestIAPUpsertConflictReadsBack(t *testing.T) {
 	if d["already"] != true {
 		t.Fatalf("want already, got %v", d)
 	}
-	prod := d["result"].(map[string]any)["product"].(map[string]any)
+	prod := d["product"].(map[string]any)
 	if prod["id"] != "iapR" || prod["action"] != s12aAlready {
 		t.Fatalf("product = %v", prod)
 	}

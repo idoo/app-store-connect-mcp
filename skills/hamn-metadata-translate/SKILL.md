@@ -30,7 +30,7 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
 4. Show the user the diff (new locales, changed fields, before → after for
    fields that already had text). Wait for approval or edits.
 5. `metadata_apply` with exactly the same `app`, `version` and `listing` plus
-   `confirm` set to the `plan_id`. Items reported `already` are unchanged.
+   `plan_id` set to the `plan_id` it returned. Items reported `already` are unchanged.
 6. Report per-locale results; for errors, show Apple's message and re-plan
    just those locales.
 

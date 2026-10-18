@@ -61,10 +61,11 @@ jobs:
       pull-requests: write
       actions: write
     env:
-      GH_TOKEN: ${{ github.token }}
       SPEC_SHA: ${{ needs.detect.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.x"
@@ -94,6 +95,8 @@ jobs:
         run: go test ./... 2>&1 | tee /tmp/test.log
         continue-on-error: true
       - name: Open PR
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           branch="spec-drift/${SPEC_SHA:0:12}"
           if gh pr list --head "$branch" --state open --json number --jq '.[0].number' | grep -q .; then
@@ -122,9 +125,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
-          rm -rf spec-zip
-          git add -A .
+          git add internal/spec docs
           git commit -m "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" --allow-empty
+          gh auth setup-git
           git push origin "$branch"
           gh pr create --base main --head "$branch" \
             --title "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" \

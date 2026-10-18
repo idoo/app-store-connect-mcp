@@ -44,10 +44,11 @@ func KeySource(ref config.KeyRef, getenv func(string) string) (auth.KeySource, e
 // NewClient loads the profile's key and builds the App Store Connect client.
 // idx may be nil (no spec-derived error hints or free-text wrapping).
 //
-// The client permits non-GET requests unless writesLocked: the session's write
-// mode (which can be switched on at runtime after the human approves) and the
-// write context set by tool.Call remain the gates for every mutation.
-func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spec.Index, writesLocked bool) (*asc.Client, error) {
+// The client's read-only guard starts at the profile's write mode; NewEnv
+// wires tool.Env.SetWrites to [asc.Client.SetAllowWrites] so a runtime
+// enable_writes (after the human approves) opens it. The write context set by
+// tool.Call remains a second gate for every mutation.
+func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spec.Index) (*asc.Client, error) {
 	p := r.Profile
 	if p.KeyID == "" {
 		return nil, ErrNoProfile
@@ -71,7 +72,7 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 	opts := asc.Options{
 		Tokens:      auth.NewTokenSource(signer),
 		MaxRetries:  r.MaxRetries,
-		AllowWrites: p.AllowWrites || !writesLocked,
+		AllowWrites: p.AllowWrites,
 		Clock:       tool.SystemClock{},
 		UserAgent:   "hamn/" + version,
 	}
@@ -112,11 +113,6 @@ func NewEnv(ctx context.Context, r *config.Resolved, version string) (*tool.Env,
 	if err != nil {
 		return nil, fmt.Errorf("app: cwd: %w", err)
 	}
-	home, _ := os.UserHomeDir()
-	locked, err := WritesLocked(cwd, home)
-	if err != nil {
-		return nil, err
-	}
 	idx, err := spec.Load()
 	if err != nil {
 		return nil, fmt.Errorf("app: spec: %w", err)
@@ -143,13 +139,14 @@ func NewEnv(ctx context.Context, r *config.Resolved, version string) (*tool.Env,
 		Version:   version,
 		NoConfirm: r.NoConfirm && r.CI,
 	}
-	client, err := NewClient(ctx, r, version, idx, locked)
+	client, err := NewClient(ctx, r, version, idx)
 	switch {
 	case errors.Is(err, ErrNoProfile):
 	case err != nil:
 		return nil, err
 	default:
 		env.ASC = client
+		env.SetWrites = client.SetAllowWrites
 		env.Resolve = resolve.New(client, resolve.Options{DefaultApp: r.Profile.DefaultApp, Clock: env.Clock})
 	}
 	return env, nil

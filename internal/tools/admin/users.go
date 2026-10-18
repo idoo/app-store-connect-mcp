@@ -37,7 +37,7 @@ func init() {
 		Enums: map[string][]any{"role": roles},
 	}, list))
 	tool.Register(tool.New(tool.Meta{
-		Name: "users_invite", Toolset: tool.Admin, Class: tool.Destructive, Confirm: tool.ConfirmByHuman,
+		Name: "users_invite", Toolset: tool.Admin, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Invite a team user",
 		Description: "Invite someone to the App Store Connect team with roles and either all apps or a list of apps. " +
 			"Apple emails them immediately. An existing user or pending invite is reported, not re-sent. " +
@@ -45,7 +45,7 @@ func init() {
 		Enums: map[string][]any{"roles": roles},
 	}, invite))
 	tool.Register(tool.New(tool.Meta{
-		Name: "users_remove", Toolset: tool.Admin, Class: tool.Destructive, Confirm: tool.ConfirmByHuman,
+		Name: "users_remove", Toolset: tool.Admin, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Remove a user or cancel an invitation",
 		Description: "Remove a team member (by email or user id) or cancel their pending invitation; access ends " +
 			"immediately. Needs confirm:true and human approval.",

@@ -43,7 +43,7 @@ func init() {
 		Confirm: tool.ConfirmByPlan,
 		Title:   "Prepare an App Store version",
 		Description: "Apply a release_status plan: create the version, attach the build, answer export compliance, set release type, opt in to phased release, set What's New on existing locales. " +
-			"Needs confirm=plan_id from release_status desired. Never waits for build processing.",
+			"Needs plan_id from release_status desired. Never waits for build processing.",
 		Enums: map[string][]any{
 			"platform":     {"IOS", "MAC_OS", "TV_OS", "VISION_OS"},
 			"release_type": {releaseManual, releaseAfterApproval, releaseScheduled},
@@ -91,9 +91,9 @@ func releasePrepare(ctx context.Context, env *tool.Env, in prepareIn) (*tool.Res
 	}
 	platform := app.Platform(in.Platform)
 	d := in.desired()
-	if in.Confirm == "" {
+	if in.PlanID == "" {
 		return nil, tool.WithNext(
-			fmt.Errorf("%w: release_prepare applies a plan from release_status; nothing was changed. Call release_status with these arguments as desired, review its plan, then call release_prepare again with confirm set to its prepare plan_id", tool.ErrNeedsConfirm),
+			fmt.Errorf("%w: release_prepare applies a plan from release_status; nothing was changed. Call release_status with these arguments as desired, review its plan, then call release_prepare again with plan_id set to its prepare plan_id", tool.ErrNeedsConfirm),
 			statusNext(app, platform, string(in.Version), desiredArgs(d)),
 		)
 	}
@@ -137,7 +137,7 @@ func releasePrepare(ctx context.Context, env *tool.Env, in prepareIn) (*tool.Res
 	if err != nil {
 		return nil, err
 	}
-	wctx, res := tool.Preview(ctx, env, in.Confirm, key, fp, tool.PlanPreview{
+	wctx, res := tool.Preview(ctx, env, in.PlanID, key, fp, tool.PlanPreview{
 		Summary:  fmt.Sprintf("prepare %s %s %s", app.Name, platform, versionString),
 		Current:  snap.State,
 		Intended: key,

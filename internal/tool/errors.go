@@ -121,9 +121,13 @@ type ErrorBody struct {
 }
 
 // NextStep is a machine-readable follow-up suggestion: call Tool with Args.
+// When Tool is hidden in the session (writes disabled) the server sets Locked
+// and Unlock, the call that makes Tool available.
 type NextStep struct {
-	Tool string         `json:"tool"`
-	Args map[string]any `json:"args,omitempty"`
+	Tool   string         `json:"tool"`
+	Args   map[string]any `json:"args,omitempty"`
+	Locked string         `json:"locked,omitempty"`
+	Unlock *NextStep      `json:"unlock,omitempty"`
 }
 
 // NextStepper is implemented by errors that suggest follow-up calls.

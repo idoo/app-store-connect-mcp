@@ -167,11 +167,11 @@ func TestDistributeRepeatIsAlready(t *testing.T) {
 	res := tooltest.MustOK(t, tooltest.Call(t, s8aTool(t, "testflight_distribute"), k.Env,
 		`{"groups":["g-ext"],"what_to_test":{"en":"New maps"},"uses_non_exempt_encryption":false}`))
 	d := tooltest.Decode[struct {
-		Already bool          `json:"already"`
-		Result  distributeOut `json:"result"`
+		Already bool `json:"already"`
+		distributeOut
 	}](t, res)
-	if !d.Already || len(k.ASC.Mutations()) != 0 || d.Result.Groups[0].Outcome != outcomeAlready ||
-		d.Result.BetaReview.Outcome != outcomeAlready || d.Result.WhatToTest[0].Outcome != outcomeUnchanged {
+	if !d.Already || len(k.ASC.Mutations()) != 0 || d.Groups[0].Outcome != outcomeAlready ||
+		d.BetaReview.Outcome != outcomeAlready || d.WhatToTest[0].Outcome != outcomeUnchanged {
 		t.Fatalf("result = %s, mutations %v", tooltest.JSON(t, res.Data), paths(k.ASC.Mutations()))
 	}
 

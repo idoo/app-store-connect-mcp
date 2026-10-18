@@ -194,7 +194,7 @@ func screenshotsPlan(ctx context.Context, env *tool.Env, in sourceIn) (*tool.Res
 	}
 	out.PlanID = id
 	args := p.nextArgs()
-	args["confirm"] = id
+	args["plan_id"] = id
 	return tool.OK(out).Then(tool.NextStep{Tool: "screenshots_sync", Args: args}), nil
 }
 

@@ -268,7 +268,7 @@
     "toolset": "core",
     "class": "R",
     "title": "App overview",
-    "description": "One app at a glance: live version per platform, in-flight versions with appVersionState, the 5 latest builds with processingState, and listing locales. Use before release or TestFlight work.",
+    "description": "One app at a glance: live version per platform, in-flight versions with app_version_state, the 5 latest builds with processing_state, and listing locales. Use before release or TestFlight work.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -294,7 +294,7 @@
     "toolset": "core",
     "class": "R",
     "title": "List apps",
-    "description": "List or find apps in the account. query fuzzy-matches name, bundle id, SKU or id (best first). Returns id, name, bundleId, sku, primaryLocale and platforms. Other tools accept any of these as the app argument.",
+    "description": "List or find apps in the account. query fuzzy-matches name, bundle id, SKU or id (best first). Returns id, name, bundle_id, sku, primary_locale, platforms and in_flight versions; state filters by in-flight state.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -320,6 +320,10 @@
         },
         "query": {
           "description": "fuzzy match on name, bundle id, SKU or id; empty lists every app",
+          "type": "string"
+        },
+        "state": {
+          "description": "only apps with an in-flight version in this appVersionState, e.g. WAITING_FOR_REVIEW",
           "type": "string"
         }
       },
@@ -433,7 +437,7 @@
     "toolset": "core",
     "class": "D",
     "title": "Call any API mutation",
-    "description": "POST/PATCH/DELETE any App Store Connect operation, validated against the spec. Deletes and destructive or public ops (review, release, money, people, webhooks) preview first and need confirm:true. Prefer workflow tools; reads go to asc_api_get.",
+    "description": "POST/PATCH/DELETE any App Store Connect operation, validated against the spec. Every call previews first and needs confirm:true plus human approval. Prefer workflow tools; reads go to asc_api_get.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": false,
@@ -481,7 +485,7 @@
     },
     "default_toolset": true,
     "needs_team_key": false,
-    "confirm": "flag"
+    "confirm": "human"
   },
   {
     "name": "asc_api_search",
@@ -498,6 +502,10 @@
     "input_schema": {
       "additionalProperties": false,
       "properties": {
+        "include_writes": {
+          "description": "in read-only mode, also list POST/PATCH/DELETE operations",
+          "type": "boolean"
+        },
         "limit": {
           "description": "max hits (default 10, max 50)",
           "type": "integer"
@@ -976,7 +984,7 @@
     "toolset": "metadata",
     "class": "W",
     "title": "Apply store listing changes",
-    "description": "Applies a metadata_plan: pass the same arguments plus confirm=plan_id. Refused if the listing changed since planning. Creates missing locales; deletes only locales in remove. For release notes only, use release_prepare.",
+    "description": "Applies a metadata_plan: pass the same arguments plus plan_id. Refused if the listing changed since planning. Creates missing locales; deletes only locales in remove. For release notes only, use release_prepare.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
@@ -991,10 +999,6 @@
           "description": "app id, bundle id, SKU or name; default: pinned app",
           "type": "string"
         },
-        "confirm": {
-          "description": "plan_id returned by the preview call with identical arguments",
-          "type": "string"
-        },
         "expo_config": {
           "description": "path to EAS Metadata store.config.json, inside the project",
           "type": "string"
@@ -1007,6 +1011,10 @@
           "additionalProperties": true,
           "description": "inline desired listing: {\"locales\":{\"en-US\":{\"description\":\"…\",\"keywords\":\"a,b\"}}}; keys name, subtitle, privacyPolicyUrl, privacyChoicesUrl, privacyPolicyText, description, keywords, marketingUrl, promotionalText, supportUrl, whatsNew; omitted keys stay unchanged, \"\" clears",
           "type": "object"
+        },
+        "plan_id": {
+          "description": "plan_id returned by the preview call with identical arguments",
+          "type": "string"
         },
         "platform": {
           "description": "default: inferred from the app",
@@ -1505,7 +1513,7 @@
     "toolset": "monetization",
     "class": "D",
     "title": "Apply a pricing plan",
-    "description": "Apply a pricing_plan: same arguments plus confirm=plan_id; refused if prices changed since. App/IAP: one schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.",
+    "description": "Apply a pricing_plan: same arguments plus plan_id; refused if prices changed since. App/IAP: one schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": false,
@@ -1561,10 +1569,6 @@
           "description": "territory of price; default current base or USA",
           "type": "string"
         },
-        "confirm": {
-          "description": "plan_id returned by the preview call with identical arguments",
-          "type": "string"
-        },
         "kind": {
           "description": "default app",
           "enum": [
@@ -1580,6 +1584,10 @@
           },
           "description": "territory → customer price, set manually instead of equalized",
           "type": "object"
+        },
+        "plan_id": {
+          "description": "plan_id returned by the preview call with identical arguments",
+          "type": "string"
         },
         "plan_type": {
           "description": "subscriptions only",
@@ -1903,7 +1911,7 @@
     "toolset": "release",
     "class": "W",
     "title": "Prepare an App Store version",
-    "description": "Apply a release_status plan: create the version, attach the build, answer export compliance, set release type, opt in to phased release, set What's New on existing locales. Needs confirm=plan_id from release_status desired. Never waits for build processing.",
+    "description": "Apply a release_status plan: create the version, attach the build, answer export compliance, set release type, opt in to phased release, set What's New on existing locales. Needs plan_id from release_status desired. Never waits for build processing.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -1922,10 +1930,6 @@
           "description": "build to attach: latest, latest-valid, build number or id",
           "type": "string"
         },
-        "confirm": {
-          "description": "plan_id returned by the preview call with identical arguments",
-          "type": "string"
-        },
         "earliest_release_date": {
           "description": "RFC 3339 time for SCHEDULED releases",
           "type": "string"
@@ -1936,6 +1940,10 @@
             "null",
             "boolean"
           ]
+        },
+        "plan_id": {
+          "description": "plan_id returned by the preview call with identical arguments",
+          "type": "string"
         },
         "platform": {
           "description": "default: the app's platform",
@@ -2161,7 +2169,7 @@
     "toolset": "release",
     "class": "D",
     "title": "Submit a version for App Review",
-    "description": "Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. First call previews and returns plan_id; call again with confirm.",
+    "description": "Submit the App Store version (plus IAPs/subscriptions) for App Review: reuses a draft submission, resubmits after rejection by resolving rejected items, reports already_submitted. First call previews and returns plan_id; call again with plan_id.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
@@ -2174,10 +2182,6 @@
       "properties": {
         "app": {
           "description": "app id, bundle id, SKU or name; default: pinned app",
-          "type": "string"
-        },
-        "confirm": {
-          "description": "plan_id returned by the preview call with identical arguments",
           "type": "string"
         },
         "include_iaps": {
@@ -2199,6 +2203,10 @@
             "null",
             "array"
           ]
+        },
+        "plan_id": {
+          "description": "plan_id returned by the preview call with identical arguments",
+          "type": "string"
         },
         "platform": {
           "description": "default: the app's platform",
@@ -2590,7 +2598,7 @@
     "toolset": "screenshots",
     "class": "W",
     "title": "Sync screenshots",
-    "description": "Applies a screenshots_plan: same arguments plus confirm=plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
+    "description": "Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
@@ -2603,10 +2611,6 @@
       "properties": {
         "app": {
           "description": "app id, bundle id, SKU or name; default: pinned app",
-          "type": "string"
-        },
-        "confirm": {
-          "description": "plan_id returned by the preview call with identical arguments",
           "type": "string"
         },
         "dir": {
@@ -2629,6 +2633,10 @@
             "replace",
             "add"
           ],
+          "type": "string"
+        },
+        "plan_id": {
+          "description": "plan_id returned by the preview call with identical arguments",
           "type": "string"
         },
         "platform": {

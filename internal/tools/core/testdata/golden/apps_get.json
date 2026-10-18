@@ -2,9 +2,9 @@
   "data": {
     "id": "100",
     "name": "Hjul",
-    "bundleId": "com.idoo.hjul",
+    "bundle_id": "com.idoo.hjul",
     "sku": "HJUL",
-    "primaryLocale": "en-US",
+    "primary_locale": "en-US",
     "platforms": [
       "IOS",
       "MAC_OS"
@@ -14,9 +14,9 @@
         "id": "v4",
         "platform": "IOS",
         "version": "2.1",
-        "appVersionState": "READY_FOR_DISTRIBUTION",
-        "releaseType": "MANUAL",
-        "createdDate": "2026-10-10T00:00:00-07:00"
+        "app_version_state": "READY_FOR_DISTRIBUTION",
+        "release_type": "MANUAL",
+        "created_date": "2026-10-10T00:00:00-07:00"
       }
     ],
     "in_flight": [
@@ -24,16 +24,16 @@
         "id": "v5",
         "platform": "IOS",
         "version": "3.0",
-        "appVersionState": "WAITING_FOR_REVIEW",
-        "releaseType": "MANUAL",
-        "createdDate": "2026-10-25T00:00:00-07:00"
+        "app_version_state": "WAITING_FOR_REVIEW",
+        "release_type": "MANUAL",
+        "created_date": "2026-10-25T00:00:00-07:00"
       },
       {
         "id": "m1",
         "platform": "MAC_OS",
         "version": "1.0",
-        "appVersionState": "PREPARE_FOR_SUBMISSION",
-        "createdDate": "2026-10-20T00:00:00-07:00"
+        "app_version_state": "PREPARE_FOR_SUBMISSION",
+        "created_date": "2026-10-20T00:00:00-07:00"
       }
     ],
     "latest_builds": [
@@ -42,20 +42,20 @@
         "build": "42",
         "version": "3.0",
         "platform": "IOS",
-        "processingState": "PROCESSING",
+        "processing_state": "PROCESSING",
         "expired": false,
-        "uploadedDate": "2026-10-24T10:00:00-07:00",
-        "minOsVersion": "18.0"
+        "uploaded_date": "2026-10-24T10:00:00-07:00",
+        "min_os_version": "18.0"
       },
       {
         "id": "b1",
         "build": "41",
         "version": "3.0",
         "platform": "IOS",
-        "processingState": "VALID",
+        "processing_state": "VALID",
         "expired": false,
-        "uploadedDate": "2026-10-20T10:00:00-07:00",
-        "minOsVersion": "18.0"
+        "uploaded_date": "2026-10-20T10:00:00-07:00",
+        "min_os_version": "18.0"
       }
     ],
     "locales": [

@@ -299,7 +299,7 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 		Device: r.Str("deviceModel"), OSVersion: r.Str("osVersion"), Locale: r.Str("locale"),
 		Tester: tool.Untrusted(r.Str("email")), Comment: tool.Untrusted(r.Str("comment")),
 	}
-	shots, _ := r.Attributes["screenshots"].([]any)
+	shots, _ := tool.Unwrap(r.Attributes["screenshots"]).([]any)
 	for _, s := range shots {
 		m, _ := s.(map[string]any)
 		f := func(k string) int { v, _ := m[k].(float64); return int(v) }
@@ -313,7 +313,7 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 
 // screenshotURLs returns the signed screenshot URLs of a feedback item.
 func screenshotURLs(r tool.Resource) []string {
-	shots, _ := r.Attributes["screenshots"].([]any)
+	shots, _ := tool.Unwrap(r.Attributes["screenshots"]).([]any)
 	urls := make([]string, 0, len(shots))
 	for _, s := range shots {
 		m, _ := s.(map[string]any)

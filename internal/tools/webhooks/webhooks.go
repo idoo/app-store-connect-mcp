@@ -40,7 +40,7 @@ func init() {
 			"deliveries with state and HTTP status. Use before webhooks_upsert/webhooks_delete. Full URLs and secrets are never shown.",
 	}, list))
 	tool.Register(tool.New(tool.Meta{
-		Name: "webhooks_upsert", Toolset: tool.Webhooks, Class: tool.Destructive, Confirm: tool.ConfirmByHuman,
+		Name: "webhooks_upsert", Toolset: tool.Webhooks, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Create or update a webhook",
 		Description: "Create a webhook (name, https url, event_types) or update one matched by id or name; optional ping. " +
 			"Without a secret one is generated and returned ONCE: store it, Apple never shows it again. " +
@@ -48,7 +48,7 @@ func init() {
 		Enums: map[string][]any{"event_types": eventTypes},
 	}, upsert))
 	tool.Register(tool.New(tool.Meta{
-		Name: "webhooks_delete", Toolset: tool.Webhooks, Class: tool.Destructive, Confirm: tool.ConfirmByHuman,
+		Name: "webhooks_delete", Toolset: tool.Webhooks, Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Delete a webhook",
 		Description: "Delete an app's webhook by id or name; deliveries stop immediately and the secret is lost. " +
 			"Needs confirm:true and human approval.",

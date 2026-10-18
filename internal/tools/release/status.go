@@ -244,7 +244,7 @@ func fetchScreenshotSets(ctx context.Context, env *tool.Env, locID string) ([]sc
 	shots := map[string]string{}
 	for _, r := range resp.Included {
 		if r.Type == "appScreenshots" {
-			st, _ := r.Attributes["assetDeliveryState"].(map[string]any)
+			st, _ := tool.Unwrap(r.Attributes["assetDeliveryState"]).(map[string]any)
 			state, _ := st["state"].(string)
 			shots[r.ID] = state
 		}
@@ -480,7 +480,7 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 		}
 		plan.PreparePlanID = id
 		a := maps.Clone(args)
-		a["confirm"] = id
+		a["plan_id"] = id
 		next = append(next, tool.NextStep{Tool: "release_prepare", Args: a})
 	} else {
 		plan.Notes = append(plan.Notes, "nothing to prepare")
@@ -501,7 +501,7 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 		}
 		plan.SubmitPlanID = id
 		next = append(next, tool.NextStep{Tool: "release_submit", Args: map[string]any{
-			"app": s.App.ID, "platform": string(s.Platform), "version": versionString, "confirm": id,
+			"app": s.App.ID, "platform": string(s.Platform), "version": versionString, "plan_id": id,
 		}})
 		plan.Notes = append(plan.Notes, "run release_prepare first; release_submit's plan assumes its changes, and fix every block check before submitting")
 	}

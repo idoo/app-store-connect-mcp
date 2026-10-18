@@ -192,9 +192,10 @@ func s12aConflict(err error) bool {
 }
 
 // s12aSame reports whether a remote attribute equals the wanted value
-// (compared as JSON so 1 and 1.0 match).
+// (compared as JSON so 1 and 1.0 match). Text the client wrapped as
+// [tool.Untrusted] is compared unwrapped.
 func s12aSame(remote, want any) bool {
-	a, err1 := json.Marshal(remote)
+	a, err1 := json.Marshal(tool.Unwrap(remote))
 	b, err2 := json.Marshal(want)
 	return err1 == nil && err2 == nil && string(a) == string(b)
 }

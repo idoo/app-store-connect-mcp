@@ -10,7 +10,7 @@ package release
 //
 //	key, err := prepareArgsKey(app, platform, versionString, buildID, in.releaseDesired)
 //	fp, err := releaseFingerprint(ctx, env, app.ID, platform, versionRef)
-//	wctx, res := tool.Preview(ctx, env, in.Confirm, key, fp, preview)
+//	wctx, res := tool.Preview(ctx, env, in.PlanID, key, fp, preview)
 //
 // and release_submit uses submitArgsKey + releaseFingerprint the same way.
 // Keys are built from RESOLVED values (app id, platform, version string,

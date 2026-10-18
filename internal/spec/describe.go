@@ -41,7 +41,22 @@ func (x *Index) describe(op *Op) *tool.OpDescription {
 		}
 		d.Params = append(d.Params, tool.Param{Name: p.Name, In: p.In, Required: p.Required, Type: paramType(p), Enum: p.Enum})
 	}
-	example := map[string]any{"method": op.Method, "path": op.Path}
+	example := map[string]any{"method": op.Method, "path": examplePath(op.Path)}
+	if op.Method == http.MethodGet {
+		// asc_api_get arguments: concrete fields/include/limit, not only the template.
+		delete(example, "method")
+		if f := d.Fields[targetType(op.ID)]; len(f) > 0 {
+			example["fields"] = map[string]string{targetType(op.ID): strings.Join(f[:min(len(f), exampleFields)], ",")}
+		}
+		if len(d.Includes) > 0 {
+			example["include"] = d.Includes[:1]
+		}
+		for _, p := range op.Params {
+			if p.Name == "limit" {
+				example["query"] = map[string]string{"limit": "50"}
+			}
+		}
+	}
 	if b := op.Body; b != nil {
 		d.BodyType = b.Type
 		d.BodySkeleton = skeleton(b)
@@ -50,6 +65,31 @@ func (x *Index) describe(op *Op) *tool.OpDescription {
 	}
 	d.Example = example
 	return d
+}
+
+// exampleFields caps the sparse fieldset shown in a GET example.
+const exampleFields = 3
+
+// examplePath fills each {param} of a template with a visible placeholder
+// ("/v1/apps/{id}/builds" → "/v1/apps/<id>/builds").
+func examplePath(template string) string {
+	segs := strings.Split(template, "/")
+	for i, s := range segs {
+		if isParam(s) {
+			segs[i] = "<" + strings.Trim(s, "{}") + ">"
+		}
+	}
+	return strings.Join(segs, "/")
+}
+
+// targetType is the resource type an operation returns, from Apple's
+// operation id naming (apps_appEvents_getToManyRelated → appEvents).
+func targetType(opID string) string {
+	parts := strings.Split(opID, "_")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2]
+	}
+	return parts[0]
 }
 
 func (x *Index) opSensitive(op *Op) bool {
