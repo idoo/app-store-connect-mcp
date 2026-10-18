@@ -490,7 +490,7 @@ func TestResourcesAndPrompts(t *testing.T) {
 		names = append(names, p.Name)
 	}
 	slices.Sort(names)
-	want := []string{"rejection_triage", "release_checklist", "reply_to_reviews", "testflight_feedback_digest", "translate_metadata", "weekly_report"}
+	want := []string{"daily_digest", "post_release_check", "rejection_triage", "release_checklist", "reply_to_reviews", "testflight_feedback_digest", "translate_metadata", "weekly_report"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("prompts = %v", names)
 	}
@@ -512,7 +512,7 @@ func TestResourcesAndPrompts(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, a := range p.Arguments {
-			optional := a.Name == "since" || a.Name == "platform"
+			optional := a.Name == "since" || a.Name == "platform" || (p.Name == "daily_digest" && a.Name == "app")
 			if a.Description == "" || optional == a.Required {
 				t.Errorf("prompt %s arg %s: desc=%q required=%v", p.Name, a.Name, a.Description, a.Required)
 			}

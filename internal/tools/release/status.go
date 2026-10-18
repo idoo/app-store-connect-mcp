@@ -27,7 +27,7 @@ type statusIn struct {
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_status", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
-		Title: "Release readiness and preflight",
+		Title: "Release readiness and preflight", UI: "release",
 		Description: "Preflight a version: build, compliance, What's New, listing limits, screenshots, review contact, age " +
 			"rating, pricing, products, open submission. desired returns plan_ids for " +
 			"release_prepare/release_submit.",

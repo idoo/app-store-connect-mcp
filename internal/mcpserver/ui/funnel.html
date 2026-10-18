@@ -1,33 +1,44 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>app-store-connect-mcp · Funnel</title>
-<style>:root{color-scheme:light dark;--color-background-primary:light-dark(#fff,#171717);--color-background-secondary:light-dark(#f5f5f5,#262626);--color-text-primary:light-dark(#171717,#fafafa);--color-text-secondary:light-dark(#525252,#a3a3a3);--color-border-primary:light-dark(#e5e5e5,#404040);--ok:light-dark(#15803d,#4ade80);--warn:light-dark(#b45309,#fbbf24);--block:light-dark(#b91c1c,#f87171);--accent:light-dark(#2563eb,#60a5fa);--font-sans:system-ui,-apple-system,sans-serif}
+<title>app-store-connect-mcp · Analytics funnel</title>
+<style>:root{color-scheme:light dark;--color-background-primary:light-dark(#fff,#171717);--color-background-secondary:light-dark(#f5f5f5,#262626);--color-text-primary:light-dark(#171717,#fafafa);--color-text-secondary:light-dark(#525252,#a3a3a3);--color-border-primary:light-dark(#e5e5e5,#404040);--ok:light-dark(#15803d,#4ade80);--warn:light-dark(#b45309,#fbbf24);--block:light-dark(#b91c1c,#f87171);--info:light-dark(#2563eb,#60a5fa);--accent:light-dark(#2563eb,#60a5fa);--font-sans:system-ui,-apple-system,sans-serif}
 *{box-sizing:border-box}body{margin:0;padding:12px;font:14px/1.4 var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)}
-h1{font-size:16px;margin:0 0 8px}h2{font-size:14px;margin:12px 0 6px}.muted{color:var(--color-text-secondary);font-size:12px}
+h1{font-size:16px;margin:0 0 4px}h2{font-size:14px;margin:14px 0 6px}.muted{color:var(--color-text-secondary);font-size:12px}
 .card{border:1px solid var(--color-border-primary);border-radius:8px;padding:8px 10px;margin:6px 0;background:var(--color-background-secondary)}
-.row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.grow{flex:1;min-width:0}
-.b{font-size:11px;font-weight:600;padding:1px 6px;border-radius:9px;border:1px solid currentColor}.ok{color:var(--ok)}.warn{color:var(--warn)}.block{color:var(--block)}
+.row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.grow{flex:1;min-width:0}.tiles{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.tile{border:1px solid var(--color-border-primary);border-radius:6px;padding:4px 6px;font-size:12px;background:var(--color-background-primary)}
+.b{font-size:11px;font-weight:600;padding:1px 6px;border-radius:9px;border:1px solid currentColor;white-space:nowrap}.ok{color:var(--ok)}.warn{color:var(--warn)}.block{color:var(--block)}.info,.manual{color:var(--info)}
 button{font:inherit;font-size:12px;padding:3px 10px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer}button.armed{background:var(--block);border-color:var(--block);color:#fff}
-pre,.txt{white-space:pre-wrap;word-break:break-word;margin:4px 0;font-size:12px}textarea{width:100%;font:inherit;font-size:13px;min-height:60px;background:var(--color-background-primary);color:var(--color-text-primary);border:1px solid var(--color-border-primary);border-radius:6px}
-del{color:var(--block)}ins{color:var(--ok);text-decoration:none}</style></head>
+pre,.txt{white-space:pre-wrap;word-break:break-word;margin:4px 0;font-size:12px}textarea{width:100%;font:inherit;font-size:13px;min-height:60px;margin-top:6px;background:var(--color-background-primary);color:var(--color-text-primary);border:1px solid var(--color-border-primary);border-radius:6px}
+.old{color:var(--block);text-decoration:line-through}.new{color:var(--ok)}.stars{color:var(--warn);letter-spacing:1px}
+table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:4px 6px;border-bottom:1px solid var(--color-border-primary);text-align:left}th{color:var(--color-text-secondary);font-weight:600}.num{text-align:right;font-variant-numeric:tabular-nums}</style></head>
 <body><main id="app"></main>
 <script>
 "use strict";const SCREEN="funnel";
-function list(o,...k){for(const n of k)if(o&&Array.isArray(o[n]))return o[n];return[]}
 
 const NS="http://www.w3.org/2000/svg";function sv(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
-function num(v){return typeof v==="number"?v:typeof v==="object"&&v?+(v.value??v.count??0):+v||0}
-function render(root,d){add(root,el("h1",null,"Funnel "+str(d.period||"")));if(d.status&&d.status!=="ok")add(root,el("p","warn",str(d.status)+" "+str(d.hint||d.message||"")));
- const steps=list(d,"steps","funnel","stages","rows");const max=Math.max(1,...steps.map(s=>Math.max(num(s.value??s.count??s.current),num(s.previous))));
- const W=420,H=28,svg=sv("svg",{viewBox:`0 0 ${W} ${steps.length*H+4}`,width:"100%",role:"img"});
- steps.forEach((s,i)=>{const v=num(s.value??s.count??s.current),p=num(s.previous),y=i*H+2;
-  svg.appendChild(sv("rect",{x:150,y:y+2,width:Math.max(1,(W-160)*p/max),height:22,fill:"currentColor",opacity:.15}));
-  svg.appendChild(sv("rect",{x:150,y:y+6,width:Math.max(1,(W-160)*v/max),height:14,fill:"var(--accent)"}));
-  const t=sv("text",{x:0,y:y+18,"font-size":12,fill:"currentColor"});t.textContent=str(s.name||s.step||s.label)+" "+v.toLocaleString();svg.appendChild(t)});
- if(steps.length)root.appendChild(svg);
- for(const s of steps){if(s.previous==null)continue;const v=num(s.value??s.count??s.current),p=num(s.previous),ch=p?((v-p)/p*100).toFixed(1)+"%":"n/a";
-  add(root,add(el("div","row"),el("span","grow",str(s.name||s.step||s.label)),el("span",v>=p?"ok":"block",(v>=p?"▲ ":"▼ ")+ch+" vs previous")))}
- if(d.coverage||d.lag)add(root,el("p","muted",str(d.coverage||"")+" "+str(d.lag||"")));if(!steps.length)add(root,el("pre",null,JSON.stringify(d,null,1)))}
+function n(v){return typeof v==="number"?v:+v||0}
+function render(root,d,inp,w){const app=d.app||{},cur=d.current||{};
+ add(root,el("h1",null,str(app.name)+" · "+str(d.question||"funnel")),el("p","muted",str(cur.from)+" → "+str(cur.to)+(d.previous?" vs "+str(d.previous.from)+" → "+str(d.previous.to):"")));
+ if(d.status!=="ok"){const c=el("div","card");add(c,add(el("div","row"),badge(d.status==="not_set_up"?"warn":"info"),el("strong","grow",d.status==="not_set_up"?"Analytics reports are not set up for this app":str(d.status))));
+  if(d.message)add(c,el("div","txt",str(d.message)));for(const a of arr(w.next))add(c,action(a,a.tool==="analytics_setup"?"Set up analytics reports":a.tool));add(root,c)}
+ if(d.status!=="ok")return;const f=d.funnel||{},c=f.current||{},p=f.previous||{},ch=f.change||{};
+ const ST=[["impressions","Impressions",null],["page_views","Product page views","page_view_rate"],["downloads","Downloads","download_rate"]];
+ const max=Math.max(1,...ST.map(([k])=>Math.max(n(c[k]),n(p[k])))),W=520,X=150,H=40;const svg=sv("svg",{viewBox:`0 0 ${W} ${ST.length*H+4}`,width:"100%",role:"img"});
+ ST.forEach(([k,label,rate],i)=>{const y=i*H+2,bw=W-X-10;
+  svg.appendChild(sv("rect",{x:X,y:y+2,width:Math.max(1,bw*n(p[k])/max),height:30,rx:3,fill:"currentColor",opacity:.13}));
+  svg.appendChild(sv("rect",{x:X,y:y+8,width:Math.max(1,bw*n(c[k])/max),height:18,rx:3,style:"fill:var(--accent)"}));
+  const t=sv("text",{x:0,y:y+16,"font-size":13,"font-weight":600,fill:"currentColor"});t.textContent=label;svg.appendChild(t);
+  const t2=sv("text",{x:0,y:y+31,"font-size":11,fill:"currentColor",opacity:.7});t2.textContent=n(c[k]).toLocaleString()+(rate&&c[rate]?" · "+str(c[rate])+" rate":"");svg.appendChild(t2)});
+ add(root,el("h2",null,"Funnel (bar: this period · shaded: previous)"));root.appendChild(svg);
+ const cmp=el("div","card");for(const[k,label,rate]of ST){const r=el("div","row");add(r,el("span","grow",label),el("span","muted",n(p[k]).toLocaleString()+" → "+n(c[k]).toLocaleString()+(rate&&p[rate]?" (rate "+str(p[rate])+" → "+str(c[rate])+")":"")));
+  if(ch[k]!=null)add(r,changeBadge(ch[k]));add(cmp,r)}add(root,el("h2",null,"Period comparison"),cmp);
+ const rows=arr(d.table);if(rows.length){const tb=el("table");const hr=el("tr");for(const h of[str(d.by||"segment"),"Impressions","Page views","Downloads","DL rate","Δ downloads"])add(hr,el("th",null,h));add(tb,hr);
+  for(const row of rows){const rc=row.current||{},tr=el("tr");add(tr,el("td",null,str(row.key||row.label)));for(const k of["impressions","page_views","downloads","download_rate"])add(tr,el("td","num",str(rc[k]||"0")));
+   const td=el("td","num");add(td,(row.change&&row.change.downloads!=null)?changeBadge(row.change.downloads):el("span","muted","new"));add(tr,td);add(tb,tr)}
+  add(root,el("h2",null,"By "+str(d.by)),tb)}
+ const cv=d.coverage;if(cv){const c2=el("div","card");add(c2,add(el("div","row"),badge(cv.days_present<cv.days_expected?"warn":"ok"),el("strong","grow",`Coverage: ${cv.days_present}/${cv.days_expected} days · latest ${str(cv.latest_day)} · lag ${cv.lag_days} d`)));
+  if(arr(cv.missing_days).length)add(c2,el("div","muted","Missing: "+arr(cv.missing_days).join(", ")));for(const x of arr(d.explanations))add(c2,el("div","muted","• "+str(x)));add(root,c2)}}
+function changeBadge(v){const s=str(v);return el("span","b "+(s.startsWith("-")?"block":"ok"),s)}
 
 
 const S={input:{},result:null};let seq=0;const pend={};
@@ -35,29 +46,41 @@ function rpc(method,params){return new Promise((res,rej)=>{const id=++seq;pend[i
 function note(method,params){parent.postMessage({jsonrpc:"2.0",method,params},"*")}
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=String(text);return e}
 function add(p,...c){for(const x of c)if(x)p.appendChild(x);return p}
-function str(v){if(v==null)return"";if(typeof v==="object")return v.text!=null?String(v.text):v.value!=null?String(v.value):JSON.stringify(v);return String(v)}
-function data(r){r=r||{};if(r.structuredContent)return r.structuredContent;try{const t=(r.content||[]).find(c=>c.type==="text");return t?JSON.parse(t.text):{}}catch(_){return{}}}
+function arr(v){return Array.isArray(v)?v:[]}
+/* str renders any value as plain text; {untrusted:"…"} is third-party text. */
+function str(v){if(v==null)return"";if(typeof v==="object")return v.untrusted!=null?String(v.untrusted):JSON.stringify(v);return String(v)}
+/* Results are {_meta, data, next}; wrap() is the envelope, data() the payload. */
+function wrap(r){r=r||{};if(r.structuredContent)return r.structuredContent;try{const t=(r.content||[]).find(c=>c.type==="text");return t?JSON.parse(t.text):{}}catch(_){return{}}}
+function data(r){const w=wrap(r);return w&&w.data!==undefined?w.data:w}
 function theme(c){if(!c)return;const root=document.documentElement;if(c.theme)root.style.colorScheme=c.theme;const v=c.styles&&c.styles.variables;if(v)for(const k in v)if(/^--[a-z0-9-]+$/.test(k)&&typeof v[k]==="string")root.style.setProperty(k,v[k])}
+function badge(st){return el("span","b "+st,st)}
+function errorView(d){const c=el("div","card");add(c,el("strong","block",str(d.error||"error")),el("div","txt",str(d.message)));if(d.hint)add(c,el("div","muted",str(d.hint)));return c}
+function show(out,r){const d=data(r);out.replaceChildren(r&&r.isError?errorView(d):el("pre",null,JSON.stringify(d.preview||d,null,1)))}
 /* Writes: the first click calls the tool without confirm/plan_id (the server
  only previews); a second explicit click sends the server's plan_id, or
  confirm:true for flag-confirmed tools. The server gates stay authoritative. */
 function writeButton(label,tool,args,out){const b=el("button",null,label);let plan=null;
  b.onclick=async()=>{b.disabled=true;try{
-  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args});const d=data(r);out.replaceChildren(el("pre",null,JSON.stringify(d.preview||d,null,1)));
-   if(r&&r.isError){b.textContent=label;return}plan=d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm "+label.toLowerCase();b.className="armed"}
-  else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";b.textContent=label;out.replaceChildren(el("pre",null,JSON.stringify(data(r),null,1)))}
+  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError)return;const d=data(r);
+   plan=d&&d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm: "+label;b.className="armed"}
+  else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";b.textContent=label;show(out,r)}
  }catch(e){out.replaceChildren(el("pre","block",str(e&&e.message||e)))}finally{b.disabled=false;resize()}};return b}
+/* action renders a {tool,args,locked,reason} suggestion as a button. */
+function action(a,label){const box=el("div"),out=el("div"),row=el("div","row");add(row,writeButton(label||a.tool,a.tool,a.args,out));
+ if(a.locked)add(row,el("span","muted",a.locked==="writes_disabled"?"writes are off: the host will be asked to enable them first":str(a.locked)));
+ if(a.reason)add(row,el("span","muted",str(a.reason)));return add(box,row,out)}
 function resize(){note("ui/notifications/size-changed",{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight})}
 function draw(){const root=document.getElementById("app");root.replaceChildren();if(!S.result){add(root,el("p","muted","Waiting for tool result…"));return resize()}
- if(S.result.isError){add(root,el("pre","block",JSON.stringify(data(S.result),null,1)));return resize()}
- try{render(root,data(S.result),S.input)}catch(e){add(root,el("pre","block",str(e)))}resize()}
+ const d=data(S.result);if(S.result.isError){add(root,errorView(d||{}));return resize()}
+ try{render(root,d||{},S.input||{},wrap(S.result))}catch(e){add(root,el("pre","block",str(e)),el("pre",null,JSON.stringify(d,null,1)))}resize()}
 addEventListener("message",e=>{if(e.source!==parent)return;const m=e.data;if(!m||m.jsonrpc!=="2.0")return;
  if(m.id!=null&&!m.method&&pend[m.id]){const p=pend[m.id];delete pend[m.id];m.error?p.rej(m.error):p.res(m.result);return}
  const p=m.params||{};if(m.method==="ui/notifications/tool-input"){S.input=p.arguments||{};draw()}
  else if(m.method==="ui/notifications/tool-result"){S.result=p;draw()}
  else if(m.method==="ui/notifications/host-context-changed")theme(p);
  else if(m.id!=null&&m.method==="ping")parent.postMessage({jsonrpc:"2.0",id:m.id,result:{}},"*")});
-rpc("ui/initialize",{appCapabilities:{availableDisplayModes:["inline"]},clientInfo:{name:"app-store-connect-mcp-"+SCREEN,version:"1"},protocolVersion:"2026-01-26"}).then(r=>{theme(r&&r.hostContext);note("ui/notifications/initialized",{});draw()}).catch(()=>draw());
+draw();
+rpc("ui/initialize",{appCapabilities:{availableDisplayModes:["inline"]},clientInfo:{name:"app-store-connect-mcp-"+SCREEN,version:"1"},protocolVersion:"2026-01-26"}).then(r=>{theme(r&&r.hostContext);note("ui/notifications/initialized",{})}).catch(()=>{});
 new ResizeObserver(resize).observe(document.body);
 
 </script></body></html>

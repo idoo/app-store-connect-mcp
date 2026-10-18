@@ -1,7 +1,9 @@
 package reports
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"math/big"
 	"slices"
@@ -24,16 +26,17 @@ const (
 )
 
 type salesIn struct {
-	Period     string      `json:"period,omitempty" jsonschema:"Pacific time; default yesterday"`
-	From       string      `json:"from,omitempty" jsonschema:"YYYY-MM-DD (with to)"`
-	To         string      `json:"to,omitempty" jsonschema:"YYYY-MM-DD, inclusive"`
-	Frequency  string      `json:"frequency,omitempty" jsonschema:"with report_date"`
-	ReportDate string      `json:"report_date,omitempty" jsonschema:"YYYY-MM-DD (WEEKLY: Sunday), MONTHLY YYYY-MM, YEARLY YYYY"`
-	ReportType string      `json:"report_type,omitempty" jsonschema:"default SALES"`
-	SubType    string      `json:"report_subtype,omitempty" jsonschema:"default: first valid"`
-	GroupBy    []string    `json:"group_by,omitempty"`
-	TopN       int         `json:"top_n,omitempty" jsonschema:"default 10, max 100"`
-	App        tool.AppRef `json:"app,omitempty" jsonschema:"default: all apps"`
+	Period      string      `json:"period,omitempty" jsonschema:"Pacific time; default yesterday"`
+	From        string      `json:"from,omitempty" jsonschema:"YYYY-MM-DD (with to)"`
+	To          string      `json:"to,omitempty" jsonschema:"YYYY-MM-DD, inclusive"`
+	Frequency   string      `json:"frequency,omitempty" jsonschema:"with report_date"`
+	ReportDate  string      `json:"report_date,omitempty" jsonschema:"YYYY-MM-DD (WEEKLY: Sunday), MONTHLY YYYY-MM, YEARLY YYYY"`
+	ReportType  string      `json:"report_type,omitempty" jsonschema:"default SALES"`
+	SubType     string      `json:"report_subtype,omitempty" jsonschema:"default: first valid"`
+	GroupBy     []string    `json:"group_by,omitempty"`
+	TopN        int         `json:"top_n,omitempty" jsonschema:"default 10, max 100"`
+	App         tool.AppRef `json:"app,omitempty" jsonschema:"default: all apps"`
+	IncludeRows bool        `json:"include_rows,omitempty"`
 }
 
 func init() {
@@ -54,8 +57,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "sales_report", Toolset: tool.Reports, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
 		Title: "Sales and Trends report",
-		Description: "Decoded Sales & Trends rows and aggregates (units by category, proceeds per currency, top-N) for a " +
-			"period, from/to or frequency+report_date. Overviews: insights_summary. Unpublished days: pending.",
+		Description: "Sales & Trends aggregates (units by category, proceeds per currency, top-N) for a period, " +
+			"from/to or frequency+report_date; include_rows: CSV link of all rows. Unpublished: pending.",
 		Enums: map[string][]any{
 			"period":         periods,
 			"frequency":      {"DAILY", "WEEKLY", "MONTHLY", "YEARLY"},
@@ -186,6 +189,8 @@ type salesOut struct {
 	// Columns/Sample are decoded rows for report types without aggregation.
 	Columns []string            `json:"columns,omitempty"`
 	Sample  []map[string]string `json:"sample,omitempty"`
+	// RowsResource is the URI of the CSV artifact with every decoded row.
+	RowsResource string `json:"rows_resource,omitempty"`
 }
 
 // subscriberSummary totals a SUBSCRIBER report.
@@ -275,6 +280,12 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 		if warn := rawRows(&out, tables, app); warn != "" {
 			res.Warn(warn)
 		}
+	}
+	if truncated := out.Rows > len(out.Sample) && out.Sample != nil; in.IncludeRows || truncated {
+		linkRows(ctx, env, res, fmt.Sprintf("sales-%s-%s-%s.csv", strings.ToLower(string(rt)), w.From, w.To), salesCSV(tables, app), func(uri string) {
+			out.RowsResource = uri
+			out.Sample = nil
+		})
 	}
 	if len(out.CoveredDays) == 0 && len(out.PendingDays) > 0 {
 		res.Warn("no report published yet for this range; Apple publishes daily reports the next day (Pacific time)")
@@ -411,32 +422,40 @@ func subscriptionRowMatches(appAppleID, appName string, app *tool.App) bool {
 	return strings.EqualFold(appName, app.Name)
 }
 
+// appRows returns t's rows matching app on an identifier column; ok is false
+// when the report has no such column (rows are then unfiltered).
+func appRows(t *reports.Table, app *tool.App) (rows [][]string, ok bool) {
+	if app == nil {
+		return t.Rows, true
+	}
+	cols := []int{}
+	for _, name := range []string{"Apple Identifier", "App Apple ID", "SKU", "Parent Identifier"} {
+		if i := t.Col(name); i >= 0 {
+			cols = append(cols, i)
+		}
+	}
+	if len(cols) == 0 {
+		return t.Rows, false
+	}
+	return slices.DeleteFunc(slices.Clone(t.Rows), func(r []string) bool {
+		for _, i := range cols {
+			if v := r[i]; v != "" && (v == app.ID || v == app.SKU) {
+				return false
+			}
+		}
+		return true
+	}), true
+}
+
 // rawRows returns decoded rows for report types without a typed summary,
 // filtered by app on an identifier column when the report has one.
 func rawRows(out *salesOut, tables []dayTable, app *tool.App) string {
 	warn := ""
 	for _, d := range tables {
 		t := d.Table
-		rows := t.Rows
-		if app != nil {
-			cols := []int{}
-			for _, name := range []string{"Apple Identifier", "App Apple ID", "SKU", "Parent Identifier"} {
-				if i := t.Col(name); i >= 0 {
-					cols = append(cols, i)
-				}
-			}
-			if len(cols) == 0 {
-				warn = "this report has no app identifier column; the app filter was not applied"
-			} else {
-				rows = slices.DeleteFunc(slices.Clone(rows), func(r []string) bool {
-					for _, i := range cols {
-						if v := r[i]; v != "" && (v == app.ID || v == app.SKU) {
-							return false
-						}
-					}
-					return true
-				})
-			}
+		rows, ok := appRows(t, app)
+		if !ok {
+			warn = "this report has no app identifier column; the app filter was not applied"
 		}
 		if out.Columns == nil {
 			out.Columns = t.Columns
@@ -447,4 +466,47 @@ func rawRows(out *salesOut, tables []dayTable, app *tool.App) string {
 		}
 	}
 	return warn
+}
+
+// salesCSV renders every covered day's decoded rows (app-filtered on an
+// identifier column when there is one) as CSV with a leading report_date
+// column. Days with a different header start a new header row.
+func salesCSV(tables []dayTable, app *tool.App) func() ([]byte, error) {
+	return func() ([]byte, error) {
+		var buf bytes.Buffer
+		w := csv.NewWriter(&buf)
+		var header []string
+		for _, d := range tables {
+			if !slices.Equal(header, d.Table.Columns) {
+				header = d.Table.Columns
+				if err := w.Write(append([]string{"report_date"}, header...)); err != nil {
+					return nil, err
+				}
+			}
+			rows, _ := appRows(d.Table, app)
+			for _, r := range rows {
+				if err := w.Write(append([]string{d.Date}, r...)); err != nil {
+					return nil, err
+				}
+			}
+		}
+		w.Flush()
+		return buf.Bytes(), w.Error()
+	}
+}
+
+// linkRows stores the rendered rows as a CSV artifact, links it and calls
+// linked with its URI. Without an artifact store the inline output stays as
+// it is and the result warns.
+func linkRows(ctx context.Context, env *tool.Env, res *tool.Result, name string, render func() ([]byte, error), linked func(uri string)) {
+	b, err := render()
+	if err == nil {
+		var l tool.Link
+		if l, err = env.Artifacts.Put(ctx, name, "text/csv", b); err == nil {
+			res.WithLink(l)
+			linked(l.URI)
+			return
+		}
+	}
+	res.Warn("decoded rows were not stored as a resource (" + err.Error() + "); the inline output is unchanged")
 }

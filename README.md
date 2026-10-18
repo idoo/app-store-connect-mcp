@@ -41,6 +41,8 @@ It can't break anything until you let it. Anything public, money-moving or hard 
 
 Everything you'd click in App Store Connect: releases, TestFlight, listings, screenshots, reviews, sales, IAPs, signing, Xcode Cloud. For everything else there's raw API access. [Tool list](docs/TOOLS.md), [config](docs/CONFIG.md).
 
+After launch it keeps watching, if you turn on the `insights` toolset: post-release health with a guard that pauses a phased rollout from cron, a "what's new since yesterday" digest, the analytics funnel, and keyword rank tracking. In Claude Desktop, claude.ai, ChatGPT and VS Code the release checklist, metadata diffs, screenshots, reviews and funnel show up as small interactive views.
+
 ## License
 
 [MIT](LICENSE) © Ivan Verevkin

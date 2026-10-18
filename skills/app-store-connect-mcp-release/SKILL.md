@@ -21,6 +21,7 @@ Refs: `app` is a name, bundle id, SKU or id (omit it if the project pins one). `
 8. Watch with `release_review_status`. The API doesn't show rejection details, so give the Resolution Center link, help fix, then submit again.
 9. Approved with a MANUAL release: ask, then `release_publish` (preview, then `confirm: true`). Phased: `release_phased` with `action` pause, resume or complete, preview first. `complete` ships to everyone at once, so the user approves it.
 10. To pull a submission back: ask, then `release_cancel` (preview, then `confirm: true`).
+11. After release, check health with `release_health_report` (enable the `insights` toolset if it's missing). On `breach` during a phased release, show the reasons and offer `release_phased` with `action: "pause"`; pause only after the user agrees.
 
 ## Rules
 

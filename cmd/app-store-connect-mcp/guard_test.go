@@ -33,6 +33,8 @@ const guardAppID = "1000000002"
 type guardScenario struct {
 	curHangs, prevHangs float64
 	phased              string
+	// noSignatures serves empty diagnostic signature lists.
+	noSignatures bool
 }
 
 func guardDoc(t *testing.T, data any, included ...map[string]any) string {
@@ -79,6 +81,9 @@ func installGuardScenario(t *testing.T, srv *asctest.Server, s guardScenario) {
 	srv.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions", http.StatusOK, guardDoc(t, versions, inc...))
 	srv.Handle(http.MethodGet, "/v1/appStoreVersions/{id}", http.StatusOK, guardDoc(t, versions[1], inc...))
 	sig := func(build string, w float64) string {
+		if s.noSignatures {
+			return guardDoc(t, []any{})
+		}
 		return guardDoc(t, []map[string]any{{
 			"type": "diagnosticSignatures", "id": build + "h",
 			"attributes": map[string]any{"diagnosticType": "HANGS", "signature": "main thread", "weight": w},
@@ -252,6 +257,21 @@ func TestGuardPauseOnlyInvariant(t *testing.T) {
 	}
 	if guardPauseAction != "pause" {
 		t.Fatalf("guard action %q", guardPauseAction)
+	}
+}
+
+func TestGuardUnknownExits5AndNeverPauses(t *testing.T) {
+	srv := asctest.New(t)
+	installGuardScenario(t, srv, guardScenario{phased: "ACTIVE", noSignatures: true})
+	code, out, _ := runGuardWith(t, srv, true, "--app", "Sail", "--pause-on-breach")
+	if code != exitUnknown || out["verdict"] != "unknown" {
+		t.Errorf("code %d verdict %v", code, out["verdict"])
+	}
+	if out["pause"] != nil {
+		t.Errorf("pause = %v", out["pause"])
+	}
+	if n := assertPauseOnly(t, srv); n != 0 {
+		t.Errorf("%d mutations, want 0", n)
 	}
 }
 

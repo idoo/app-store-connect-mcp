@@ -16,7 +16,7 @@ import (
 )
 
 const guardUsage = `usage: app-store-connect-mcp guard --app APP [--platform IOS] [--version V] [--pause-on-breach] [thresholds]
-  evaluates release health and prints JSON; exit 0 healthy, 3 watch, 4 breach, 1 error, 2 usage.
+  evaluates release health and prints JSON; exit 0 healthy, 3 watch, 4 breach, 5 unknown (no production data; never pauses), 1 error, 2 usage.
   --pause-on-breach only pauses an ACTIVE phased release and needs writes enabled
   (--allow-writes, ASC_MCP_ALLOW_WRITES=1 or profile allow_writes); it never resumes, completes or starts one.`
 
@@ -24,6 +24,9 @@ const guardUsage = `usage: app-store-connect-mcp guard --app APP [--platform IOS
 const (
 	exitWatch  = 3
 	exitBreach = 4
+	// exitUnknown means no production data was measured; the guard never
+	// pauses on it.
+	exitUnknown = 5
 )
 
 // guardExit is an exit status other than 0 that is not an error.
@@ -116,6 +119,8 @@ func runGuard(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return &guardExit{exitBreach}
 	case insights.VerdictWatch:
 		return &guardExit{exitWatch}
+	case insights.VerdictUnknown:
+		return &guardExit{exitUnknown}
 	}
 	return nil
 }

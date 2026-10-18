@@ -581,11 +581,13 @@ func TestMutationTransportErrorIsOutcomeUnknown(t *testing.T) {
 			}
 			_ = conn.Close()
 		}},
-		{name: "client timeout", timeout: 50 * time.Millisecond, handler: func(_ http.ResponseWriter, r *http.Request) {
+		// The deadline must leave time for the request to reach the server
+		// under a loaded -race run; the handler outlasts it.
+		{name: "client timeout", timeout: time.Second, handler: func(_ http.ResponseWriter, r *http.Request) {
 			_, _ = io.ReadAll(r.Body)
 			select {
 			case <-r.Context().Done():
-			case <-time.After(2 * time.Second):
+			case <-time.After(5 * time.Second):
 			}
 		}},
 	}

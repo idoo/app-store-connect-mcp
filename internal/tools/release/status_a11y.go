@@ -47,8 +47,10 @@ func a11yFamilies(s *statusSnapshot) []string {
 // checkAccessibility warns (never blocks) when a device family has no
 // published Accessibility Nutrition Label.
 func checkAccessibility(s *statusSnapshot) check {
+	// The web page has no documented deep link; Apple's help names the
+	// sidebar item "App Accessibility" on the app page.
 	c := check{ID: "accessibility_labels", Status: statusOK, FixVia: &fixVia{
-		Tool: "appinfo_update", Manual: ascURL(s.App.ID, "distribution/accessibility"),
+		Tool: "appinfo_update", Manual: ascBase + url.PathEscape(s.App.ID),
 	}}
 	if s.A11yErr != "" {
 		c.Status, c.Detail = statusWarn, "could not read accessibility declarations: "+s.A11yErr
@@ -73,7 +75,7 @@ func checkAccessibility(s *statusSnapshot) check {
 		}
 	}
 	if len(c.Items) > 0 {
-		c.Status, c.Detail = statusWarn, "Accessibility Nutrition Labels missing or unpublished (not required for submission yet)"
+		c.Status, c.Detail = statusWarn, "Accessibility Nutrition Labels missing or unpublished (not required for submission yet); on the web: App Accessibility in the app's sidebar"
 		return c
 	}
 	c.Detail, c.FixVia = "Accessibility Nutrition Labels published", nil

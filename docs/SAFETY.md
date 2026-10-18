@@ -27,7 +27,11 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 - `signing_capabilities_set` when it disables a capability;
 - `testflight_distribute` / `testflight_testers_add` when they touch an external group, submit for beta review, answer export compliance or overwrite review details.
 
-The form names the profile (account) and shows what will happen first and any stranger-written text last, fenced and labelled. It shows exactly what Apple will receive: nothing in it is redacted or truncated. Over 6000 bytes it refuses instead. Clients that can't show forms get `human_approval_required`, unless the profile sets `allow_no_elicit`. `--no-confirm` skips previews only with `ASC_MCP_CI=1`, and still not the human ones.
+The form names the profile (account) and shows what will happen first and any stranger-written text last, fenced and labelled. It shows exactly what Apple will receive: nothing in it is redacted or truncated. Over 6000 bytes it refuses instead. Clients that can't show forms get `human_approval_required`, unless the profile sets `allow_no_elicit`, or a pipeline sets both `ASC_MCP_CI=1` and `ASC_MCP_ALLOW_NO_ELICIT=1`. `--no-confirm` skips previews only with `ASC_MCP_CI=1`, and still not the human ones.
+
+**Interactive views add no new power.** MCP Apps views are only offered to clients that ask for them. They are static HTML in the client's sandbox with no network access, and render stranger text as text. A button in a view calls the same tool the model would: the first click gets the preview, the second sends the confirmation, and the approval form still appears.
+
+**The guard only pauses.** `app-store-connect-mcp guard --pause-on-breach` can pause an active phased release and nothing else, and only with writes on.
 
 **Stranger text is marked.** Reviews, tester data, feedback, crash logs, free-text attributes, store listings and raw `asc_api_request` bodies come back as `{"untrusted": ...}`. The server instructions tell the model that's data, not orders.
 

@@ -10,6 +10,10 @@ const (
 	VerdictHealthy = "healthy"
 	VerdictWatch   = "watch"
 	VerdictBreach  = "breach"
+	// VerdictUnknown means no production source (diagnostics, perf metrics,
+	// analytics crashes) has data; TestFlight and ratings alone never make a
+	// release healthy.
+	VerdictUnknown = "unknown"
 )
 
 // HealthThresholds are the watch/breach limits of a release health

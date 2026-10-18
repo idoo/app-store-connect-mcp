@@ -65,9 +65,9 @@
 |---|---|---|---|
 |[`analytics_report`](#analytics_report)|R|none|Without report: lists the app's analytics reports. With report: sums metrics of its newest segments by dimensions. Needs analytics_setup; data lags 24–48 h.|
 |[`analytics_setup`](#analytics_setup)|W|none|Ensures an ONGOING analytics report request exists (optional ONE_TIME_SNAPSHOT for history); existing ones report already. Data arrives 24–48 h later via analytics_report.|
-|[`finance_report`](#finance_report)|R|none|Decoded Payments & Financial report for one fiscal month: proceeds per currency and top products. No FX rates or USD totals: Apple shows those only on the web Payments page. Unpublished months: pending.|
+|[`finance_report`](#finance_report)|R|none|Payments & Financial report for one fiscal month: proceeds per currency, top products; include_rows: CSV link of all rows. No FX/USD totals (web Payments only). Unpublished months: pending.|
 |[`insights_summary`](#insights_summary)|R|none|Use first for "how is my app doing": units and proceeds vs the previous period, ratings, versions, TestFlight feedback, analytics status; each section ok or unavailable and why.|
-|[`sales_report`](#sales_report)|R|none|Decoded Sales & Trends rows and aggregates (units by category, proceeds per currency, top-N) for a period, from/to or frequency+report_date. Overviews: insights_summary. Unpublished days: pending.|
+|[`sales_report`](#sales_report)|R|none|Sales & Trends aggregates (units by category, proceeds per currency, top-N) for a period, from/to or frequency+report_date; include_rows: CSV link of all rows. Unpublished: pending.|
 
 ## screenshots ★
 
@@ -149,7 +149,7 @@
 |---|---|---|---|
 |[`analytics_funnel_report`](#analytics_funnel_report)|R|none|Impressions → page views → downloads with conversion by source/territory, sessions, crashes, installs vs deletions; vs previous period with coverage and lag. Never creates requests: not_set_up points at analytics_setup.|
 |[`digest_summary`](#digest_summary)|R|none|What changed per app since last asked: new reviews, TestFlight feedback, version and review submission state changes, builds, a sales day-vs-week delta. Oldest unseen first; mark_seen advances per-source watermarks. Review/feedback text is untrusted.|
-|[`release_health_report`](#release_health_report)|R|none|Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy\|watch\|breach; breach with an active phased release suggests pause.|
+|[`release_health_report`](#release_health_report)|R|none|Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy\|watch\|breach\|unknown (no production data); breach with an active phased release suggests pause.|
 
 ## Arguments
 
@@ -308,6 +308,7 @@
 |`app`|string|||name, bundle id, SKU or id; "all" = up to 10 apps|
 |`limit_per_source`|integer|||items per source (default 20, max 100)|
 |`mark_seen`|boolean|||advance each source to the last item returned|
+|`since_days`|integer|||days back for first-seen sources (default 7)|
 |`sources`|string[]||`reviews`, `feedback`, `states`, `builds`, `sales`|sources to read (default all)|
 
 ### doctor
@@ -318,6 +319,7 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
+|`include_rows`|boolean||||
 |`month`|string|||fiscal YYYY-MM; default newest closed|
 |`region`|string|||default ZZ, or Z1 for detail|
 |`report_type`|string||`FINANCIAL`, `FINANCE_DETAIL`|default FINANCIAL|
@@ -608,6 +610,7 @@ No arguments.
 |`frequency`|string||`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`|with report_date|
 |`from`|string|||YYYY-MM-DD (with to)|
 |`group_by`|string[]||`app`, `sku`, `country`, `date`, `product_category`, `currency`||
+|`include_rows`|boolean||||
 |`period`|string||`yesterday`, `this_week`, `last_week`, `last_7_days`, `month_to_date`, `last_month`|Pacific time; default yesterday|
 |`report_date`|string|||YYYY-MM-DD (WEEKLY: Sunday), MONTHLY YYYY-MM, YEARLY YYYY|
 |`report_subtype`|string||`SUMMARY`, `DETAILED`, `SUMMARY_INSTALL_TYPE`, `SUMMARY_TERRITORY`, `SUMMARY_CHANNEL`|default: first valid|
@@ -738,7 +741,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`action`|string||`track`, `report`, `untrack`|default track|
-|`app`|string|||App Store id (the ASC app id) or bundle id; default: pinned app|
+|`app`|string|||App Store id, bundle id, or name/SKU (needs ASC key); default: pinned app|
 |`countries`|string[]|||two-letter storefronts (≤10); default us, or all tracked|
 |`days`|integer|||report window in days 1-365; default 30|
 |`depth`|integer|||search depth 1-200; default 100|

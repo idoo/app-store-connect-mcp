@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
+### Added
+
+- New `insights` toolset (off by default):
+  - `release_health_report` compares hangs, launches, disk writes, performance regressions, TestFlight crashes and ratings with the previous version, and says `healthy`, `watch`, `breach`, or `unknown` while Apple has no production data yet.
+  - `digest_summary` shows what changed since you last asked: reviews, TestFlight feedback, review and build states, yesterday's sales.
+  - `analytics_funnel_report` answers impressions → product page views → downloads by source and territory, period over period.
+- `app-store-connect-mcp guard` runs the health check from cron or CI (exit 0 healthy, 3 watch, 4 breach, 5 no data yet) and with `--pause-on-breach` can pause an active phased rollout. It never resumes, completes or starts one.
+- `store_ranks_report` (store toolset) and `app-store-connect-mcp aso` track your search rank per keyword and country over time.
+- `release_status` warns about missing Accessibility Nutrition Labels and inconsistent 2025 age-rating answers. `appinfo_update` creates and publishes accessibility declarations, with your approval.
+- In clients with MCP Apps (Claude Desktop, claude.ai, ChatGPT, VS Code), release readiness, metadata plans, screenshots, reviews and the analytics funnel open as interactive views. Buttons go through the same preview and approval steps.
+- Large outputs (report rows, crash logs, oversized results) come back as resource links instead of filling the chat. Prompts and resources autocomplete apps, platforms and API operations.
+- New prompts `daily_digest` and `post_release_check`.
+- CI: `ASC_MCP_ALLOW_NO_ELICIT=1` together with `ASC_MCP_CI=1` lets a pipeline run approval-gated actions. `doctor --json` gives a machine-readable report. `serve --allow-origin` accepts remote browser clients.
+
+### Fixed
+
+- Batch actions (expire builds, distribute, register devices, capabilities, IAP and subscription upserts, review replies) report an error when nothing was applied, and mark items that may have been applied anyway.
+- A create that succeeded but returned a broken response is reported as "may have been applied", so the agent won't create it twice. A retried delete that already went through counts as done. Deletes and updates that run out of retries say the outcome is unknown.
+- `reviews_list mark_seen` with filters and `reviews_reply` no longer mark unseen reviews as seen.
+- Metadata plans for iOS+macOS apps work while the other platform is in review, refuse new languages that can't get a store name yet, and say which platform they cover. `translate_metadata` takes a `platform`.
+- Big inline metadata plans no longer echo the whole listing back. `screenshots_list` makes far fewer API calls. Two screenshot folders for the same locale are flagged.
+- A generated webhook secret is saved before the request, so it survives a lost response. A repo's `webhook-secrets/.gitignore` must actually ignore secrets.
+- Tester device fields are checked against their real shapes. App and group names in approval prompts are quoted.
+- The server starts when the state directory isn't writable; only cursors and history are unavailable, and `doctor` says so.
+- An empty `ASC_PRIVATE_KEY` is reported as a missing secret. The Dockerfile HTTP example works. HTTP-mode advice says to restart the server. The env-profile vendor hint names `ASC_VENDOR_NUMBER`. Oversized and non-JSON responses get their own error codes.
+
 ## [0.4.0] - 2026-10-26
 
 - A `.asc-mcp.toml` or `.hamn.toml` project pin now stops the server with the `mv` command to rename it, instead of being ignored.
@@ -66,7 +94,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.1.3...v0.2.0
