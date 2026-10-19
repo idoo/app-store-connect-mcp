@@ -32,15 +32,16 @@ func init() {
 	}, testersList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_testers_add", Toolset: tool.TestFlight, Class: tool.Write, Idempotent: true,
-		Title: "Add TestFlight testers",
+		Confirm: tool.ConfirmByFlag,
+		Title:   "Add TestFlight testers",
 		Description: "Add or invite up to 100 testers (email, optional names) to a beta group. New emails are invited; " +
-			"existing testers are linked; members are reported as already. Returns added|already|error per email. " +
-			"External groups need a beta-approved build before invites go out.",
+			"existing testers are linked; members are reported as already. External groups need confirm:true and " +
+			"human approval after a preview.",
 	}, testersAdd))
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_testers_remove", Toolset: tool.TestFlight, Class: tool.Destructive,
-		Confirm: tool.ConfirmByFlag,
-		Title:   "Remove TestFlight testers",
+		Confirm: tool.ConfirmByFlag, RequireHuman: true,
+		Title: "Remove TestFlight testers",
 		Description: "Remove up to 100 testers (emails or ids) from a beta group, or with scope app from every group " +
 			"and build of the app. Without confirm:true returns a preview listing the matched testers; nothing changes.",
 		Enums: map[string][]any{"scope": {"group", "app"}},
@@ -137,6 +138,7 @@ type testersAddIn struct {
 	App     tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
 	Group   tool.GroupRef `json:"group" jsonschema:"beta group name or id"`
 	Testers []testerInput `json:"testers" jsonschema:"1-100 testers to add or invite"`
+	tool.ConfirmFlag
 }
 
 // addOutcome is the per-email result of testflight_testers_add.
@@ -205,6 +207,12 @@ func testersAdd(ctx context.Context, env *tool.Env, in testersAddIn) (*tool.Resu
 		}
 		rest = append(rest, t)
 	}
+	if len(rest) > 0 {
+		var gres *tool.Result
+		if ctx, gres = gateTestersAdd(ctx, env, app, g, emails(rest), in.Confirm); gres != nil {
+			return gres, nil
+		}
+	}
 
 	// 2. Existing team testers are linked in one call; the others are created.
 	existing, err := findTesters(ctx, env, nil, "filter[email]", emails(rest))
@@ -247,6 +255,21 @@ func testersAdd(ctx context.Context, env *tool.Env, in testersAddIn) (*tool.Resu
 		res.Then(tool.NextStep{Tool: "testflight_testers_list", Args: map[string]any{"app": app.ID, "group": g.ID}})
 	}
 	return res, nil
+}
+
+// gateTestersAdd lets additions to internal groups (team members only)
+// through unconfirmed; inviting outsiders to an external group gives them the
+// app's beta builds, so it needs confirm:true and a human.
+func gateTestersAdd(ctx context.Context, env *tool.Env, app tool.App, g tool.Group, emails []string, confirm bool) (context.Context, *tool.Result) {
+	if g.Internal {
+		return tool.Unconfirmed(ctx, env)
+	}
+	return tool.RequireHumanConfirm(ctx, env, confirm, tool.PlanPreview{
+		Summary:      fmt.Sprintf("add or invite %d tester(s) to external beta group %s of app %s", len(emails), g.Name, app.ID),
+		Affected:     append([]string{"group " + g.Name + " (" + g.ID + "), external"}, emails...),
+		Intended:     map[string]any{"group": g, "invite": emails},
+		Irreversible: []string{"invitation emails are sent; invitees can install the group's approved builds"},
+	})
 }
 
 type setOutcome func(email, outcome, id, detail string)

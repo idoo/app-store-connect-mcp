@@ -7,7 +7,8 @@ import (
 	"github.com/idoo/hamn/internal/tool"
 )
 
-// Job 2: "push the latest build to my external testers" in at most 2 calls,
+// Job 2: "push the latest build to my external testers" in at most 2 calls
+// (an external group needs a preview, then a human-approved confirm),
 // referring to the app by name and the build as latest.
 func TestJobPushLatestBuildToExternalGroup(t *testing.T) {
 	k := newKit(t)
@@ -37,7 +38,11 @@ func TestJobPushLatestBuildToExternalGroup(t *testing.T) {
 		`{"data":{"type":"betaAppReviewSubmissions","id":"sub1","attributes":{"betaReviewState":"WAITING_FOR_REVIEW"}}}`)
 
 	j := connect(t, k)
-	j.call("testflight_distribute", `{"app":"Hjul","groups":["External Testers"],"what_to_test":{"*":"New maps"}}`)
+	prev := j.call("testflight_distribute", `{"app":"Hjul","groups":["External Testers"],"what_to_test":{"*":"New maps"}}`)
+	if prev["status"] != "needs_confirm" || len(asc.Mutations()) != 0 {
+		t.Fatalf("external distribute without confirm = %v, mutations %v", prev, asc.Mutations())
+	}
+	j.call("testflight_distribute", `{"app":"Hjul","groups":["External Testers"],"what_to_test":{"*":"New maps"},"confirm":true}`)
 	j.done(2)
 
 	added := false

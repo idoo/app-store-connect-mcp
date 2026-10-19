@@ -14,7 +14,19 @@ const (
 	statusOK    = "ok"
 	statusWarn  = "warn"
 	statusBlock = "block"
+	// statusInfo is a fact, not a problem: nothing to fix now.
+	statusInfo = "info"
+	// statusManual is a check hamn cannot read via the API; a human must
+	// confirm it in App Store Connect (fix_via.manual is the deep link).
+	statusManual = "manual"
 )
+
+// lockedStates are AppVersionState values of a submitted-but-unreleased
+// version: its build and metadata cannot change.
+var lockedStates = []string{"WAITING_FOR_REVIEW", "IN_REVIEW", "ACCEPTED", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_DISTRIBUTION"}
+
+// versionScopedChecks cannot change while the version is with App Review.
+var versionScopedChecks = []string{"build", "export_compliance", "whats_new", "listing", "screenshots", "review_detail"}
 
 // fixVia says how a check is fixed: a hamn tool, or manually at a URL.
 type fixVia struct {
@@ -49,6 +61,12 @@ type statusSnapshot struct {
 	// Version is nil when the requested version does not exist.
 	Version    *versionDetail
 	VersionRef tool.VersionRef
+	// InFlight is the newest locked (submitted, unreleased) version of the
+	// platform, from the app's included versions; nil when none.
+	InFlight *tool.Resource
+	// KoreaAvailable reports South Korea availability; nil when unknown
+	// (only read when a Korea-only age rating question is unanswered).
+	KoreaAvailable *bool
 	// AppInfoLocs are the editable appInfo localizations (name, subtitle, privacy URL).
 	AppInfoLocs []tool.Resource
 	AgeRating   *tool.Resource
@@ -77,31 +95,58 @@ func runChecks(s *statusSnapshot) []check {
 	if s.Version != nil {
 		out = append(out, checkPhased(s))
 	}
+	if st := s.lockedState(); st != "" {
+		for i, c := range out {
+			if slices.Contains(versionScopedChecks, c.ID) && (c.Status == statusWarn || c.Status == statusBlock) {
+				out[i].Status, out[i].FixVia = statusInfo, nil
+				out[i].Detail = "locked while " + st + ": " + c.Detail
+			}
+		}
+	}
 	return out
+}
+
+// lockedState returns the state of the inspected version when it is
+// submitted but unreleased, else "".
+func (s *statusSnapshot) lockedState() string {
+	if s.Version == nil {
+		return ""
+	}
+	if st := s.Version.Version.Str("appVersionState"); slices.Contains(lockedStates, st) {
+		return st
+	}
+	return ""
 }
 
 func checkVersion(s *statusSnapshot) check {
 	c := check{ID: "version"}
 	if s.Version == nil {
-		c.Status = statusBlock
-		if concreteVersion(s.VersionRef) {
+		switch {
+		case concreteVersion(s.VersionRef):
+			c.Status, c.FixVia = statusBlock, fixTool("release_prepare")
 			c.Detail = fmt.Sprintf("version %s does not exist for %s", s.VersionRef, s.Platform)
-		} else {
-			c.Detail = fmt.Sprintf("no editable %s version; pass a version string to create one", s.Platform)
+		case s.InFlight != nil:
+			c.Status = statusInfo
+			c.Detail = fmt.Sprintf("no editable %s version: %s is %s (in flight); release_review_status tracks it", s.Platform, s.InFlight.Str("versionString"), s.InFlight.Str("appVersionState"))
+		default:
+			c.Status, c.FixVia = statusBlock, fixTool("release_prepare")
+			c.Detail = fmt.Sprintf("no %s version in preparation or in flight; release_prepare with a version string creates one", s.Platform)
 		}
-		c.FixVia = fixTool("release_prepare")
 		return c
 	}
 	state := s.Version.Version.Str("appVersionState")
 	c.Detail = fmt.Sprintf("%s %s is %s", s.Platform, s.Version.Version.Str("versionString"), state)
 	switch state {
 	case "WAITING_FOR_REVIEW", "IN_REVIEW":
-		c.Status, c.FixVia = statusWarn, fixTool("release_review_status")
-		c.Detail += "; already submitted (cancel with release_cancel to edit)"
+		c.Status = statusInfo
+		c.Detail += "; submitted, waiting for Apple (release_review_status tracks it)"
 	case "PENDING_DEVELOPER_RELEASE":
 		c.Status, c.FixVia = statusOK, fixTool("release_publish")
 		c.Detail += "; approved, waiting for release_publish"
-	case "READY_FOR_DISTRIBUTION", "PROCESSING_FOR_DISTRIBUTION", "PENDING_APPLE_RELEASE":
+	case "ACCEPTED", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_DISTRIBUTION":
+		c.Status = statusInfo
+		c.Detail += "; approved, Apple is releasing it"
+	case "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION", "DEVELOPER_REMOVED_FROM_SALE", "REMOVED_FROM_SALE":
 		c.Status = statusWarn
 		c.Detail += "; already released, create a new version to ship changes"
 	default:
@@ -183,6 +228,9 @@ func limitIssue(locale string, f applemeta.Field, v string) string {
 
 func checkListing(s *statusSnapshot) check {
 	c := check{ID: "listing", Status: statusOK, FixVia: fixTool("metadata_plan")}
+	// stored lists over-limit keywords Apple already accepted: hamn refuses to
+	// write such a value, but the stored one is not a submit blocker.
+	var stored []string
 	for _, l := range s.Version.localizations() {
 		loc := l.Str("locale")
 		for _, req := range []struct{ attr, label string }{{"description", "description"}, {"keywords", "keywords"}, {"supportUrl", "support URL"}} {
@@ -191,7 +239,12 @@ func checkListing(s *statusSnapshot) check {
 			}
 		}
 		for f, attr := range map[applemeta.Field]string{applemeta.FieldKeywords: "keywords", applemeta.FieldPromotionalText: "promotionalText", applemeta.FieldDescription: "description", applemeta.FieldWhatsNew: "whatsNew"} {
-			if msg := limitIssue(loc, f, l.Str(attr)); msg != "" {
+			msg := limitIssue(loc, f, l.Str(attr))
+			switch {
+			case msg == "":
+			case f == applemeta.FieldKeywords:
+				stored = append(stored, msg+" (stored value accepted by Apple; hamn will not write values over the limit)")
+			default:
 				c.Items = append(c.Items, msg)
 			}
 		}
@@ -210,10 +263,15 @@ func checkListing(s *statusSnapshot) check {
 			c.Items = append(c.Items, loc+": privacy policy URL missing")
 		}
 	}
+	blocking := len(c.Items)
+	c.Items = append(c.Items, stored...)
 	slices.Sort(c.Items)
-	if len(c.Items) > 0 {
+	switch {
+	case blocking > 0:
 		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d listing problem(s)", len(c.Items))
-	} else {
+	case len(stored) > 0:
+		c.Status, c.Detail = statusWarn, "stored keywords exceed the documented 100-byte limit; Apple accepted them"
+	default:
 		c.Detail, c.FixVia = "every locale has the required fields within limits", nil
 	}
 	return c
@@ -310,23 +368,59 @@ func checkReviewDetail(s *statusSnapshot) check {
 // ageRatingOptional are declaration attributes that may legitimately be null.
 var ageRatingOptional = []string{"kidsAgeBand", "ageRatingOverride", "ageRatingOverrideV2", "koreaAgeRatingOverride", "developerAgeRatingInfoUrl"}
 
+// koreaOnly reports a declaration attribute required only for distribution
+// in South Korea (GRAC).
+func koreaOnly(attr string) bool {
+	a := strings.ToLower(attr)
+	return strings.HasPrefix(a, "grac") || strings.HasPrefix(a, "korea")
+}
+
+// unansweredKorea lists the unanswered Korea-only questions of decl.
+func unansweredKorea(decl *tool.Resource) []string {
+	var out []string
+	if decl == nil {
+		return nil
+	}
+	for k, v := range decl.Attributes {
+		if v == nil && koreaOnly(k) && !slices.Contains(ageRatingOptional, k) {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 func checkAgeRating(s *statusSnapshot) check {
 	c := check{ID: "age_rating", FixVia: fixTool("appinfo_update")}
 	if s.AgeRating == nil {
 		c.Status, c.Detail = statusBlock, "no age rating declaration"
 		return c
 	}
+	general := 0
 	for k, v := range s.AgeRating.Attributes {
 		if v == nil && !slices.Contains(ageRatingOptional, k) {
 			c.Items = append(c.Items, k)
+			if !koreaOnly(k) {
+				general++
+			}
 		}
 	}
 	slices.Sort(c.Items)
-	if len(c.Items) > 0 {
+	korea := len(c.Items) - general
+	switch {
+	case general > 0:
 		c.Status, c.Detail = statusWarn, fmt.Sprintf("%d age rating question(s) unanswered", len(c.Items))
-		return c
+	case korea > 0 && s.KoreaAvailable != nil && *s.KoreaAvailable:
+		c.Status, c.Detail = statusWarn, fmt.Sprintf("%d Korea (GRAC) age rating question(s) unanswered; required because the app is available in South Korea", korea)
+	case korea > 0:
+		c.Status, c.FixVia = statusInfo, nil
+		c.Detail = fmt.Sprintf("%d Korea (GRAC) age rating question(s) unanswered; needed only if the app is offered in South Korea, which it is not", korea)
+		if s.KoreaAvailable == nil {
+			c.Detail = fmt.Sprintf("%d Korea (GRAC) age rating question(s) unanswered; needed only for South Korea (availability unknown)", korea)
+		}
+	default:
+		c.Status, c.Detail, c.FixVia = statusOK, "age rating declaration complete", nil
 	}
-	c.Status, c.Detail, c.FixVia = statusOK, "age rating declaration complete", nil
 	return c
 }
 
@@ -388,10 +482,9 @@ func checkProducts(s *statusSnapshot) check {
 }
 
 func checkPrivacy(s *statusSnapshot) check {
-	c := check{ID: "app_privacy", Status: statusOK, FixVia: fixURL(ascURL(s.App.ID, "distribution/privacy"))}
-	c.Detail = "not readable via the API; confirm App Privacy answers are current"
+	c := check{ID: "app_privacy", Status: statusManual, FixVia: fixURL(ascURL(s.App.ID, "distribution/privacy"))}
+	c.Detail = "not readable via the API; confirm App Privacy answers are current in App Store Connect"
 	if !s.PriorReleased {
-		c.Status = statusWarn
 		c.Detail = "first release: App Privacy must be published in App Store Connect (not available via the API)"
 	}
 	return c
@@ -405,8 +498,15 @@ func checkSubmission(s *statusSnapshot) check {
 	st := s.Submission.Str("state")
 	switch st {
 	case "WAITING_FOR_REVIEW", "IN_REVIEW":
-		c.Status, c.FixVia = statusBlock, fixTool("release_cancel")
-		c.Detail = "a submission is " + st + "; cancel it before submitting again"
+		if s.Version == nil || s.lockedState() != "" {
+			c.Status = statusInfo
+			c.Detail = "a submission is " + st + ", waiting for Apple; release_review_status tracks it"
+			return c
+		}
+		// An editable version while another submission is with Apple: a new
+		// submission must wait. Cancelling is the user's call, never a fix.
+		c.Status, c.FixVia = statusBlock, fixTool("release_review_status")
+		c.Detail = "another submission is " + st + "; release_submit must wait until Apple finishes it (release_cancel would withdraw it and lose its queue place, only if the user asks)"
 	case "UNRESOLVED_ISSUES":
 		c.Status, c.FixVia = statusWarn, fixURL(ascURL(s.App.ID, "distribution/reviewsubmissions"))
 		c.Detail = "a submission has unresolved issues; fix them, then release_submit resubmits it"

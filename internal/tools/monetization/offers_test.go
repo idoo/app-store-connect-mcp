@@ -2,6 +2,8 @@ package monetization
 
 import (
 	"net/http"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/idoo/hamn/internal/tool/tooltest"
@@ -93,10 +95,20 @@ func TestOffersCreateIntroPerTerritory(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/subscriptionIntroductoryOffers", http.StatusCreated,
 		`{"data":{"type":"subscriptionIntroductoryOffers","id":"ioN","attributes":{"offerMode":"PAY_AS_YOU_GO"}}}`)
 
-	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
+	args := `{"product_id":"` + offerTestProduct + `",
 		"kind":"intro","mode":"PAY_AS_YOU_GO","duration":"ONE_MONTH","periods":3,"start_date":"2026-11-01",
-		"prices":[{"territory":"usa","price":"0.99"},{"territory":"GBR","price_point_id":"ppGBR"}]}`))
-	if got := k.ASC.RequestsTo(http.MethodGet, "/v1/subscriptions/{id}/pricePoints"); len(got) != 1 || got[0].Query.Get("filter[territory]") != "USA" {
+		"prices":[{"territory":"usa","price":"0.99"},{"territory":"GBR","price_point_id":"ppGBR"}]`
+	// Preview: terms and territory prices, nothing created.
+	prev := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, args+`}`))
+	if pv := tooltest.JSON(t, prev.Data); !strings.Contains(pv, `"needs_confirm"`) || !strings.Contains(pv, `"USA":"0.99"`) ||
+		!strings.Contains(pv, "PAY_AS_YOU_GO") || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("preview = %s", pv)
+	}
+	// RequireHuman: the agent's confirm alone is refused.
+	tooltest.MustFail(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, args+`,"confirm":true}`), "human_approval_required")
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, args+`,"confirm":true}`))
+	if got := k.ASC.RequestsTo(http.MethodGet, "/v1/subscriptions/{id}/pricePoints"); len(got) != 3 || got[0].Query.Get("filter[territory]") != "USA" {
 		t.Fatalf("price point lookup = %+v", got)
 	}
 	tooltest.AssertGolden(t, "testdata/s12c/intro_create_requests.json", offerMutationBodies(t, k))
@@ -128,9 +140,10 @@ func TestOffersCreatePromoBody(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/promotionalOffers", http.StatusOK, s12aDoc(`[]`))
 	k.ASC.Handle(http.MethodPost, "/v1/subscriptionPromotionalOffers", http.StatusCreated,
 		`{"data":{"type":"subscriptionPromotionalOffers","id":"poN","attributes":{"name":"Winter","offerCode":"winter","offerMode":"PAY_UP_FRONT"}}}`)
+	k.Elicit(true)
 	tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
 		"kind":"promotional","name":"Winter","identifier":"winter","mode":"PAY_UP_FRONT","duration":"THREE_MONTHS",
-		"prices":[{"territory":"USA","price_point_id":"ppUSA"}]}`))
+		"prices":[{"territory":"USA","price_point_id":"ppUSA"}],"confirm":true}`))
 	body := s12aBodyOf(t, k.ASC.Mutations()[0])
 	inc, _ := body["included"].([]any)
 	if len(inc) != 1 || s12aRel(t, k.ASC.Mutations()[0], "subscription") != "subscriptions/s1" {
@@ -148,10 +161,11 @@ func TestOffersCreateWinBackEqualized(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/winBackOffers", http.StatusCreated,
 		`{"data":{"type":"winBackOffers","id":"wbN","attributes":{"referenceName":"Come back","offerId":"comeback","priority":"NORMAL"}}}`)
 
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
 		"kind":"win_back","name":"Come back","identifier":"comeback","mode":"PAY_AS_YOU_GO","duration":"ONE_MONTH","periods":2,
 		"start_date":"2026-11-01","paid_months":3,"lapsed_min_months":1,"lapsed_max_months":6,
-		"prices":[{"territory":"USA","price_point_id":"ppUSA"}],"equalize":true}`))
+		"prices":[{"territory":"USA","price_point_id":"ppUSA"}],"equalize":true,"confirm":true}`))
 	tooltest.AssertGolden(t, "testdata/s12c/winback_create_requests.json", offerMutationBodies(t, k))
 	out := tooltest.Decode[offersCreateOut](t, res)
 	if out.Created != 1 || out.Territories != 3 || out.Offer == nil || out.Offer.ID != "wbN" {
@@ -169,10 +183,11 @@ func TestOffersCreateOfferCodeCampaignFreeTrial(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/subscriptionOfferCodes", http.StatusCreated,
 		`{"data":{"type":"subscriptionOfferCodes","id":"ocN","attributes":{"name":"Spring","active":true}}}`)
 
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
 		"kind":"offer_code","name":"Spring","mode":"FREE_TRIAL","duration":"ONE_MONTH",
 		"customer_eligibilities":["NEW","EXPIRED"],"offer_eligibility":"STACK_WITH_INTRO_OFFERS",
-		"prices":[{"territory":"USA"}],"equalize":true}`))
+		"prices":[{"territory":"USA"}],"equalize":true,"confirm":true}`))
 	tooltest.AssertGolden(t, "testdata/s12c/offer_code_create_requests.json", offerMutationBodies(t, k))
 	if len(res.Next) != 1 || res.Next[0].Tool != "offer_codes_generate" || res.Next[0].Args["offer_code_id"] != "ocN" {
 		t.Fatalf("next = %+v", res.Next)
@@ -209,12 +224,25 @@ func TestOfferCodesGenerateOneTimeWithValues(t *testing.T) {
 	}
 	k.ASC.HandleFixture(http.MethodGet, "/v1/subscriptionOfferCodeOneTimeUseCodes/{id}/values", tooltest.Fixture{Status: http.StatusOK, Body: []byte(csv)})
 
-	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offer_codes_generate"), k.Env,
-		`{"offer_code_id":"oc1","type":"one_time","number_of_codes":25,"expiration_date":"2026-12-31"}`))
+	args := `{"offer_code_id":"oc1","type":"one_time","number_of_codes":25,"expiration_date":"2026-12-31"`
+	prev := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offer_codes_generate"), k.Env, args+`}`))
+	if pv := tooltest.JSON(t, prev.Data); !strings.Contains(pv, `"needs_confirm"`) || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("preview = %s", pv)
+	}
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offer_codes_generate"), k.Env, args+`,"confirm":true}`))
 	tooltest.AssertGolden(t, "testdata/s12c/one_time_requests.json", offerMutationBodies(t, k))
 	out := tooltest.Decode[offerCodesResultOut](t, res)
-	if out.ID != "otN" || out.Count != 25 || len(out.Codes) != offerShowCodes || out.Codes[0] != "CODEAX9" || out.Sensitive == "" {
+	if out.ID != "otN" || out.Count != 25 || out.Sensitive == "" || out.File != filepath.Join(k.Files.Root, "offer-codes", "otN.csv") {
 		t.Fatalf("out = %+v", out)
+	}
+	// Code values go to the confined file, never to the agent.
+	if js := tooltest.JSON(t, res.Data); strings.Contains(js, "CODEAX9") {
+		t.Fatalf("result leaks code values: %s", js)
+	}
+	file, err := k.Files.ReadFile("offer-codes/otN.csv")
+	if err != nil || !strings.HasPrefix(string(file), "code\nCODEAX9\n") || strings.Count(string(file), "\n") != 26 {
+		t.Fatalf("codes file = %q, %v", file, err)
 	}
 	if got := k.ASC.RequestsTo(http.MethodGet, "/v1/subscriptionOfferCodeOneTimeUseCodes/{id}/values"); len(got) != 1 || got[0].Path != "/v1/subscriptionOfferCodeOneTimeUseCodes/otN/values" {
 		t.Fatalf("values requests = %+v", got)
@@ -240,11 +268,12 @@ func TestOfferCodesGenerateCustomCode(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/subscriptionOfferCodeCustomCodes", http.StatusCreated,
 		`{"data":{"type":"subscriptionOfferCodeCustomCodes","id":"ccN","attributes":{"customCode":"HJULSPRING","numberOfCodes":500,"active":true}}}`)
 
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, s12aTool(t, "offer_codes_generate"), k.Env, `{"product_id":"`+offerTestProduct+`",
-		"campaign":"Spring","type":"custom","custom_code":"HJULSPRING","number_of_codes":500,"expiration_date":"2027-03-31"}`))
+		"campaign":"Spring","type":"custom","custom_code":"HJULSPRING","number_of_codes":500,"expiration_date":"2027-03-31","confirm":true}`))
 	tooltest.AssertGolden(t, "testdata/s12c/custom_code_requests.json", offerMutationBodies(t, k))
 	out := tooltest.Decode[offerCodesResultOut](t, res)
-	if out.ID != "ccN" || out.OfferCodeID != "oc1" || out.CustomCode != "HJULSPRING" || len(out.Codes) != 0 {
+	if out.ID != "ccN" || out.OfferCodeID != "oc1" || out.CustomCode != "HJULSPRING" || out.File != "" {
 		t.Fatalf("out = %+v", out)
 	}
 }

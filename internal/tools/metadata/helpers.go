@@ -57,6 +57,8 @@ type target struct {
 	Version  tool.Version
 	// FirstVersion is true when the app has never had a live version.
 	FirstVersion bool
+	// FellBack is true when no version was editable and the live one was used.
+	FellBack bool
 }
 
 func (t *target) appOut() appOut {
@@ -79,6 +81,7 @@ func resolveTarget(ctx context.Context, env *tool.Env, appRef tool.AppRef, platf
 	var nf *tool.ErrNotFound
 	if err != nil && fallbackLive && (ref == "" || ref == tool.VersionEditable) && errors.As(err, &nf) {
 		v, err = env.Resolve.Version(ctx, app.ID, t.Platform, tool.VersionLive)
+		t.FellBack = err == nil
 	}
 	if err != nil {
 		return nil, err

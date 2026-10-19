@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"time"
@@ -21,13 +22,6 @@ var (
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "pricing_get", Toolset: tool.Monetization, Class: tool.Read, Idempotent: true,
-		Title: "Get current prices",
-		Description: "Current price schedule of an app, IAP or subscription: base territory, manual prices, prices in effect " +
-			"per territory (requested territories or top 20, with total count), scheduled changes; app availability summary.",
-		Enums: map[string][]any{"kind": prcKinds},
-	}, pricingGet))
-	tool.Register(tool.New(tool.Meta{
 		Name: "pricing_plan", Toolset: tool.Monetization, Class: tool.Read, Idempotent: true,
 		Title: "Plan a price or availability change",
 		Description: "Preview a price change (base price matched to Apple's price points, Apple equalization elsewhere, " +
@@ -36,84 +30,12 @@ func init() {
 		Enums: map[string][]any{"kind": prcKinds, "plan_type": prcPlanTypes},
 	}, pricingPlan))
 	tool.Register(tool.New(tool.Meta{
-		Name: "pricing_apply", Toolset: tool.Monetization, Class: tool.Destructive, Confirm: tool.ConfirmByPlan,
+		Name: "pricing_apply", Toolset: tool.Monetization, Class: tool.Destructive, Confirm: tool.ConfirmByPlan, RequireHuman: true,
 		Title: "Apply a pricing plan",
 		Description: "Apply a pricing_plan: same arguments plus plan_id; refused if prices changed since. App/IAP: one " +
 			"schedule POST; subscriptions: one POST per territory, resumable by re-running pricing_plan.",
 		Enums: map[string][]any{"kind": prcKinds, "plan_type": prcPlanTypes},
 	}, pricingApply))
-}
-
-// ---- pricing_get ----
-
-type pricingGetIn struct {
-	App         tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Kind        string      `json:"kind,omitempty" jsonschema:"default app"`
-	ProductID   string      `json:"product_id,omitempty" jsonschema:"product id of the IAP or subscription"`
-	Territories []string    `json:"territories,omitempty" jsonschema:"3-letter codes to show; default: top 20 storefronts"`
-}
-
-type pricingGetOut struct {
-	Target         prcTarget        `json:"target"`
-	AsOf           string           `json:"as_of"`
-	ScheduleID     string           `json:"schedule_id,omitempty"`
-	BaseTerritory  string           `json:"base_territory,omitempty"`
-	Manual         []prcPrice       `json:"manual,omitempty"`
-	Prices         []prcPrice       `json:"prices"`
-	TerritoryCount int              `json:"territory_count"`
-	Scheduled      []prcPrice       `json:"scheduled,omitempty"`
-	Availability   *prcAvailSummary `json:"availability,omitempty"`
-}
-
-func pricingGet(ctx context.Context, env *tool.Env, in pricingGetIn) (*tool.Result, error) {
-	k, err := prcKindFor(in.Kind)
-	if err != nil {
-		return nil, err
-	}
-	terrs, err := prcTerritories("territories", in.Territories)
-	if err != nil {
-		return nil, err
-	}
-	t, err := prcResolve(ctx, env, in.App, k, in.ProductID)
-	if err != nil {
-		return nil, err
-	}
-	today := prcToday(env)
-	out := pricingGetOut{Target: t, AsOf: today}
-	var rows []prcPrice
-	if k == prcSub {
-		if rows, err = prcSubPrices(ctx, env, t.ID, terrs, ""); err != nil {
-			return nil, err
-		}
-	} else {
-		s, err := prcReadSchedule(ctx, env, k, t.ID, terrs)
-		if err != nil {
-			return nil, err
-		}
-		out.ScheduleID, out.BaseTerritory, out.Manual = s.ID, s.Base, s.Manual
-		rows = append(append(rows, s.Manual...), s.Automatic...)
-	}
-	eff := prcEffective(rows, today)
-	out.TerritoryCount = len(eff)
-	out.Prices = prcLimit(eff, len(prcTop))
-	for _, r := range rows {
-		if r.StartDate > today {
-			out.Scheduled = append(out.Scheduled, r)
-		}
-	}
-	if k == prcApp {
-		a, err := prcReadAvail(ctx, env, t.AppID)
-		if err != nil {
-			return nil, err
-		}
-		s := a.summary()
-		out.Availability = &s
-	}
-	res := tool.OK(out)
-	if out.TerritoryCount > len(out.Prices) {
-		res.Warn(fmt.Sprintf("showing %d of %d territories; pass territories to see others", len(out.Prices), out.TerritoryCount))
-	}
-	return res, nil
 }
 
 // ---- pricing_plan / pricing_apply ----
@@ -350,7 +272,7 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 			want[terr] = target{pt, "equalized"}
 		}
 	}
-	for _, terr := range sortedKeys(in.Overrides) {
+	for _, terr := range slices.Sorted(maps.Keys(in.Overrides)) {
 		opts, err := prcPoints(ctx, env, k, p.T.ID, terr, in.PlanType)
 		if err != nil {
 			return err
@@ -439,15 +361,6 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 	}
 	p.Calls += p.priceCalls
 	return nil
-}
-
-func sortedKeys(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // preview is the confirmation preview of the plan.

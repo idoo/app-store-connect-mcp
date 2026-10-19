@@ -21,6 +21,12 @@ type fixture struct {
 	keywords       string // keywords override for the last locale
 	noIPhoneShots  bool   // primary locale lacks the required iPhone slot
 	noPrice        bool
+	// state overrides v1's appVersionState; a locked state also opens a
+	// WAITING_FOR_REVIEW submission.
+	state string
+	// korea answers the GRAC question with nil and makes KOR available (true)
+	// or unavailable (false); nil leaves the declaration complete.
+	korea *bool
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -101,7 +107,11 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 	for _, p := range prior {
 		verIDs = append(verIDs, "appStoreVersions:"+p.ID)
 	}
-	appInc := append([]jres{{Type: "appStoreVersions", ID: "v1", Attrs: map[string]any{"platform": "IOS", "versionString": "1.4", "appVersionState": "PREPARE_FOR_SUBMISSION", "releaseType": "AFTER_APPROVAL"}}}, prior...)
+	state := "PREPARE_FOR_SUBMISSION"
+	if f.state != "" {
+		state = f.state
+	}
+	appInc := append([]jres{{Type: "appStoreVersions", ID: "v1", Attrs: map[string]any{"platform": "IOS", "versionString": "1.4", "appVersionState": state, "releaseType": "AFTER_APPROVAL"}}}, prior...)
 	k.ASC.Handle("GET", "/v1/apps/{id}", 200, doc(t, jres{
 		Type: "apps", ID: "100",
 		Attrs: map[string]any{"primaryLocale": "en-US", "contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"},
@@ -143,11 +153,19 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 	}
 	k.ASC.Handle("GET", "/v1/appStoreVersions/{id}", 200, doc(t, jres{
 		Type: "appStoreVersions", ID: "v1",
-		Attrs: map[string]any{"versionString": "1.4", "platform": "IOS", "appVersionState": "PREPARE_FOR_SUBMISSION", "releaseType": "AFTER_APPROVAL"},
+		Attrs: map[string]any{"versionString": "1.4", "platform": "IOS", "appVersionState": state, "releaseType": "AFTER_APPROVAL"},
 		Rels:  verRels,
 	}, inc...))
 
-	infoInc = append(infoInc, jres{Type: "ageRatingDeclarations", ID: "age1", Attrs: map[string]any{"violenceCartoonOrFantasy": "NONE", "kidsAgeBand": nil}})
+	age := map[string]any{"violenceCartoonOrFantasy": "NONE", "kidsAgeBand": nil}
+	if f.korea != nil {
+		age["gracRatingClassificationNumber"] = nil
+		k.ASC.Handle("GET", "/v2/appAvailabilities/{id}/territoryAvailabilities", 200, doc(t, []jres{
+			{Type: "territoryAvailabilities", ID: "ta1", Attrs: map[string]any{"available": true}, Rels: map[string]any{"territory": "territories:USA"}},
+			{Type: "territoryAvailabilities", ID: "ta2", Attrs: map[string]any{"available": *f.korea}, Rels: map[string]any{"territory": "territories:KOR"}},
+		}))
+	}
+	infoInc = append(infoInc, jres{Type: "ageRatingDeclarations", ID: "age1", Attrs: age})
 	k.ASC.Handle("GET", "/v1/apps/{id}/appInfos", 200, doc(t, []jres{{
 		Type: "appInfos", ID: "ai1", Attrs: map[string]any{"state": "PREPARE_FOR_SUBMISSION"},
 		Rels: map[string]any{"appInfoLocalizations": infoLocRels, "ageRatingDeclaration": "ageRatingDeclarations:age1"},
@@ -169,7 +187,11 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		k.ASC.Handle("GET", "/v1/apps/{id}/appPriceSchedule", 200, doc(t, jres{Type: "appPriceSchedules", ID: "100", Attrs: map[string]any{}, Rels: map[string]any{"baseTerritory": "territories:USA"}}))
 	}
 	k.ASC.Handle("GET", "/v1/apps/{id}/appAvailabilityV2", 200, doc(t, jres{Type: "appAvailabilities", ID: "100", Attrs: map[string]any{"availableInNewTerritories": true}}))
-	k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, `{"data":[]}`)
+	if slices.Contains(lockedStates, state) {
+		k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, doc(t, []jres{{Type: "reviewSubmissions", ID: "sub1", Attrs: map[string]any{"state": "WAITING_FOR_REVIEW"}}}))
+	} else {
+		k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, `{"data":[]}`)
+	}
 	k.ASC.Handle("GET", "/v1/apps/{id}/inAppPurchasesV2", 200, doc(t, []jres{{Type: "inAppPurchases", ID: "iap1", Attrs: map[string]any{"name": "Pro", "state": "READY_TO_SUBMIT"}, Rels: map[string]any{"versions": []string{"inAppPurchaseVersions:iv1"}}}},
 		jres{Type: "inAppPurchaseVersions", ID: "iv1", Attrs: map[string]any{"state": "READY_FOR_REVIEW"}}))
 	k.ASC.Handle("GET", "/v1/apps/{id}/subscriptionGroups", 200, `{"data":[]}`)
@@ -200,15 +222,21 @@ func checkByID(t *testing.T, out statusOut, id string) check {
 	return check{}
 }
 
+func ready(out statusOut) bool { return out.Summary.Ready != nil && *out.Summary.Ready }
+
 func TestReleaseStatusReady(t *testing.T) {
 	k := setup(t, readyFixture())
 	out, res := call(t, k, `{"app":"Hjul"}`)
 	for _, c := range out.Checks {
-		if c.Status != statusOK {
+		want := statusOK
+		if c.ID == "app_privacy" {
+			want = statusManual
+		}
+		if c.Status != want {
 			t.Errorf("check %s = %s: %s %v", c.ID, c.Status, c.Detail, c.Items)
 		}
 	}
-	if !out.Summary.Ready || out.Summary.Block != 0 || out.Plan != nil {
+	if !ready(out) || out.Summary.Block != 0 || out.Summary.Manual != 1 || out.Summary.Phase != phasePreparing || out.Plan != nil {
 		t.Errorf("summary = %+v plan = %+v", out.Summary, out.Plan)
 	}
 	if out.Version.ID != "v1" || out.Version.AppVersionState != "PREPARE_FOR_SUBMISSION" || out.Build == nil || out.Build.ID != "b1" {
@@ -232,7 +260,7 @@ func TestReleaseStatusBlocked(t *testing.T) {
 	k := setup(t, f)
 	out, _ := call(t, k, `{"app":"Hjul"}`)
 	want := map[string]string{
-		"build": statusBlock, "export_compliance": statusBlock, "listing": statusBlock,
+		"build": statusBlock, "export_compliance": statusBlock, "listing": statusWarn,
 		"screenshots": statusBlock, "pricing_availability": statusBlock, "whats_new": statusOK,
 	}
 	for id, st := range want {
@@ -243,10 +271,10 @@ func TestReleaseStatusBlocked(t *testing.T) {
 	if c := checkByID(t, out, "screenshots"); len(c.Items) != 1 || !strings.Contains(c.Items[0], "en-US: no screenshots for APP_IPHONE_67 or APP_IPHONE_65") {
 		t.Errorf("screenshot items = %v", c.Items)
 	}
-	if c := checkByID(t, out, "listing"); len(c.Items) != 1 || !strings.HasPrefix(c.Items[0], "de-DE: keywords is 101 bytes") {
+	if c := checkByID(t, out, "listing"); len(c.Items) != 1 || !strings.HasPrefix(c.Items[0], "de-DE: keywords is 101 bytes") || !strings.Contains(c.Items[0], "accepted by Apple") {
 		t.Errorf("listing items = %v", c.Items)
 	}
-	if out.Summary.Ready || out.Summary.Block != 5 {
+	if ready(out) || out.Summary.Block != 4 {
 		t.Errorf("summary = %+v", out.Summary)
 	}
 }
@@ -267,7 +295,7 @@ func TestReleaseStatusFirstVersion(t *testing.T) {
 	if c := checkByID(t, out, "whats_new"); c.Status != statusOK || !strings.Contains(c.Detail, "first version") {
 		t.Errorf("whats_new = %+v", c)
 	}
-	if c := checkByID(t, out, "app_privacy"); c.Status != statusWarn || c.FixVia.Manual != "https://appstoreconnect.apple.com/apps/100/distribution/privacy" {
+	if c := checkByID(t, out, "app_privacy"); c.Status != statusManual || c.FixVia.Manual != "https://appstoreconnect.apple.com/apps/100/distribution/privacy" {
 		t.Errorf("app_privacy = %+v", c)
 	}
 }
@@ -276,7 +304,7 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 	locs := []string{"en-US", "de-DE", "fr-FR", "es-ES", "it", "ja", "ko", "zh-Hans", "zh-Hant", "pt-BR", "nl-NL", "sv", "da", "no", "fi"}
 	k := setup(t, fixture{locales: locs})
 	out, _ := call(t, k, `{"app":"Hjul","version":"1.4"}`)
-	if !out.Summary.Ready {
+	if !ready(out) {
 		t.Errorf("15-locale fixture not ready: %+v", out.Checks)
 	}
 	reqs := k.ASC.Requests()
@@ -355,5 +383,101 @@ func TestReleaseStatusMissingVersion(t *testing.T) {
 	}
 	if out.Plan == nil || out.Plan.PreparePlanID == "" || out.Plan.Changes[0] != "create IOS version 2.0" {
 		t.Errorf("plan = %+v", out.Plan)
+	}
+}
+
+// lockedKit is the setup fixture with v1 (1.4) WAITING_FOR_REVIEW and an open
+// submission; explicit keeps "1.4" resolvable, otherwise nothing resolves
+// (no editable version). The build is missing to prove locked blocks soften.
+func lockedKit(t *testing.T, explicit bool) *tooltest.Kit {
+	t.Helper()
+	f := readyFixture()
+	f.state, f.noBuild = "WAITING_FOR_REVIEW", true
+	k := setup(t, f)
+	k.Resolve.Versions = map[tool.VersionRef]tool.Version{}
+	if explicit {
+		k.Resolve.Versions["1.4"] = tool.Version{ID: "v1", String: "1.4", Platform: tool.IOS, State: "WAITING_FOR_REVIEW"}
+	}
+	return k
+}
+
+func assertNoCancelFix(t *testing.T, out statusOut, res *tool.Result) {
+	t.Helper()
+	for _, c := range out.Checks {
+		if c.FixVia != nil && c.FixVia.Tool == "release_cancel" {
+			t.Errorf("check %s suggests release_cancel", c.ID)
+		}
+		if c.Status == statusBlock {
+			t.Errorf("check %s blocks while in review: %s", c.ID, c.Detail)
+		}
+	}
+	for _, n := range res.Next {
+		if n.Tool == "release_cancel" {
+			t.Errorf("next suggests release_cancel: %+v", res.Next)
+		}
+	}
+	if out.Summary.Ready != nil || out.Summary.Phase != phaseInReview {
+		t.Errorf("summary = %+v", out.Summary)
+	}
+	if len(res.Next) == 0 || res.Next[0].Tool != "release_review_status" {
+		t.Errorf("next = %+v", res.Next)
+	}
+}
+
+func TestReleaseStatusNoEditableReportsInFlight(t *testing.T) {
+	k := lockedKit(t, false)
+	out, res := call(t, k, `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "version"); c.Status != statusInfo || !strings.Contains(c.Detail, "1.4 is WAITING_FOR_REVIEW") || c.FixVia != nil {
+		t.Errorf("version = %+v", c)
+	}
+	f := out.InFlight
+	if f == nil || f.ID != "v1" || f.AppVersionState != "WAITING_FOR_REVIEW" || len(f.Options) != 1 || f.Options[0].Tool != "release_cancel" || f.Options[0].Reason == "" {
+		t.Fatalf("in_flight = %+v", f)
+	}
+	assertNoCancelFix(t, out, res)
+}
+
+func TestReleaseStatusExplicitVersionInReview(t *testing.T) {
+	k := lockedKit(t, true)
+	out, res := call(t, k, `{"app":"Hjul","version":"1.4"}`)
+	if c := checkByID(t, out, "build"); c.Status != statusInfo || !strings.HasPrefix(c.Detail, "locked while WAITING_FOR_REVIEW") {
+		t.Errorf("build = %+v", c)
+	}
+	if c := checkByID(t, out, "submission"); c.Status != statusInfo {
+		t.Errorf("submission = %+v", c)
+	}
+	if out.InFlight != nil || out.Version.AppVersionState != "WAITING_FOR_REVIEW" {
+		t.Errorf("version = %+v in_flight = %+v", out.Version, out.InFlight)
+	}
+	assertNoCancelFix(t, out, res)
+}
+
+func TestReleaseStatusNothingInFlightSuggestsPrepare(t *testing.T) {
+	k := setup(t, readyFixture())
+	k.Resolve.Versions = map[tool.VersionRef]tool.Version{}
+	out, res := call(t, k, `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "version"); c.Status != statusBlock || c.FixVia == nil || c.FixVia.Tool != "release_prepare" || out.InFlight != nil {
+		t.Errorf("version = %+v in_flight = %+v", c, out.InFlight)
+	}
+	if out.Summary.Phase != phaseMissing || len(res.Next) == 0 || res.Next[0].Tool != "release_prepare" {
+		t.Errorf("summary = %+v next = %+v", out.Summary, res.Next)
+	}
+}
+
+func TestReleaseStatusKoreaAgeRating(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		available bool
+		want      string
+	}{{"in Korea", true, statusWarn}, {"not in Korea", false, statusInfo}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := readyFixture()
+			f.korea = &tc.available
+			k := setup(t, f)
+			out, _ := call(t, k, `{"app":"Hjul"}`)
+			if c := checkByID(t, out, "age_rating"); c.Status != tc.want || !slices.Equal(c.Items, []string{"gracRatingClassificationNumber"}) {
+				t.Errorf("age_rating = %+v", c)
+			}
+		})
 	}
 }
