@@ -38,10 +38,10 @@ type testerOut struct {
 // testerFromResource builds a testerOut; groupNames maps the app's beta group
 // ids to names (groups of other apps are left out).
 func testerFromResource(r tool.Resource, groupNames map[string]string) testerOut {
-	name := strings.TrimSpace(r.Str("firstName") + " " + r.Str("lastName"))
+	name := strings.TrimSpace(r.Str("firstName") + " " + r.Str("lastName")) // trusted: wrapped as tool.Untrusted below
 	out := testerOut{
 		ID:         r.ID,
-		Email:      tool.Untrusted(r.Str("email")),
+		Email:      r.Text("email"),
 		Name:       tool.Untrusted(name),
 		State:      r.Str("state"),
 		InviteType: r.Str("inviteType"),
@@ -56,14 +56,6 @@ func testerFromResource(r tool.Resource, groupNames map[string]string) testerOut
 
 // emailKey is the case-insensitive identity of an email address.
 func emailKey(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
-
-// validEmail is a deliberately loose syntax check: one @ with text on both
-// sides, a dot in the domain and no whitespace.
-func validEmail(s string) bool {
-	local, domain, ok := strings.Cut(s, "@")
-	return ok && local != "" && strings.Contains(domain, ".") && !strings.ContainsAny(s, " \t\r\n,") &&
-		!strings.Contains(domain, "@")
-}
 
 // testerFields is the sparse fieldset used by tester lookups.
 var testerFields = []string{"email", "firstName", "lastName", "state", "inviteType"}
@@ -95,7 +87,7 @@ func findTesters(ctx context.Context, env *tool.Env, scope url.Values, filterKey
 func byEmail(rs []tool.Resource) map[string]tool.Resource {
 	m := make(map[string]tool.Resource, len(rs))
 	for _, r := range rs {
-		m[emailKey(r.Str("email"))] = r
+		m[emailKey(r.Str("email"))] = r // trusted: lookup key only
 	}
 	return m
 }
@@ -112,7 +104,7 @@ func appGroupNames(ctx context.Context, env *tool.Env, appID string) (map[string
 	}
 	m := make(map[string]string, len(res.Data))
 	for _, g := range res.Data {
-		m[g.ID] = g.Str("name")
+		m[g.ID] = g.Str("name") // trusted: team-created beta group name, not tester-writable
 	}
 	return m, nil
 }

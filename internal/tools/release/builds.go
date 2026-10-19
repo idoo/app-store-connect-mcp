@@ -131,7 +131,7 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 		for _, id := range b.RelIDs("betaGroups") {
 			row.GroupCount++
 			if g, ok := inc["betaGroups:"+id]; ok {
-				row.Groups = append(row.Groups, g.Str("name"))
+				row.Groups = append(row.Groups, g.Str("name")) // trusted: team-created beta group name, not tester-writable
 			}
 		}
 		out.Builds = append(out.Builds, row)

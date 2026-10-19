@@ -39,9 +39,9 @@ type subsListIn struct {
 }
 
 type subsGroupLocOut struct {
-	Locale        string `json:"locale"`
-	Name          string `json:"name,omitempty"`
-	CustomAppName string `json:"custom_app_name,omitempty"`
+	Locale        string         `json:"locale"`
+	Name          tool.Untrusted `json:"name,omitempty"`
+	CustomAppName tool.Untrusted `json:"custom_app_name,omitempty"`
 }
 
 type subsOffersOut struct {
@@ -54,7 +54,7 @@ type subsOffersOut struct {
 type subsOut struct {
 	ID             string         `json:"id"`
 	ProductID      string         `json:"product_id"`
-	Name           string         `json:"name"`
+	Name           tool.Untrusted `json:"name"`
 	Period         string         `json:"period,omitempty"`
 	GroupLevel     int            `json:"group_level,omitempty"`
 	State          string         `json:"state"`
@@ -65,7 +65,7 @@ type subsOut struct {
 
 type subsGroupOut struct {
 	ID            string            `json:"id"`
-	ReferenceName string            `json:"reference_name"`
+	ReferenceName tool.Untrusted    `json:"reference_name"`
 	Localizations []subsGroupLocOut `json:"localizations,omitempty"`
 	Subscriptions []subsOut         `json:"subscriptions"`
 	Detail        string            `json:"detail,omitempty"`
@@ -98,9 +98,9 @@ func subsList(ctx context.Context, env *tool.Env, in subsListIn) (*tool.Result, 
 	out := subsListOut{App: app, Groups: []subsGroupOut{}, ByState: map[string]int{}}
 	res := tool.OK(&out)
 	for i, g := range groups.Data {
-		gout := subsGroupOut{ID: g.ID, ReferenceName: g.Str("referenceName"), Subscriptions: []subsOut{}}
+		gout := subsGroupOut{ID: g.ID, ReferenceName: g.Text("referenceName"), Subscriptions: []subsOut{}}
 		for _, l := range related(g, "subscriptionGroupLocalizations", "subscriptionGroupLocalizations", ginc) {
-			gout.Localizations = append(gout.Localizations, subsGroupLocOut{Locale: l.Str("locale"), Name: l.Str("name"), CustomAppName: l.Str("customAppName")})
+			gout.Localizations = append(gout.Localizations, subsGroupLocOut{Locale: l.Str("locale"), Name: l.Text("name"), CustomAppName: l.Text("customAppName")})
 		}
 		slices.SortFunc(gout.Localizations, func(a, b subsGroupLocOut) int { return strings.Compare(a.Locale, b.Locale) })
 		if i >= subsMaxGroups {
@@ -163,7 +163,7 @@ func subsOfGroup(ctx context.Context, env *tool.Env, groupID string) ([]subsOut,
 		lvl, _ := s.Int("groupLevel")
 		fam, _ := s.Bool("familySharable")
 		it := subsOut{
-			ID: s.ID, ProductID: s.Str("productId"), Name: s.Str("name"), Period: s.Str("subscriptionPeriod"),
+			ID: s.ID, ProductID: s.Str("productId"), Name: s.Text("name"), Period: s.Str("subscriptionPeriod"),
 			GroupLevel: lvl, State: s.Str("state"), FamilySharable: fam,
 			Offers: subsOffersOut{
 				Introductory: len(s.RelIDs("introductoryOffers")), Promotional: len(s.RelIDs("promotionalOffers")),
@@ -534,7 +534,7 @@ func subsFindGroup(ctx context.Context, env *tool.Env, appID, ref string) (tool.
 		return tool.Resource{}, false, fmt.Errorf("look up subscription group %q: %w", ref, err)
 	}
 	for _, g := range resp.Data {
-		if g.Str("referenceName") == ref {
+		if g.Str("referenceName") == ref { // trusted: comparison with the caller's ref
 			return g, true, nil
 		}
 	}

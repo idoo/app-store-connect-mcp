@@ -247,7 +247,7 @@ func offerCodeCampaign(ctx context.Context, env *tool.Env, in offerCodesIn) (str
 	if !found {
 		return "", offerSubNotFound(in.ProductID)
 	}
-	r, ok, err := offerExisting(ctx, env, sub.ID, offerKindCode, func(r tool.Resource) bool { return r.Str("name") == in.Campaign })
+	r, ok, err := offerExisting(ctx, env, sub.ID, offerKindCode, func(r tool.Resource) bool { return r.Str("name") == in.Campaign }) // trusted: comparison only
 	if err != nil {
 		return "", err
 	}

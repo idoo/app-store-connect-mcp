@@ -1984,7 +1984,7 @@
     "toolset": "insights",
     "class": "R",
     "title": "Release health vs previous version",
-    "description": "Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach|unknown (no production data); breach with an active phased release suggests pause.",
+    "description": "Live (or given) version vs the previous one since its release instant: diagnostic signature deltas decide; TestFlight crashes, ratings (≥20 reviews per window), perf and analytics crashes are advisory. Verdict healthy|watch|breach|unknown; pause only on a pausing breach.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2757,7 +2757,7 @@
     "toolset": "screenshots",
     "class": "D",
     "title": "Sync screenshots",
-    "description": "Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
+    "description": "Applies a screenshots_plan: same arguments plus its plan_id (required). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": false,
@@ -4399,7 +4399,7 @@
     "toolset": "xcodecloud",
     "class": "W",
     "title": "Start an Xcode Cloud build",
-    "description": "Start a build run of a workflow (name or id) on a branch, tag or open pull request number; without a source Xcode Cloud uses the workflow's default. clean forces a clean build. Not idempotent: each call starts a new run.",
+    "description": "Start a build run of a workflow (name or id) on a branch, tag or open pull request number (default: the workflow's source). Preview first, then confirm:true; PR builds need a human, fork PRs also allow_fork_pr. Each confirm starts a new run.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
@@ -4410,6 +4410,10 @@
     "input_schema": {
       "additionalProperties": false,
       "properties": {
+        "allow_fork_pr": {
+          "description": "allow a pull request from another repository (still human-approved)",
+          "type": "boolean"
+        },
         "app": {
           "description": "app used to find the workflow by name; default: pinned app",
           "type": "string"
@@ -4420,6 +4424,10 @@
         },
         "clean": {
           "description": "clean build (default: the workflow setting)",
+          "type": "boolean"
+        },
+        "confirm": {
+          "description": "true after reviewing the preview",
           "type": "boolean"
         },
         "pull_request": {
@@ -4442,7 +4450,7 @@
     },
     "default_toolset": false,
     "needs_team_key": false,
-    "confirm": "none"
+    "confirm": "flag"
   },
   {
     "name": "xcc_build_status",

@@ -3,7 +3,9 @@
     "apps": [
       {
         "id": "200",
-        "name": "Sikt",
+        "name": {
+          "untrusted": "Sikt"
+        },
         "bundle_id": "se.jvcr.sift",
         "sku": "SIFT",
         "primary_locale": "sv",

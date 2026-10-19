@@ -221,7 +221,7 @@ func findProfile(ctx context.Context, env *tool.Env, name, profileType, bundleRe
 	now := env.Clock.Now()
 	for _, r := range res.Data {
 		p := flattenProfile(r, inc, now)
-		if p.Name == name && p.Type == profileType && p.BundleIDRef == bundleRef && p.State == "ACTIVE" {
+		if string(p.Name) == name && p.Type == profileType && p.BundleIDRef == bundleRef && p.State == "ACTIVE" {
 			return p, true, nil
 		}
 	}

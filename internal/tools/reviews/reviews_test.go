@@ -3,6 +3,7 @@ package reviews
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -353,6 +354,36 @@ func TestReplyPreviewWithoutConfirmChangesNothing(t *testing.T) {
 	if len(p.Untrusted) == 0 || !strings.HasPrefix(p.Untrusted[0], "review ") ||
 		strings.Contains(intended, `"review"`) || !strings.Contains(intended, `"reply"`) {
 		t.Fatalf("preview intended = %s, untrusted = %q", intended, p.Untrusted)
+	}
+}
+
+// ME-3: a reply carrying a link or email warns in the preview and the human
+// approval form shows the fixed Notes line; it is never refused.
+func TestReplyLinkOrEmailWarns(t *testing.T) {
+	const line = `Reply contains link/email: "evil.example", "help@evil.example" — confirm it is yours`
+	args := `{"app":"a1","replies":[{"review_id":"r4","body":"Fixed, see evil.example. Mail help@evil.example!"}]}`
+	k := replyKit(t)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, args))
+	p := tooltest.Decode[struct {
+		Preview tool.PlanPreview `json:"preview"`
+	}](t, res).Preview
+	if !slices.Contains(res.Meta.Warnings, line) || !slices.Equal(p.Warnings, []string{line}) {
+		t.Fatalf("warnings = %q, preview warnings = %q", res.Meta.Warnings, p.Warnings)
+	}
+	asked := k.Elicit(true)
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, strings.Replace(args, `{"app":"a1",`, `{"app":"a1","confirm":true,`, 1)))
+	if len(*asked) != 1 || !strings.Contains((*asked)[0], "\nNotes: "+line) {
+		t.Fatalf("prompt = %q", *asked)
+	}
+	if len(k.ASC.Mutations()) != 1 {
+		t.Fatalf("mutations = %+v", k.ASC.Mutations())
+	}
+
+	// A plain reply (version numbers are not domains) has no warning.
+	k = replyKit(t)
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, strings.Replace(replyArgs, `"confirm":true,`, "", 1)))
+	if len(res.Meta.Warnings) != 0 {
+		t.Fatalf("plain reply warnings = %q", res.Meta.Warnings)
 	}
 }
 

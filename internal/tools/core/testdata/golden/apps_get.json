@@ -1,7 +1,9 @@
 {
   "data": {
     "id": "100",
-    "name": "Hjul",
+    "name": {
+      "untrusted": "Hjul"
+    },
     "bundle_id": "com.idoo.hjul",
     "sku": "HJUL",
     "primary_locale": "en-US",

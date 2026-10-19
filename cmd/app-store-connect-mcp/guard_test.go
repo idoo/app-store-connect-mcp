@@ -33,8 +33,13 @@ const guardAppID = "1000000002"
 type guardScenario struct {
 	curHangs, prevHangs float64
 	phased              string
-	// noSignatures serves empty diagnostic signature lists.
-	noSignatures bool
+	// noSignatures serves empty diagnostic signature lists; noCurSignatures
+	// only for the live build.
+	noSignatures, noCurSignatures bool
+	// crashes are TestFlight crash reports dated after the window start.
+	crashes int
+	// noLive serves no READY_FOR_DISTRIBUTION version.
+	noLive bool
 }
 
 func guardDoc(t *testing.T, data any, included ...map[string]any) string {
@@ -68,20 +73,24 @@ func installGuardScenario(t *testing.T, srv *asctest.Server, s guardScenario) {
 			"attributes": map[string]any{"phasedReleaseState": s.phased, "currentDayNumber": 3, "totalPauseDuration": 0},
 		})
 	}
+	liveState := "READY_FOR_DISTRIBUTION"
+	if s.noLive {
+		liveState = "PENDING_DEVELOPER_RELEASE"
+	}
 	versions := []map[string]any{
 		{
 			"type": "appStoreVersions", "id": "v1", "attributes": map[string]any{"versionString": "1.0", "platform": "IOS", "appVersionState": "REPLACED_WITH_NEW_VERSION", "createdDate": "2026-09-01T00:00:00Z"},
 			"relationships": map[string]any{"build": guardRel("builds", "b1")},
 		},
 		{
-			"type": "appStoreVersions", "id": "v2", "attributes": map[string]any{"versionString": "1.1", "platform": "IOS", "appVersionState": "READY_FOR_DISTRIBUTION", "releaseType": "AFTER_APPROVAL", "createdDate": "2026-10-10T00:00:00Z"},
+			"type": "appStoreVersions", "id": "v2", "attributes": map[string]any{"versionString": "1.1", "platform": "IOS", "appVersionState": liveState, "releaseType": "AFTER_APPROVAL", "createdDate": "2026-10-10T00:00:00Z"},
 			"relationships": curRels,
 		},
 	}
 	srv.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions", http.StatusOK, guardDoc(t, versions, inc...))
 	srv.Handle(http.MethodGet, "/v1/appStoreVersions/{id}", http.StatusOK, guardDoc(t, versions[1], inc...))
 	sig := func(build string, w float64) string {
-		if s.noSignatures {
+		if s.noSignatures || (s.noCurSignatures && build == "b2") {
 			return guardDoc(t, []any{})
 		}
 		return guardDoc(t, []map[string]any{{
@@ -92,7 +101,12 @@ func installGuardScenario(t *testing.T, srv *asctest.Server, s guardScenario) {
 	srv.Handle(http.MethodGet, "/v1/builds/b2/diagnosticSignatures", http.StatusOK, sig("b2", s.curHangs))
 	srv.Handle(http.MethodGet, "/v1/builds/b1/diagnosticSignatures", http.StatusOK, sig("b1", s.prevHangs))
 	srv.Handle(http.MethodGet, "/v1/apps/{id}/perfPowerMetrics", http.StatusOK, `{"productData":[],"insights":{"regressions":[]}}`)
-	srv.Handle(http.MethodGet, "/v1/apps/{id}/betaFeedbackCrashSubmissions", http.StatusOK, guardDoc(t, []any{}))
+	crashes := []map[string]any{}
+	for i := range s.crashes {
+		crashes = append(crashes, map[string]any{"type": "betaFeedbackCrashSubmissions", "id": fmt.Sprintf("c%d", i), "attributes": map[string]any{"createdDate": "2026-10-15T00:00:00Z"}})
+	}
+	srv.Handle(http.MethodGet, "/v1/apps/{id}/betaFeedbackCrashSubmissions", http.StatusOK, guardDoc(t, crashes))
+	srv.Handle(http.MethodGet, "/v1/reviewSubmissions", http.StatusOK, guardDoc(t, []any{}))
 	srv.Handle(http.MethodGet, "/v1/apps/{id}/customerReviews", http.StatusOK, guardDoc(t, []any{}))
 	srv.Handle(http.MethodGet, "/v1/apps/{id}/analyticsReportRequests", http.StatusOK, guardDoc(t, []any{}))
 	srv.Handle(http.MethodPatch, "/v1/appStoreVersionPhasedReleases/{id}", http.StatusOK, guardDoc(t, map[string]any{
@@ -300,5 +314,54 @@ func TestGuardRequiresApp(t *testing.T) {
 	var ue *usageError
 	if !errors.As(err, &ue) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// IQ-8: a TestFlight-only breach exits 4 but never pauses.
+func TestGuardTestFlightBreachDoesNotPause(t *testing.T) {
+	srv := asctest.New(t)
+	installGuardScenario(t, srv, guardScenario{curHangs: 1, prevHangs: 1, phased: "ACTIVE", crashes: 25})
+	code, out, logs := runGuardWith(t, srv, true, "--app", "Sail", "--pause-on-breach")
+	if code != exitBreach || out["verdict"] != "breach" {
+		t.Fatalf("code %d verdict %v", code, out["verdict"])
+	}
+	reasons, _ := out["reasons"].([]any)
+	for _, r := range reasons {
+		if m, _ := r.(map[string]any); m["pausing"] != false {
+			t.Errorf("pausing reason %v", m)
+		}
+	}
+	if p, _ := out["pause"].(map[string]any); p["action"] != "skipped" {
+		t.Errorf("pause = %v (logs %s)", out["pause"], logs)
+	}
+	if n := assertPauseOnly(t, srv); n != 0 {
+		t.Errorf("%d mutations, want 0", n)
+	}
+}
+
+// IQ-2: no signatures for the live build (previous HANGS 5) is unknown.
+func TestGuardNoCurrentSignaturesExits5(t *testing.T) {
+	srv := asctest.New(t)
+	installGuardScenario(t, srv, guardScenario{prevHangs: 5, phased: "ACTIVE", noCurSignatures: true})
+	code, out, _ := runGuardWith(t, srv, true, "--app", "Sail", "--pause-on-breach")
+	if code != exitUnknown || out["verdict"] != "unknown" || out["pause"] != nil {
+		t.Errorf("code %d verdict %v pause %v", code, out["verdict"], out["pause"])
+	}
+	if n := assertPauseOnly(t, srv); n != 0 {
+		t.Errorf("%d mutations, want 0", n)
+	}
+}
+
+// IQ-10: no live version exits 5, not 1.
+func TestGuardNoLiveVersionExits5(t *testing.T) {
+	srv := asctest.New(t)
+	installGuardScenario(t, srv, guardScenario{noLive: true})
+	code, out, _ := runGuardWith(t, srv, true, "--app", "Sail", "--pause-on-breach")
+	if code != exitUnknown || out["verdict"] != "unknown" {
+		t.Fatalf("code %d verdict %v", code, out["verdict"])
+	}
+	reasons, _ := out["reasons"].([]any)
+	if len(reasons) != 1 || reasons[0].(map[string]any)["message"] != "no live version on IOS" {
+		t.Errorf("reasons %v", reasons)
 	}
 }

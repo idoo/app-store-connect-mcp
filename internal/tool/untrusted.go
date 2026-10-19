@@ -1,22 +1,37 @@
 package tool
 
 // UntrustedFallback lists common free-text attribute names written by third
-// parties (customers, testers, reviewers) or copied from them. [WrapUntrusted]
-// uses it when no type-specific list is known.
+// parties (customers, testers, reviewers, teammates, CI) or copied from them.
+// [WrapUntrusted] always wraps these keys, in addition to any type-specific
+// list.
 var UntrustedFallback = []string{
 	"body",
 	"comment",
 	"description",
+	"destinationBranchName",
+	"displayName",
 	"feedback",
+	"message",
 	"name",
 	"notes",
 	"promotionalText",
 	"responseBody",
 	"reviewerNickname",
+	"sourceBranchName",
 	"subtitle",
 	"title",
 	"whatToTest",
 	"whatsNew",
+}
+
+// FreeTextKeys are attribute names whose values are third-party free text.
+// Tools read them with [Resource.Text], never [Resource.Str], unless the use
+// is trusted (a comparison or an id-like use) and marked "// trusted:".
+var FreeTextKeys = []string{
+	"name", "firstName", "lastName", "title", "message", "displayName",
+	"description", "body", "comment", "responseBody",
+	"whatsNew", "promotionalText", "subtitle", "keywords", "referenceName", "reviewerNotes",
+	"sourceBranchName", "destinationBranchName", "deviceModel", "osVersion", "email", "nickname",
 }
 
 // thirdPartyTypes are resource types authored entirely by customers or
@@ -32,11 +47,11 @@ var thirdPartyTypes = map[string]bool{
 // WrapUntrusted replaces, in place, third-party text in rs with [Untrusted]
 // so it marshals as {"untrusted": text}. Every string attribute of a
 // third-party-authored type (customer reviews, tester feedback, testers,
-// crash logs) is wrapped. For other types, freeText returns the free-text
-// attribute names (nil or a nil result means [UntrustedFallback]); their
-// strings are wrapped wherever those keys appear, including inside nested
-// objects and arrays. Already wrapped values are left as they are, so
-// WrapUntrusted is idempotent.
+// crash logs) is wrapped. For other types, the free-text keys are the union
+// of freeText's list for the type (when freeText is non-nil) and
+// [UntrustedFallback]; their strings are wrapped wherever those keys appear,
+// including inside nested objects and arrays. Already wrapped values are
+// left as they are, so WrapUntrusted is idempotent.
 func WrapUntrusted(rs []Resource, freeText func(resourceType string) []string) {
 	for _, r := range rs {
 		if thirdPartyTypes[r.Type] {
@@ -49,10 +64,10 @@ func WrapUntrusted(rs []Resource, freeText func(resourceType string) []string) {
 		if freeText != nil {
 			keys = freeText(r.Type)
 		}
-		if keys == nil {
-			keys = UntrustedFallback
+		set := make(map[string]bool, len(keys)+len(UntrustedFallback))
+		for _, k := range UntrustedFallback {
+			set[k] = true
 		}
-		set := make(map[string]bool, len(keys))
 		for _, k := range keys {
 			set[k] = true
 		}

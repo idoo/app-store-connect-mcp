@@ -102,7 +102,7 @@ func (b betaAppInfoIn) check() error {
 	switch {
 	case len(b.attrs()) == 0:
 		return errors.New("no fields given")
-	case b.FeedbackEmail != "" && !validEmail(b.FeedbackEmail):
+	case b.FeedbackEmail != "" && tool.ValidEmail(b.FeedbackEmail) != nil:
 		return fmt.Errorf("feedback_email %q is not an email address", b.FeedbackEmail)
 	case !httpsURL(b.MarketingURL) || !httpsURL(b.PrivacyPolicyURL):
 		return errors.New("marketing_url and privacy_policy_url must be http(s) URLs")
@@ -250,8 +250,10 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 		if len(reviewAttrs) == 0 {
 			return nil, tool.InvalidArgs("beta_review: no fields given")
 		}
-		if e := in.BetaReview.ContactEmail; e != "" && !validEmail(e) {
-			return nil, tool.InvalidArgs("beta_review.contact_email %q is not an email address", e)
+		if e := in.BetaReview.ContactEmail; e != "" {
+			if err := tool.ValidEmail(e); err != nil {
+				return nil, tool.InvalidArgs("beta_review.contact_email %q is not an email address", e)
+			}
 		}
 		if err := applemeta.Check(applemeta.FieldReviewNotes, in.BetaReview.Notes); err != nil {
 			return nil, tool.InvalidArgs("beta_review.notes: %v", err)
@@ -479,7 +481,7 @@ func (d *distribution) whatToTest(ctx context.Context, want map[string]string, l
 		text := want[loc]
 		var err error
 		if cur, ok := d.st.whatToTest[loc]; ok {
-			if cur.Str("whatsNew") == text {
+			if cur.Str("whatsNew") == text { // trusted: comparison only
 				o.Outcome = outcomeUnchanged
 			} else {
 				_, err = write(ctx, d.env, http.MethodPatch, "/v1/betaBuildLocalizations/"+cur.ID,

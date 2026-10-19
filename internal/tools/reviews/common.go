@@ -58,8 +58,8 @@ func toReview(r tool.Resource, responses map[string]tool.Resource) reviewOut {
 		Rating:    rating,
 		Territory: r.Str("territory"),
 		Created:   r.Str("createdDate"),
-		Title:     tool.Untrusted(r.Str("title")),
-		Body:      tool.Untrusted(r.Str("body")),
+		Title:     r.Text("title"),
+		Body:      r.Text("body"),
 		Nickname:  tool.Untrusted(r.Str("reviewerNickname")),
 	}
 	out.created, _ = parseTime(out.Created)
@@ -69,7 +69,7 @@ func toReview(r tool.Resource, responses map[string]tool.Resource) reviewOut {
 	if id := r.RelID("response"); id != "" {
 		resp := responses[id]
 		out.Response = &responseOut{
-			ID: id, Body: resp.Str("responseBody"), State: resp.Str("state"), Modified: resp.Str("lastModifiedDate"),
+			ID: id, Body: resp.Str("responseBody"), State: resp.Str("state"), Modified: resp.Str("lastModifiedDate"), // trusted: the developer's own published reply
 		}
 	}
 	return out

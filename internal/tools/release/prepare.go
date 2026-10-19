@@ -471,7 +471,7 @@ func (p *preparer) whatsNew(ctx context.Context) error {
 		Locales: map[string]*metadata.LocaleFields{},
 	}
 	for _, l := range p.snap.Detail.localizations() {
-		text := l.Str("whatsNew")
+		text := l.Str("whatsNew") // trusted: diff input for the What's New plan
 		remote.App.VersionLocalizationIDs[l.Str("locale")] = l.ID
 		remote.Locales[l.Str("locale")] = &metadata.LocaleFields{WhatsNew: &text}
 	}

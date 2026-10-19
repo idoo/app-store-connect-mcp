@@ -17,7 +17,9 @@ const (
 
 var (
 	// pemBlock matches a complete PEM block, including JSON-escaped newlines.
-	pemBlock = regexp.MustCompile(`-----BEGIN [A-Z0-9 ]+-----[\s\S]*?-----END [A-Z0-9 ]+-----`)
+	// It never crosses an unescaped `"`, so a match stays inside one JSON
+	// string and cannot swallow neighbouring values.
+	pemBlock = regexp.MustCompile(`-----BEGIN [A-Z0-9 ]+-----(?:[^"\\]|\\.)*?-----END [A-Z0-9 ]+-----`)
 	// pemOpenKey matches an unterminated private key (e.g. a cut log line).
 	pemOpenKey = regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:[A-Za-z0-9+/=\s]|\\[nr])*`)
 	jwtToken   = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{2,}\.eyJ[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*`)

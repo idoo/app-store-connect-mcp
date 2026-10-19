@@ -213,7 +213,7 @@ func stateFromVersion(versionString string, platform tool.Platform, v *versionDe
 	st.VersionState = v.Version.Str("appVersionState")
 	st.BuildID = v.Version.RelID("build")
 	for _, l := range v.localizations() {
-		st.WhatsNew[l.Str("locale")] = l.Str("whatsNew")
+		st.WhatsNew[l.Str("locale")] = l.Str("whatsNew") // trusted: fingerprint input, never echoed
 	}
 	return st
 }

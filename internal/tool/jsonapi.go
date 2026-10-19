@@ -80,6 +80,12 @@ func (r Resource) Str(key string) string {
 	return ""
 }
 
+// Text returns a free-text attribute (see [FreeTextKeys]) wrapped as
+// [Untrusted], so third-party text stays marked when echoed to the agent.
+func (r Resource) Text(key string) Untrusted {
+	return Untrusted(r.Str(key))
+}
+
 // Bool returns a boolean attribute and whether it was present as a bool.
 func (r Resource) Bool(key string) (v, ok bool) {
 	v, ok = r.Attributes[key].(bool)

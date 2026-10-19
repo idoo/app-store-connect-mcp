@@ -54,14 +54,20 @@ type section struct {
 
 // HealthReport is the output of release_health_report.
 type HealthReport struct {
-	App         tool.App     `json:"app"`
-	Version     string       `json:"version"`
-	VersionID   string       `json:"version_id"`
-	Previous    string       `json:"previous_version,omitempty"`
-	Verdict     string       `json:"verdict"`
-	Reasons     []string     `json:"reasons,omitempty"`
-	Phased      *PhasedState `json:"phased_release,omitempty"`
-	Diagnostics struct {
+	App       tool.App `json:"app"`
+	Version   string   `json:"version"`
+	VersionID string   `json:"version_id"`
+	Previous  string   `json:"previous_version,omitempty"`
+	Verdict   string   `json:"verdict"`
+	Reasons   []Reason `json:"reasons,omitempty"`
+	// WindowStart is the release instant every source is measured from;
+	// WindowStartSource names where it came from and WindowApproximate is
+	// true when it is not the real release instant.
+	WindowStart       string       `json:"window_start,omitempty"`
+	WindowStartSource string       `json:"window_start_source,omitempty"`
+	WindowApproximate bool         `json:"window_start_approximate,omitempty"`
+	Phased            *PhasedState `json:"phased_release,omitempty"`
+	Diagnostics       struct {
 		Current  *buildDiagnostics   `json:"current,omitempty"`
 		Previous *buildDiagnostics   `json:"previous,omitempty"`
 		DeltaPct map[string]*float64 `json:"weight_delta_pct,omitempty"`
@@ -75,8 +81,10 @@ type HealthReport struct {
 		Count int `json:"count"`
 	} `json:"testflight_crash_feedback"`
 	Ratings struct {
+		section
 		Since         string   `json:"since,omitempty"`
 		ReviewsSince  int      `json:"reviews_since"`
+		ReviewsBefore int      `json:"reviews_before"`
 		AverageSince  *float64 `json:"average_since,omitempty"`
 		AverageBefore *float64 `json:"average_before,omitempty"`
 	} `json:"ratings"`
@@ -85,24 +93,28 @@ type HealthReport struct {
 		Crashes *float64 `json:"crashes,omitempty"`
 	} `json:"analytics_crashes"`
 	// Coverage maps each source to measured, no_data or not_set_up.
-	Coverage   map[string]string `json:"coverage"`
-	Thresholds HealthThresholds  `json:"thresholds"`
+	Coverage map[string]string `json:"coverage"`
+	// ProductionSources can make a release healthy; InformationalSources
+	// are reported but never decide the verdict.
+	ProductionSources    []string         `json:"production_sources"`
+	InformationalSources []string         `json:"informational_sources"`
+	Thresholds           HealthThresholds `json:"thresholds"`
 }
 
 // PhasedState is the live version's phased release.
 type PhasedState struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
-	Day   int    `json:"current_day"`
+	ID        string `json:"id"`
+	State     string `json:"state"`
+	Day       int    `json:"current_day"`
+	StartDate string `json:"start_date,omitempty"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_health_report", Toolset: tool.Insights, Class: tool.Read, Idempotent: true,
-		Title: "Release health vs previous version",
-		Description: "Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, " +
-			"TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach|unknown (no production data); breach with an active phased release suggests pause.",
-		Enums: map[string][]any{"platform": {"IOS", "MAC_OS", "TV_OS", "VISION_OS"}},
+		Title:       "Release health vs previous version",
+		Description: "Live (or given) version vs the previous one since its release instant: diagnostic signature deltas decide; TestFlight crashes, ratings (≥20 reviews per window), perf and analytics crashes are advisory. Verdict healthy|watch|breach|unknown; pause only on a pausing breach.",
+		Enums:       map[string][]any{"platform": {"IOS", "MAC_OS", "TV_OS", "VISION_OS"}},
 	}, healthReport))
 }
 
@@ -115,7 +127,7 @@ func healthReport(ctx context.Context, env *tool.Env, in HealthIn) (*tool.Result
 	if rep.Analytics.Status == "not_set_up" {
 		res.Then(tool.NextStep{Tool: "analytics_setup", Args: map[string]any{"app": rep.App.ID}})
 	}
-	if rep.Verdict == VerdictBreach && rep.Phased != nil && rep.Phased.State == "ACTIVE" {
+	if rep.Verdict == VerdictBreach && AnyPausing(rep.Reasons) && rep.Phased != nil && rep.Phased.State == "ACTIVE" {
 		res.Then(tool.NextStep{Tool: "release_phased", Args: map[string]any{
 			"app": rep.App.ID, "platform": string(platformOr(in.Platform)), "version": rep.Version, "action": "pause",
 		}})
@@ -133,6 +145,9 @@ func platformOr(p tool.Platform) tool.Platform {
 	return p
 }
 
+// errNoLiveVersion means the platform has no version on the store.
+var errNoLiveVersion = errors.New("no live version")
+
 // RunHealth gathers every signal for the live (or given) version and the one
 // before it, then evaluates the thresholds. It never mutates anything.
 func RunHealth(ctx context.Context, env *tool.Env, in HealthIn) (*HealthReport, error) {
@@ -141,26 +156,37 @@ func RunHealth(ctx context.Context, env *tool.Env, in HealthIn) (*HealthReport, 
 		return nil, err
 	}
 	platform := platformOr(in.Platform)
+	rep := &HealthReport{
+		App: app, Thresholds: in.Thresholds.withDefaults(),
+		ProductionSources: productionSources, InformationalSources: informationalSources,
+	}
 	cur, prev, inc, err := healthVersions(ctx, env, app.ID, platform, in.Version)
+	if errors.Is(err, errNoLiveVersion) {
+		rep.Verdict = VerdictUnknown
+		rep.Reasons = []Reason{{Level: VerdictUnknown, Source: SourceVersion, Message: "no live version on " + string(platform)}}
+		rep.Coverage = coverageOf(rep)
+		return rep, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	rep := &HealthReport{App: app, Version: cur.Str("versionString"), VersionID: cur.ID, Thresholds: in.Thresholds.withDefaults()}
+	rep.Version, rep.VersionID = cur.Str("versionString"), cur.ID
 	if id := cur.RelID("appStoreVersionPhasedRelease"); id != "" {
 		for _, r := range inc {
 			if r.Type == "appStoreVersionPhasedReleases" && r.ID == id {
 				day, _ := r.Int("currentDayNumber")
-				rep.Phased = &PhasedState{ID: r.ID, State: r.Str("phasedReleaseState"), Day: day}
+				rep.Phased = &PhasedState{ID: r.ID, State: r.Str("phasedReleaseState"), Day: day, StartDate: r.Str("startDate")}
 			}
 		}
 	}
-	sig := HealthSignals{Weights: map[string][2]float64{}}
-	since := cur.Str("createdDate")
+	windowStart(ctx, env, app.ID, platform, cur, rep)
+	sig := HealthSignals{Weights: map[string][2]float64{}, ApproximateWindow: rep.WindowApproximate}
 	if prev != nil {
 		rep.Previous = prev.Str("versionString")
 	}
 
-	// Diagnostic signatures per build.
+	// Diagnostic signatures per build; compared only when the current build
+	// has any, so a build Apple has not measured yet is never "−100 %".
 	curD, err := diagnostics(ctx, env, cur.RelID("build"))
 	if err != nil {
 		return nil, err
@@ -172,52 +198,106 @@ func RunHealth(ctx context.Context, env *tool.Env, in HealthIn) (*HealthReport, 
 			return nil, err
 		}
 		rep.Diagnostics.Previous = prevD
-		rep.Diagnostics.DeltaPct = map[string]*float64{}
-		for _, typ := range []string{"HANGS", "LAUNCHES", "DISK_WRITES"} {
-			c, p := curD.Weights[typ], prevD.Weights[typ]
-			sig.Weights[typ] = [2]float64{c, p}
-			if p > 0 {
-				d := (c - p) / p * 100
-				rep.Diagnostics.DeltaPct[typ] = &d
-			} else {
-				rep.Diagnostics.DeltaPct[typ] = nil
+		if curD.Count > 0 {
+			rep.Diagnostics.DeltaPct = map[string]*float64{}
+			for _, typ := range []string{"HANGS", "LAUNCHES", "DISK_WRITES"} {
+				c, p := curD.Weights[typ], prevD.Weights[typ]
+				sig.Weights[typ] = [2]float64{c, p}
+				if p > 0 {
+					d := (c - p) / p * 100
+					rep.Diagnostics.DeltaPct[typ] = &d
+				} else {
+					rep.Diagnostics.DeltaPct[typ] = nil
+				}
 			}
 		}
 	}
 
-	// App-level perfPowerMetrics regressions.
+	// App-level perfPowerMetrics regressions (informational).
 	perf(ctx, env, app.ID, rep, &sig)
 
-	// TestFlight crash feedback for the live build.
-	if b := cur.RelID("build"); b != "" {
-		q := url.Values{"filter[build]": {b}}
-		res, err := env.ASC.List(ctx, "/v1/apps/"+app.ID+"/betaFeedbackCrashSubmissions", tool.ListOptions{Query: q, MaxItems: 200})
-		if err != nil {
-			rep.CrashFeedback.section = section{Status: "error", Message: err.Error()}
-		} else {
-			n := max(res.Total, len(res.Data))
-			rep.CrashFeedback.section, rep.CrashFeedback.Count = section{Status: "ok"}, n
-			sig.CrashReports = &n
-		}
-	} else {
-		rep.CrashFeedback.section = section{Status: "unavailable", Message: "no build attached"}
-	}
+	// TestFlight crash feedback for the live build since the window start.
+	crashFeedback(ctx, env, app.ID, cur.RelID("build"), rep, &sig)
 
-	// Ratings since the live version vs the window before it.
-	if err := ratings(ctx, env, app.ID, since, prev, rep, &sig); err != nil {
+	// Ratings since the window start vs the window before it.
+	if err := ratings(ctx, env, app.ID, rep.WindowStart, prev, rep, &sig); err != nil {
 		return nil, err
 	}
 
-	// Production crashes from analytics.
-	analytics(ctx, env, app.ID, since, rep)
+	// Production crashes from analytics (informational).
+	analytics(ctx, env, app.ID, rep.WindowStart, rep)
 
 	rep.Verdict, rep.Reasons = EvaluateHealth(sig, rep.Thresholds)
 	rep.Coverage = coverageOf(rep)
 	if !productionMeasured(rep.Coverage) {
 		rep.Verdict = VerdictUnknown
-		rep.Reasons = append([]string{"no production data yet"}, rep.Reasons...)
+		rep.Reasons = append([]Reason{{Level: VerdictUnknown, Source: SourceDiagnostics, Message: "no diagnostic signatures for the current build yet"}}, rep.Reasons...)
 	}
 	return rep, nil
+}
+
+// Window start sources, in the order they are tried.
+const (
+	windowPhased     = "phased_release"
+	windowScheduled  = "scheduled_release"
+	windowSubmission = "review_submission"
+	windowCreated    = "version_created"
+)
+
+// windowStart sets the release instant: the phased release start, a past
+// scheduled release date, then (approximate) the latest completed review
+// submission of the version or its creation date.
+func windowStart(ctx context.Context, env *tool.Env, appID string, platform tool.Platform, cur tool.Resource, rep *HealthReport) {
+	set := func(t time.Time, src string, approx bool) {
+		rep.WindowStart, rep.WindowStartSource, rep.WindowApproximate = t.UTC().Format(time.RFC3339), src, approx
+	}
+	now := env.Clock.Now()
+	if rep.Phased != nil {
+		if t, ok := parseTime(rep.Phased.StartDate); ok {
+			set(t, windowPhased, false)
+			return
+		}
+	}
+	if t, ok := parseTime(cur.Str("earliestReleaseDate")); ok && !t.After(now) {
+		set(t, windowScheduled, false)
+		return
+	}
+	resp, err := env.ASC.Get(ctx, "/v1/reviewSubmissions", url.Values{
+		"filter[app]":               {appID},
+		"filter[platform]":          {string(platform)},
+		"filter[state]":             {"COMPLETE"},
+		"fields[reviewSubmissions]": {"state,submittedDate,appStoreVersionForReview"},
+		"limit":                     {"20"},
+	})
+	if err == nil {
+		var best time.Time
+		for _, s := range resp.Data {
+			if s.RelID("appStoreVersionForReview") != cur.ID {
+				continue
+			}
+			if t, ok := parseTime(s.Str("submittedDate")); ok && t.After(best) {
+				best = t
+			}
+		}
+		if !best.IsZero() {
+			set(best, windowSubmission, true)
+			return
+		}
+	}
+	if t, ok := parseTime(cur.Str("createdDate")); ok {
+		set(t, windowCreated, true)
+		return
+	}
+	rep.WindowStartSource, rep.WindowApproximate = windowCreated, true
+}
+
+// parseTime parses an RFC 3339 timestamp.
+func parseTime(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	return t, err == nil
 }
 
 // Coverage states.
@@ -228,9 +308,13 @@ const (
 )
 
 // productionSources are the sources that can make a release healthy.
-var productionSources = []string{"diagnostics", "perf_power_metrics", "analytics_crashes"}
+var productionSources = []string{SourceDiagnostics}
 
-// coverageOf reports which sources produced data.
+// informationalSources are reported but never decide the verdict.
+var informationalSources = []string{SourcePerf, SourceAnalytics, SourceTestFlight, SourceRatings}
+
+// coverageOf reports which sources produced data. Diagnostics count as
+// measured only when the current build has at least one signature.
 func coverageOf(rep *HealthReport) map[string]string {
 	state := func(ok bool) string {
 		if ok {
@@ -240,14 +324,14 @@ func coverageOf(rep *HealthReport) map[string]string {
 	}
 	d := rep.Diagnostics
 	c := map[string]string{
-		"diagnostics":               state((d.Current != nil && d.Current.Count > 0) || (d.Previous != nil && d.Previous.Count > 0)),
-		"perf_power_metrics":        state(rep.Perf.Status == "ok"),
-		"analytics_crashes":         state(rep.Analytics.Status == "ok"),
-		"testflight_crash_feedback": state(rep.CrashFeedback.Status == "ok"),
-		"ratings":                   state(rep.Ratings.AverageSince != nil || rep.Ratings.AverageBefore != nil),
+		SourceDiagnostics: state(d.Current != nil && d.Current.Count > 0),
+		SourcePerf:        state(rep.Perf.Status == "ok"),
+		SourceAnalytics:   state(rep.Analytics.Status == "ok"),
+		SourceTestFlight:  state(rep.CrashFeedback.Status == "ok"),
+		SourceRatings:     state(rep.Ratings.Status == "ok"),
 	}
 	if rep.Analytics.Status == "not_set_up" {
-		c["analytics_crashes"] = covNotSetUp
+		c[SourceAnalytics] = covNotSetUp
 	}
 	return c
 }
@@ -263,13 +347,14 @@ func productionMeasured(c map[string]string) bool {
 }
 
 // healthVersions returns the chosen version, the one created before it on the
-// same platform (if any) and the included resources.
+// same platform (if any) and the included resources. Without a version
+// argument and no live version it returns errNoLiveVersion.
 func healthVersions(ctx context.Context, env *tool.Env, appID string, platform tool.Platform, version string) (tool.Resource, *tool.Resource, []tool.Resource, error) {
 	q := url.Values{
 		"filter[platform]":                      {string(platform)},
 		"include":                               {"appStoreVersionPhasedRelease,build"},
-		"fields[appStoreVersions]":              {"versionString,appVersionState,createdDate,appStoreVersionPhasedRelease,build"},
-		"fields[appStoreVersionPhasedReleases]": {"phasedReleaseState,currentDayNumber"},
+		"fields[appStoreVersions]":              {"versionString,appVersionState,createdDate,earliestReleaseDate,appStoreVersionPhasedRelease,build"},
+		"fields[appStoreVersionPhasedReleases]": {"phasedReleaseState,currentDayNumber,startDate"},
 		"limit":                                 {"10"},
 	}
 	resp, err := env.ASC.Get(ctx, "/v1/apps/"+appID+"/appStoreVersions", q)
@@ -286,11 +371,10 @@ func healthVersions(ctx context.Context, env *tool.Env, appID string, platform t
 		}
 	}
 	if idx < 0 {
-		what := "a live version"
-		if version != "" {
-			what = "version " + version
+		if version == "" {
+			return tool.Resource{}, nil, nil, errNoLiveVersion
 		}
-		return tool.Resource{}, nil, nil, fmt.Errorf("%s not found for %s: %w", what, platform, tool.ErrInvalidArgs)
+		return tool.Resource{}, nil, nil, fmt.Errorf("version %s not found for %s: %w", version, platform, tool.ErrInvalidArgs)
 	}
 	var prev *tool.Resource
 	if idx+1 < len(vs) {
@@ -298,6 +382,36 @@ func healthVersions(ctx context.Context, env *tool.Env, appID string, platform t
 		prev = &p
 	}
 	return vs[idx], prev, resp.Included, nil
+}
+
+// crashFeedback counts TestFlight crash reports on the live build created at
+// or after the window start.
+func crashFeedback(ctx context.Context, env *tool.Env, appID, build string, rep *HealthReport, sig *HealthSignals) {
+	if build == "" {
+		rep.CrashFeedback.section = section{Status: "unavailable", Message: "no build attached"}
+		return
+	}
+	start, ok := parseTime(rep.WindowStart)
+	if !ok {
+		rep.CrashFeedback.section = section{Status: "unavailable", Message: "no window start"}
+		return
+	}
+	res, err := env.ASC.List(ctx, "/v1/apps/"+appID+"/betaFeedbackCrashSubmissions", tool.ListOptions{
+		Query:  url.Values{"filter[build]": {build}, "sort": {"-createdDate"}},
+		Fields: map[string][]string{"betaFeedbackCrashSubmissions": {"createdDate"}}, MaxItems: 1000,
+	})
+	if err != nil {
+		rep.CrashFeedback.section = section{Status: "error", Message: err.Error()}
+		return
+	}
+	n := 0
+	for _, r := range res.Data {
+		if t, ok := parseTime(r.Str("createdDate")); ok && !t.Before(start) {
+			n++
+		}
+	}
+	rep.CrashFeedback.section, rep.CrashFeedback.Count = section{Status: "ok"}, n
+	sig.CrashReports = &n
 }
 
 // diagnostics sums a build's diagnostic signature weights per type.
@@ -375,10 +489,16 @@ func perf(ctx context.Context, env *tool.Env, appID string, rep *HealthReport, s
 	sig.Regressions = &n
 }
 
-// ratings averages reviews created since the live version against those
-// created between the previous version and it.
+// ratings averages reviews created since the window start against those
+// created between the previous version and it. Each window needs
+// MinReviewsPerWindow reviews; below that ratings are insufficient_data.
 func ratings(ctx context.Context, env *tool.Env, appID, since string, prev *tool.Resource, rep *HealthReport, sig *HealthSignals) error {
 	rep.Ratings.Since = since
+	start, ok := parseTime(since)
+	if !ok {
+		rep.Ratings.section = section{Status: "unavailable", Message: "no window start"}
+		return nil
+	}
 	q := url.Values{"sort": {"-createdDate"}}
 	res, err := env.ASC.List(ctx, "/v1/apps/"+appID+"/customerReviews", tool.ListOptions{
 		Query: q, Fields: map[string][]string{"customerReviews": {"rating", "createdDate"}}, MaxItems: 500,
@@ -386,25 +506,30 @@ func ratings(ctx context.Context, env *tool.Env, appID, since string, prev *tool
 	if err != nil {
 		return fmt.Errorf("customer reviews: %w", err)
 	}
-	from := ""
+	var from time.Time
+	hasFrom := false
 	if prev != nil {
-		from = prev.Str("createdDate")
+		from, hasFrom = parseTime(prev.Str("createdDate"))
 	}
 	var sNow, sBefore float64
 	var nNow, nBefore int
 	for _, r := range res.Data {
-		c := r.Str("createdDate")
+		c, ok := parseTime(r.Str("createdDate"))
+		if !ok {
+			continue
+		}
 		rating, _ := r.Int("rating")
 		switch {
-		case c >= since:
+		case !c.Before(start):
 			sNow += float64(rating)
 			nNow++
-		case from != "" && c >= from:
+		case hasFrom && !c.Before(from):
 			sBefore += float64(rating)
 			nBefore++
 		}
 	}
-	rep.Ratings.ReviewsSince = nNow
+	rep.Ratings.ReviewsSince, rep.Ratings.ReviewsBefore = nNow, nBefore
+	sig.RatingCountNow, sig.RatingCountBefore = nNow, nBefore
 	if nNow > 0 {
 		a := sNow / float64(nNow)
 		rep.Ratings.AverageSince, sig.RatingNow = &a, &a
@@ -412,6 +537,14 @@ func ratings(ctx context.Context, env *tool.Env, appID, since string, prev *tool
 	if nBefore > 0 {
 		a := sBefore / float64(nBefore)
 		rep.Ratings.AverageBefore, sig.RatingBefore = &a, &a
+	}
+	switch {
+	case nNow < MinReviewsPerWindow || nBefore < MinReviewsPerWindow:
+		rep.Ratings.section = section{Status: "insufficient_data", Message: fmt.Sprintf("needs ≥ %d reviews in each window (have %d since, %d before)", MinReviewsPerWindow, nNow, nBefore)}
+	case rep.WindowApproximate:
+		rep.Ratings.section = section{Status: "ok", Message: "window start is approximate; rating change is informational"}
+	default:
+		rep.Ratings.section = section{Status: "ok"}
 	}
 	return nil
 }

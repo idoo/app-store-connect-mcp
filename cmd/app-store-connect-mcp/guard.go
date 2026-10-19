@@ -16,16 +16,16 @@ import (
 )
 
 const guardUsage = `usage: app-store-connect-mcp guard --app APP [--platform IOS] [--version V] [--pause-on-breach] [thresholds]
-  evaluates release health and prints JSON; exit 0 healthy, 3 watch, 4 breach, 5 unknown (no production data; never pauses), 1 error, 2 usage.
-  --pause-on-breach only pauses an ACTIVE phased release and needs writes enabled
-  (--allow-writes, ASC_MCP_ALLOW_WRITES=1 or profile allow_writes); it never resumes, completes or starts one.`
+  evaluates release health and prints JSON; exit 0 healthy, 3 watch, 4 breach, 5 unknown (no diagnostics for the live build or no live version; never pauses), 1 error, 2 usage.
+  --pause-on-breach only pauses an ACTIVE phased release on a breach with a pausing reason (diagnostics; never TestFlight or ratings)
+  and needs writes enabled (--allow-writes, ASC_MCP_ALLOW_WRITES=1 or profile allow_writes); it never resumes, completes or starts one.`
 
 // Guard exit codes.
 const (
 	exitWatch  = 3
 	exitBreach = 4
-	// exitUnknown means no production data was measured; the guard never
-	// pauses on it.
+	// exitUnknown means no production data was measured or there is no
+	// live version; the guard never pauses on it.
 	exitUnknown = 5
 )
 
@@ -71,7 +71,7 @@ func runGuard(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	appRef := fs.String("app", "", "app name, bundle id, SKU or id")
 	platform := fs.String("platform", "IOS", "IOS, MAC_OS, TV_OS or VISION_OS")
 	version := fs.String("version", "", "version string (default: live)")
-	pause := fs.Bool("pause-on-breach", false, "pause an ACTIVE phased release on breach (needs writes)")
+	pause := fs.Bool("pause-on-breach", false, "pause an ACTIVE phased release on a pausing breach (needs writes)")
 	allowWrites := fs.Bool("allow-writes", false, "enable writes (only used by --pause-on-breach)")
 	var th insights.HealthThresholds
 	fs.Float64Var(&th.SignatureWatchPct, "signature-watch-pct", 0, "signature weight growth % for watch (default 25)")
@@ -106,7 +106,11 @@ func runGuard(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	out := guardOut{HealthReport: rep}
 	if *pause && rep.Verdict == insights.VerdictBreach {
-		out.Pause = pausePhased(ctx, env, writes, in.Platform, rep, stderr)
+		if insights.AnyPausing(rep.Reasons) {
+			out.Pause = pausePhased(ctx, env, writes, in.Platform, rep, stderr)
+		} else {
+			out.Pause = logPause(stderr, &pauseOutcome{Action: "skipped", Reason: "breach has no pausing reason (TestFlight and ratings never pause)"})
+		}
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetEscapeHTML(false)

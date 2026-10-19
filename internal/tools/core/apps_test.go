@@ -53,11 +53,15 @@ func TestAppsListFuzzy(t *testing.T) {
 			k.ASC.Handle("GET", "/v1/apps", 200, appsPage)
 			res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "apps_list"), k.Env, tt.args))
 			out := tooltest.Decode[struct {
-				Apps []appSummary `json:"apps"`
+				Apps []struct {
+					Name struct {
+						Untrusted string `json:"untrusted"`
+					} `json:"name"`
+				} `json:"apps"`
 			}](t, res)
 			names := []string{}
 			for _, a := range out.Apps {
-				names = append(names, a.Name)
+				names = append(names, a.Name.Untrusted)
 			}
 			if !slices.Equal(names, tt.want) {
 				t.Errorf("names = %v, want %v", names, tt.want)

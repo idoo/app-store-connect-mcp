@@ -248,7 +248,7 @@ func checkWhatsNew(s *statusSnapshot) check {
 		return c
 	}
 	for _, l := range s.Version.localizations() {
-		if strings.TrimSpace(l.Str("whatsNew")) == "" {
+		if strings.TrimSpace(l.Str("whatsNew")) == "" { // trusted: emptiness check
 			c.Items = append(c.Items, l.Str("locale"))
 		}
 	}
@@ -290,7 +290,7 @@ func checkListing(s *statusSnapshot) check {
 				c.Items = append(c.Items, msg)
 			}
 		}
-		if strings.TrimSpace(l.Str("name")) == "" {
+		if strings.TrimSpace(l.Str("name")) == "" { // trusted: emptiness check
 			c.Items = append(c.Items, loc+": name missing")
 		}
 		if strings.TrimSpace(l.Str("privacyPolicyUrl")) == "" {

@@ -46,9 +46,9 @@ type iapListIn struct {
 }
 
 type iapLocOut struct {
-	Locale      string `json:"locale"`
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
+	Locale      string         `json:"locale"`
+	Name        tool.Untrusted `json:"name,omitempty"`
+	Description tool.Untrusted `json:"description,omitempty"`
 }
 
 type iapVersionOut struct {
@@ -60,7 +60,7 @@ type iapVersionOut struct {
 type iapOut struct {
 	ID             string         `json:"id"`
 	ProductID      string         `json:"product_id"`
-	ReferenceName  string         `json:"reference_name"`
+	ReferenceName  tool.Untrusted `json:"reference_name"`
 	Type           string         `json:"type"`
 	State          string         `json:"state"`
 	FamilySharable bool           `json:"family_sharable,omitempty"`
@@ -111,7 +111,7 @@ func iapList(ctx context.Context, env *tool.Env, in iapListIn) (*tool.Result, er
 	for _, r := range res.Data {
 		fam, _ := r.Bool("familySharable")
 		it := iapOut{
-			ID: r.ID, ProductID: r.Str("productId"), ReferenceName: r.Str("name"),
+			ID: r.ID, ProductID: r.Str("productId"), ReferenceName: r.Text("name"),
 			Type: r.Str("inAppPurchaseType"), State: r.Str("state"), FamilySharable: fam,
 		}
 		if v, ok := latestVersion(related(r, "versions", "inAppPurchaseVersions", inc)); ok {
@@ -133,7 +133,7 @@ func iapList(ctx context.Context, env *tool.Env, in iapListIn) (*tool.Result, er
 func iapLocs(rs []tool.Resource) []iapLocOut {
 	out := make([]iapLocOut, 0, len(rs))
 	for _, l := range rs {
-		out = append(out, iapLocOut{Locale: l.Str("locale"), Name: l.Str("name"), Description: l.Str("description")})
+		out = append(out, iapLocOut{Locale: l.Str("locale"), Name: l.Text("name"), Description: l.Text("description")})
 	}
 	slices.SortFunc(out, func(a, b iapLocOut) int { return strings.Compare(a.Locale, b.Locale) })
 	return out

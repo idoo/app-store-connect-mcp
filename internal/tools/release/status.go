@@ -524,7 +524,7 @@ func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 		}
 	}
 	for _, p := range iaps.Data {
-		name := p.Str("name")
+		name := p.Str("name") // trusted: team-created product label used as a map key and check item
 		if name == "" {
 			name = p.Str("productId")
 		}
@@ -562,7 +562,7 @@ func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 	}
 	for _, r := range groups.Included {
 		if r.Type == "subscriptions" {
-			name := r.Str("name")
+			name := r.Str("name") // trusted: team-created product label used as a map key and check item
 			if name == "" {
 				name = r.Str("productId")
 			}
@@ -643,7 +643,7 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 		existing := map[string]string{}
 		if s.Version != nil {
 			for _, l := range s.Version.localizations() {
-				existing[l.Str("locale")] = l.Str("whatsNew")
+				existing[l.Str("locale")] = l.Str("whatsNew") // trusted: comparison input for the plan
 			}
 		}
 		switch {

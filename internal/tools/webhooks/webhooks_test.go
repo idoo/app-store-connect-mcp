@@ -112,7 +112,7 @@ func TestWebhooksCreateGeneratesSecretOnce(t *testing.T) {
 	if data["relationships"].(map[string]any)["app"].(map[string]any)["data"].(map[string]any)["id"] != "A1" {
 		t.Fatalf("relationships = %v", data["relationships"])
 	}
-	out := tooltest.Decode[upsertOut](t, res)
+	out, _ := res.Data.(upsertOut) // name is tool.Untrusted: compare the Go value
 	if out.Action != "created" || !strings.Contains(out.SecretNote, "sensitive") || out.Webhook.ID != "W9" {
 		t.Fatalf("out = %+v", out)
 	}
@@ -284,9 +284,42 @@ func TestWebhooksUpdateByNameAndPing(t *testing.T) {
 	if ping["relationships"].(map[string]any)["webhook"].(map[string]any)["data"].(map[string]any)["id"] != "W1" {
 		t.Fatalf("ping = %v", ping)
 	}
-	out := tooltest.Decode[upsertOut](t, res)
+	out, _ := res.Data.(upsertOut) // name is tool.Untrusted: compare the Go value
 	if out.Action != "updated" || out.PingID != "P1" || out.SecretFile != "" {
 		t.Fatalf("out = %+v", out)
+	}
+}
+
+// TestWebhooksRedirectNamesOldAndNewHost (CD-1): a URL change shows both hosts
+// in the approval form, and a look-alike non-ASCII host is escaped with a note.
+func TestWebhooksRedirectNamesOldAndNewHost(t *testing.T) {
+	k := kit(t)
+	asked := k.Elicit(false)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, hooksDoc)
+	tooltest.MustFail(t, tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env,
+		`{"webhook":"W1","url":"https://h\u043e\u043eks.example.com/asc","confirm":true}`), tool.ErrDeclined.Code)
+	if len(*asked) != 1 || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("asked %d, mutations %d", len(*asked), len(k.ASC.Mutations()))
+	}
+	form := (*asked)[0]
+	summary, _, _ := strings.Cut(form, "\n")
+	if !strings.Contains(summary, `from host hooks.example.com to new host "h\u043e\u043eks.example.com"`) {
+		t.Errorf("summary = %s", summary)
+	}
+	if strings.Contains(form, "h\u043e\u043eks") {
+		t.Errorf("form shows the look-alike host unescaped:\n%s", form)
+	}
+	if !strings.Contains(form, `Notes: non-ASCII host "h\u043e\u043eks.example.com"`) {
+		t.Errorf("form lacks the non-ASCII note:\n%s", form)
+	}
+
+	// An ASCII redirect still names both hosts and adds no note.
+	k = kit(t)
+	asked = k.Elicit(false)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, hooksDoc)
+	tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env, `{"webhook":"W1","url":"https://evil.example.net/x","confirm":true}`)
+	if len(*asked) != 1 || !strings.Contains((*asked)[0], "from host hooks.example.com to new host evil.example.net") || strings.Contains((*asked)[0], "non-ASCII") {
+		t.Errorf("ascii redirect form = %v", *asked)
 	}
 }
 

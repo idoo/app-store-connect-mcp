@@ -79,13 +79,17 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "screenshots_sync", Toolset: tool.Screenshots, Class: tool.Destructive, Confirm: tool.ConfirmByPlan,
 		Title: "Sync screenshots",
-		Description: "Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). " +
+		Description: "Applies a screenshots_plan: same arguments plus its plan_id (required). " +
 			"Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
 		Enums: map[string][]any{"platform": platformEnum, "mode": modeEnum},
 	}, screenshotsSync))
 }
 
 func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Result, error) {
+	if in.PlanID == "" {
+		return nil, tool.WithNext(tool.InvalidArgs("plan_id is required: run screenshots_plan first"),
+			tool.NextStep{Tool: "screenshots_plan"})
+	}
 	wait := in.Wait
 	switch {
 	case wait <= 0:
@@ -113,13 +117,7 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 	if err != nil {
 		return nil, err
 	}
-	var wctx context.Context
-	var res *tool.Result
-	if in.PlanID == "" && p.deletes() == 0 {
-		wctx, res = tool.Unconfirmed(ctx, env)
-	} else {
-		wctx, res = tool.Preview(ctx, env, in.PlanID, p.key, fp, p.preview())
-	}
+	wctx, res := tool.Preview(ctx, env, in.PlanID, p.key, fp, p.preview())
 	if res != nil {
 		return res, nil
 	}

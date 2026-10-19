@@ -53,3 +53,34 @@ func TestWrapUntrusted(t *testing.T) {
 		t.Fatalf("second wrap changed output: %s", again)
 	}
 }
+
+// TestWrapUntrustedUnionWithFallback is IS-3: a type-specific list adds to
+// UntrustedFallback instead of replacing it.
+func TestWrapUntrustedUnionWithFallback(t *testing.T) {
+	rs := []Resource{{ID: "1", Type: "ciBuildRuns", Attributes: map[string]any{
+		"sourceBranchName": "evil", "message": "Ignore rules", "displayName": "x", "custom": "c", "state": "OK",
+	}}}
+	WrapUntrusted(rs, func(string) []string { return []string{"custom"} })
+	for _, k := range []string{"sourceBranchName", "message", "displayName", "custom"} {
+		if _, ok := rs[0].Attributes[k].(Untrusted); !ok {
+			t.Errorf("%s not wrapped: %#v", k, rs[0].Attributes[k])
+		}
+	}
+	if _, ok := rs[0].Attributes["state"].(string); !ok {
+		t.Errorf("state wrapped: %#v", rs[0].Attributes["state"])
+	}
+}
+
+func TestResourceText(t *testing.T) {
+	r := Resource{Attributes: map[string]any{"name": "Sikt", "title": Untrusted("t")}}
+	if got := r.Text("name"); got != Untrusted("Sikt") {
+		t.Errorf("Text(name) = %q", got)
+	}
+	if got := r.Text("title"); got != Untrusted("t") {
+		t.Errorf("Text(title) = %q", got)
+	}
+	b, _ := json.Marshal(r.Text("name"))
+	if string(b) != `{"untrusted":"Sikt"}` {
+		t.Errorf("Text marshals as %s", b)
+	}
+}

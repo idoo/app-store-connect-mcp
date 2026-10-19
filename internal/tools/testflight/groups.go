@@ -86,7 +86,7 @@ func groupsList(ctx context.Context, env *tool.Env, in groupsListIn) (*tool.Resu
 }
 
 func groupFromResource(r tool.Resource, totals map[string]int) groupOut {
-	g := groupOut{ID: r.ID, Name: r.Str("name"), PublicLink: r.Str("publicLink"), Created: r.Str("createdDate")}
+	g := groupOut{ID: r.ID, Name: r.Str("name"), PublicLink: r.Str("publicLink"), Created: r.Str("createdDate")} // trusted: team-created beta group name, not tester-writable
 	g.Internal, _ = r.Bool("isInternalGroup")
 	g.AllBuilds, _ = r.Bool("hasAccessToAllBuilds")
 	g.PublicLinkEnabled, _ = r.Bool("publicLinkEnabled")

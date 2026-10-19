@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
@@ -149,7 +150,7 @@ func TestDigestTiesReturnedExactlyOnce(t *testing.T) {
 		t.Errorf("seen = %v", seen)
 	}
 	var st digestState
-	if _, err := k.State.Load(digestStateKind, "test__100", &st); err != nil || len(st.Sources["reviews"].IDs) != 3 {
+	if _, err := k.State.Load(digestStateKind, "test__100", &st); err != nil || len(st.Sources["reviews"].Seen) != 3 {
 		t.Errorf("state = %+v err=%v", st, err)
 	}
 }
@@ -157,7 +158,7 @@ func TestDigestTiesReturnedExactlyOnce(t *testing.T) {
 func TestDigestFailingSourceKeepsWatermark(t *testing.T) {
 	k, feed := digestKit(t)
 	feed.add("r1", "2026-10-20T10:00:00Z")
-	wm := digestWatermark{TS: "2026-10-01T00:00:00Z", IDs: []string{"b0"}}
+	wm := digestWatermark{TS: "2026-10-01T00:00:00Z", Seen: map[string]time.Time{"b0": digestParseTime("2026-10-01T00:00:00Z")}}
 	if err := k.State.Save(digestStateKind, "test__100", digestState{Sources: map[string]digestWatermark{"builds": wm}}); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func TestDigestFailingSourceKeepsWatermark(t *testing.T) {
 	if _, err := k.State.Load(digestStateKind, "test__100", &st); err != nil {
 		t.Fatal(err)
 	}
-	if b := st.Sources["builds"]; b.TS != wm.TS || len(b.IDs) != 1 {
+	if b := st.Sources["builds"]; b.TS != wm.TS || len(b.Seen) != 1 {
 		t.Errorf("builds watermark moved: %+v", b)
 	}
 	if st.Sources["reviews"].TS == "" {
@@ -300,7 +301,7 @@ func TestDigestAdvanceAndSelect(t *testing.T) {
 		t.Fatalf("sel = %+v", sel)
 	}
 	w := digestAdvance(digestWatermark{}, sel)
-	if w.TS != "2026-10-20T10:00:00Z" || strings.Join(w.IDs, ",") != "a" {
+	if w.TS != "2026-10-20T10:00:00Z" || len(w.Seen) != 2 || !digestSeen(w, "a") || !digestSeen(w, "z") {
 		t.Fatalf("w = %+v", w)
 	}
 	if got := digestAdvance(w, nil); got.TS != w.TS {
@@ -310,7 +311,7 @@ func TestDigestAdvanceAndSelect(t *testing.T) {
 	if len(sel) != 1 || sel[0].ID != "c" || more {
 		t.Errorf("after = %+v", sel)
 	}
-	if w2 := digestAdvance(w, sel); strings.Join(w2.IDs, ",") != "a,c" {
+	if w2 := digestAdvance(w, sel); len(w2.Seen) != 3 || !digestSeen(w2, "c") || w2.TS != w.TS {
 		t.Errorf("w2 = %+v", w2)
 	}
 }

@@ -4,7 +4,7 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 
 ## Who we worry about
 
-- **Text from strangers.** Reviews, TestFlight feedback, tester and app names reach the model as written.
+- **Text from strangers.** Reviews, TestFlight feedback, tester and app names, commit messages and PR titles reach the model as written.
 - **An eager model.** Wrong app, wrong version, or a "cleanup" that deletes six locales.
 - **A sketchy repo.** A cloned `.app-store-connect-mcp.toml` pointing your agent at your production profile.
 - **Bad URLs.** Upload, report and pagination links come from responses and could point anywhere.
@@ -25,19 +25,20 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 - `signing_devices_register` when a device is new (each one uses a yearly device slot);
 - `iap_upsert` / `subscriptions_upsert` when they create a product (its id is burned for good), turn on family sharing or change a subscription's level;
 - `signing_capabilities_set` when it disables a capability;
-- `testflight_distribute` / `testflight_testers_add` when they touch an external group, submit for beta review, answer export compliance or overwrite review details.
+- `testflight_distribute` / `testflight_testers_add` when they touch an external group, submit for beta review, answer export compliance or overwrite review details;
+- `xcc_build_start` on a pull request, because the PR's `ci_scripts` run with the workflow's secrets. PRs from forks are refused unless you pass `allow_fork_pr`.
 
-The form names the profile (account) and shows what will happen first and any stranger-written text last, fenced and labelled. It shows exactly what Apple will receive: nothing in it is redacted or truncated. Over 6000 bytes it refuses instead. Clients that can't show forms get `human_approval_required`, unless the profile sets `allow_no_elicit`, or a pipeline sets both `ASC_MCP_CI=1` and `ASC_MCP_ALLOW_NO_ELICIT=1`. `--no-confirm` skips previews only with `ASC_MCP_CI=1`, and still not the human ones.
+The form starts with the profile (account), what will happen and the exact targets: a webhook move names the old and the new host, a lookalike non-ASCII host is shown escaped, and email addresses must be plain ASCII. Stranger-written text comes next, fenced, labelled and squeezed onto one line, so it can't draw fake lines. The server's own `Change`, `Irreversible` and `Approve?` lines always come after it. `Change` shows exactly what Apple will receive, never redacted or truncated; over 6000 bytes the form refuses instead. Clients that can't show forms get `human_approval_required`, unless the profile sets `allow_no_elicit`, or a pipeline sets both `ASC_MCP_CI=1` and `ASC_MCP_ALLOW_NO_ELICIT=1`. `--no-confirm` skips previews only with `ASC_MCP_CI=1`, and still not the human ones.
 
-**Interactive views add no new power.** MCP Apps views are only offered to clients that ask for them. They are static HTML in the client's sandbox with no network access, and render stranger text as text. A button in a view calls the same tool the model would: the first click gets the preview, the second sends the confirmation, and the approval form still appears.
+**Interactive views add no new power.** MCP Apps views are only offered to clients that ask for them. They are static HTML in the client's sandbox with no network access, and show stranger text as text in its own labelled box. A button in a view calls the same tool the model would. If the tool returns a preview, the button turns into Confirm and the approval form still appears; buttons for tools without a preview say "(runs now)".
 
-**The guard only pauses.** `app-store-connect-mcp guard --pause-on-breach` can pause an active phased release and nothing else, and only with writes on.
+**The guard only pauses.** `app-store-connect-mcp guard --pause-on-breach` can pause an active phased release and nothing else, and only with writes on. Only crash diagnostics can trigger it: a rating drop or TestFlight crashes, which strangers can cause, never pause a rollout.
 
-**Stranger text is marked.** Reviews, tester data, feedback, crash logs, free-text attributes, store listings and raw `asc_api_request` bodies come back as `{"untrusted": ...}`. The server instructions tell the model that's data, not orders.
+**Stranger text is marked.** Reviews, tester data, feedback, crash logs, names, commit and branch text, free-text attributes, store listings and raw API bodies come back as `{"untrusted": ...}`, with bidi, zero-width and tag characters shown as visible `⟨U+202E⟩` tokens. The server instructions tell the model that's data, not orders. Treat this as a second layer, not the gate: in a 54-call test on Claude models the marking made no measurable difference, because the models already refused. Weaker models may not.
 
 **Pins only narrow.** `.app-store-connect-mcp.toml` can turn writes off, never on. Outside `trusted_pins` it can only pick a read-only profile.
 
-**Nothing deleted by omission.** Metadata, screenshot and tester tools only remove what's listed in `remove`. A 409 "already exists" counts as done. Mutations are never retried except after a 429. A timeout on one returns `outcome_unknown` instead of trying again and burning a product id.
+**Nothing deleted by omission.** Metadata, screenshot and tester tools only remove what's listed in `remove`. `screenshots_sync` always needs a `plan_id` from `screenshots_plan`, so a folder in a cloned repo can't reach your version unseen. A 409 "already exists" counts as done. Mutations are never retried except after a 429. A timeout on one returns `outcome_unknown` instead of trying again and burning a product id.
 
 **Keys stay out of chat.** No tool takes or returns key material; only `app-store-connect-mcp auth` edits profiles. The config holds paths or keychain references and is refused if others can write it. JWTs, PEM blocks, `Authorization` headers and signed URL queries are redacted from results, errors and logs. JWTs only go to the API base URL. One-time offer codes go to `offer-codes/<batch_id>.csv` under the project root (git-ignored, mode 0600), not into the transcript.
 
@@ -52,7 +53,7 @@ The form names the profile (account) and shows what will happen first and any st
 1. `reviews_list` returns it as `{"untrusted": "..."}`.
 2. With writes off, `reviews_reply` doesn't exist.
 3. With writes on, the first call is a preview.
-4. Confirming pops the approval form: your reply first, their review fenced below. Decline and nothing happens.
+4. Confirming pops the approval form: what will be posted and where, then their review fenced on one line, then the server's own lines. A reply that contains a link or email gets an extra note asking you to check it's yours. Decline and nothing happens.
 
 ## What this doesn't fix
 

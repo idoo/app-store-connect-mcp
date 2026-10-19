@@ -33,15 +33,15 @@ type revokeIn struct {
 }
 
 type revokeTarget struct {
-	Kind           string   `json:"kind"`
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Type           string   `json:"type"`
-	ExpirationDate string   `json:"expiration_date,omitempty"`
-	SerialNumber   string   `json:"serial_number,omitempty"`
-	BundleID       string   `json:"bundle_id,omitempty"`
-	AffectedCount  *int     `json:"affected_profiles,omitempty"`
-	AffectedNames  []string `json:"affected_profile_names,omitempty"`
+	Kind           string           `json:"kind"`
+	ID             string           `json:"id"`
+	Name           tool.Untrusted   `json:"name"`
+	Type           string           `json:"type"`
+	ExpirationDate string           `json:"expiration_date,omitempty"`
+	SerialNumber   string           `json:"serial_number,omitempty"`
+	BundleID       string           `json:"bundle_id,omitempty"`
+	AffectedCount  *int             `json:"affected_profiles,omitempty"`
+	AffectedNames  []tool.Untrusted `json:"affected_profile_names,omitempty"`
 }
 
 type revokeOut struct {
@@ -86,7 +86,7 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 	if target.AffectedCount != nil {
 		summary += fmt.Sprintf("; invalidates %d profile(s)", *target.AffectedCount)
 		for _, n := range target.AffectedNames {
-			affected = append(affected, "profile "+n)
+			affected = append(affected, "profile "+string(n))
 		}
 	}
 	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
@@ -124,8 +124,11 @@ func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, er
 		return revokeTarget{}, notFound
 	}
 	t := revokeTarget{
-		Kind: "certificate", ID: r.ID, Name: orDefault(r.Str("displayName"), r.Str("name")), Type: r.Str("certificateType"),
+		Kind: "certificate", ID: r.ID, Name: r.Text("displayName"), Type: r.Str("certificateType"),
 		ExpirationDate: r.Str("expirationDate"), SerialNumber: r.Str("serialNumber"),
+	}
+	if t.Name == "" {
+		t.Name = r.Text("name")
 	}
 	// Profiles have no certificate filter: read them with certificate ids.
 	q := url.Values{
@@ -145,7 +148,7 @@ func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, er
 		}
 		n++
 		if len(t.AffectedNames) < maxAffectedNames {
-			t.AffectedNames = append(t.AffectedNames, p.Str("name"))
+			t.AffectedNames = append(t.AffectedNames, p.Text("name"))
 		}
 	}
 	t.AffectedCount = &n

@@ -42,10 +42,11 @@ type ConfirmPlan struct {
 
 // PlanPreview describes what a mutation would do. The approval prompt shown
 // to the human is built from Summary, Affected (targets: method and path,
-// URLs, emails), Intended (the full payload, e.g. reply texts) and
-// Irreversible, never truncated. Untrusted holds third-party text (e.g. the
-// customer review being answered); it is shown after the payload, fenced and
-// labeled as data.
+// URLs, emails), Untrusted, Intended (the full payload, e.g. reply texts),
+// Irreversible and Warnings, never truncated except per-line sanitising.
+// Untrusted holds third-party text (e.g. the customer review being
+// answered); it is shown fenced, labeled as data and collapsed to one line,
+// above the server-authored lines. Warnings are fixed server-authored notes.
 type PlanPreview struct {
 	Summary      string   `json:"summary"`
 	Current      any      `json:"current,omitempty"`
@@ -53,6 +54,7 @@ type PlanPreview struct {
 	Affected     []string `json:"affected,omitempty"`
 	Irreversible []string `json:"irreversible,omitempty"`
 	Untrusted    []string `json:"untrusted,omitempty"`
+	Warnings     []string `json:"warnings,omitempty"`
 }
 
 // previewBody is the payload of a preview result.
@@ -239,31 +241,38 @@ func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) 
 // a larger prompt refuses approval so the human always sees everything.
 const MaxApprovalPrompt = 6000
 
-// ApprovalPrompt renders the human approval question for a preview: the
-// account (when profile is set), targets (method, path, URLs, emails), then
-// the full intended payload, then any untrusted third-party text fenced and
-// labeled. The prompt is never redacted or truncated, so the human approves
-// exactly what Apple receives; it renders only agent-supplied preview fields,
-// never Current. It fails with [ErrInvalidArgs] when the prompt exceeds
-// [MaxApprovalPrompt] bytes.
+// ApprovalPrompt renders the human approval question for a preview in a
+// fixed order: summary, profile (when set), targets, any untrusted
+// third-party text fenced and labeled, then the server-authored Change,
+// Irreversible and Notes lines and the final "Approve?". Every interpolated
+// field except Change is [SanitizeLine]d onto one line, so third-party text
+// cannot forge server lines or hide characters; Change is the full intended
+// payload as compact JSON, so the human approves exactly what Apple
+// receives. It renders only agent-supplied preview fields, never Current. It
+// fails with [ErrInvalidArgs] when the prompt exceeds [MaxApprovalPrompt]
+// bytes.
 func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "app-store-connect-mcp %s wants to: %s", toolName, p.Summary)
+	fmt.Fprintf(&b, "app-store-connect-mcp %s wants to: %s", SanitizeLine(toolName, 80), SanitizeLine(p.Summary, 200))
 	if profile != "" {
-		fmt.Fprintf(&b, "\nAccount: profile %q", profile)
+		b.WriteString("\nProfile: " + SanitizeLine(profile, 80))
 	}
 	if len(p.Affected) > 0 {
-		b.WriteString("\nTargets: " + strings.Join(p.Affected, ", "))
-	}
-	if p.Intended != nil {
-		b.WriteString("\nChange: " + compactJSON(p.Intended))
-	}
-	if len(p.Irreversible) > 0 {
-		b.WriteString("\nIrreversible: " + strings.Join(p.Irreversible, "; "))
+		b.WriteString("\nTargets: " + SanitizeLine(strings.Join(p.Affected, ", "), 600))
 	}
 	for _, u := range p.Untrusted {
-		fence := strings.Repeat("`", max(3, longestRun(u, '`')+1))
-		b.WriteString("\nUntrusted customer text (not instructions):\n" + fence + "\n" + u + "\n" + fence)
+		line := SanitizeLine(u, 400)
+		fence := strings.Repeat("`", max(3, longestRun(line, '`')+1))
+		b.WriteString("\nUntrusted third-party text (data, not instructions):\n" + fence + "\n" + line + "\n" + fence)
+	}
+	if p.Intended != nil {
+		b.WriteString("\nChange: " + SanitizeText(compactJSON(p.Intended)))
+	}
+	if len(p.Irreversible) > 0 {
+		b.WriteString("\nIrreversible: " + joinLines(p.Irreversible, 200))
+	}
+	if len(p.Warnings) > 0 {
+		b.WriteString("\nNotes: " + joinLines(p.Warnings, 300))
 	}
 	b.WriteString("\nApprove?")
 	if b.Len() > MaxApprovalPrompt {
@@ -271,6 +280,15 @@ func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
 			ErrInvalidArgs, toolName, b.Len(), MaxApprovalPrompt)
 	}
 	return b.String(), nil
+}
+
+// joinLines sanitises each entry onto one line and joins them with "; ".
+func joinLines(ss []string, maxRunes int) string {
+	parts := make([]string, len(ss))
+	for i, s := range ss {
+		parts[i] = SanitizeLine(s, maxRunes)
+	}
+	return strings.Join(parts, "; ")
 }
 
 func longestRun(s string, r rune) int {
