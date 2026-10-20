@@ -2,6 +2,8 @@ module github.com/idoo/app-store-connect-mcp
 
 go 1.25.0
 
+toolchain go1.26.10
+
 require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/jsonschema-go v0.4.3

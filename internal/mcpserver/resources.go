@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/idoo/app-store-connect-mcp/internal/asc"
@@ -21,6 +20,17 @@ var (
 	rejectionsDoc string
 )
 
+// staticDocURIs are the embedded, never-changing documentation resources.
+var staticDocURIs = map[string]bool{
+	limitsURI:     true,
+	rejectionsURI: true,
+}
+
+const (
+	limitsURI     = "app-store-connect-mcp://docs/limits"
+	rejectionsURI = "app-store-connect-mcp://docs/rejections"
+)
+
 const specOpPrefix = "app-store-connect-mcp://spec/operations/"
 
 func (s *session) addResources() {
@@ -30,8 +40,8 @@ func (s *session) addResources() {
 				return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: uri, MIMEType: "text/markdown", Text: text}}}, nil
 			})
 	}
-	staticDoc("app-store-connect-mcp://docs/limits", "limits", "App Store Connect limits", limitsDoc)
-	staticDoc("app-store-connect-mcp://docs/rejections", "rejections", "Common App Review rejections", rejectionsDoc)
+	staticDoc(limitsURI, "limits", "App Store Connect limits", limitsDoc)
+	staticDoc(rejectionsURI, "rejections", "Common App Review rejections", rejectionsDoc)
 
 	s.srv.AddResource(&mcp.Resource{URI: "app-store-connect-mcp://apps", Name: "apps", Title: "Apps", MIMEType: "application/json"}, s.readApps)
 	s.srv.AddResourceTemplate(&mcp.ResourceTemplate{
@@ -62,21 +72,13 @@ func (s *session) readSpecOp(_ context.Context, req *mcp.ReadResourceRequest) (*
 	uri := req.Params.URI
 	id := strings.TrimPrefix(uri, specOpPrefix)
 	if id == uri || id == "" || s.deps.Env.Spec == nil {
-		return nil, resourceNotFound(uri)
+		return nil, mcp.ResourceNotFoundError(uri)
 	}
 	d, err := s.deps.Env.Spec.Describe(id)
 	if err != nil {
-		return nil, resourceNotFound(uri)
+		return nil, mcp.ResourceNotFoundError(uri)
 	}
 	return jsonContents(uri, d)
-}
-
-// resourceNotFound is the -32002 error that protocol versions up to
-// 2025-11-25 (our session cap) specify; the SDK's ResourceNotFoundError uses
-// -32602 for newer versions. Revisit when the protocol cap lifts.
-func resourceNotFound(uri string) error {
-	data, _ := json.Marshal(map[string]string{"uri": uri})
-	return &jsonrpc.Error{Code: -32002, Message: "Resource not found", Data: data}
 }
 
 func jsonContents(uri string, v any) (*mcp.ReadResourceResult, error) {
@@ -87,4 +89,30 @@ func jsonContents(uri string, v any) (*mcp.ReadResourceResult, error) {
 	return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{
 		URI: uri, MIMEType: "application/json", Text: string(asc.RedactBytes(b)),
 	}}}, nil
+}
+
+// Cache TTLs advertised to clients (2026-07-28 ttlMs). The tool list is kept
+// short because toolsets_enable and enable_writes change it at runtime.
+const (
+	toolsListTTLMs = 5_000
+	listTTLMs      = 60_000
+	staticDocTTLMs = 300_000
+)
+
+// setCacheable marks every cacheable result private (results depend on the
+// profile) with a short TTL. Reads other than the embedded docs stay
+// immediately stale. It must not call back into the server: the SDK holds
+// the server lock while it runs for list methods.
+func setCacheable(_ context.Context, req mcp.Request, c *mcp.Cacheable) {
+	c.CacheScope = "private"
+	switch r := req.(type) {
+	case *mcp.ListToolsRequest:
+		c.TTLMs = toolsListTTLMs
+	case *mcp.ListResourcesRequest, *mcp.ListResourceTemplatesRequest, *mcp.ListPromptsRequest:
+		c.TTLMs = listTTLMs
+	case *mcp.ReadResourceRequest:
+		if r.Params != nil && staticDocURIs[r.Params.URI] {
+			c.TTLMs = staticDocTTLMs
+		}
+	}
 }

@@ -23,6 +23,14 @@ type toolsetEntry struct {
 	Locked []lockedTool `json:"locked,omitempty"`
 }
 
+// errStatelessFixed refuses runtime toolset and write-mode changes on the
+// stateless HTTP path, where every request sees the server-level config.
+var errStatelessFixed = &tool.Error{
+	Code:    tool.ErrUnavailable.Code,
+	Message: "toolsets and write mode are fixed for stateless (2026-07-28) HTTP clients",
+	Hint:    "restart app-store-connect-mcp with --toolsets and/or --allow-writes (or the matching env/profile settings)",
+}
+
 // toolsetsTool builds the session's toolsets tool (core, local). Its
 // enable_writes action changes the session's security mode, so it is a Write
 // tool (no readOnlyHint) that stays listed in read-only mode.
@@ -47,6 +55,9 @@ func (s *session) toolsetsTool() tool.Tool {
 }
 
 func (s *session) toolsetsHandler(ctx context.Context, env *tool.Env, in toolsetsIn) (*tool.Result, error) {
+	if s.deps.Stateless && in.Action != "list" {
+		return nil, errStatelessFixed
+	}
 	switch in.Action {
 	case "list":
 		return tool.OK(map[string]any{"writes": env.Profile.AllowWrites, "toolsets": s.listDetailed()}), nil
@@ -133,7 +144,10 @@ func (s *session) enableWritesAction(ctx context.Context, env *tool.Env) (*tool.
 	if s.deps.WritesLocked {
 		return nil, errWritesLocked
 	}
-	ok, err := env.Elicit(ctx, fmt.Sprintf("Allow App Store Connect writes for profile %q for this session?", env.Profile.Name))
+	ask, err := tool.AskHuman(ctx, env, fmt.Sprintf("Allow App Store Connect writes for profile %q for this session?", env.Profile.Name))
+	if ask != nil {
+		return ask, nil
+	}
 	if isElicitUnavailable(err) {
 		return tool.OK(map[string]any{
 			"writes":       false,
@@ -141,10 +155,7 @@ func (s *session) enableWritesAction(ctx context.Context, env *tool.Env) (*tool.
 		}), nil
 	}
 	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("enable_writes: %w", tool.ErrDeclined)
+		return nil, fmt.Errorf("enable_writes: %w", err)
 	}
 	s.enableWrites()
 	env.SetWrites(true)

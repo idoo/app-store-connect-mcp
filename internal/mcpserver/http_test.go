@@ -149,7 +149,7 @@ func TestServeHTTPShutsDownOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errc := make(chan error, 1)
 	go func() {
-		errc <- ServeHTTP(ctx, "127.0.0.1:0", HTTPOptions{Token: "t", NewServer: func(*http.Request) *mcp.Server { return nil }})
+		errc <- ServeHTTP(ctx, "127.0.0.1:0", HTTPOptions{Token: strongToken, NewServer: func(*http.Request) *mcp.Server { return nil }})
 	}()
 	cancel()
 	if err := <-errc; err != nil {
@@ -246,8 +246,8 @@ func TestHTTPBuildsOneServerPerSession(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	// The probe, the session server, and one throwaway Build for the
-	// client's server/discover attempt (rejected: app-store-connect-mcp caps at 2025-11-25).
+	// The probe, the session server, and at most one more Build for the
+	// client's server/discover attempt.
 	// Before the fix, every request built a server (~13 here).
 	live := 0
 	for s := range seen {

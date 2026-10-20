@@ -2,7 +2,8 @@
 # app-store-connect-mcp installer: downloads a release binary from GitHub, verifies its
 # sha256 against checksums.txt, the cosign signature of checksums.txt (if
 # `cosign` is installed) and the build provenance (if `gh` is installed),
-# and installs it to ~/.local/bin.
+# and installs it to ~/.local/bin. Without cosign or gh only the sha256 is
+# checked, which proves integrity but not authenticity; it says so.
 #
 #   curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh
 #
@@ -24,16 +25,11 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is required"; }
 
 need uname
 need tar
-if command -v curl >/dev/null 2>&1; then
-	fetch() { curl -fsSL --proto '=https' --tlsv1.2 -o "$2" "$1"; }
-	# Final URL after redirects.
-	resolve() { curl -fsSLI --proto '=https' --tlsv1.2 -o /dev/null -w '%{url_effective}' "$1"; }
-elif command -v wget >/dev/null 2>&1; then
-	fetch() { wget -q --https-only -O "$2" "$1"; }
-	resolve() { wget -q --https-only --max-redirect=5 -S --spider "$1" 2>&1 | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r'; }
-else
-	die "curl or wget is required"
-fi
+need curl
+# https only, also after redirects (--proto applies to every hop).
+fetch() { curl -fsSL --proto '=https' --tlsv1.2 -o "$2" "$1"; }
+# Final URL after redirects.
+resolve() { curl -fsSLI --proto '=https' --tlsv1.2 -o /dev/null -w '%{url_effective}' "$1"; }
 
 case $(uname -s) in
 Darwin) os=darwin ;;
@@ -61,6 +57,9 @@ if [ -z "$version" ]; then
 	esac
 fi
 version=${version#v}
+case $version in
+"" | *[!0-9A-Za-z.+-]*) die "invalid version '$version'" ;;
+esac
 
 archive="app-store-connect-mcp_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/$repo/releases/download/v$version"
@@ -72,15 +71,19 @@ say "downloading app-store-connect-mcp $version ($os/$arch)"
 fetch "$base/$archive" "$tmp/$archive"
 fetch "$base/checksums.txt" "$tmp/checksums.txt"
 
+# authentic=1 once cosign or gh ties the download to this repo's release workflow.
+authentic=0
 if command -v cosign >/dev/null 2>&1; then
 	fetch "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" ||
 		die "checksums.txt.sigstore.json missing from release v$version"
+	# Exact identity: the release workflow at this very tag, not any tag.
 	cosign verify-blob --bundle "$tmp/checksums.txt.sigstore.json" \
-		--certificate-identity-regexp "^https://github.com/$repo/.github/workflows/release.yml@refs/tags/v" \
+		--certificate-identity "https://github.com/$repo/.github/workflows/release.yml@refs/tags/v$version" \
 		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
 		"$tmp/checksums.txt" >/dev/null 2>&1 ||
 		die "cosign could not verify checksums.txt; refusing to install"
 	say "checksums.txt signature verified (cosign)"
+	authentic=1
 elif [ "${ASC_MCP_REQUIRE_COSIGN:-0}" = 1 ]; then
 	die "ASC_MCP_REQUIRE_COSIGN=1 but cosign is not installed"
 else
@@ -105,8 +108,13 @@ elif ! gh auth status >/dev/null 2>&1; then
 	say "warning: gh not authenticated; skipping build provenance check, relying on the sha256 check"
 elif gh attestation verify "$tmp/$archive" --repo "$repo" >/dev/null; then
 	say "build provenance verified (gh attestation)"
+	authentic=1
 else
 	die "gh attestation verify failed for $archive; refusing to install"
+fi
+if [ "$authentic" = 0 ]; then
+	say "WARNING: checksum only, not authenticity: the sha256 came from the same server as the binary."
+	say "WARNING: install cosign or an authenticated gh to verify the release was built by $repo."
 fi
 
 tar -xzf "$tmp/$archive" -C "$tmp" app-store-connect-mcp

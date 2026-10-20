@@ -135,8 +135,12 @@ func (f *Files) rel(p string) (string, error) {
 	return rel, nil
 }
 
-// ReadFile reads a confined file.
+// ReadFile reads a confined file. A path whose last element is a symbolic
+// link is refused with [tool.ErrSymlink].
 func (f *Files) ReadFile(p string) ([]byte, error) {
+	if err := tool.RefuseSymlink(f.root, p); err != nil {
+		return nil, fmt.Errorf("files: %w", err)
+	}
 	rel, err := f.rel(p)
 	if err != nil {
 		return nil, err
@@ -194,8 +198,12 @@ func (f *Files) WriteFile(p string, data []byte, perm fs.FileMode) error {
 	return nil
 }
 
-// Open opens a confined file for reading.
+// Open opens a confined file for reading. A path whose last element is a
+// symbolic link is refused with [tool.ErrSymlink].
 func (f *Files) Open(p string) (*os.File, error) {
+	if err := tool.RefuseSymlink(f.root, p); err != nil {
+		return nil, fmt.Errorf("files: %w", err)
+	}
 	rel, err := f.rel(p)
 	if err != nil {
 		return nil, err

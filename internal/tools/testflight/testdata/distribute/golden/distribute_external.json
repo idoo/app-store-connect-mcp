@@ -146,6 +146,103 @@
       "Write": false
     },
     {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/builds/b1",
+      "Query": {
+        "fields[betaAppReviewSubmissions]": [
+          "betaReviewState,submittedDate"
+        ],
+        "fields[betaBuildLocalizations]": [
+          "locale,whatsNew"
+        ],
+        "fields[betaGroups]": [
+          "name"
+        ],
+        "fields[buildBetaDetails]": [
+          "internalBuildState,externalBuildState"
+        ],
+        "fields[builds]": [
+          "version,processingState,expired,usesNonExemptEncryption,betaGroups,betaBuildLocalizations,buildBetaDetail,betaAppReviewSubmission"
+        ],
+        "include": [
+          "betaGroups,betaBuildLocalizations,buildBetaDetail,betaAppReviewSubmission"
+        ],
+        "limit[betaBuildLocalizations]": [
+          "50"
+        ],
+        "limit[betaGroups]": [
+          "50"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1",
+      "Query": {
+        "fields[apps]": [
+          "primaryLocale"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaAppLocalizations",
+      "Query": {
+        "fields[betaAppLocalizations]": [
+          "locale,feedbackEmail,description,marketingUrl,privacyPolicyUrl"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/apps/app1/betaAppReviewDetail",
+      "Query": {
+        "fields[betaAppReviewDetails]": [
+          "contactFirstName,contactLastName,contactPhone,contactEmail,demoAccountName,demoAccountPassword,demoAccountRequired,notes"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
       "Method": "PATCH",
       "Path": "/v1/builds/b1",
       "Query": null,

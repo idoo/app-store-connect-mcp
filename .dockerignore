@@ -1,0 +1,13 @@
+.git
+dist
+bin
+offer-codes
+webhook-secrets
+/app-store-connect-mcp
+/hamn
+/asc-mcp
+*.exe
+*.test
+*.p8
+.env
+.app-store-connect-mcp.toml

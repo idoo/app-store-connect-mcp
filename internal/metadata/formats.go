@@ -79,7 +79,7 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 	}
 	raw := map[string]*LocaleFields{}
 	unknown := map[string][]string{}
-	var appInfoFiles []string
+	var appInfoFiles, links []string
 	err = files.WalkDir(root, func(p string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
@@ -89,6 +89,10 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 			return err
 		}
 		parts := strings.Split(filepath.ToSlash(rel), "/")
+		if rel != "." && tool.IsSymlink(d) {
+			links = append(links, filepath.ToSlash(rel))
+			return nil
+		}
 		switch {
 		case rel == ".":
 			return nil
@@ -140,6 +144,12 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 		l.Notes = append(l.Notes, Issue{
 			Code:    IssueUnknownSourceKey,
 			Message: fmt.Sprintf("%s not read here; set copyright, categories and review details with appinfo_update", strings.Join(appInfoFiles, ", ")),
+		})
+	}
+	if len(links) > 0 {
+		l.Notes = append(l.Notes, Issue{
+			Code:    IssueUnknownSourceKey,
+			Message: fmt.Sprintf("%s not read: symbolic links are skipped; copy the file instead", strings.Join(links, ", ")),
 		})
 	}
 	switch {

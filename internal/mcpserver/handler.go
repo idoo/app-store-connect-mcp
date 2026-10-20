@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -38,7 +39,13 @@ func (s *session) handler(t tool.Tool) mcp.ToolHandler {
 		if req.Params != nil {
 			args = req.Params.Arguments
 		}
-		return s.render(t.Call(ctx, s.env(ctx, req), args)), nil
+		r := t.Call(ctx, s.env(ctx, req), args)
+		if r.Ask != nil {
+			if p, ok := ctx.Value(approvalProbeKey{}).(*approvalProbe); ok {
+				p.asked.Store(true)
+			}
+		}
+		return s.render(r), nil
 	}
 }
 
@@ -51,7 +58,8 @@ func (s *session) env(ctx context.Context, req *mcp.CallToolRequest) *tool.Env {
 	e.Toolsets = s
 	e.Version = s.deps.Version
 	e.Progress = nil
-	e.Elicit = elicitFunc(req.Session)
+	e.CanElicit = canElicit(req.Session) && ctx.Value(noElicitKey{}) == nil
+	e.Reply = approvalReply(req.Params)
 	e.Roots = rootsFunc(req.Session)
 	if req.Params != nil && req.Session != nil {
 		if token := req.Params.GetProgressToken(); token != nil {
@@ -71,29 +79,70 @@ func (s *session) env(ctx context.Context, req *mcp.CallToolRequest) *tool.Env {
 // yes, so no field can be left at a default that silently declines.
 var approveSchema = map[string]any{"type": "object", "properties": map[string]any{}}
 
-// elicitFunc returns a yes/no elicitation for ss, or nil when the client did
-// not declare elicitation (tool.Call then reports ErrElicitationUnavailable).
-// The message is sent unredacted: the human approves exactly what Apple gets
-// (tool.ApprovalPrompt never renders Current state). A client that rejects
-// elicitation/create at the protocol level counts as a client without
-// elicitation.
-func elicitFunc(ss *mcp.ServerSession) func(context.Context, string) (bool, error) {
-	if !canElicit(ss) {
+// approveInput is the input request id of the approval form.
+const approveInput = "approve"
+
+// approvalReply extracts the answer to an approval input request from a
+// retried tools/call, or nil on a first call. A retry whose "approve"
+// response is missing or not an elicitation result has an empty Action and
+// is refused by the confirm gates.
+func approvalReply(p *mcp.CallToolParamsRaw) *tool.ApprovalReply {
+	if p == nil || (len(p.InputResponses) == 0 && p.RequestState == "") {
 		return nil
 	}
-	return func(ctx context.Context, msg string) (bool, error) {
-		r, err := ss.Elicit(ctx, &mcp.ElicitParams{Message: msg, RequestedSchema: approveSchema})
-		if err != nil {
-			var we *jsonrpc.Error
-			if errors.As(err, &we) {
-				switch we.Code {
-				case jsonrpc.CodeInvalidRequest, jsonrpc.CodeMethodNotFound, jsonrpc.CodeInvalidParams:
-					return false, fmt.Errorf("%w: client rejected elicitation/create: %v", tool.ErrElicitationUnavailable, err)
-				}
-			}
-			return false, fmt.Errorf("elicit approval: %w", err)
+	r := &tool.ApprovalReply{State: p.RequestState}
+	if er, ok := p.InputResponses[approveInput].(*mcp.ElicitResult); ok && er != nil {
+		r.Action = er.Action
+	}
+	return r
+}
+
+// askResult renders an approval ask as an input-required result: one form
+// elicitation and the signed state, no content. The message is sent
+// unredacted: the human approves exactly what Apple gets
+// (tool.ApprovalPrompt never renders Current state). For clients older than
+// 2026-07-28 the SDK bridge turns it into elicitation/create mid-call.
+func askResult(a *tool.ApprovalAsk) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		InputRequests: mcp.InputRequestMap{approveInput: &mcp.ElicitParams{Message: a.Prompt, RequestedSchema: approveSchema}},
+		RequestState:  a.State,
+	}
+}
+
+type (
+	// approvalProbeKey carries an *approvalProbe on tools/call contexts.
+	approvalProbeKey struct{}
+	// noElicitKey marks a call re-run after the client rejected
+	// elicitation/create: it is treated as a client without elicitation.
+	noElicitKey struct{}
+)
+
+// approvalProbe records that a tool call returned an approval ask.
+type approvalProbe struct{ asked atomic.Bool }
+
+// approvalMiddleware wraps the SDK's multi round-trip bridge. When a legacy
+// client rejects the bridged elicitation/create at the protocol level, the
+// call is re-run as for a client without elicitation (human gates fail
+// closed); any other failure to ask becomes an isError result. Nothing was
+// written in either case: an ask is returned before write capability.
+func (s *session) approvalMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+		if method != "tools/call" {
+			return next(ctx, method, req)
 		}
-		return r.Action == "accept", nil
+		probe := &approvalProbe{}
+		res, err := next(context.WithValue(ctx, approvalProbeKey{}, probe), method, req)
+		if err == nil || !probe.asked.Load() {
+			return res, err
+		}
+		var we *jsonrpc.Error
+		if errors.As(err, &we) {
+			switch we.Code {
+			case jsonrpc.CodeInvalidRequest, jsonrpc.CodeMethodNotFound, jsonrpc.CodeInvalidParams:
+				return next(context.WithValue(ctx, noElicitKey{}, true), method, req)
+			}
+		}
+		return s.render(tool.Fail(fmt.Errorf("ask for confirmation: %w", err))), nil
 	}
 }
 
@@ -120,15 +169,9 @@ func rootsFunc(ss *mcp.ServerSession) func(context.Context) ([]string, error) {
 	}
 }
 
-// mrtrProtocol is the first protocol version (SEP-2322) on which servers may
-// not send elicitation/create while serving a request; such clients must be
-// asked through multi round-trip input requests instead.
-const mrtrProtocol = "2026-07-28"
-
 // canElicit reports whether ss declared form elicitation (an empty
-// elicitation object means form) on a protocol version that allows
-// in-request elicitation. URL-only clients and newer versions fail closed
-// (Elicit reports ErrElicitationUnavailable).
+// elicitation object means form). URL-only clients fail closed. Approval is
+// asked through input-required results on every protocol version.
 func canElicit(ss *mcp.ServerSession) bool {
 	if ss == nil {
 		return false
@@ -138,13 +181,16 @@ func canElicit(ss *mcp.ServerSession) bool {
 		return false
 	}
 	e := p.Capabilities.Elicitation
-	return e != nil && (e.Form != nil || e.URL == nil) && p.ProtocolVersion < mrtrProtocol
+	return e != nil && (e.Form != nil || e.URL == nil)
 }
 
 // render converts a tool result into an MCP result: structuredContent is
 // {data, next, _meta:{app-store-connect-mcp}}, the text content is its compact JSON (or
 // Result.Text), images follow, and everything is capped and redacted.
 func (s *session) render(r *tool.Result) *mcp.CallToolResult {
+	if r.Ask != nil {
+		return askResult(r.Ask)
+	}
 	s.markLocked(r)
 	full := r.Data
 	data, trunc, err := asc.CapResult(r.Data, s.deps.MaxResultBytes)

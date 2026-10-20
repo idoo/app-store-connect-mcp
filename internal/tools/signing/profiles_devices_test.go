@@ -145,11 +145,12 @@ func TestDevicesRegisterIdempotentByUDID(t *testing.T) {
 	}
 	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, args+`,"confirm":true}`))
-	wantLog(t, k, "GET /v1/devices", "GET /v1/devices", "POST /v1/devices")
+	// Preview, approval ask, approved re-run: the lookup repeats, one POST.
+	wantLog(t, k, "GET /v1/devices", "GET /v1/devices", "GET /v1/devices", "POST /v1/devices")
 	if f := k.ASC.Requests()[0].Query.Get("filter[udid]"); f != "00008110-aaaa,00008120-BBBB" {
 		t.Fatalf("filter = %q", f)
 	}
-	attrs := bodyOf(t, k.ASC.Requests()[2])["data"].(map[string]any)["attributes"].(map[string]any)
+	attrs := bodyOf(t, k.ASC.RequestsTo(http.MethodPost, "/v1/devices")[0])["data"].(map[string]any)["attributes"].(map[string]any)
 	if attrs["udid"] != "00008120-BBBB" || attrs["platform"] != "IOS" || attrs["name"] != "iPad" {
 		t.Fatalf("attrs = %v", attrs)
 	}
@@ -174,6 +175,8 @@ func TestDevicesRegisterIdempotentByUDID(t *testing.T) {
 
 func TestDevicesRegisterConflictReadsBack(t *testing.T) {
 	k := newKit(t)
+	// Approval ask and approved re-run both see no device; the 409 read-back sees it.
+	k.ASC.Handle(http.MethodGet, "/v1/devices", http.StatusOK, `{"data":[]}`)
 	k.ASC.Handle(http.MethodGet, "/v1/devices", http.StatusOK, `{"data":[]}`)
 	k.ASC.Handle(http.MethodGet, "/v1/devices", http.StatusOK,
 		`{"data":[{"type":"devices","id":"D7","attributes":{"name":"Mac","udid":"M-1","platform":"MAC_OS","status":"ENABLED"}}]}`)
@@ -181,7 +184,7 @@ func TestDevicesRegisterConflictReadsBack(t *testing.T) {
 		`{"errors":[{"status":"409","code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"invalid","detail":"A device with number 'M-1' already exists on this team."}]}`)
 	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_devices_register"), k.Env, `{"devices":[{"name":"Mac","udid":"M-1","platform":"MAC_OS"}],"confirm":true}`))
-	wantLog(t, k, "GET /v1/devices", "POST /v1/devices", "GET /v1/devices")
+	wantLog(t, k, "GET /v1/devices", "GET /v1/devices", "POST /v1/devices", "GET /v1/devices")
 	if o := tooltest.Decode[map[string]any](t, res); o["already"] != true {
 		t.Fatalf("out = %v", o)
 	}

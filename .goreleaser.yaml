@@ -56,9 +56,9 @@ sboms:
       - "${artifact}.spdx.json"
 
 # Keyless cosign (GitHub OIDC) over checksums.txt; the bundle covers every
-# archive through its sha256. Verify:
+# archive through its sha256. Verify (exact identity: this tag's release run):
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \
-#     --certificate-identity-regexp '^https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/v' \
+#     --certificate-identity "https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/v$version" \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
 signs:
   - id: checksums
@@ -131,5 +131,5 @@ release:
     or `app-store-connect-mcp-{{ .Version }}.mcpb` for Claude Desktop.
 
     **Verify:** `gh attestation verify app-store-connect-mcp_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp`, or
-    `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
+    `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity 'https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/{{ .Tag }}' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
     The .mcpb is listed in `app-store-connect-mcp-{{ .Version }}.mcpb.sha256`.

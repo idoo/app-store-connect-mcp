@@ -44,6 +44,7 @@ const (
 	problemTooMany             = "too_many_screenshots"
 	problemLayout              = "unexpected_layout"
 	problemDuplicateLocale     = "duplicate_locale"
+	problemSymlink             = "symlink_skipped"
 )
 
 // sourceIn is shared by screenshots_plan and screenshots_sync.
@@ -346,6 +347,11 @@ func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) 
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if path != root && tool.IsSymlink(d) {
+			rel, _ := filepath.Rel(root, path) //nolint:errcheck // path comes from walking root
+			problems = append(problems, problem{File: filepath.ToSlash(rel), Kind: problemSymlink, Message: "symbolic link skipped; copy the file instead"})
 			return nil
 		}
 		if d.IsDir() {

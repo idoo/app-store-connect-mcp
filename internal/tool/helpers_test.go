@@ -216,16 +216,18 @@ func TestGateMisuseFailsClosed(t *testing.T) {
 				return tool.Preview(ctx, env, in.PlanID, in, "fp", tool.PlanPreview{Summary: "x"})
 			})
 		}, func(k *tooltest.Kit) { k.Env.NoConfirm = true }, `PLAN`, "human_approval_required"},
-		{"elicit_error_is_not_approval", func() tool.Tool {
+		{"forged_approval_state", func() tool.Tool {
 			return tool.New(humanFlag, exampleHandler)
 		}, func(k *tooltest.Kit) {
-			k.Env.Elicit = func(context.Context, string) (bool, error) { return false, errors.New("transport closed") }
-		}, `{"app":"1","confirm":true}`, "error"},
-		{"elicit_error_non_human", func() tool.Tool {
+			k.Env.CanElicit = true
+			k.Env.Reply = &tool.ApprovalReply{State: "e30.forged", Action: "accept"}
+		}, `{"app":"1","confirm":true}`, "invalid_arguments"},
+		{"approval_reply_without_state", func() tool.Tool {
 			return tool.New(exampleMeta, exampleHandler)
 		}, func(k *tooltest.Kit) {
-			k.Env.Elicit = func(context.Context, string) (bool, error) { return false, errors.New("transport closed") }
-		}, `{"app":"1","confirm":true}`, "error"},
+			k.Env.CanElicit = true
+			k.Env.Reply = &tool.ApprovalReply{Action: "accept"}
+		}, `{"app":"1","confirm":true}`, "invalid_arguments"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -118,11 +118,11 @@ func (s *session) readArtifact(_ context.Context, req *mcp.ReadResourceRequest) 
 	uri := req.Params.URI
 	id := strings.TrimPrefix(uri, artifactPrefix)
 	if id == uri || id == "" {
-		return nil, resourceNotFound(uri)
+		return nil, mcp.ResourceNotFoundError(uri)
 	}
 	art, ok := s.artifacts.get(id)
 	if !ok {
-		return nil, resourceNotFound(uri)
+		return nil, mcp.ResourceNotFoundError(uri)
 	}
 	c := &mcp.ResourceContents{URI: uri, MIMEType: art.mime}
 	if isTextMIME(art.mime) {

@@ -8,7 +8,7 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// maxGroupHint caps the group names listed in a not-found hint.
+// maxGroupHint caps the group ids listed in a not-found hint.
 const maxGroupHint = 10
 
 // Group implements [tool.Resolver]: a beta group of the app by id or by
@@ -37,13 +37,16 @@ func (r *Resolver) Group(ctx context.Context, appID string, ref tool.GroupRef) (
 	case 1:
 		return hits[0], nil
 	case 0:
-		names := make([]string, 0, maxGroupHint)
+		// Group names are teammate-written text and the hint is a plain
+		// string outside {"untrusted"}, so it lists ids only;
+		// testflight_groups_list returns the names wrapped.
+		ids := make([]string, 0, maxGroupHint)
 		for _, d := range res.Data[:min(len(res.Data), maxGroupHint)] {
-			names = append(names, d.Str("name"))
+			ids = append(ids, d.ID)
 		}
 		hint := "the app has no beta groups"
-		if len(names) > 0 {
-			hint = "beta groups: " + strings.Join(names, ", ")
+		if len(ids) > 0 {
+			hint = "no beta group has this id or name; testflight_groups_list shows their names; beta group ids: " + strings.Join(ids, ", ")
 		}
 		return tool.Group{}, &tool.ErrNotFound{
 			Kind: "beta group", Ref: s, Hint: hint,

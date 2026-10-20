@@ -125,6 +125,46 @@
     },
     {
       "Method": "GET",
+      "Path": "/v1/apps/app1/betaGroups",
+      "Query": {
+        "fields[betaGroups]": [
+          "name,isInternalGroup"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
+      "Path": "/v1/betaTesters",
+      "Query": {
+        "fields[betaTesters]": [
+          "email,firstName,lastName,state,inviteType"
+        ],
+        "filter[betaGroups]": [
+          "g-ext"
+        ],
+        "filter[email]": [
+          "new@example.com,existing@example.com,racy@example.com,member@example.com"
+        ],
+        "limit": [
+          "200"
+        ]
+      },
+      "Body": null,
+      "RawBody": null,
+      "ContentType": "",
+      "Accept": "",
+      "Write": false
+    },
+    {
+      "Method": "GET",
       "Path": "/v1/betaTesters",
       "Query": {
         "fields[betaTesters]": [

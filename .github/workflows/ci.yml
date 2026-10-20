@@ -17,7 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Same exact toolchain as release.yml, so CI tests what ships.
+  # Same exact toolchain as release.yml, so CI tests what ships. Bump it
+  # together with go.mod's toolchain line, release.yml and the Dockerfile.
   GO_VERSION: "1.26.10"
 
 jobs:
@@ -29,10 +30,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ["1.26.10"]
         include:
-          # go.mod's minimum toolchain, so newer-only APIs fail CI.
+          # go.mod's minimum Go, so newer-only APIs fail CI. GOTOOLCHAIN=local
+          # keeps it from switching to go.mod's toolchain line.
           - os: ubuntu-latest
             go: "1.25.x"
+            gotoolchain: local
     runs-on: ${{ matrix.os }}
+    env:
+      GOTOOLCHAIN: ${{ matrix.gotoolchain || 'auto' }}
     steps:
       # Goldens, fixtures and embedded files are compared byte for byte.
       - if: runner.os == 'Windows'
@@ -128,8 +133,10 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: release --snapshot --clean --skip=publish,sign
+      # Validation runs npm code, so it lives here (contents: read, no
+      # id-token) and never in release.yml.
       - name: Build and validate .mcpb
-        run: scripts/build-mcpb.sh
+        run: VALIDATE=1 scripts/build-mcpb.sh
 
   actionlint:
     runs-on: ubuntu-latest
@@ -147,6 +154,14 @@ jobs:
           /tmp/actionlint -color
       - name: shellcheck
         run: shellcheck install.sh scripts/*.sh
+      - name: no tracked binaries
+        run: |
+          bins=$(git ls-files -z | xargs -0 file -N | grep -E ':[[:space:]]*(ELF|Mach-O|PE32|MS-DOS executable)' || true)
+          if [ -n "$bins" ]; then
+            echo "tracked executables (build output must not be committed):" >&2
+            echo "$bins" >&2
+            exit 1
+          fi
 
   gitleaks:
     runs-on: ubuntu-latest

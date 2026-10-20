@@ -10,8 +10,9 @@
 # The manifest's tool list is generated from docs/tools.json (default
 # toolsets, tools listed in read-only mode).
 #
-# Usage: scripts/build-mcpb.sh [version]   (default: dist/metadata.json)
-# Needs: jq, zip. Validates with the pinned mcpb CLI when npx exists.
+# Usage: [VALIDATE=1] scripts/build-mcpb.sh [version]   (default: dist/metadata.json)
+# Needs: jq, zip. VALIDATE=1 also checks the manifest with the pinned mcpb
+# CLI via npx (CI only; the release job never runs npm code).
 set -eu
 
 mcpb_cli_version=2.1.2
@@ -71,10 +72,9 @@ jq --arg v "$version" --argjson ts "$default_toolsets" --slurpfile tools "$root/
       | {name, description} ]' \
 	"$root/packaging/mcpb/manifest.json" >"$stage/manifest.json"
 
-if command -v npx >/dev/null 2>&1; then
+if [ "${VALIDATE:-0}" = 1 ]; then
+	command -v npx >/dev/null 2>&1 || { echo "build-mcpb: VALIDATE=1 needs npx" >&2; exit 1; }
 	npx -y "@anthropic-ai/mcpb@$mcpb_cli_version" validate "$stage/manifest.json" >&2
-else
-	echo "build-mcpb: npx not found, skipping manifest validation" >&2
 fi
 
 out="$dist/app-store-connect-mcp-$version.mcpb"

@@ -148,6 +148,7 @@ func Resolve(opts Options) (*Resolved, error) {
 		return nil, err
 	}
 	r.emptyKeyProblem(opts, getenv)
+	r.keyPermIssues()
 	if err := r.resolveModes(opts.Flags, getenv); err != nil {
 		return nil, err
 	}
@@ -155,6 +156,18 @@ func Resolve(opts Options) (*Resolved, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+// keyPermIssues reports the resolved key file's permissions the way Load
+// reports config.toml's: readable by others is a warning; writable by
+// others is a problem (Read refuses the key, so signing fails).
+func (r *Resolved) keyPermIssues() {
+	w, err := r.Profile.Key.CheckPerm()
+	if err != nil {
+		r.Profile.Problems = append(r.Profile.Problems, err.Error())
+		return
+	}
+	r.Warnings = append(r.Warnings, w...)
 }
 
 // emptyKeyProblem flags an env profile whose inline key variable is present

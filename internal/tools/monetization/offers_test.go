@@ -110,7 +110,8 @@ func TestOffersCreateIntroPerTerritory(t *testing.T) {
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, args+`,"confirm":true}`), "human_approval_required")
 	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, args+`,"confirm":true}`))
-	if got := k.ASC.RequestsTo(http.MethodGet, "/v1/subscriptions/{id}/pricePoints"); len(got) != 3 || got[0].Query.Get("filter[territory]") != "USA" {
+	// One lookup each: preview, refused confirm, approval ask, approved re-run.
+	if got := k.ASC.RequestsTo(http.MethodGet, "/v1/subscriptions/{id}/pricePoints"); len(got) != 4 || got[0].Query.Get("filter[territory]") != "USA" {
 		t.Fatalf("price point lookup = %+v", got)
 	}
 	tooltest.AssertGolden(t, "testdata/offers/intro_create_requests.json", offerMutationBodies(t, k))
