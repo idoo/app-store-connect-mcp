@@ -62,7 +62,7 @@ func toReview(r tool.Resource, responses map[string]tool.Resource) reviewOut {
 		Body:      r.Text("body"),
 		Nickname:  tool.Untrusted(r.Str("reviewerNickname")),
 	}
-	out.created, _ = parseTime(out.Created)
+	out.created, _ = tool.ParseInstant(out.Created)
 	if loc, ok := applemeta.LocaleForTerritory(out.Territory); ok {
 		out.ReplyLocale = loc
 	}
@@ -86,19 +86,6 @@ func responsesByID(included []tool.Resource) map[string]tool.Resource {
 	return m
 }
 
-// parseTime accepts RFC 3339 (with or without fractional seconds) and plain
-// YYYY-MM-DD dates (UTC midnight).
-func parseTime(s string) (time.Time, error) {
-	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
-		return t, nil
-	}
-	t, err := time.Parse(time.DateOnly, s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("%w: %q is not an ISO date or RFC 3339 time", tool.ErrInvalidArgs, s)
-	}
-	return t, nil
-}
-
 // advanceCursor stores value as the app's reviews cursor unless the stored
 // cursor is already at or past it. It returns the cursor now stored.
 func advanceCursor(env *tool.Env, appID string, newest time.Time, value string) (string, error) {
@@ -106,7 +93,7 @@ func advanceCursor(env *tool.Env, appID string, newest time.Time, value string) 
 	if err != nil {
 		return "", fmt.Errorf("read reviews cursor: %w", err)
 	}
-	if st, perr := parseTime(stored); stored != "" && perr == nil && !newest.After(st) {
+	if st, perr := tool.ParseInstant(stored); stored != "" && perr == nil && !newest.After(st) {
 		return stored, nil
 	}
 	if err := env.State.SetCursor(env.Profile.Name, appID, cursorName, value); err != nil {

@@ -44,4 +44,4 @@ mcpb: snapshot
 # Regenerates docs/TOOLS.md and docs/tools.json and fails if they changed.
 docs:
 	$(GO) run ./internal/tools/docsgen
-	git diff --exit-code docs
+	git diff --exit-code docs/TOOLS.md docs/tools.json

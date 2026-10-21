@@ -74,7 +74,7 @@ func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.
 	if err != nil {
 		return nil, fmt.Errorf("list profiles: %w", err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	now := env.Clock.Now()
 	out := profilesListOut{Profiles: []profileOut{}, Total: res.Total, NextCursor: res.NextCursor}
 	for _, r := range res.Data {
@@ -115,7 +115,7 @@ func readProfile(ctx context.Context, env *tool.Env, id string, content bool) (p
 	if !ok {
 		return profileOut{}, notFound
 	}
-	return flattenProfile(r, indexIncluded(resp.Included), env.Clock.Now()), nil
+	return flattenProfile(r, tool.IndexIncluded(resp.Included), env.Clock.Now()), nil
 }
 
 // --- signing_profile_create ---
@@ -176,7 +176,7 @@ func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*too
 		}
 	}
 	rels := map[string]any{
-		"bundleId":     relData("bundleIds", bundle.ID),
+		"bundleId":     tool.RelData("bundleIds", bundle.ID),
 		"certificates": relList("certificates", certs),
 	}
 	if len(devices) > 0 {
@@ -217,7 +217,7 @@ func findProfile(ctx context.Context, env *tool.Env, name, profileType, bundleRe
 	if err != nil {
 		return profileOut{}, false, fmt.Errorf("find profile %s: %w", name, err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	now := env.Clock.Now()
 	for _, r := range res.Data {
 		p := flattenProfile(r, inc, now)

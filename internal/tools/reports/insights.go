@@ -68,14 +68,16 @@ type insightsOut struct {
 
 type salesInsight struct {
 	section
-	ComparedDays int                         `json:"compared_days,omitempty"`
-	CurrentDays  int                         `json:"current_days,omitempty"`
-	PreviousDays int                         `json:"previous_days,omitempty"`
-	PendingDays  []string                    `json:"pending_days,omitempty"`
-	Units        reports.Units               `json:"units,omitempty"`
-	PrevUnits    reports.Units               `json:"previous_units,omitempty"`
-	UnitsChange  map[reports.Category]string `json:"units_change,omitempty"`
-	Proceeds     []proceedsChange            `json:"proceeds,omitempty"`
+	// vendorMissing marks the profile has no vendor number (never serialized).
+	vendorMissing bool
+	ComparedDays  int                         `json:"compared_days,omitempty"`
+	CurrentDays   int                         `json:"current_days,omitempty"`
+	PreviousDays  int                         `json:"previous_days,omitempty"`
+	PendingDays   []string                    `json:"pending_days,omitempty"`
+	Units         reports.Units               `json:"units,omitempty"`
+	PrevUnits     reports.Units               `json:"previous_units,omitempty"`
+	UnitsChange   map[reports.Category]string `json:"units_change,omitempty"`
+	Proceeds      []proceedsChange            `json:"proceeds,omitempty"`
 }
 
 type proceedsChange struct {
@@ -157,6 +159,12 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 
 	today := applemeta.PacificDay(now)
 	out.Sales = salesSection(ctx, env, app, from, to, pFrom, pTo, today)
+	if out.Sales.vendorMissing {
+		// The sales_report suggestion would fail the same way; the next step
+		// is the one-time setup command and where to find the number.
+		te := vendorNumberMissing(env.Profile.Name).(*tool.Error)
+		res.Warn("next step for sales: " + te.Hint + "; " + te.Message)
+	}
 	if app == nil {
 		out.Ratings = allAppsRatings(ctx, env, from, to, pFrom)
 		out.Release.section = unavailable(noApp)
@@ -177,7 +185,10 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return res.Then(tool.NextStep{Tool: "sales_report", Args: map[string]any{"period": preset, "group_by": []string{"country"}}}), nil
+	if out.Sales.Status == "ok" {
+		res.Then(tool.NextStep{Tool: "sales_report", Args: map[string]any{"app": app.ID, "period": preset, "group_by": []string{"country"}}})
+	}
+	return res, nil
 }
 
 // reasonOf turns a section error into a short reason.
@@ -194,7 +205,7 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 	if err != nil {
 		var te *tool.Error
 		if errors.As(err, &te) {
-			return salesInsight{section: unavailable(te.Message + "; " + te.Hint)}
+			return salesInsight{section: unavailable(te.Message + "; " + te.Hint), vendorMissing: true}
 		}
 		return salesInsight{section: unavailable(reasonOf(err))}
 	}

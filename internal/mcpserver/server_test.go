@@ -255,6 +255,16 @@ func TestToolsetsToolNotReadOnlyHint(t *testing.T) {
 	t.Fatal("toolsets not listed in read-only mode")
 }
 
+// toolsets with no arguments lists the toolsets instead of failing schema
+// validation on a missing action.
+func TestToolsetsNoArgsLists(t *testing.T) {
+	h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", nil)
+	res, body := h.call(t, "toolsets", map[string]any{})
+	if res.IsError || dataOf(body)["toolsets"] == nil {
+		t.Fatalf("toolsets {} = %v", body)
+	}
+}
+
 func TestEnableWrites(t *testing.T) {
 	answer := func(action string) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 		return func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -301,7 +311,7 @@ func TestEnableWrites(t *testing.T) {
 		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "cursor", nil)
 		res, body := h.call(t, "toolsets", args)
 		instr, _ := dataOf(body)["instructions"].(string)
-		if res.IsError || !strings.Contains(instr, "~/.cursor/mcp.json") || !strings.Contains(instr, "ASC_MCP_ALLOW_WRITES") {
+		if res.IsError || !strings.Contains(instr, "app-store-connect-mcp config install cursor --allow-writes") || !strings.Contains(instr, "ASC_MCP_ALLOW_WRITES") {
 			t.Fatalf("fallback = %v", body)
 		}
 	})

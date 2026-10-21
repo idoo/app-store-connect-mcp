@@ -164,7 +164,7 @@ func prcFindSub(ctx context.Context, env *tool.Env, appID, productID string) (st
 	if err != nil {
 		return "", fmt.Errorf("look up subscription %s: %w", productID, err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	for _, g := range res.Data {
 		for _, s := range related(g, "subscriptions", "subscriptions", inc) {
 			if s.Str("productId") == productID {
@@ -362,7 +362,7 @@ func prcSchedulePrices(ctx context.Context, env *tool.Env, k *prcKind, scheduleI
 
 // prcPricesOf flattens price rows with their included price points.
 func prcPricesOf(k *prcKind, res *tool.ListResult, manual bool) []prcPrice {
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	cur := prcCurrencies(res.Included)
 	out := make([]prcPrice, 0, len(res.Data))
 	for _, r := range res.Data {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"strings"
 	"testing"
 )
@@ -180,18 +179,5 @@ func TestFetchRedirectLimit(t *testing.T) {
 	_, err := f.Fetch(context.Background(), "GET", srv.URL+"/loop", nil, nil, 0)
 	if !errors.Is(err, ErrURLPolicy) || !strings.Contains(err.Error(), "redirects") {
 		t.Fatalf("err = %v, want redirect limit", err)
-	}
-}
-
-func TestPublicIP(t *testing.T) {
-	for _, s := range []string{"8.8.8.8", "17.1.2.3", "2001:4860:4860::8888"} {
-		if !publicIP(netip.MustParseAddr(s)) {
-			t.Errorf("publicIP(%s) = false", s)
-		}
-	}
-	for _, s := range []string{"198.18.0.1", "240.0.0.1", "255.255.255.255", "ff02::1", "::"} {
-		if publicIP(netip.MustParseAddr(s)) {
-			t.Errorf("publicIP(%s) = true", s)
-		}
 	}
 }

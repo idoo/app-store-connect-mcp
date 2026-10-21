@@ -323,8 +323,8 @@ func (f *FakeASC) List(ctx context.Context, path string, opts tool.ListOptions) 
 		if err != nil {
 			return nil, err
 		}
-		if total, ok := pagingTotal(resp.Meta); ok {
-			out.Total = total
+		if n := resp.Total(); n > 0 {
+			out.Total = n
 		}
 		// Items beyond MaxItems on the current page are dropped; the cursor
 		// resumes at the following page (page size should divide MaxItems).
@@ -373,12 +373,6 @@ func decodeCursor(c string) (*url.URL, error) {
 		return nil, fmt.Errorf("%w: bad cursor", tool.ErrInvalidArgs)
 	}
 	return u, nil
-}
-
-func pagingTotal(meta map[string]any) (int, bool) {
-	p, _ := meta["paging"].(map[string]any)
-	t, ok := p["total"].(float64)
-	return int(t), ok
 }
 
 // RateLimit implements tool.ASC.

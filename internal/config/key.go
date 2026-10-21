@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,6 +31,9 @@ const (
 // ErrKeychainSource is returned by KeyRef.Read for keychain keys, which
 // internal/auth reads itself.
 var ErrKeychainSource = errors.New("key is stored in the keychain; read it via internal/auth")
+
+// MissingKeyHint is appended to errors for a .p8 file that does not exist.
+const MissingKeyHint = "moved the .p8? fix key_path by rerunning `app-store-connect-mcp auth import` (or `auth add`), or set " + EnvKeyPath
 
 // KeyRef locates a private key without holding its bytes, so config values
 // are always safe to print.
@@ -66,6 +70,9 @@ func (r KeyRef) Read(getenv func(string) string) ([]byte, error) {
 			return nil, fmt.Errorf("read private key: %w", err)
 		}
 		b, err := os.ReadFile(filepath.Clean(r.Path))
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("read private key: %w; %s", err, MissingKeyHint)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read private key: %w", err)
 		}

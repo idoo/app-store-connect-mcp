@@ -163,7 +163,7 @@ func offerIAPCodes(ctx context.Context, env *tool.Env, app tool.App, productID s
 	if err != nil {
 		return nil, fmt.Errorf("list IAP offer codes: %w", err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	out := offerIAPOut{ID: iap.ID, ProductID: productID, Offers: []offerOut{}}
 	for _, r := range res.Data {
 		o := offerRow(offerKindIAPCode, r, inc)
@@ -250,7 +250,7 @@ func offerFetch(ctx context.Context, env *tool.Env, subID, kind string) ([]tool.
 	if err != nil {
 		return nil, nil, fmt.Errorf("list %s offers: %w", kind, err)
 	}
-	return res.Data, indexIncluded(res.Included), nil
+	return res.Data, tool.IndexIncluded(res.Included), nil
 }
 
 // offerRow summarizes one offer resource.

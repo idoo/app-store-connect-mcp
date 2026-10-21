@@ -242,6 +242,57 @@ func (d *Document) Err(status int) *APIError {
 	return &e
 }
 
+// Total returns meta.paging.total, or 0 when absent (see [PagingTotal]).
+func (d *Document) Total() int { return PagingTotal(d.Meta) }
+
+// Total returns meta.paging.total, or 0 when absent (see [PagingTotal]).
+func (r *Response) Total() int { return PagingTotal(r.Meta) }
+
+// PagingTotal reads meta.paging.total as decoded by encoding/json (float64),
+// by a json.Decoder with UseNumber (json.Number) or built in Go (int); it
+// returns 0 when absent.
+func PagingTotal(meta map[string]any) int {
+	paging, _ := meta["paging"].(map[string]any)
+	switch v := paging["total"].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case json.Number:
+		n, _ := v.Int64()
+		return int(n)
+	}
+	return 0
+}
+
+// IndexIncluded indexes included resources by "type/id".
+func IndexIncluded(inc []Resource) map[string]Resource {
+	m := make(map[string]Resource, len(inc))
+	for _, r := range inc {
+		m[r.Type+"/"+r.ID] = r
+	}
+	return m
+}
+
+// RelData is a JSON:API to-one relationship body {"data":{"type","id"}}.
+func RelData(typ, id string) map[string]any {
+	return map[string]any{"data": map[string]any{"type": typ, "id": id}}
+}
+
+// IsDigits reports whether s is a non-empty run of ASCII digits, the shape
+// of App Store Connect numeric ids (apps, users).
+func IsDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func flatten(r rawResource) Resource {
 	out := Resource{ID: r.ID, Type: r.Type, Attributes: r.Attributes}
 	if out.Attributes == nil {

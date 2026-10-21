@@ -94,7 +94,7 @@ func subsList(ctx context.Context, env *tool.Env, in subsListIn) (*tool.Result, 
 	if err != nil {
 		return nil, fmt.Errorf("list subscription groups: %w", err)
 	}
-	ginc := indexIncluded(groups.Included)
+	ginc := tool.IndexIncluded(groups.Included)
 	out := subsListOut{App: app, Groups: []subsGroupOut{}, ByState: map[string]int{}}
 	res := tool.OK(&out)
 	for i, g := range groups.Data {
@@ -157,7 +157,7 @@ func subsOfGroup(ctx context.Context, env *tool.Env, groupID string) ([]subsOut,
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions of group %s: %w", groupID, err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	out := make([]subsOut, 0, len(res.Data))
 	for _, s := range res.Data {
 		lvl, _ := s.Int("groupLevel")
@@ -554,7 +554,7 @@ func subsFind(ctx context.Context, env *tool.Env, groupID, productID string) (su
 	if err != nil {
 		return sub, shot, false, fmt.Errorf("look up subscription %s: %w", productID, err)
 	}
-	inc := indexIncluded(resp.Included)
+	inc := tool.IndexIncluded(resp.Included)
 	for _, r := range resp.Data {
 		if r.Str("productId") == productID {
 			if id := r.RelID("appStoreReviewScreenshot"); id != "" {
@@ -579,7 +579,7 @@ func subsFindAnywhere(ctx context.Context, env *tool.Env, appID, productID strin
 	if err != nil {
 		return "", fmt.Errorf("read back subscription %s: %w", productID, err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	for _, g := range res.Data {
 		for _, s := range related(g, "subscriptions", "subscriptions", inc) {
 			if s.Str("productId") == productID {

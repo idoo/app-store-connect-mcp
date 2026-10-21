@@ -149,11 +149,8 @@ func fetchBuilds(ctx context.Context, env *tool.Env, q url.Values, out *buildsLi
 	if err != nil {
 		return -1, fmt.Errorf("list builds: %w", err)
 	}
-	inc := map[string]tool.Resource{}
-	for _, r := range resp.Included {
-		inc[r.Type+":"+r.ID] = r
-	}
-	out.Builds, out.Total = make([]buildRow, 0, len(resp.Data)), pagingTotal(resp.Meta)
+	inc := tool.IndexIncluded(resp.Included)
+	out.Builds, out.Total = make([]buildRow, 0, len(resp.Data)), resp.Total()
 	processing := -1
 	for _, b := range resp.Data {
 		row := buildRow{
@@ -164,15 +161,15 @@ func fetchBuilds(ctx context.Context, env *tool.Env, q url.Values, out *buildsLi
 		if v, ok := b.Bool("usesNonExemptEncryption"); ok {
 			row.UsesNonExemptEncryption = &v
 		}
-		if pv, ok := inc["preReleaseVersions:"+b.RelID("preReleaseVersion")]; ok {
+		if pv, ok := inc["preReleaseVersions/"+b.RelID("preReleaseVersion")]; ok {
 			row.Version, row.Platform = pv.Str("version"), pv.Str("platform")
 		}
-		if bd, ok := inc["buildBetaDetails:"+b.RelID("buildBetaDetail")]; ok {
+		if bd, ok := inc["buildBetaDetails/"+b.RelID("buildBetaDetail")]; ok {
 			row.InternalState, row.ExternalState = bd.Str("internalBuildState"), bd.Str("externalBuildState")
 		}
 		for _, id := range b.RelIDs("betaGroups") {
 			row.GroupCount++
-			if g, ok := inc["betaGroups:"+id]; ok {
+			if g, ok := inc["betaGroups/"+id]; ok {
 				row.Groups = append(row.Groups, g.Str("name")) // trusted: team-created beta group name, not tester-writable
 			}
 		}
@@ -209,7 +206,7 @@ func otherPlatformBuilds(ctx context.Context, env *tool.Env, app tool.App, platf
 		if err != nil {
 			return nil, fmt.Errorf("count %s builds: %w", p, err)
 		}
-		if n := max(pagingTotal(resp.Meta), len(resp.Data)); n > 0 {
+		if n := max(resp.Total(), len(resp.Data)); n > 0 {
 			if out == nil {
 				out = map[tool.Platform]int{}
 			}
@@ -217,13 +214,6 @@ func otherPlatformBuilds(ctx context.Context, env *tool.Env, app tool.App, platf
 		}
 	}
 	return out, nil
-}
-
-// pagingTotal reads meta.paging.total (0 when absent).
-func pagingTotal(meta map[string]any) int {
-	p, _ := meta["paging"].(map[string]any)
-	n, _ := p["total"].(float64)
-	return int(n)
 }
 
 // Build wait bounds.

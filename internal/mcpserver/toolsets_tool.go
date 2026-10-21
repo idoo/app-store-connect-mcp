@@ -9,7 +9,7 @@ import (
 )
 
 type toolsetsIn struct {
-	Action   string   `json:"action" jsonschema:"what to do"`
+	Action   string   `json:"action,omitempty" jsonschema:"default list"`
 	Toolsets []string `json:"toolsets,omitempty" jsonschema:"toolsets for enable/disable"`
 }
 
@@ -55,6 +55,9 @@ func (s *session) toolsetsTool() tool.Tool {
 }
 
 func (s *session) toolsetsHandler(ctx context.Context, env *tool.Env, in toolsetsIn) (*tool.Result, error) {
+	if in.Action == "" {
+		in.Action = "list"
+	}
 	if s.deps.Stateless && in.Action != "list" {
 		return nil, errStatelessFixed
 	}
@@ -174,24 +177,29 @@ func clientName(ctx context.Context) string {
 }
 
 // writesInstructions returns copy-paste steps to restart app-store-connect-mcp with writes on
-// for the detected MCP client.
+// for the detected MCP client. The per-client `config install --allow-writes`
+// command comes first; the profile flag is offered last, labelled global.
 func writesInstructions(client string) string {
-	const tail = " Then restart the client. Alternatively set allow_writes = true in the profile in ~/.config/app-store-connect-mcp/config.toml."
+	const tail = " Then restart the client. Alternative (all clients): allow_writes = true in the profile in ~/.config/app-store-connect-mcp/config.toml."
+	cmd := func(name string) string {
+		return "Ask the user to run: app-store-connect-mcp config install " + name + " --allow-writes (sets ASC_MCP_ALLOW_WRITES=1 for this client only; add --profile NAME if it uses one)."
+	}
 	c := strings.ToLower(client)
 	switch {
 	case strings.Contains(c, "claude-code") || strings.Contains(c, "claude code"):
-		return "Ask the user to run: claude mcp remove app-store-connect-mcp -s user && claude mcp add app-store-connect-mcp -s user -e ASC_MCP_ALLOW_WRITES=1 <existing -e ASC_* flags> -- app-store-connect-mcp." + tail
+		return cmd("claude-code") + " If Claude Code already has the server, it prints the claude mcp remove/add command to run." + tail
 	case strings.Contains(c, "claude"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.app-store-connect-mcp.env in claude_desktop_config.json.` + tail
+		return cmd("claude-desktop") + tail
 	case strings.Contains(c, "cursor"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.app-store-connect-mcp.env in ~/.cursor/mcp.json.` + tail
+		return cmd("cursor") + tail
 	case strings.Contains(c, "codex"):
-		return `Ask the user to add ASC_MCP_ALLOW_WRITES = "1" to env of [mcp_servers.app-store-connect-mcp] in ~/.codex/config.toml.` + tail
+		return cmd("codex") + tail
 	case strings.Contains(c, "visual studio code") || strings.Contains(c, "vscode"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to servers.app-store-connect-mcp.env in .vscode/mcp.json.` + tail
+		return cmd("vscode") + tail
 	case strings.Contains(c, "windsurf"):
-		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.app-store-connect-mcp.env in ~/.codeium/windsurf/mcp_config.json.` + tail
+		return cmd("windsurf") + tail
 	default:
-		return "Ask the user to set the environment variable ASC_MCP_ALLOW_WRITES=1 in this client's app-store-connect-mcp server config (or start app-store-connect-mcp with --allow-writes)." + tail
+		return "Ask the user to run app-store-connect-mcp config install <client> --allow-writes (client: claude-code, claude-desktop, codex, cursor, vscode, windsurf), " +
+			"or set ASC_MCP_ALLOW_WRITES=1 in this client's app-store-connect-mcp server config." + tail
 	}
 }

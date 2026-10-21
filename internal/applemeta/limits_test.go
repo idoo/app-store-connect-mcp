@@ -56,11 +56,11 @@ func TestCheckUnknownField(t *testing.T) {
 	}
 }
 
-func TestLimit(t *testing.T) {
-	if m, ok := Limit(FieldKeywords); m != 100 || !ok {
-		t.Errorf("Limit(keywords) = %d,%v", m, ok)
+func TestLimitTable(t *testing.T) {
+	if m, ok := limits[FieldKeywords]; m != 100 || !ok {
+		t.Errorf("limits[keywords] = %d,%v", m, ok)
 	}
-	if _, ok := Limit("nope"); ok {
-		t.Error("Limit(unknown) ok")
+	if _, ok := limits["nope"]; ok {
+		t.Error("limits[unknown] ok")
 	}
 }

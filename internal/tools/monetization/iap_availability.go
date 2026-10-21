@@ -3,6 +3,7 @@ package monetization
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -75,7 +76,7 @@ func planAvail(ctx context.Context, env *tool.Env, k availKind, productID string
 		if err != nil {
 			return nil, err
 		}
-		want = sortedKeys(all)
+		want = slices.Sorted(maps.Keys(all))
 	}
 	slices.Sort(want)
 	want = slices.Compact(want)

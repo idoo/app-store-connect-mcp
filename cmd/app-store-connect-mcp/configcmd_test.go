@@ -29,7 +29,7 @@ func TestSnippetGoldens(t *testing.T) {
 				name += "-" + profile
 			}
 			t.Run(name, func(t *testing.T) {
-				got, err := snippet(client, fakeBin, profile, perms)
+				got, err := snippet(client, fakeBin, serverOpts{profile: profile}, perms)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -76,7 +76,7 @@ func TestReadToolPermissionsOnlyReadTools(t *testing.T) {
 
 func TestMergeJSONServerPreservesOthers(t *testing.T) {
 	old := []byte(`{"theme":"dark","mcpServers":{"other":{"command":"x"},"app-store-connect-mcp":{"command":"old"}}}`)
-	out, err := mergeJSONServer(old, "mcpServers", "app-store-connect-mcp", serverEntry("cursor", fakeBin, ""))
+	out, err := mergeJSONServer(old, "mcpServers", "app-store-connect-mcp", serverEntry("cursor", fakeBin, serverOpts{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestInstallJSONBacksUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	if err := install("cursor", fakeBin, "work", home, &out); err != nil {
+	if err := install("cursor", fakeBin, serverOpts{profile: "work"}, home, &out); err != nil {
 		t.Fatal(err)
 	}
 	backups, err := filepath.Glob(path + ".app-store-connect-mcp-backup-*")
@@ -154,7 +154,7 @@ func TestInstallJSONBacksUp(t *testing.T) {
 func TestInstallCreatesNewFileWithoutBackup(t *testing.T) {
 	home := t.TempDir()
 	var out strings.Builder
-	if err := install("vscode", fakeBin, "", home, &out); err != nil {
+	if err := install("vscode", fakeBin, serverOpts{}, home, &out); err != nil {
 		t.Fatal(err)
 	}
 	path := clientConfigPath("vscode", home)
@@ -186,7 +186,7 @@ ASC_MCP_PROFILE = "old"
 [profiles.fast] # trailing comment
 model = "mini"
 `
-	out, err := mergeCodexTOML([]byte(old), codexBlock(fakeBin, "work"))
+	out, err := mergeCodexTOML([]byte(old), codexBlock(fakeBin, serverOpts{profile: "work"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,14 +215,14 @@ model = "mini"
 }
 
 func TestMergeCodexTOMLEmptyAndInvalid(t *testing.T) {
-	out, err := mergeCodexTOML(nil, codexBlock(fakeBin, ""))
+	out, err := mergeCodexTOML(nil, codexBlock(fakeBin, serverOpts{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != codexBlock(fakeBin, "") {
+	if string(out) != codexBlock(fakeBin, serverOpts{}) {
 		t.Errorf("empty merge = %q", out)
 	}
-	if _, err := mergeCodexTOML([]byte("[broken"), codexBlock(fakeBin, "")); err == nil {
+	if _, err := mergeCodexTOML([]byte("[broken"), codexBlock(fakeBin, serverOpts{})); err == nil {
 		t.Error("want error for invalid TOML")
 	}
 }

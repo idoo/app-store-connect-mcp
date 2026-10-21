@@ -320,7 +320,7 @@ func prcGetCatalog(ctx context.Context, env *tool.Env, appID string, k *prcKind)
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions: %w", err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	var out []prcProductRef
 	for _, g := range res.Data {
 		for _, s := range related(g, "subscriptions", "subscriptions", inc) {

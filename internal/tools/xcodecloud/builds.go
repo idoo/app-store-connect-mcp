@@ -116,12 +116,12 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 	if res != nil {
 		return res, nil
 	}
-	rels := map[string]any{"workflow": relData("ciWorkflows", wf.ID)}
+	rels := map[string]any{"workflow": tool.RelData("ciWorkflows", wf.ID)}
 	if src != nil {
 		if src.Kind == "PULL_REQUEST" {
-			rels["pullRequest"] = relData("scmPullRequests", src.ID)
+			rels["pullRequest"] = tool.RelData("scmPullRequests", src.ID)
 		} else {
-			rels["sourceBranchOrTag"] = relData("scmGitReferences", src.ID)
+			rels["sourceBranchOrTag"] = tool.RelData("scmGitReferences", src.ID)
 		}
 	}
 	data := map[string]any{"type": "ciBuildRuns", "relationships": rels}
@@ -139,10 +139,6 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 	run := flattenRun(r)
 	return tool.OK(buildStartOut{Run: run, Workflow: workflowRef{ID: wf.ID, Name: wf.Name}, Source: src}).
 		Then(tool.NextStep{Tool: "xcc_build_status", Args: map[string]any{"run": run.ID, "wait": true}}), nil
-}
-
-func relData(typ, id string) map[string]any {
-	return map[string]any{"data": map[string]any{"type": typ, "id": id}}
 }
 
 // startGate previews the run and asks for confirmation. A pull request runs

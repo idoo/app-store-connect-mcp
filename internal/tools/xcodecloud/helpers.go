@@ -56,14 +56,6 @@ type productOut struct {
 	Workflows []workflowOut  `json:"workflows"`
 }
 
-func indexIncluded(inc []tool.Resource) map[string]tool.Resource {
-	m := make(map[string]tool.Resource, len(inc))
-	for _, r := range inc {
-		m[r.Type+"/"+r.ID] = r
-	}
-	return m
-}
-
 // flattenWorkflow builds a workflowOut from a ciWorkflows resource.
 func flattenWorkflow(r tool.Resource, inc map[string]tool.Resource) workflowOut {
 	w := workflowOut{ID: r.ID, Name: r.Text("name"), ProductID: r.RelID("product"), StartConditions: startConditions(r)}
@@ -174,7 +166,7 @@ func listWorkflows(ctx context.Context, env *tool.Env, productID string) ([]work
 	if err != nil {
 		return nil, fmt.Errorf("list workflows of product %s: %w", productID, err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	out := make([]workflowOut, 0, len(res.Data))
 	for _, r := range res.Data {
 		w := flattenWorkflow(r, inc)
@@ -228,7 +220,7 @@ func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref, n
 		if !ok {
 			return workflowOut{}, &tool.ErrNotFound{Kind: "workflow", Ref: ref, Next: next}
 		}
-		return flattenWorkflow(r, indexIncluded(resp.Included)), nil
+		return flattenWorkflow(r, tool.IndexIncluded(resp.Included)), nil
 	}
 	products, _, err := listProducts(ctx, env, app)
 	if err != nil {

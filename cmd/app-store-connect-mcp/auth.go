@@ -338,7 +338,12 @@ func (p *prompter) ask(q, def string) (string, error) {
 		fmt.Fprintf(p.out, "%s: ", q)
 	}
 	line, err := p.in.ReadString('\n')
-	if err != nil && (!errors.Is(err, io.EOF) || line == "") {
+	if errors.Is(err, io.EOF) && line == "" {
+		return "", fmt.Errorf("no answer to %q: stdin is not interactive; run this in a terminal, "+
+			"or export %s, %s (team keys), %s or %s, and %s, then rerun", q,
+			config.EnvKeyID, config.EnvIssuerID, config.EnvKeyPath, config.EnvKey, config.EnvVendorNumber)
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
 		return "", fmt.Errorf("read answer: %w", err)
 	}
 	if s := strings.TrimSpace(line); s != "" {
@@ -469,7 +474,7 @@ func askCommon(p *prompter, prof *config.Profile, o addOptions, stderr io.Writer
 		return err
 	}
 	var err error
-	if prof.VendorNumber, err = p.ask("Vendor number (sales/finance reports; optional)", prof.VendorNumber); err != nil {
+	if prof.VendorNumber, err = p.ask("Vendor number (needed for sales and finance reports; App Store Connect > Payments and Financial Reports)", prof.VendorNumber); err != nil {
 		return err
 	}
 	if prof.DefaultApp, err = p.ask("Default app id or bundle id (optional)", prof.DefaultApp); err != nil {
@@ -525,6 +530,28 @@ func authAdd(p *prompter, o addOptions, stdout, stderr io.Writer) (string, error
 	return name, saveProfile(path, cfg, name, prof, stdout)
 }
 
+// missingLabels names the environment variables that supply each missing
+// import field, so the user knows what to export.
+func missingLabels(missing []string) string {
+	out := make([]string, len(missing))
+	for i, m := range missing {
+		switch m {
+		case "private_key":
+			out[i] = "private key (set " + config.EnvKeyPath + " or " + config.EnvKey + ")"
+			if strings.TrimSpace(os.Getenv("ASC_KEY_PATH")) != "" {
+				out[i] += "; ASC_KEY_PATH is not read"
+			}
+		case "vendor_number":
+			out[i] = "vendor number, needed for sales and finance (set " + config.EnvVendorNumber + ")"
+		case "issuer_id or key_kind":
+			out[i] = "issuer id (set " + config.EnvIssuerID + ", or " + config.EnvKeyKind + "=individual)"
+		default:
+			out[i] = m
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
 func absPath(p string) (string, error) {
 	abs, err := filepath.Abs(config.ExpandHome(p, os.Getenv))
 	if err != nil {
@@ -550,7 +577,7 @@ func authImport(p *prompter, o addOptions, stdout, stderr io.Writer) (string, er
 	for i, c := range cands {
 		fmt.Fprintf(stderr, "%d) key %s from %s", i+1, c.Profile.KeyID, strings.Join(c.Sources, ", "))
 		if len(c.Missing) > 0 {
-			fmt.Fprintf(stderr, " (missing: %s)", strings.Join(c.Missing, ", "))
+			fmt.Fprintf(stderr, " (missing: %s)", missingLabels(c.Missing))
 		}
 		fmt.Fprintln(stderr)
 	}

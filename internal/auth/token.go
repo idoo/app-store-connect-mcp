@@ -19,25 +19,9 @@ type TokenSource struct {
 	signs int
 }
 
-// Option configures a TokenSource.
-type Option func(*TokenSource)
-
-// WithClock injects the time source (default time.Now).
-func WithClock(now func() time.Time) Option {
-	return func(ts *TokenSource) {
-		if now != nil {
-			ts.now = now
-		}
-	}
-}
-
 // NewTokenSource returns a caching TokenSource for signer.
-func NewTokenSource(signer *Signer, opts ...Option) *TokenSource {
-	ts := &TokenSource{signer: signer, now: time.Now}
-	for _, o := range opts {
-		o(ts)
-	}
-	return ts
+func NewTokenSource(signer *Signer) *TokenSource {
+	return &TokenSource{signer: signer, now: time.Now}
 }
 
 // Token returns a valid bearer JWT, signing a new one when the cached token is

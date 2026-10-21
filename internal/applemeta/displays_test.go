@@ -31,7 +31,7 @@ func loadSpecEnums(t *testing.T) (displays, previews []string) {
 func TestDisplayTableMatchesSpec(t *testing.T) {
 	displays, previews := loadSpecEnums(t)
 	var got []string
-	for _, d := range Displays() {
+	for _, d := range displaySpecs {
 		got = append(got, string(d.Type))
 		if len(d.Sizes) == 0 {
 			t.Errorf("%s has no pixel sizes", d.Type)

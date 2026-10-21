@@ -12,9 +12,13 @@ app-store-connect-mcp auth add|import              add a key; asks team or indiv
 app-store-connect-mcp auth list|test|remove
 app-store-connect-mcp auth set [NAME] key=value    vendor_number, default_app, allow_writes, issuer_id, key_kind
 app-store-connect-mcp doctor [--profile NAME]
-app-store-connect-mcp config snippet|install CLIENT [--profile NAME]
+app-store-connect-mcp config snippet|install CLIENT [--profile NAME] [--allow-writes]
 app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--force]
+app-store-connect-mcp guard --app APP [thresholds]  release health for cron; exit 0 ok, 3 watch, 4 breach, 5 unknown
+app-store-connect-mcp aso track|report --app APP    keyword ranks for cron (public search, no key needed)
 ```
+
+`guard` thresholds, defaults in brackets: `--signature-watch-pct` (25) and `--signature-breach-pct` (100) for crash-signature weight growth in percent, `--crash-watch` (3) and `--crash-breach` (10) TestFlight crash reports, `--rating-drop-watch` (0.3) and `--rating-drop-breach` (0.8) average-rating drop, `--regressions-breach` (2) perf regressions. `guard --help` prints the same list. Only a diagnostics breach can pause, with `--pause-on-breach` and writes on.
 
 `auth set` without a name targets `env` when `ASC_KEY_ID` is set (stored under `[env]`), otherwise the default profile. Setting `issuer_id=` or `key_kind=individual` turns a profile into an individual key.
 
@@ -102,7 +106,7 @@ Earlier releases read `.asc-mcp.toml` and `.hamn.toml`. If one of those is in a 
 
 ## Toolsets
 
-`core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin` and `store` are opt-in.
+`core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store` and `insights` are opt-in.
 
 Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (defaults with edits), `all,-admin`. `core` can't be removed. The `toolsets` tool changes them mid-session and the client gets `tools/list_changed`. Discovery mode starts with core only, for clients with a tool cap.
 

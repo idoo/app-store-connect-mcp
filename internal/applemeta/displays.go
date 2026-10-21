@@ -219,9 +219,6 @@ var previewTypes = []PreviewType{
 	"DESKTOP", "APPLE_TV", "APPLE_VISION_PRO",
 }
 
-// Displays returns every screenshot display spec, preferred slots first.
-func Displays() []DisplaySpec { return slices.Clone(displaySpecs) }
-
 // PreviewTypes returns every app preview slot.
 func PreviewTypes() []PreviewType { return slices.Clone(previewTypes) }
 

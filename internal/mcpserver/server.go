@@ -43,7 +43,8 @@ type Deps struct {
 	// MaxResultBytes caps result payloads; 0 means
 	// asc.DefaultMaxResponseBytes and a negative value disables the cap.
 	MaxResultBytes int
-	// Now is the plan clock; nil means time.Now.
+	// Now is the session clock (plans, completion cache, _meta as_of); nil
+	// means time.Now.
 	Now func() time.Time
 }
 

@@ -108,7 +108,7 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 			window["until"] = until.Format(time.RFC3339)
 		}
 	default:
-		t, err := parseTime(in.Since)
+		t, err := tool.ParseInstant(in.Since)
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +283,7 @@ func listApp(ctx context.Context, env *tool.Env, app appRef, query url.Values, s
 	}
 	g.Cursor = stored
 	if sinceArg == lastSeen && stored != "" {
-		t, err := parseTime(stored)
+		t, err := tool.ParseInstant(stored)
 		if err != nil {
 			return fail(fmt.Errorf("stored reviews cursor %q: %w", stored, err))
 		}

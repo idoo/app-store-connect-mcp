@@ -56,12 +56,6 @@ func (e *LimitError) Error() string {
 	return fmt.Sprintf("%s is %d %s; App Store Connect allows at most %d", e.Field, e.Got, e.Unit, e.Max)
 }
 
-// Limit returns the maximum length of f in Unicode characters.
-func Limit(f Field) (maxLen int, ok bool) {
-	maxLen, ok = limits[f]
-	return maxLen, ok
-}
-
 // Length measures value the way App Store Connect does: Unicode characters
 // (keywords included, commas counted).
 func Length(_ Field, value string) int {

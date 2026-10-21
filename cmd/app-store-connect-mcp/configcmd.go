@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,7 +35,7 @@ const serverName = "app-store-connect-mcp"
 var sessionTools = []string{"toolsets"}
 
 // configUsage is printed for `app-store-connect-mcp config --help` and misuse.
-var configUsage = "usage: app-store-connect-mcp config <snippet|install> <client> [--profile NAME]\nclients: " + strings.Join(clients, ", ")
+var configUsage = "usage: app-store-connect-mcp config <snippet|install> <client> [--profile NAME] [--allow-writes]\nclients: " + strings.Join(clients, ", ")
 
 // credentialsNote reminds that GUI clients don't inherit shell env.
 const credentialsNote = "credentials: run `app-store-connect-mcp auth import` (or `app-store-connect-mcp auth add`) once; GUI clients don't see ASC_* from your shell"
@@ -46,7 +47,9 @@ func runConfig(args []string, stdout, stderr io.Writer) error {
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("config "+sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	profile := fs.String("profile", "", "pin the server to this profile via ASC_MCP_PROFILE")
+	var o serverOpts
+	fs.StringVar(&o.profile, "profile", "", "pin the server to this profile via ASC_MCP_PROFILE")
+	fs.BoolVar(&o.writes, "allow-writes", false, "turn writes on for this client only (sets "+config.EnvAllowWrites+"=1 in its entry)")
 	if len(rest) == 0 || strings.HasPrefix(rest[0], "-") {
 		return usageErr(configUsage)
 	}
@@ -63,21 +66,23 @@ func runConfig(args []string, stdout, stderr io.Writer) error {
 	}
 	switch sub {
 	case "snippet":
-		s, err := snippet(client, bin, *profile, readToolPermissions())
+		s, err := snippet(client, bin, o, readToolPermissions())
 		if err != nil {
 			return err
 		}
-		if _, err = io.WriteString(stdout, s); err != nil {
-			return err
+		// The credentials step comes first, and only while it is still
+		// needed; stderr keeps stdout pasteable.
+		if note := credentialsHint(stderr); note != "" {
+			fmt.Fprintln(stderr, note)
 		}
-		fmt.Fprintln(stderr, credentialsNote) // stderr keeps stdout pasteable
-		return nil
+		_, err = io.WriteString(stdout, s)
+		return err
 	case "install":
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("home dir: %w", err)
 		}
-		if err := install(client, bin, *profile, home, stdout); err != nil {
+		if err := install(client, bin, o, home, stdout); err != nil {
 			return err
 		}
 		warnNoProfile(stdout, stderr)
@@ -89,14 +94,23 @@ func runConfig(args []string, stdout, stderr io.Writer) error {
 
 // warnNoProfile tells the user the installed server has no credentials yet.
 func warnNoProfile(stdout, stderr io.Writer) {
+	if note := credentialsHint(stderr); note != "" {
+		fmt.Fprintln(stdout, note)
+	}
+}
+
+// credentialsHint is the credentials step still to do: "" when a saved
+// profile exists; the note alone when ASC_* env is set (GUI clients don't
+// see it); a no-profile warning plus the note otherwise.
+func credentialsHint(stderr io.Writer) string {
 	if envCredentialsSet() {
-		fmt.Fprintln(stdout, credentialsNote)
-		return
+		return credentialsNote
 	}
 	path, cfg, err := loadConfig(stderr)
-	if err == nil && len(cfg.Profiles) == 0 {
-		fmt.Fprintf(stdout, "warning: no profile in %s yet, so every tool will fail.\n%s\n", path, credentialsNote)
+	if err != nil || len(cfg.Profiles) > 0 {
+		return ""
 	}
+	return fmt.Sprintf("warning: no profile in %s yet, so every tool will fail.\n%s", path, credentialsNote)
 }
 
 // binaryPath returns the path clients should launch: a stable PATH location
@@ -133,11 +147,22 @@ func stableBinaryPath(exe string, lookPath func(string) (string, error)) string 
 	return exe
 }
 
-// profileEnv returns the server env: only profile selection, never key material.
-func profileEnv(profile string) map[string]string {
+// serverOpts are the per-client server settings `config` writes.
+type serverOpts struct {
+	// profile pins the server to a profile via ASC_MCP_PROFILE.
+	profile string
+	// writes turns writes on for this client entry only.
+	writes bool
+}
+
+// env returns the server env: profile selection and write mode, never key material.
+func (o serverOpts) env() map[string]string {
 	env := map[string]string{}
-	if profile != "" {
-		env[config.EnvProfile] = profile
+	if o.profile != "" {
+		env[config.EnvProfile] = o.profile
+	}
+	if o.writes {
+		env[config.EnvAllowWrites] = "1"
 	}
 	return env
 }
@@ -158,12 +183,12 @@ func readToolPermissions() []string {
 }
 
 // serverEntry is the JSON server entry for client.
-func serverEntry(client, bin, profile string) map[string]any {
+func serverEntry(client, bin string, o serverOpts) map[string]any {
 	e := map[string]any{"command": bin, "args": []string{}}
 	if client == "vscode" {
 		e["type"] = "stdio"
 	}
-	if env := profileEnv(profile); len(env) > 0 {
+	if env := o.env(); len(env) > 0 {
 		e["env"] = env
 	}
 	return e
@@ -179,12 +204,12 @@ func serversKey(client string) string {
 
 // snippet renders the config for client; perms is the claude-code
 // permissions allow list.
-func snippet(client, bin, profile string, perms []string) (string, error) {
+func snippet(client, bin string, o serverOpts, perms []string) (string, error) {
 	switch client {
 	case "claude-code":
 		var b strings.Builder
 		b.WriteString("# Register app-store-connect-mcp for every project:\n")
-		b.WriteString(shellJoin(claudeAddArgs(bin, profile)...) + "\n\n")
+		b.WriteString(shellJoin(claudeAddArgs(bin, o)...) + "\n\n")
 		b.WriteString("# Optional: pre-approve read-only tools in ~/.claude/settings.json:\n")
 		perm, err := json.MarshalIndent(map[string]any{"permissions": map[string]any{"allow": perms}}, "", "  ")
 		if err != nil {
@@ -194,9 +219,9 @@ func snippet(client, bin, profile string, perms []string) (string, error) {
 		b.WriteString("\n")
 		return b.String(), nil
 	case "codex":
-		return "# ~/.codex/config.toml\n" + codexBlock(bin, profile), nil
+		return "# ~/.codex/config.toml\n" + codexBlock(bin, o), nil
 	default:
-		doc := map[string]any{serversKey(client): map[string]any{serverName: serverEntry(client, bin, profile)}}
+		doc := map[string]any{serversKey(client): map[string]any{serverName: serverEntry(client, bin, o)}}
 		out, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
 			return "", fmt.Errorf("encode snippet: %w", err)
@@ -205,10 +230,11 @@ func snippet(client, bin, profile string, perms []string) (string, error) {
 	}
 }
 
-func claudeAddArgs(bin, profile string) []string {
+func claudeAddArgs(bin string, o serverOpts) []string {
 	args := []string{"claude", "mcp", "add", serverName, "-s", "user"}
-	if profile != "" {
-		args = append(args, "-e", config.EnvProfile+"="+profile)
+	env := o.env()
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		args = append(args, "-e", k+"="+env[k])
 	}
 	return append(args, "--", bin)
 }
@@ -233,11 +259,15 @@ const (
 )
 
 // codexBlock renders the [mcp_servers.app-store-connect-mcp] table.
-func codexBlock(bin, profile string) string {
+func codexBlock(bin string, o serverOpts) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[mcp_servers.%s]\ncommand = %s\nargs = []\n%s\n%s\n", serverName, tomlString(bin), codexStartupTimeout, codexToolTimeout)
-	if profile != "" {
-		fmt.Fprintf(&b, "env = { %s = %s }\n", config.EnvProfile, tomlString(profile))
+	if env := o.env(); len(env) > 0 {
+		pairs := make([]string, 0, len(env))
+		for _, k := range slices.Sorted(maps.Keys(env)) {
+			pairs = append(pairs, k+" = "+tomlString(env[k]))
+		}
+		fmt.Fprintf(&b, "env = { %s }\n", strings.Join(pairs, ", "))
 	}
 	return b.String()
 }
@@ -298,8 +328,8 @@ var runClaude = func(ctx context.Context, args []string, stdout, stderr io.Write
 // installClaudeCode registers the server with `claude mcp add`. An existing
 // registration is never replaced, since that would drop the user's -e flags;
 // the replace command is printed instead.
-func installClaudeCode(bin, profile string, stdout io.Writer) error {
-	args := claudeAddArgs(bin, profile)
+func installClaudeCode(bin string, o serverOpts, stdout io.Writer) error {
+	args := claudeAddArgs(bin, o)
 	ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
 	defer cancel()
 	if runClaude(ctx, []string{"claude", "mcp", "get", serverName}, io.Discard, io.Discard) == nil {
@@ -322,9 +352,9 @@ func installClaudeCode(bin, profile string, stdout io.Writer) error {
 	}
 }
 
-func install(client, bin, profile, home string, stdout io.Writer) error {
+func install(client, bin string, o serverOpts, home string, stdout io.Writer) error {
 	if client == "claude-code" {
-		return installClaudeCode(bin, profile, stdout)
+		return installClaudeCode(bin, o, stdout)
 	}
 	path := clientConfigPath(client, home)
 	var (
@@ -332,10 +362,10 @@ func install(client, bin, profile, home string, stdout io.Writer) error {
 		err error
 	)
 	if client == "codex" {
-		res, err = mergeFile(path, func(old []byte) ([]byte, error) { return mergeCodexTOML(old, codexBlock(bin, profile)) })
+		res, err = mergeFile(path, func(old []byte) ([]byte, error) { return mergeCodexTOML(old, codexBlock(bin, o)) })
 	} else {
 		res, err = mergeFile(path, func(old []byte) ([]byte, error) {
-			return mergeJSONServer(old, serversKey(client), serverName, serverEntry(client, bin, profile))
+			return mergeJSONServer(old, serversKey(client), serverName, serverEntry(client, bin, o))
 		})
 	}
 	if err != nil {

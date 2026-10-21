@@ -6,7 +6,7 @@ One Go binary on the official MCP Go SDK and a pinned index of Apple's OpenAPI s
 
 | Package | Job |
 |---|---|
-| `cmd/app-store-connect-mcp` | CLI: `serve`, `auth`, `doctor`, `config`, `skills`, `version` |
+| `cmd/app-store-connect-mcp` | CLI: `serve`, `auth`, `doctor`, `config`, `skills`, `guard`, `aso`, `version` |
 | `cmd/app-store-connect-mcp-record` | Dev-only fixture recorder (`-tags dev`), GET-only |
 | `internal/tool` | The contract: tool meta, classes, toolsets, confirm gate, registry. `tooltest` is its test kit |
 | `internal/tools/*` | One package per toolset. `docsgen` writes `docs/TOOLS.md` and `docs/tools.json` |

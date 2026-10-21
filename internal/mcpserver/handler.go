@@ -26,9 +26,6 @@ func sessionFrom(ctx context.Context) *mcp.ServerSession {
 	return ss
 }
 
-// now is the clock of _meta as_of; tests replace it.
-var now = time.Now
-
 // asOf is the time stamp of a result: UTC seconds and Apple's reporting day
 // (America/Los_Angeles).
 func asOf(t time.Time) map[string]string {
@@ -38,8 +35,8 @@ func asOf(t time.Time) map[string]string {
 	}
 }
 
-// metaObject is the result's _meta object with as_of added.
-func metaObject(m any) map[string]any {
+// metaObject is the result's _meta object with as_of (at) added.
+func metaObject(m any, at time.Time) map[string]any {
 	out := map[string]any{}
 	if b, err := json.Marshal(m); err == nil {
 		_ = json.Unmarshal(b, &out)
@@ -47,7 +44,7 @@ func metaObject(m any) map[string]any {
 	if out == nil {
 		out = map[string]any{}
 	}
-	out["as_of"] = asOf(now())
+	out["as_of"] = asOf(at)
 	return out
 }
 
@@ -255,7 +252,7 @@ func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 		r.Next = next
 		r.Meta.Warnings = append(r.Meta.Warnings, "large next[].args values were omitted; resend the same values you passed")
 	}
-	obj := map[string]any{"_meta": map[string]any{"app-store-connect-mcp": metaObject(r.Meta)}}
+	obj := map[string]any{"_meta": map[string]any{"app-store-connect-mcp": metaObject(r.Meta, s.now())}}
 	if data != nil {
 		obj["data"] = data
 	}

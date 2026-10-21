@@ -122,12 +122,20 @@ type ErrAmbiguous struct {
 	Kind       string      `json:"kind"`
 	Ref        string      `json:"ref"`
 	Candidates []Candidate `json:"candidates"`
-	Next       []NextStep  `json:"next,omitempty"`
+	// Total is the true number of matches; Candidates may be capped.
+	Total int        `json:"total,omitempty"`
+	Next  []NextStep `json:"next,omitempty"`
 }
 
 // Error implements error.
 func (e *ErrAmbiguous) Error() string {
-	return fmt.Sprintf("%s %q is ambiguous (%d matches); pass an id", e.Kind, e.Ref, len(e.Candidates))
+	n := max(e.Total, len(e.Candidates))
+	if e.Kind == "app" && e.Ref == "" {
+		return fmt.Sprintf("which app? you have %d apps; pass app (name, bundle id or id), "+
+			"or set default_app (`app-store-connect-mcp auth set <profile> default_app=…`) "+
+			"or pin one with app = \"…\" in .app-store-connect-mcp.toml", n)
+	}
+	return fmt.Sprintf("%s %q is ambiguous (%d matches); pass an id", e.Kind, e.Ref, n)
 }
 
 // NextSteps implements [NextStepper].

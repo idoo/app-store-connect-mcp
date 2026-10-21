@@ -378,7 +378,7 @@ const maxProblems = 5
 // app ids are numeric, so anything else is resolved.
 func resolveAppPath(ctx context.Context, env *tool.Env, path string) (string, error) {
 	segs := strings.Split(path, "/")
-	if len(segs) < 4 || segs[2] != "apps" || isDigits(segs[3]) {
+	if len(segs) < 4 || segs[2] != "apps" || tool.IsDigits(segs[3]) {
 		return path, nil
 	}
 	ref, err := url.PathUnescape(segs[3])
@@ -394,18 +394,6 @@ func resolveAppPath(ctx context.Context, env *tool.Env, path string) (string, er
 	}
 	segs[3] = app.ID
 	return strings.Join(segs, "/"), nil
-}
-
-func isDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // isCollection reports whether a GET operation returns a list, per Apple's

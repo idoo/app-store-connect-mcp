@@ -12,11 +12,14 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/idoo/app-store-connect-mcp/internal/netpolicy"
 )
 
 // URL probe bounds.
@@ -32,14 +35,22 @@ var (
 	errNotHTTPS    = errors.New("not https")
 )
 
-// urlNet resolves and dials for the URL probes; tests replace urlNetFor.
+// urlNet resolves and dials for the URL probes; tests put one in the call
+// context under urlNetKey.
 type urlNet struct {
 	lookup func(ctx context.Context, host string) ([]net.IP, error)
 	dial   func(ctx context.Context, network, addr string) (net.Conn, error)
 	tls    *tls.Config
 }
 
-var urlNetFor = func() urlNet {
+// urlNetKey carries a test urlNet in the call context.
+type urlNetKey struct{}
+
+// urlNetFrom returns the urlNet in ctx, or the system resolver and dialer.
+func urlNetFrom(ctx context.Context) urlNet {
+	if n, ok := ctx.Value(urlNetKey{}).(urlNet); ok {
+		return n
+	}
 	d := &net.Dialer{Timeout: urlCheckTimeout}
 	return urlNet{
 		lookup: func(ctx context.Context, host string) ([]net.IP, error) {
@@ -49,26 +60,10 @@ var urlNetFor = func() urlNet {
 	}
 }
 
-// blockedNets are non-public ranges the net.IP predicates miss.
-var blockedNets = func() []*net.IPNet {
-	var out []*net.IPNet
-	for _, c := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4", "64:ff9b::/96", "64:ff9b:1::/48"} {
-		_, n, _ := net.ParseCIDR(c)
-		out = append(out, n)
-	}
-	return out
-}()
-
 // publicIP reports whether ip may be connected to.
 func publicIP(ip net.IP) bool {
-	if v4 := ip.To4(); v4 != nil {
-		ip = v4
-	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
-		return false
-	}
-	return !slices.ContainsFunc(blockedNets, func(n *net.IPNet) bool { return n.Contains(ip) })
+	addr, ok := netip.AddrFromSlice(ip)
+	return ok && netpolicy.PublicAddr(addr)
 }
 
 // dialPublic resolves addr, refuses it when any address is not public, and
@@ -199,7 +194,7 @@ func checkURLs(ctx context.Context, s *statusSnapshot) check {
 		c.Items = append(c.Items, fmt.Sprintf("checked the first %d of %d URLs", urlCheckMaxURLs, len(targets)))
 		targets = targets[:urlCheckMaxURLs]
 	}
-	n := urlNetFor()
+	n := urlNetFrom(ctx)
 	items := make([]string, len(targets))
 	bad := make([]bool, len(targets))
 	sem := make(chan struct{}, urlCheckParallel)

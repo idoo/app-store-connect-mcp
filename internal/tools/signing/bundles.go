@@ -107,7 +107,7 @@ func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*too
 	if err != nil {
 		return nil, fmt.Errorf("list bundle IDs: %w", err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	needle := strings.ToLower(strings.TrimSpace(in.Query))
 	out := bundleIDsListOut{BundleIDs: []bundleRow{}, Total: res.Total, NextCursor: res.NextCursor}
 	seeds := map[string]bool{}
@@ -191,7 +191,7 @@ func bundleIDCreate(ctx context.Context, env *tool.Env, in bundleIDCreateIn) (*t
 	if !ok || r.ID == "" {
 		return nil, fmt.Errorf("register bundle ID %s: response has no resource: %w", in.Identifier, tool.ErrOutcomeUnknown)
 	}
-	b := flattenBundle(r, indexIncluded(resp.Included))
+	b := flattenBundle(r, tool.IndexIncluded(resp.Included))
 	return tool.OK(bundleIDCreateOut{BundleID: b, Created: true}).Then(next(b)), nil
 }
 

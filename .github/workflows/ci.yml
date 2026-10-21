@@ -71,6 +71,27 @@ jobs:
         with:
           version: v2.15.0
 
+  deadcode:
+    name: no unreachable code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      # deadcode exits 0 even when it reports; fail on any output. -test
+      # counts tests as roots, so test-only helpers belong in _test.go files.
+      - name: deadcode -test ./...
+        run: |
+          out="$(go run golang.org/x/tools/cmd/deadcode@v0.38.0 -test ./...)"
+          if [ -n "$out" ]; then
+            printf '%s\n' "$out"
+            exit 1
+          fi
+
   govulncheck:
     runs-on: ubuntu-latest
     steps:

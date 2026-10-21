@@ -95,7 +95,7 @@ func TestInsightsSummaryWithSales(t *testing.T) {
 	if an["status"] != "unavailable" || !strings.Contains(an["reason"].(string), "analytics_setup") {
 		t.Errorf("analytics = %s", tooltest.JSON(t, an))
 	}
-	if len(r.Next) == 0 || r.Next[0].Tool != "analytics_setup" {
+	if len(r.Next) != 2 || r.Next[0].Tool != "analytics_setup" || r.Next[1].Tool != "sales_report" || r.Next[1].Args["app"] != "1000000001" {
 		t.Errorf("next = %+v", r.Next)
 	}
 	rv := k.ASC.RequestsTo(http.MethodGet, "/v1/apps/1000000001/customerReviews")
@@ -118,6 +118,17 @@ func TestInsightsSummaryVendorMissing(t *testing.T) {
 	}
 	if got["ratings"].(map[string]any)["status"] != "ok" || got["release"].(map[string]any)["status"] != "ok" {
 		t.Errorf("other sections must still work: %s", tooltest.JSON(t, got))
+	}
+	// N1: the dead-end sales_report suggestion is gone; the next step is the
+	// exact setup command and where to find the number.
+	for _, n := range r.Next {
+		if n.Tool == "sales_report" {
+			t.Errorf("sales_report suggested without a vendor number: %+v", r.Next)
+		}
+	}
+	if w := strings.Join(r.Meta.Warnings, "\n"); !strings.Contains(w, "app-store-connect-mcp auth set test vendor_number=<number>") ||
+		!strings.Contains(w, "Payments and Financial Reports") {
+		t.Errorf("warnings = %q", w)
 	}
 
 	ind := insightsKit(t).Individual()

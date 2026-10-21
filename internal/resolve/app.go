@@ -42,7 +42,7 @@ func (r *Resolver) findApp(ctx context.Context, s string) (tool.App, error) {
 	if s == "" {
 		return r.onlyApp(ctx)
 	}
-	if isDigits(s) {
+	if tool.IsDigits(s) {
 		res, err := r.asc.Get(ctx, "/v1/apps/"+s, url.Values{"fields[apps]": {appFields}})
 		switch {
 		case err == nil:
@@ -132,7 +132,7 @@ func matchApp(s string, apps []tool.App) (tool.App, error) {
 }
 
 func ambiguousApps(ref string, apps []tool.App) *tool.ErrAmbiguous {
-	amb := &tool.ErrAmbiguous{Kind: "app", Ref: ref}
+	amb := &tool.ErrAmbiguous{Kind: "app", Ref: ref, Total: len(apps)}
 	for _, a := range apps[:min(len(apps), maxCandidates)] {
 		amb.Candidates = append(amb.Candidates, tool.Candidate{ID: a.ID, Label: a.Name + " (" + a.BundleID + ")"})
 	}
@@ -229,16 +229,4 @@ func (r *Resolver) platform(ctx context.Context, appID string, want tool.Platfor
 
 func appFromResource(d tool.Resource) tool.App {
 	return tool.App{ID: d.ID, BundleID: d.Str("bundleId"), Name: d.Str("name"), SKU: d.Str("sku")}
-}
-
-func isDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
 }

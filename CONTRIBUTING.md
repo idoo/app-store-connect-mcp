@@ -4,7 +4,7 @@ app-store-connect-mcp is small on purpose. Open a short issue before a big PR.
 
 ## Setup
 
-Go 1.25+, plus golangci-lint v2 for linting.
+Go 1.26.10 (go.mod pins the toolchain; Go 1.25+ fetches it for you), plus golangci-lint v2 for linting.
 
 ```sh
 make build      # bin/app-store-connect-mcp
@@ -15,7 +15,7 @@ make docs       # regenerates docs/TOOLS.md and docs/tools.json, fails on any di
 make spec       # spec index only; needs ASC_MCP_SPEC=/path/to/openapi.oas.json
 ```
 
-CI fails if docsgen changes anything, so run `make docs` and commit what it writes.
+CI fails if docsgen changes `docs/TOOLS.md` or `docs/tools.json`, so run `make docs` and commit what it writes.
 
 ## No live writes
 

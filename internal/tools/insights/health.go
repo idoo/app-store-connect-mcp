@@ -253,12 +253,12 @@ func windowStart(ctx context.Context, env *tool.Env, appID string, platform tool
 	}
 	now := env.Clock.Now()
 	if rep.Phased != nil {
-		if t, ok := parseTime(rep.Phased.StartDate); ok {
+		if t, ok := instant(rep.Phased.StartDate); ok {
 			set(t, windowPhased, false)
 			return
 		}
 	}
-	if t, ok := parseTime(cur.Str("earliestReleaseDate")); ok && !t.After(now) {
+	if t, ok := instant(cur.Str("earliestReleaseDate")); ok && !t.After(now) {
 		set(t, windowScheduled, false)
 		return
 	}
@@ -275,7 +275,7 @@ func windowStart(ctx context.Context, env *tool.Env, appID string, platform tool
 			if s.RelID("appStoreVersionForReview") != cur.ID {
 				continue
 			}
-			if t, ok := parseTime(s.Str("submittedDate")); ok && t.After(best) {
+			if t, ok := instant(s.Str("submittedDate")); ok && t.After(best) {
 				best = t
 			}
 		}
@@ -284,19 +284,17 @@ func windowStart(ctx context.Context, env *tool.Env, appID string, platform tool
 			return
 		}
 	}
-	if t, ok := parseTime(cur.Str("createdDate")); ok {
+	if t, ok := instant(cur.Str("createdDate")); ok {
 		set(t, windowCreated, true)
 		return
 	}
 	rep.WindowStartSource, rep.WindowApproximate = windowCreated, true
 }
 
-// parseTime parses an RFC 3339 timestamp.
-func parseTime(s string) (time.Time, bool) {
-	if s == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339Nano, s)
+// instant parses an Apple timestamp or window start with [tool.ParseInstant];
+// ok is false for "" or anything unparsable.
+func instant(s string) (time.Time, bool) {
+	t, err := tool.ParseInstant(s)
 	return t, err == nil
 }
 
@@ -391,7 +389,7 @@ func crashFeedback(ctx context.Context, env *tool.Env, appID, build string, rep 
 		rep.CrashFeedback.section = section{Status: "unavailable", Message: "no build attached"}
 		return
 	}
-	start, ok := parseTime(rep.WindowStart)
+	start, ok := instant(rep.WindowStart)
 	if !ok {
 		rep.CrashFeedback.section = section{Status: "unavailable", Message: "no window start"}
 		return
@@ -406,7 +404,7 @@ func crashFeedback(ctx context.Context, env *tool.Env, appID, build string, rep 
 	}
 	n := 0
 	for _, r := range res.Data {
-		if t, ok := parseTime(r.Str("createdDate")); ok && !t.Before(start) {
+		if t, ok := instant(r.Str("createdDate")); ok && !t.Before(start) {
 			n++
 		}
 	}
@@ -494,7 +492,7 @@ func perf(ctx context.Context, env *tool.Env, appID string, rep *HealthReport, s
 // MinReviewsPerWindow reviews; below that ratings are insufficient_data.
 func ratings(ctx context.Context, env *tool.Env, appID, since string, prev *tool.Resource, rep *HealthReport, sig *HealthSignals) error {
 	rep.Ratings.Since = since
-	start, ok := parseTime(since)
+	start, ok := instant(since)
 	if !ok {
 		rep.Ratings.section = section{Status: "unavailable", Message: "no window start"}
 		return nil
@@ -509,12 +507,12 @@ func ratings(ctx context.Context, env *tool.Env, appID, since string, prev *tool
 	var from time.Time
 	hasFrom := false
 	if prev != nil {
-		from, hasFrom = parseTime(prev.Str("createdDate"))
+		from, hasFrom = instant(prev.Str("createdDate"))
 	}
 	var sNow, sBefore float64
 	var nNow, nBefore int
 	for _, r := range res.Data {
-		c, ok := parseTime(r.Str("createdDate"))
+		c, ok := instant(r.Str("createdDate"))
 		if !ok {
 			continue
 		}
