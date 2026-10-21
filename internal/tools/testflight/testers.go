@@ -55,8 +55,8 @@ type testersListIn struct {
 	Email      string        `json:"email,omitempty" jsonschema:"exact tester email"`
 	State      string        `json:"state,omitempty" jsonschema:"filters the fetched page"`
 	InviteType string        `json:"invite_type,omitempty"`
-	Limit      int           `json:"limit,omitempty" jsonschema:"testers to fetch, default 200, max 1000"`
-	Cursor     string        `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
+	Limit      int           `json:"limit,omitempty" jsonschema:"default 200, max 1000"`
+	Cursor     string        `json:"cursor,omitempty" jsonschema:"next_cursor"`
 }
 
 func testersList(ctx context.Context, env *tool.Env, in testersListIn) (*tool.Result, error) {

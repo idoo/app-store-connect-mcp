@@ -15,8 +15,8 @@ type buildsListIn struct {
 	Platform       tool.Platform `json:"platform,omitempty"`
 	Version        string        `json:"version,omitempty" jsonschema:"marketing version, e.g. 1.4"`
 	State          string        `json:"state,omitempty" jsonschema:"processing state filter"`
-	IncludeExpired bool          `json:"include_expired,omitempty" jsonschema:"also list expired builds"`
-	Limit          int           `json:"limit,omitempty" jsonschema:"newest first, 1-200, default 20"`
+	IncludeExpired bool          `json:"include_expired,omitempty"`
+	Limit          int           `json:"limit,omitempty" jsonschema:"1-200, default 20"`
 }
 
 type buildsWaitIn struct {
@@ -36,10 +36,9 @@ func init() {
 	}, buildsList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "builds_wait", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
-		Title: "Wait for build processing",
-		Description: "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. Waits at most 50 s " +
-			"unless the client sends a progress token. At the timeout returns still_processing; call again with the same args.",
-		Enums: map[string][]any{"platform": platformEnum},
+		Title:       "Wait for build processing",
+		Description: "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. At the timeout returns still_processing; call again with the same args.",
+		Enums:       map[string][]any{"platform": platformEnum},
 	}, buildsWait))
 }
 
@@ -69,6 +68,14 @@ type buildsListOut struct {
 	// OtherPlatforms counts matching builds on the app's other platforms
 	// when the platform was inferred and found none.
 	OtherPlatforms map[tool.Platform]int `json:"other_platforms,omitempty"`
+	// PlatformFallback is set when the defaulted platform had no builds and
+	// the only other platform with builds was listed instead.
+	PlatformFallback *platformFallback `json:"platform_fallback,omitempty"`
+}
+
+type platformFallback struct {
+	From tool.Platform `json:"from"`
+	To   tool.Platform `json:"to"`
 }
 
 func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Result, error) {
@@ -103,16 +110,51 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 	if !in.IncludeExpired {
 		q.Set("filter[expired]", "false")
 	}
+	out := buildsListOut{App: app, Platform: platform}
+	processing, err := fetchBuilds(ctx, env, q, &out)
+	if err != nil {
+		return nil, err
+	}
+	if in.Platform == "" && len(out.Builds) == 0 {
+		if out.OtherPlatforms, err = otherPlatformBuilds(ctx, env, app, platform, q); err != nil {
+			return nil, err
+		}
+		if len(out.OtherPlatforms) == 1 {
+			for to := range out.OtherPlatforms {
+				q.Set("filter[preReleaseVersion.platform]", string(to))
+				out = buildsListOut{App: app, Platform: to, PlatformFallback: &platformFallback{From: platform, To: to}}
+				if processing, err = fetchBuilds(ctx, env, q, &out); err != nil {
+					return nil, err
+				}
+				platform = to
+			}
+		}
+	}
+	res := tool.OK(out)
+	if processing >= 0 {
+		res.Then(tool.NextStep{Tool: "builds_wait", Args: map[string]any{"app": app.ID, "platform": string(platform), "build": out.Builds[processing].ID}})
+	}
+	for _, p := range app.Platforms {
+		if out.OtherPlatforms[p] > 0 {
+			res.Then(tool.NextStep{Tool: "builds_list", Args: map[string]any{"app": app.ID, "platform": string(p)}})
+		}
+	}
+	return res, nil
+}
+
+// fetchBuilds lists the builds matching q into out and returns the index of
+// the newest PROCESSING build, or -1.
+func fetchBuilds(ctx context.Context, env *tool.Env, q url.Values, out *buildsListOut) (int, error) {
 	resp, err := env.ASC.Get(ctx, "/v1/builds", q)
 	if err != nil {
-		return nil, fmt.Errorf("list builds: %w", err)
+		return -1, fmt.Errorf("list builds: %w", err)
 	}
 	inc := map[string]tool.Resource{}
 	for _, r := range resp.Included {
 		inc[r.Type+":"+r.ID] = r
 	}
-	out := buildsListOut{App: app, Platform: platform, Builds: make([]buildRow, 0, len(resp.Data)), Total: pagingTotal(resp.Meta)}
-	var processing *buildRow
+	out.Builds, out.Total = make([]buildRow, 0, len(resp.Data)), pagingTotal(resp.Meta)
+	processing := -1
 	for _, b := range resp.Data {
 		row := buildRow{
 			ID: b.ID, Number: b.Str("version"), ProcessingState: b.Str("processingState"),
@@ -135,26 +177,12 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 			}
 		}
 		out.Builds = append(out.Builds, row)
-		if processing == nil && row.ProcessingState == "PROCESSING" {
-			processing = &out.Builds[len(out.Builds)-1]
+		if processing < 0 && row.ProcessingState == "PROCESSING" {
+			processing = len(out.Builds) - 1
 		}
 	}
 	out.Returned = len(out.Builds)
-	if in.Platform == "" && len(out.Builds) == 0 {
-		if out.OtherPlatforms, err = otherPlatformBuilds(ctx, env, app, platform, q); err != nil {
-			return nil, err
-		}
-	}
-	res := tool.OK(out)
-	if processing != nil {
-		res.Then(tool.NextStep{Tool: "builds_wait", Args: map[string]any{"app": app.ID, "platform": string(platform), "build": processing.ID}})
-	}
-	for _, p := range app.Platforms {
-		if out.OtherPlatforms[p] > 0 {
-			res.Then(tool.NextStep{Tool: "builds_list", Args: map[string]any{"app": app.ID, "platform": string(p)}})
-		}
-	}
-	return res, nil
+	return processing, nil
 }
 
 // otherPlatformBuilds counts the builds matching q on each of the app's

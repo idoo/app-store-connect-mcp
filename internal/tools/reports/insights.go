@@ -20,7 +20,7 @@ const (
 )
 
 type insightsIn struct {
-	App    tool.AppRef `json:"app,omitempty" jsonschema:"default: pinned, else all apps"`
+	App    tool.AppRef `json:"app,omitempty" jsonschema:"default pinned, else all (sales/ratings)"`
 	Period string      `json:"period,omitempty" jsonschema:"Pacific; default last_7_days"`
 }
 
@@ -32,8 +32,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "insights_summary", Toolset: tool.Reports, Class: tool.Read, Idempotent: true,
 		Title: "How is my app doing",
-		Description: "Use first for \"how is my app doing\": units and proceeds vs the previous period, ratings, versions, " +
-			"TestFlight feedback, analytics status; each section ok or unavailable and why.",
+		Description: "Use first for \"how is my app doing\": units and proceeds vs previous period, ratings, versions, " +
+			"TestFlight feedback, analytics; each section ok or unavailable+why.",
 		Enums: map[string][]any{"period": periods},
 	}, insightsSummary))
 }
@@ -93,6 +93,10 @@ type ratingsInsight struct {
 	PrevAverage    string `json:"previous_average,omitempty"`
 	Stars          [5]int `json:"stars"` // 1★..5★ counts in the current period
 	Capped         bool   `json:"capped,omitempty"`
+	// AppsScanned and AppsWithReviews are set when every app (from
+	// /v1/apps, as reviews_list app:"all" counts them) was aggregated.
+	AppsScanned     int `json:"apps_scanned,omitempty"`
+	AppsWithReviews int `json:"apps_with_reviews,omitempty"`
 }
 
 type versionInsight struct {
@@ -148,13 +152,13 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 	} else if in.App != "" {
 		return nil, err
 	} else {
-		noApp = "no app selected: pass app (" + tool.BodyFor(err).Message + ")"
+		noApp = "needs one app: pass app (" + tool.BodyFor(err).Message + ")"
 	}
 
 	today := applemeta.PacificDay(now)
 	out.Sales = salesSection(ctx, env, app, from, to, pFrom, pTo, today)
 	if app == nil {
-		out.Ratings.section = unavailable(noApp)
+		out.Ratings = allAppsRatings(ctx, env, from, to, pFrom)
 		out.Release.section = unavailable(noApp)
 		out.TestFlight.section = unavailable(noApp)
 		out.Analytics.section = unavailable(noApp)
@@ -305,6 +309,70 @@ func unionKeys(a, b reports.Units) []reports.Category {
 // ratingsSection averages ratings of reviews created in the current and
 // previous windows (newest 200 reviews at most).
 func ratingsSection(ctx context.Context, env *tool.Env, appID string, from, to, pFrom time.Time) ratingsInsight {
+	out, cur, prev, err := ratingsTally(ctx, env, appID, from, to, pFrom)
+	if err != nil {
+		return ratingsInsight{section: unavailable(reasonOf(err))}
+	}
+	out.Average = average(cur, out.NewReviews)
+	out.PrevAverage = average(prev, out.PrevNewReviews)
+	return out
+}
+
+// allAppsRatings aggregates ratingsTally over every app /v1/apps returns.
+func allAppsRatings(ctx context.Context, env *tool.Env, from, to, pFrom time.Time) ratingsInsight {
+	apps, err := env.ASC.List(ctx, "/v1/apps", tool.ListOptions{
+		Fields: map[string][]string{"apps": {"name"}}, Limit: 200, MaxItems: 5000,
+	})
+	if err != nil {
+		return ratingsInsight{section: unavailable(reasonOf(err))}
+	}
+	type tally struct {
+		r         ratingsInsight
+		cur, prev int
+		err       error
+	}
+	tallies := make([]tally, len(apps.Data))
+	if err := tool.Parallel(ctx, 4, apps.Data, func(ctx context.Context, i int, a tool.Resource) error {
+		t := &tallies[i]
+		t.r, t.cur, t.prev, t.err = ratingsTally(ctx, env, a.ID, from, to, pFrom)
+		return nil
+	}); err != nil {
+		return ratingsInsight{section: unavailable(reasonOf(err))}
+	}
+	out := ratingsInsight{section: sectionOK, AppsScanned: len(apps.Data)}
+	var cur, prev, failed int
+	for _, t := range tallies {
+		if t.err != nil {
+			failed++
+			continue
+		}
+		if t.r.NewReviews > 0 {
+			out.AppsWithReviews++
+		}
+		out.NewReviews += t.r.NewReviews
+		out.PrevNewReviews += t.r.PrevNewReviews
+		for i, n := range t.r.Stars {
+			out.Stars[i] += n
+		}
+		out.Capped = out.Capped || t.r.Capped
+		cur, prev = cur+t.cur, prev+t.prev
+	}
+	out.Average = average(cur, out.NewReviews)
+	out.PrevAverage = average(prev, out.PrevNewReviews)
+	switch {
+	case failed == len(tallies) && failed > 0:
+		return ratingsInsight{section: unavailable(reasonOf(tallies[0].err))}
+	case failed > 0:
+		out.Reason = fmt.Sprintf("%d app(s) could not be read; totals may be low", failed)
+	case out.Capped:
+		out.Reason = fmt.Sprintf("only the newest %d reviews per app were read; earlier counts may be low", insightsMaxReviews)
+	}
+	return out
+}
+
+// ratingsTally counts one app's reviews in the current and previous windows
+// and returns the rating sums.
+func ratingsTally(ctx context.Context, env *tool.Env, appID string, from, to, pFrom time.Time) (out ratingsInsight, cur, prev int, err error) {
 	res, err := env.ASC.List(ctx, "/v1/apps/"+appID+"/customerReviews", tool.ListOptions{
 		Query:    map[string][]string{"sort": {"-createdDate"}},
 		Fields:   map[string][]string{"customerReviews": {"rating", "createdDate"}},
@@ -312,11 +380,10 @@ func ratingsSection(ctx context.Context, env *tool.Env, appID string, from, to, 
 		MaxItems: insightsMaxReviews,
 	})
 	if err != nil {
-		return ratingsInsight{section: unavailable(reasonOf(err))}
+		return out, 0, 0, err
 	}
 	end := to.AddDate(0, 0, 1)
-	out := ratingsInsight{section: sectionOK}
-	var cur, prev int
+	out = ratingsInsight{section: sectionOK}
 	reachedStart := false
 	for _, r := range res.Data {
 		t, err := time.Parse(time.RFC3339, r.Str("createdDate"))
@@ -340,12 +407,10 @@ func ratingsSection(ctx context.Context, env *tool.Env, appID string, from, to, 
 		}
 	}
 	out.Capped = !reachedStart && res.NextCursor != ""
-	out.Average = average(cur, out.NewReviews)
-	out.PrevAverage = average(prev, out.PrevNewReviews)
 	if out.Capped {
 		out.Reason = fmt.Sprintf("only the newest %d reviews were read; earlier counts may be low", insightsMaxReviews)
 	}
-	return out
+	return out, cur, prev, nil
 }
 
 func average(sum, n int) string {

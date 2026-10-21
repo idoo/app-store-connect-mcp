@@ -51,8 +51,8 @@ type feedbackListIn struct {
 	Kind             string        `json:"kind,omitempty" jsonschema:"default all"`
 	Since            string        `json:"since,omitempty" jsonschema:"last_seen, YYYY-MM-DD or RFC 3339"`
 	Build            tool.BuildRef `json:"build,omitempty" jsonschema:"only this build (number, id or latest)"`
-	Platform         tool.Platform `json:"platform,omitempty" jsonschema:"only this platform"`
-	DeviceModel      string        `json:"device_model,omitempty" jsonschema:"only this device model, e.g. iPhone15,2"`
+	Platform         tool.Platform `json:"platform,omitempty"`
+	DeviceModel      string        `json:"device_model,omitempty" jsonschema:"e.g. iPhone15,2"`
 	Limit            int           `json:"limit,omitempty" jsonschema:"items per kind, 1-50 (default 20)"`
 	MarkSeen         bool          `json:"mark_seen,omitempty" jsonschema:"advance last_seen past these items"`
 	IncludeCrashLogs bool          `json:"include_crash_logs,omitempty" jsonschema:"fetch log text of up to 3 crashes (8 KB each)"`

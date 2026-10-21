@@ -59,6 +59,22 @@
         "detail": "App Review contact set; no demo account (add one if the app needs a login)"
       },
       {
+        "id": "iphone_duo_screenshots",
+        "status": "warn",
+        "detail": "required for submissions from 2027-04-01; add them on the web (not in the API yet)",
+        "items": [
+          "APP_IPHONE_DUO: no screenshots; required for submissions from 2027-04-01"
+        ],
+        "fix_via": {
+          "manual": "https://appstoreconnect.apple.com/apps/100/distribution/ios/version/inflight"
+        }
+      },
+      {
+        "id": "cpp_keywords",
+        "status": "ok",
+        "detail": "0 custom product page localization(s) use version keywords only"
+      },
+      {
         "id": "age_rating",
         "status": "ok",
         "detail": "age rating declaration complete"
@@ -106,8 +122,8 @@
       }
     ],
     "summary": {
-      "ok": 14,
-      "warn": 0,
+      "ok": 15,
+      "warn": 1,
       "block": 0,
       "manual": 1,
       "phase": "preparing",

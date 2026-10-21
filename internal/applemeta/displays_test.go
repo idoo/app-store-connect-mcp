@@ -191,3 +191,25 @@ func TestParseDisplay(t *testing.T) {
 		}
 	}
 }
+
+// APP_IPHONE_DUO is pending: not in the pinned spec, never parsed or listed
+// as a sendable slot, but known with its required-from date.
+func TestPendingIPhoneDuo(t *testing.T) {
+	displays, _ := loadSpecEnums(t)
+	if slices.Contains(displays, string(AppIPhoneDuo)) {
+		t.Fatal("spec now lists APP_IPHONE_DUO: move it into displaySpecs")
+	}
+	if _, ok := LookupDisplay(AppIPhoneDuo); ok {
+		t.Error("pending slot is a sendable display")
+	}
+	if _, err := ParseDisplay("APP_IPHONE_DUO"); err == nil {
+		t.Error("ParseDisplay accepted a pending slot")
+	}
+	p := PendingDisplays(tool.IOS)
+	if len(p) != 1 || p[0].Type != AppIPhoneDuo || p[0].RequiredFrom.Format("2006-01-02") != "2027-04-01" {
+		t.Errorf("pending = %+v", p)
+	}
+	if len(PendingDisplays(tool.MacOS)) != 0 {
+		t.Error("mac has pending slots")
+	}
+}

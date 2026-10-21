@@ -24,7 +24,7 @@ type reviewIn struct {
 	DemoAccountRequired *bool   `json:"demo_account_required,omitempty"`
 	DemoAccountName     *string `json:"demo_account_name,omitempty"`
 	DemoAccountPassword *string `json:"demo_account_password,omitempty" jsonschema:"never echoed back"`
-	Notes               *string `json:"notes,omitempty" jsonschema:"notes for App Review"`
+	Notes               *string `json:"notes,omitempty"`
 }
 
 // attrs maps the set fields to appStoreReviewDetails attributes.
@@ -58,7 +58,7 @@ type appinfoIn struct {
 	AgeRating         map[string]any  `json:"age_rating,omitempty" jsonschema:"ageRatingDeclaration attributes, e.g. {\"gambling\":false}"`
 	Review            *reviewIn       `json:"review,omitempty" jsonschema:"App Review contact, demo account and notes"`
 	ContentRights     string          `json:"content_rights,omitempty"`
-	Copyright         *string         `json:"copyright,omitempty" jsonschema:"e.g. 2026 Example AB"`
+	Copyright         *string         `json:"copyright,omitempty"`
 	Accessibility     *a11yIn         `json:"accessibility,omitempty" jsonschema:"Accessibility Nutrition Labels"`
 }
 

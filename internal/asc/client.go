@@ -366,10 +366,10 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 		}
 		retry, wait := c.retry.shouldRetry(method, status, nil, attempt)
 		if status == http.StatusTooManyRequests {
-			if ra, ok := parseRetryAfter(raw.header.Get("Retry-After"), c.clock.Now()); ok {
-				if ra > maxRetryAfter {
+			if ra, ok := ascrules.ParseRetryAfter(raw.header.Get("Retry-After"), c.clock.Now()); ok {
+				if ra > ascrules.MaxRetryAfter {
 					return nil, fmt.Errorf("asc: %s: Retry-After %s exceeds %s: %w: %w",
-						label, ra, maxRetryAfter, tool.ErrRateLimited, apiErr)
+						label, ra, ascrules.MaxRetryAfter, tool.ErrRateLimited, apiErr)
 				}
 				wait = ra
 			}

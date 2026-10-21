@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/idoo/app-store-connect-mcp/internal/ascrules"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -156,7 +156,12 @@ func (j partsJob) putPart(ctx context.Context, i int, op Operation, part []byte)
 	var last error
 	for attempt := 0; attempt <= PartRetries; attempt++ {
 		if attempt > 0 {
-			if err := j.clock.Sleep(ctx, backoff(attempt, last)); err != nil {
+			wait, ok := backoff(attempt, last, j.clock.Now())
+			if !ok {
+				return fmt.Errorf("upload operation %d: Retry-After %s exceeds %s: %w: %w",
+					i, wait, ascrules.MaxRetryAfter, tool.ErrRateLimited, last)
+			}
+			if err := j.clock.Sleep(ctx, wait); err != nil {
 				return fmt.Errorf("upload operation %d: %w (last error: %w)", i, err, last)
 			}
 		}
@@ -202,15 +207,17 @@ func (e *partStatusError) Error() string {
 	return msg
 }
 
-// backoff returns the wait before retry attempt (1-based): Retry-After in
-// seconds when the host sent one, else 500 ms doubled per attempt, both
-// capped at 30 s.
-func backoff(attempt int, last error) time.Duration {
+// backoff returns the wait before retry attempt (1-based): the host's
+// Retry-After when usable, else 500 ms doubled per attempt capped at 30 s.
+// It reports false when Retry-After exceeds [ascrules.MaxRetryAfter], so the
+// part fails fast instead of waiting; a Retry-After ≤ 0 or in the past
+// keeps the exponential floor.
+func backoff(attempt int, last error, now time.Time) (time.Duration, bool) {
 	var se *partStatusError
 	if errors.As(last, &se) && se.header != nil {
-		if s, err := strconv.Atoi(strings.TrimSpace(se.header.Get("Retry-After"))); err == nil && s >= 0 {
-			return min(time.Duration(s)*time.Second, maxPartBackoff)
+		if ra, ok := ascrules.ParseRetryAfter(se.header.Get("Retry-After"), now); ok {
+			return ra, ra <= ascrules.MaxRetryAfter
 		}
 	}
-	return min(partBackoff<<(attempt-1), maxPartBackoff)
+	return min(partBackoff<<(attempt-1), maxPartBackoff), true
 }

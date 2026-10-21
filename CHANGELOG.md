@@ -4,6 +4,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-26
+
+### Added
+
+- `testflight_groups_upsert` creates or updates a beta group by name: public link on/off, its tester limit, feedback. Turning a public link on needs your approval; other changes to an existing group show a preview first.
+- `release_review_status wait:true` waits for App Review to finish (up to 15 minutes, with progress) and hands back a resume hint when it's still in review.
+- `release_status` warns about iPhone Duo screenshots, which Apple requires from April 2027. It only blocks after that date once the API can actually upload them.
+- `release_status` checks custom product page keywords that are missing from the version's keywords (App Store Connect drops them on release).
+- `release_status check_urls:true` loads the support, marketing and privacy URLs. Only public https addresses, at most 3 redirects, checked again on every hop.
+- Every result says what day it is (`as_of`, in UTC and Apple's Pacific reporting day). `reviews_list since` accepts `today`, `yesterday`, `this_week`, `last_7_days`, `this_month` and `last_30_days`.
+- `metadata_plan` previews against the live version when no version is being prepared, so "show me what would change" works with writes off. `metadata_apply` won't take that preview.
+
+### Changed
+
+- `insights_summary` without an app sums ratings across all apps instead of giving up on the ambiguity.
+- `builds_list` falls back to the only platform that has builds when you didn't pick one.
+- Error results carry `next` once.
+- Tool descriptions are about 300 bytes shorter overall, which pays for the new tool.
+
+### Fixed
+
+- The text sanitiser now marks every invisible character class: variation selectors (except an emoji's own), all format characters, Hangul fillers, the blank braille cell and other default-ignorables. They could carry hidden text into approval forms.
+- A huge `Retry-After` overflowed into an instant retry, and `0` or a past date retried with no wait. Both the API client and uploads now share one parser: over 30 s fails fast, zero or past uses normal backoff.
+- A long lookalike word at the line limit no longer leaves a half-written warning marker.
+- `reviews_list since:"yesterday"` could come back empty when today had more reviews than the limit.
+
 ## [0.7.0] - 2026-10-26
 
 ### Added
@@ -153,7 +179,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.4.0...v0.5.0

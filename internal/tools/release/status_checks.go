@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -26,7 +27,7 @@ const (
 var lockedStates = []string{"WAITING_FOR_REVIEW", "IN_REVIEW", "ACCEPTED", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_DISTRIBUTION"}
 
 // versionScopedChecks cannot change while the version is with App Review.
-var versionScopedChecks = []string{"build", "export_compliance", "whats_new", "listing", "screenshots", "review_detail"}
+var versionScopedChecks = []string{"build", "export_compliance", "whats_new", "listing", "screenshots", "review_detail", "iphone_duo_screenshots", "cpp_keywords"}
 
 // fixVia says how a check is fixed: a app-store-connect-mcp tool, or manually at a URL.
 type fixVia struct {
@@ -95,6 +96,15 @@ type statusSnapshot struct {
 	ReadyIAPs, ReadySubscriptions []string
 	// ProductsTruncated describes product lists cut at the item cap.
 	ProductsTruncated []string
+	// Now is when the snapshot was read (date-dependent checks).
+	Now time.Time
+	// Uploadable reports per pending display type whether the pinned spec
+	// can upload it.
+	Uploadable map[applemeta.DisplayType]bool
+	// CPPs are the custom product page localizations with their search
+	// keywords; CPPErr is set when they could not be read.
+	CPPs   []cppLocale
+	CPPErr string
 }
 
 func fixTool(name string) *fixVia { return &fixVia{Tool: name} }
@@ -106,6 +116,9 @@ func runChecks(s *statusSnapshot) []check {
 	out = append(out, checkVersion(s))
 	if s.Version != nil {
 		out = append(out, checkBuild(s), checkExportCompliance(s), checkWhatsNew(s), checkListing(s), checkScreenshots(s), checkReviewDetail(s))
+		if s.Platform == tool.IOS {
+			out = append(out, checkPendingDisplays(s), checkCPPKeywords(s))
+		}
 	}
 	out = append(out, checkAgeRating(s), checkAccessibility(s), checkContentRights(s), checkPricing(s), checkProducts(s), checkPrivacy(s), checkSubmission(s))
 	if s.Version != nil {

@@ -24,8 +24,8 @@ type listIn struct {
 	Platform   tool.Platform   `json:"platform,omitempty"`
 	Version    tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, else live), live or a version string"`
 	Locales    tool.LocaleSet  `json:"locales,omitempty" jsonschema:"locales to show, or [\"all\"] (default)"`
-	Display    string          `json:"display,omitempty" jsonschema:"only this display type, e.g. APP_IPHONE_67, 6.9, ipad-13, mac"`
-	Thumbnails bool            `json:"thumbnails,omitempty" jsonschema:"attach up to 4 small screenshot images"`
+	Display    string          `json:"display,omitempty" jsonschema:"e.g. APP_IPHONE_67, 6.9, ipad-13, mac"`
+	Thumbnails bool            `json:"thumbnails,omitempty"`
 }
 
 type localeOut struct {
@@ -63,9 +63,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "screenshots_list", Toolset: tool.Screenshots, Class: tool.Read, Idempotent: true,
 		Title: "List screenshots and previews", UI: "screenshots",
-		Description: "Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, " +
-			"file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back " +
-			"to the primary). thumbnails:true attaches up to 4 small images.",
+		Description: "Screenshot and preview sets per locale and display for a version (default editable): ids, order, file names, " +
+			"checksums, states, sizes, required-display coverage (empty locales fall back to primary). thumbnails:true attaches ≤4 images.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, screenshotsList))
 }

@@ -25,12 +25,12 @@ var previewMIME = map[string]string{
 type previewIn struct {
 	App                  tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform             tool.Platform   `json:"platform,omitempty"`
-	Version              tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or a version string of an editable version"`
+	Version              tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or an editable version string"`
 	Locale               string          `json:"locale" jsonschema:"locale of the listing, e.g. en-US"`
 	File                 string          `json:"file" jsonschema:".mov, .mp4 or .m4v video inside the project"`
-	PreviewType          string          `json:"preview_type,omitempty" jsonschema:"preview slot (IPHONE_67, DESKTOP …) or a display such as 6.9, ipad-13, mac; default: main slot of the platform"`
-	PreviewFrameTimeCode string          `json:"preview_frame_time_code,omitempty" jsonschema:"poster frame as HH:MM:SS:FF, e.g. 00:00:05:00"`
-	Wait                 int             `json:"wait_seconds,omitempty" jsonschema:"seconds to wait for processing (default 45, max 300)"`
+	PreviewType          string          `json:"preview_type,omitempty" jsonschema:"slot (IPHONE_67, DESKTOP …) or display (6.9, ipad-13, mac); default: platform main slot"`
+	PreviewFrameTimeCode string          `json:"preview_frame_time_code,omitempty" jsonschema:"poster frame, HH:MM:SS:FF"`
+	Wait                 int             `json:"wait_seconds,omitempty" jsonschema:"processing wait, default 45, max 300"`
 }
 
 type previewOut struct {
@@ -50,8 +50,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "previews_upload", Toolset: tool.Screenshots, Class: tool.Write,
 		Title: "Upload an app preview video",
-		Description: "Uploads one app preview video to a locale's preview set of the editable version, creating the set if " +
-			"needed; optional poster frame time code. Same checksum already present = no-op. Max 3 previews per set.",
+		Description: "Uploads one app preview video to a locale's preview set of the editable version (set created if needed). " +
+			"Same checksum present = no-op. Max 3 per set.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, previewsUpload))
 }

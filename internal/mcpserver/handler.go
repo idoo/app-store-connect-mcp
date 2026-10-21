@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"maps"
 	"sync/atomic"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/asc"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
@@ -22,6 +24,31 @@ type sessionKey struct{}
 func sessionFrom(ctx context.Context) *mcp.ServerSession {
 	ss, _ := ctx.Value(sessionKey{}).(*mcp.ServerSession)
 	return ss
+}
+
+// now is the clock of _meta as_of; tests replace it.
+var now = time.Now
+
+// asOf is the time stamp of a result: UTC seconds and Apple's reporting day
+// (America/Los_Angeles).
+func asOf(t time.Time) map[string]string {
+	return map[string]string{
+		"utc":       t.UTC().Truncate(time.Second).Format(time.RFC3339),
+		"apple_day": t.In(applemeta.Pacific()).Format(time.DateOnly),
+	}
+}
+
+// metaObject is the result's _meta object with as_of added.
+func metaObject(m any) map[string]any {
+	out := map[string]any{}
+	if b, err := json.Marshal(m); err == nil {
+		_ = json.Unmarshal(b, &out)
+	}
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["as_of"] = asOf(now())
+	return out
 }
 
 // handler adapts a tool to the SDK. Tool failures, including panics, become
@@ -193,6 +220,24 @@ func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 	}
 	s.markLocked(r)
 	full := r.Data
+	// An error's next steps are emitted once, at the top level.
+	if r.IsError {
+		var b *tool.ErrorBody
+		switch v := r.Data.(type) {
+		case tool.ErrorBody:
+			b = &v
+		case *tool.ErrorBody:
+			c := *v
+			b = &c
+		}
+		if b != nil && len(b.Next) > 0 {
+			if len(r.Next) == 0 {
+				r.Next = b.Next
+			}
+			b.Next = nil
+			r.Data, full = *b, *b
+		}
+	}
 	data, trunc, err := asc.CapResult(r.Data, s.deps.MaxResultBytes)
 	if err != nil {
 		r = tool.Fail(fmt.Errorf("%w: render result: %v", tool.ErrInternal, err))
@@ -210,7 +255,7 @@ func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 		r.Next = next
 		r.Meta.Warnings = append(r.Meta.Warnings, "large next[].args values were omitted; resend the same values you passed")
 	}
-	obj := map[string]any{"_meta": map[string]any{"app-store-connect-mcp": r.Meta}}
+	obj := map[string]any{"_meta": map[string]any{"app-store-connect-mcp": metaObject(r.Meta)}}
 	if data != nil {
 		obj["data"] = data
 	}

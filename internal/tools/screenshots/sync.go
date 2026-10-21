@@ -34,7 +34,7 @@ const (
 type syncIn struct {
 	tool.ConfirmPlan
 	sourceIn
-	Wait int `json:"wait_seconds,omitempty" jsonschema:"seconds to wait for Apple to process uploads (default 45, max 300)"`
+	Wait int `json:"wait_seconds,omitempty" jsonschema:"processing wait, default 45, max 300"`
 }
 
 // itemOut is the outcome of one sync step.

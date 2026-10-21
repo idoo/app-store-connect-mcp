@@ -42,7 +42,7 @@ type iapListIn struct {
 	State  string      `json:"state,omitempty"`
 	Type   string      `json:"type,omitempty"`
 	Limit  int         `json:"limit,omitempty" jsonschema:"default 200, max 5000"`
-	Cursor string      `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
+	Cursor string      `json:"cursor,omitempty" jsonschema:"next_cursor"`
 }
 
 type iapLocOut struct {

@@ -28,16 +28,15 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_publish", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByFlag, RequireHuman: true,
-		Title: "Release an approved version",
-		Description: "Release a PENDING_DEVELOPER_RELEASE version to the App Store; other states are refused. Without " +
-			"confirm:true returns a preview.",
-		Enums: map[string][]any{"platform": platformEnum},
+		Title:       "Release an approved version",
+		Description: "Release a PENDING_DEVELOPER_RELEASE version to the App Store. Without confirm:true returns a preview.",
+		Enums:       map[string][]any{"platform": platformEnum},
 	}, releasePublish))
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_phased", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByFlag,
 		Title:   "Control a phased release",
-		Description: "Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. " +
+		Description: "Pause, resume or complete a 7-day phased release, or remove one not yet started. " +
 			"Enable it before release (release_prepare phased:true). Without confirm:true previews; complete needs human approval.",
 		Enums: map[string][]any{"platform": platformEnum, "action": {"pause", "resume", "complete", "remove", "start"}},
 	}, releasePhased))

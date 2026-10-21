@@ -157,6 +157,7 @@ func releaseKit(t *testing.T) (*tooltest.Kit, *releaseFake) {
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/inAppPurchasesV2", http.StatusOK, `{"data":[]}`)
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, `{"data":[]}`)
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/accessibilityDeclarations", http.StatusOK, `{"data":[]}`)
+	asc.Handle(http.MethodGet, "/v1/apps/{id}/appCustomProductPages", http.StatusOK, `{"data":[]}`)
 	asc.Handle(http.MethodGet, "/v1/builds/{id}", http.StatusOK, string(jsonDoc(t, res{Type: "builds", ID: "b2", Attrs: map[string]any{"version": "43", "processingState": "VALID", "expired": false, "usesNonExemptEncryption": false}})))
 	asc.Handle(http.MethodGet, "/v1/builds/{id}/preReleaseVersion", http.StatusOK, string(jsonDoc(t, res{Type: "preReleaseVersions", ID: "prv14", Attrs: map[string]any{"version": "1.4", "platform": "IOS"}})))
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions", http.StatusOK, string(jsonDoc(t, []res{cur})))
