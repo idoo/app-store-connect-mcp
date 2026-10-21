@@ -49,13 +49,13 @@ func (r *reviewIn) attrs() map[string]any {
 
 type appinfoIn struct {
 	tool.ConfirmFlag
-	App               tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform          tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
-	Version           tool.VersionRef `json:"version,omitempty" jsonschema:"version for review details and copyright: editable (default) or a version string"`
-	PrimaryCategory   string          `json:"primary_category,omitempty" jsonschema:"category id or name, e.g. PRODUCTIVITY or Health & Fitness"`
+	App               tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform          tool.Platform   `json:"platform,omitempty"`
+	Version           tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or a version string"`
+	PrimaryCategory   string          `json:"primary_category,omitempty" jsonschema:"category id or name, e.g. PRODUCTIVITY"`
 	SecondaryCategory *string         `json:"secondary_category,omitempty" jsonschema:"category id or name; empty string clears it"`
-	AgeRating         map[string]any  `json:"age_rating,omitempty" jsonschema:"ageRatingDeclaration attributes to set, e.g. {\"violenceCartoonOrFantasy\":\"NONE\",\"gambling\":false}"`
-	Review            *reviewIn       `json:"review,omitempty" jsonschema:"App Review contact, demo account and notes of the version"`
+	AgeRating         map[string]any  `json:"age_rating,omitempty" jsonschema:"ageRatingDeclaration attributes, e.g. {\"gambling\":false}"`
+	Review            *reviewIn       `json:"review,omitempty" jsonschema:"App Review contact, demo account and notes"`
 	ContentRights     string          `json:"content_rights,omitempty"`
 	Copyright         *string         `json:"copyright,omitempty" jsonschema:"e.g. 2026 Example AB"`
 }
@@ -64,8 +64,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "appinfo_update", Toolset: tool.Metadata, Class: tool.Write, Confirm: tool.ConfirmByFlag,
 		Title: "Update app info and review details",
-		Description: "Sets categories, age rating, App Review contact/demo account/notes, content rights and copyright. " +
-			"Without confirm:true previews current→new. Localized text: metadata_plan; release notes: release_prepare.",
+		Description: "Set categories, age rating, App Review contact/demo/notes, content rights, copyright. Without " +
+			"confirm:true previews current→new. Listing text: metadata_plan.",
 		Enums: map[string][]any{
 			"platform":       platformEnum,
 			"content_rights": {"DOES_NOT_USE_THIRD_PARTY_CONTENT", "USES_THIRD_PARTY_CONTENT"},

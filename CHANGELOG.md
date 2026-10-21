@@ -11,10 +11,13 @@ All notable changes to this project are documented here. The format is based on 
 #### Server and safety
 
 - MCP server over stdio and Streamable HTTP (bearer token, Origin check, loopback by default, TLS for remote).
-- Read-only by default: write and destructive tools are withheld until writes are enabled by flag, env, profile, or at runtime with human approval.
+- Read-only by default: write and destructive tools are withheld until writes are enabled by flag, env, profile, or at runtime with `toolsets` `enable_writes` and human approval. Next steps that need a hidden write tool are marked `locked: "writes_disabled"` with the unlock call.
 - Read, write and destructive classes with MCP annotations, checked against tool names by a test.
-- Preview and confirm for mutations: `confirm:true` previews, `plan_id` plans bound to arguments, session and a state fingerprint, human approval through elicitation for public and irreversible actions.
-- Third-party text wrapped as `untrusted`; redaction of keys, JWTs and signed URLs; URL policy for presigned URLs; file access confined to the project root.
+- Preview and confirm for mutations: `confirm:true` for simple tools, `plan_id` for plan tools (bound to arguments, profile, session and a state fingerprint; single use; 15 minutes).
+- Human approval through elicitation for public, irreversible and money actions: review replies, submit/cancel/publish, build expiry, tester removal, pricing, offers and offer codes, users, webhooks, signing revokes, every `asc_api_request` mutation, and external TestFlight distribution. The approval form shows the change first and untrusted text fenced after it. Results report `_meta.hamn.approved_by`. Clients that can't elicit (including protocol `2026-07-28`+) are refused unless the profile sets `allow_no_elicit`.
+- HTTP mode keeps write mode per session.
+- Third-party text wrapped as `untrusted` (reviews, tester feedback, testers and crash logs in full; free-text fields elsewhere; store listings); redaction of keys, JWTs and signed URLs; URL policy for presigned URLs; file access confined to the project root through `os.Root`.
+- One-time offer codes are written to `offer-codes/<batch_id>.csv`, never returned to the agent.
 - Toolsets with runtime enable and disable (`tools/list_changed`) and a discovery mode.
 
 #### Tools
@@ -33,7 +36,7 @@ All notable changes to this project are documented here. The format is based on 
 
 - `hamn auth`, `hamn doctor`, `hamn config snippet|install`, `hamn skills list|install`.
 - Agent skills and a Claude Code plugin with a marketplace entry.
-- Release binaries for macOS, Linux and Windows with checksums, SBOM and build provenance; install script; Homebrew formula; Docker image; Claude Desktop `.mcpb` bundle; MCP Registry entry.
+- Release binaries for macOS, Linux and Windows with checksums, SBOM and build provenance; install script that verifies the sha256 and, with `gh`, the provenance attestation (refusing to install on failure); Homebrew formula; Docker image; Claude Desktop `.mcpb` bundle; MCP Registry entry.
 - Weekly spec drift check.
 
 [Unreleased]: https://github.com/idoo/hamn/compare/v0.1.0...HEAD

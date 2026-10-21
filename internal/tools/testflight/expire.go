@@ -19,17 +19,16 @@ func init() {
 		Name: "builds_expire", Toolset: tool.TestFlight, Class: tool.Destructive,
 		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Expire builds",
-		Description: "Expire up to 50 builds (numbers, ids or latest) so testers can no longer install them. " +
-			"Without confirm:true returns a preview listing build numbers and versions; nothing changes. " +
-			"Already expired builds are skipped. Irreversible.",
+		Description: "Expire up to 50 builds so testers can no longer install them. Irreversible. Without confirm:true " +
+			"previews; already expired builds are skipped.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, buildsExpire))
 }
 
 type expireIn struct {
 	tool.ConfirmFlag
-	App      tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
+	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform   `json:"platform,omitempty"`
 	Builds   []tool.BuildRef `json:"builds" jsonschema:"1-50 build numbers, ids, latest or latest-valid"`
 }
 

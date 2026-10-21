@@ -18,7 +18,7 @@ const (
 )
 
 type buildUploadIn struct {
-	App         tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App         tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform    tool.Platform `json:"platform,omitempty" jsonschema:"default: IOS for .ipa, MAC_OS for .pkg"`
 	Path        string        `json:"path" jsonschema:".ipa or .pkg file inside the project"`
 	Version     string        `json:"version,omitempty" jsonschema:"CFBundleShortVersionString; required for .pkg, read from Info.plist for .ipa"`

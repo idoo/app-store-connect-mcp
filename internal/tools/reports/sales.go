@@ -27,14 +27,14 @@ type salesIn struct {
 	Period     string      `json:"period,omitempty" jsonschema:"preset in Pacific time; default yesterday"`
 	From       string      `json:"from,omitempty" jsonschema:"first day YYYY-MM-DD (with to)"`
 	To         string      `json:"to,omitempty" jsonschema:"last day YYYY-MM-DD, inclusive"`
-	Frequency  string      `json:"frequency,omitempty" jsonschema:"fetch one report of this frequency instead of a daily range (with report_date)"`
-	ReportDate string      `json:"report_date,omitempty" jsonschema:"DAILY YYYY-MM-DD, WEEKLY the week's Sunday YYYY-MM-DD, MONTHLY YYYY-MM, YEARLY YYYY"`
+	Frequency  string      `json:"frequency,omitempty" jsonschema:"single report of this frequency (with report_date)"`
+	ReportDate string      `json:"report_date,omitempty" jsonschema:"DAILY YYYY-MM-DD, WEEKLY its Sunday, MONTHLY YYYY-MM, YEARLY YYYY"`
 	ReportType string      `json:"report_type,omitempty" jsonschema:"default SALES"`
 	SubType    string      `json:"report_subtype,omitempty" jsonschema:"default: first subtype valid for report_type"`
 	GroupBy    []string    `json:"group_by,omitempty" jsonschema:"SALES grouping dimensions"`
 	TopN       int         `json:"top_n,omitempty" jsonschema:"groups kept, default 10, max 100"`
-	App        tool.AppRef `json:"app,omitempty" jsonschema:"only rows of this app (id, bundle id, SKU or name); default: all apps"`
-	WithUSD    bool        `json:"with_usd_estimate,omitempty" jsonschema:"add proceeds_estimate_usd from Apple's FX rates in the latest finance report"`
+	App        tool.AppRef `json:"app,omitempty" jsonschema:"only this app's rows; default: all apps"`
+	WithUSD    bool        `json:"with_usd_estimate,omitempty" jsonschema:"add proceeds_estimate_usd via Apple's latest FX rates"`
 }
 
 func init() {
@@ -55,9 +55,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "sales_report", Toolset: tool.Reports, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
 		Title: "Sales and Trends report",
-		Description: "Raw/decoded Sales & Trends rows and aggregates (units by category, proceeds per currency, top-N groups) " +
-			"for a period, from/to days or one frequency+report_date. Prefer insights_summary for 'how is my app doing'. " +
-			"Days not yet published come back as pending.",
+		Description: "Decoded Sales & Trends rows and aggregates (units by category, proceeds per currency, top-N) for a " +
+			"period, from/to or frequency+report_date. Overviews: insights_summary. Unpublished days: pending.",
 		Enums: map[string][]any{
 			"period":         periods,
 			"frequency":      {"DAILY", "WEEKLY", "MONTHLY", "YEARLY"},

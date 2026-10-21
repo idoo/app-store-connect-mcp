@@ -29,22 +29,22 @@ func init() {
 		Name: "testflight_distribute", Toolset: tool.TestFlight, Class: tool.Write, Idempotent: true,
 		Confirm: tool.ConfirmByFlag,
 		Title:   "Distribute a TestFlight build",
-		Description: "Give a build (default latest) to beta groups: answers export compliance, sets What to Test " +
-			"per locale (* = all), beta review info, adds it to groups, submits external beta review. External or " +
-			"public distribution and compliance answers need confirm:true and human approval.",
+		Description: "Give a build to beta groups: export compliance, What to Test per locale (* = all), beta review info, " +
+			"external beta review. External or public distribution and compliance answers need confirm:true and " +
+			"human approval.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, distribute))
 }
 
 type distributeIn struct {
-	App                     tool.AppRef              `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Build                   tool.BuildRef            `json:"build,omitempty" jsonschema:"build number, id, latest (default) or latest-valid"`
-	Platform                tool.Platform            `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
+	App                     tool.AppRef              `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Build                   tool.BuildRef            `json:"build,omitempty" jsonschema:"number, id, latest (default) or latest-valid"`
+	Platform                tool.Platform            `json:"platform,omitempty"`
 	Groups                  []tool.GroupRef          `json:"groups" jsonschema:"1-20 beta group names or ids"`
-	WhatToTest              map[string]string        `json:"what_to_test,omitempty" jsonschema:"What to Test by locale code; key * = every existing localization (else the primary locale)"`
-	UsesNonExemptEncryption *bool                    `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer; required when the build has none (ask the user, never guess)"`
-	BetaReview              *betaReviewIn            `json:"beta_review,omitempty" jsonschema:"beta App Review contact, demo account and notes (used for external groups)"`
-	BetaAppLocalizations    map[string]betaAppInfoIn `json:"beta_app_localizations,omitempty" jsonschema:"beta app info by locale code; key * = every existing localization (else the primary locale)"`
+	WhatToTest              map[string]string        `json:"what_to_test,omitempty" jsonschema:"What to Test by locale; * = all existing (else primary)"`
+	UsesNonExemptEncryption *bool                    `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance if the build has none (ask the user, never guess)"`
+	BetaReview              *betaReviewIn            `json:"beta_review,omitempty" jsonschema:"beta review contact, demo account, notes"`
+	BetaAppLocalizations    map[string]betaAppInfoIn `json:"beta_app_localizations,omitempty" jsonschema:"beta app info by locale; * = all existing (else primary)"`
 	tool.ConfirmFlag
 }
 

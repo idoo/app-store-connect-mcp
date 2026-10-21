@@ -10,17 +10,17 @@ import (
 )
 
 type publishIn struct {
-	App      tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform   `json:"platform,omitempty" jsonschema:"default: the app's platform"`
-	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"version string; default: the version awaiting release"`
+	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform   `json:"platform,omitempty"`
+	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"default: the version awaiting release"`
 	tool.ConfirmFlag
 }
 
 type phasedIn struct {
-	App      tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform   `json:"platform,omitempty" jsonschema:"default: the app's platform"`
-	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"version string; default: the newest version with a phased release"`
-	Action   string          `json:"action" jsonschema:"what to do with the phased release"`
+	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform   `json:"platform,omitempty"`
+	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"default: newest version with a phased release"`
+	Action   string          `json:"action"`
 	tool.ConfirmFlag
 }
 
@@ -29,16 +29,16 @@ func init() {
 		Name: "release_publish", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Release an approved version",
-		Description: "Release an approved version in PENDING_DEVELOPER_RELEASE (manual release) to the App Store; any other state is refused with the current state. " +
-			"Without confirm:true returns a preview.",
+		Description: "Release a PENDING_DEVELOPER_RELEASE version to the App Store; other states are refused. Without " +
+			"confirm:true returns a preview.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, releasePublish))
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_phased", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByFlag,
 		Title:   "Control a phased release",
-		Description: "Pause, resume or complete a 7-day phased release, or remove one not yet started (INACTIVE); shows day and % of users. " +
-			"Phasing must be enabled before release (release_prepare phased:true). Without confirm:true returns a preview.",
+		Description: "Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. " +
+			"Enable it before release (release_prepare phased:true). Without confirm:true previews.",
 		Enums: map[string][]any{"platform": platformEnum, "action": {"pause", "resume", "complete", "remove", "start"}},
 	}, releasePhased))
 }

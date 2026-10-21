@@ -11,9 +11,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "metadata_plan", Toolset: tool.Metadata, Class: tool.Read, Idempotent: true,
 		Title: "Plan store listing changes",
-		Description: "Use for full listing edits (for release notes only, use release_prepare). Diffs one source (listing, " +
-			"fastlane_dir or expo_config) against the editable version, checks limits, returns plan_id for metadata_apply. " +
-			"Omitted locales/fields stay.",
+		Description: "Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config " +
+			"against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, metadataPlan))
 }

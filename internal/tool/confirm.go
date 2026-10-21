@@ -31,12 +31,12 @@ const (
 
 // ConfirmFlag is embedded in the input of [ConfirmByFlag] tools.
 type ConfirmFlag struct {
-	Confirm bool `json:"confirm,omitempty" jsonschema:"set true only after reviewing the preview of this exact call"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"true after reviewing the preview"`
 }
 
 // ConfirmPlan is embedded in the input of [ConfirmByPlan] tools.
 type ConfirmPlan struct {
-	PlanID string `json:"plan_id,omitempty" jsonschema:"plan_id returned by the preview call with identical arguments"`
+	PlanID string `json:"plan_id,omitempty" jsonschema:"from the preview call"`
 }
 
 // PlanPreview describes what a mutation would do. The approval prompt shown

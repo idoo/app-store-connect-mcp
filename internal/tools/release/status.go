@@ -14,18 +14,19 @@ import (
 )
 
 type statusIn struct {
-	App      tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform   `json:"platform,omitempty" jsonschema:"default: the app's platform"`
+	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform   `json:"platform,omitempty"`
 	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default), live or a version string"`
-	Desired  *releaseDesired `json:"desired,omitempty" jsonschema:"intended release; returns plan_ids for release_prepare/release_submit"`
+	Desired  *releaseDesired `json:"desired,omitempty" jsonschema:"intended release; yields plan_ids for release_prepare/release_submit"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_status", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "Release readiness and preflight",
-		Description: "Preflight an App Store version: build, export compliance, What's New, listing limits, screenshots, review contact, age rating, pricing, products, in-flight submission. " +
-			"Pass desired to preview release_prepare/release_submit and get their plan_ids.",
+		Description: "Preflight a version: build, compliance, What's New, listing limits, screenshots, review contact, age " +
+			"rating, pricing, products, open submission. desired returns plan_ids for " +
+			"release_prepare/release_submit.",
 		Enums: map[string][]any{
 			"platform":             {"IOS", "MAC_OS", "TV_OS", "VISION_OS"},
 			"desired.release_type": {releaseManual, releaseAfterApproval, releaseScheduled},

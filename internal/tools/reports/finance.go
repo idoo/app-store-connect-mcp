@@ -15,7 +15,7 @@ import (
 type financeIn struct {
 	Month      string `json:"month,omitempty" jsonschema:"Apple fiscal month YYYY-MM; default: last closed month"`
 	ReportType string `json:"report_type,omitempty" jsonschema:"default FINANCIAL"`
-	Region     string `json:"region,omitempty" jsonschema:"regionCode; default ZZ (all) for FINANCIAL, Z1 for FINANCE_DETAIL"`
+	Region     string `json:"region,omitempty" jsonschema:"default ZZ (FINANCIAL) or Z1 (FINANCE_DETAIL)"`
 	TopN       int    `json:"top_n,omitempty" jsonschema:"products kept, default 10, max 100"`
 }
 
@@ -23,8 +23,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "finance_report", Toolset: tool.Reports, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
 		Title: "Payments and financial report",
-		Description: "Decoded Payments & Financial report for one fiscal month (default: last closed): proceeds per currency, " +
-			"Apple's FX rates, top products, and total_usd only when every currency has a rate. Unpublished months return pending.",
+		Description: "Decoded Payments & Financial report for one fiscal month: proceeds per currency, FX rates, top " +
+			"products, total_usd only if every currency has a rate. Unpublished months: pending.",
 		Enums: map[string][]any{"report_type": {string(applemeta.ReportFinancial), string(applemeta.ReportFinanceDetail)}},
 	}, financeReport))
 }

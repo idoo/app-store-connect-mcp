@@ -14,7 +14,7 @@
 // omitempty are required. Enums go in Meta.Enums. Register in init:
 //
 //	type listIn struct {
-//		App   tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+//		App   tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 //		State string      `json:"state,omitempty"`
 //	}
 //

@@ -46,8 +46,8 @@ const (
 
 // sourceIn is shared by screenshots_plan and screenshots_sync.
 type sourceIn struct {
-	App      tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
+	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform tool.Platform   `json:"platform,omitempty"`
 	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or a version string of an editable version"`
 	Dir      string          `json:"dir" jsonschema:"screenshots directory inside the project: <locale>/*.png|jpg (fastlane; display inferred from pixels) or <locale>/<display>/*.png"`
 	Mode     string          `json:"mode,omitempty" jsonschema:"replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones"`

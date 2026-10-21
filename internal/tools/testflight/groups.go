@@ -9,8 +9,8 @@ import (
 )
 
 type groupsListIn struct {
-	App  tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Type string      `json:"type,omitempty" jsonschema:"internal, external or all (default)"`
+	App  tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Type string      `json:"type,omitempty" jsonschema:"default all"`
 }
 
 // groupOut is one beta group in the groups_list result. Counts are nil when
@@ -33,8 +33,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_groups_list", Toolset: tool.TestFlight, Class: tool.Read, Idempotent: true,
 		Title: "List TestFlight groups",
-		Description: "Beta groups of an app: internal/external, tester and build counts, public link and feedback " +
-			"settings, in one call. Pass a group's name or id as `group` to testflight_testers_* and testflight_distribute.",
+		Description: "Beta groups: internal/external, tester and build counts, public link, feedback settings. Use a " +
+			"group's name or id in testflight_testers_* and testflight_distribute.",
 		Enums: map[string][]any{"type": {"internal", "external", "all"}},
 	}, groupsList))
 }

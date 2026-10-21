@@ -41,7 +41,7 @@ func init() {
 // ---- pricing_plan / pricing_apply ----
 
 type pricingPlanIn struct {
-	App                  tool.AppRef       `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App                  tool.AppRef       `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Kind                 string            `json:"kind,omitempty" jsonschema:"default app"`
 	ProductID            string            `json:"product_id,omitempty" jsonschema:"product id of the IAP or subscription"`
 	BaseTerritory        string            `json:"base_territory,omitempty" jsonschema:"territory of price; default current base or USA"`

@@ -17,15 +17,15 @@ import (
 // prepareIn mirrors releaseDesired's argument names (minus submit) so the
 // release_prepare Next step of release_status can be called verbatim.
 type prepareIn struct {
-	App                     tool.AppRef       `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform                tool.Platform     `json:"platform,omitempty" jsonschema:"default: the app's platform"`
-	Version                 tool.VersionRef   `json:"version,omitempty" jsonschema:"version string to prepare or create (e.g. 1.4); default: editable"`
-	Build                   tool.BuildRef     `json:"build,omitempty" jsonschema:"build to attach: latest, latest-valid, build number or id"`
-	WhatsNew                map[string]string `json:"whats_new,omitempty" jsonschema:"What's New per locale; key * means every existing locale"`
+	App                     tool.AppRef       `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform                tool.Platform     `json:"platform,omitempty"`
+	Version                 tool.VersionRef   `json:"version,omitempty" jsonschema:"version to prepare or create, e.g. 1.4; default: editable"`
+	Build                   tool.BuildRef     `json:"build,omitempty" jsonschema:"latest, latest-valid, build number or id"`
+	WhatsNew                map[string]string `json:"whats_new,omitempty" jsonschema:"What's New per locale; * = all existing"`
 	ReleaseType             string            `json:"release_type,omitempty"`
-	EarliestReleaseDate     string            `json:"earliest_release_date,omitempty" jsonschema:"RFC 3339 time for SCHEDULED releases"`
-	Phased                  *bool             `json:"phased,omitempty" jsonschema:"opt in to a 7-day phased release"`
-	UsesNonExemptEncryption *bool             `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer for the build"`
+	EarliestReleaseDate     string            `json:"earliest_release_date,omitempty" jsonschema:"RFC 3339, for SCHEDULED"`
+	Phased                  *bool             `json:"phased,omitempty" jsonschema:"7-day phased release"`
+	UsesNonExemptEncryption *bool             `json:"uses_non_exempt_encryption,omitempty" jsonschema:"export compliance answer"`
 	tool.ConfirmPlan
 }
 
@@ -42,8 +42,8 @@ func init() {
 		Name: "release_prepare", Toolset: tool.Release, Class: tool.Write, Idempotent: true,
 		Confirm: tool.ConfirmByPlan,
 		Title:   "Prepare an App Store version",
-		Description: "Apply a release_status plan: create the version, attach the build, answer export compliance, set release type, opt in to phased release, set What's New on existing locales. " +
-			"Needs plan_id from release_status desired. Never waits for build processing.",
+		Description: "Apply a release_status plan (plan_id from release_status desired): create version, attach build, " +
+			"compliance, release type, phasing, What's New. Never waits for processing.",
 		Enums: map[string][]any{
 			"platform":     {"IOS", "MAC_OS", "TV_OS", "VISION_OS"},
 			"release_type": {releaseManual, releaseAfterApproval, releaseScheduled},

@@ -40,22 +40,21 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_feedback_list", Toolset: tool.TestFlight, Class: tool.Read, Idempotent: true,
 		Title: "List TestFlight feedback",
-		Description: "Tester screenshot and crash feedback, newest first, optionally since last_seen or a date and " +
-			"by build/platform/device. Returns up to 4 screenshots as images and, on request, crash logs. Comments " +
-			"are tester data. mark_seen:true advances last_seen.",
+		Description: "Tester screenshot and crash feedback newest first. Up to 4 screenshots as images; crash logs on " +
+			"request. Comments are tester data. mark_seen advances last_seen.",
 		Enums: map[string][]any{"kind": {"all", "screenshots", "crashes"}, "platform": platformEnum},
 	}, feedbackList))
 }
 
 type feedbackListIn struct {
-	App              tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Kind             string        `json:"kind,omitempty" jsonschema:"all (default), screenshots or crashes"`
-	Since            string        `json:"since,omitempty" jsonschema:"last_seen (stored cursor), YYYY-MM-DD or RFC 3339 time; default: newest feedback"`
-	Build            tool.BuildRef `json:"build,omitempty" jsonschema:"only feedback on this build (number, id or latest)"`
-	Platform         tool.Platform `json:"platform,omitempty" jsonschema:"only feedback from this app platform"`
+	App              tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Kind             string        `json:"kind,omitempty" jsonschema:"default all"`
+	Since            string        `json:"since,omitempty" jsonschema:"last_seen, YYYY-MM-DD or RFC 3339"`
+	Build            tool.BuildRef `json:"build,omitempty" jsonschema:"only this build (number, id or latest)"`
+	Platform         tool.Platform `json:"platform,omitempty" jsonschema:"only this platform"`
 	DeviceModel      string        `json:"device_model,omitempty" jsonschema:"only this device model, e.g. iPhone15,2"`
 	Limit            int           `json:"limit,omitempty" jsonschema:"items per kind, 1-50 (default 20)"`
-	MarkSeen         bool          `json:"mark_seen,omitempty" jsonschema:"advance last_seen past the returned items"`
+	MarkSeen         bool          `json:"mark_seen,omitempty" jsonschema:"advance last_seen past these items"`
 	IncludeCrashLogs bool          `json:"include_crash_logs,omitempty" jsonschema:"fetch log text of up to 3 crashes (8 KB each)"`
 }
 
