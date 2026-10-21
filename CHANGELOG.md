@@ -4,6 +4,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-26
+
+### Added
+
+- `--http-max-conns` / `ASC_MCP_HTTP_MAX_CONNS` caps open HTTP connections (default 256).
+- `install.sh` is attached to every release and covered by the signed checksums, so the one-liner is `curl -fsSL https://github.com/idoo/app-store-connect-mcp/releases/latest/download/install.sh | sh`. `ASC_MCP_REQUIRE_SIGNATURE=1` makes it refuse anything it can't verify.
+- Releases ship a cosign-signed `checksums-extra.txt` for the `.mcpb` and `tools.json`, and the release job fails unless the published release is immutable.
+
+### Changed
+
+- HTTP mode reads each request within 60 s, closes idle connections after 2 minutes, caps headers at 64 KiB and closes the connection on every refusal. A slow or never-ending body can't hold a connection open any more.
+- At the session cap, a session idle for 10 minutes makes room, and the `503` says honestly when the next slot frees up.
+- JSON-RPC batches are accepted only from clients on `2025-03-26` or older, at most 100 messages.
+- `Bearer` is matched case-insensitively.
+- Numbers and booleans sent as strings (`"3"`, `"true"`) are accepted; anything else still fails validation. `reviews_list rating` uses a 1–5 range instead of an integer enum, which Gemini rejects.
+- Starting without credentials prints one warning instead of two.
+- When `install.sh` can't check the signature (no cosign, no `gh`), it installs but doesn't run the binary, and prints how to verify it. `gh attestation verify` is pinned to the release workflow and tag. A missing version gets a readable error. `ASC_MCP_REQUIRE_COSIGN` is replaced by `ASC_MCP_REQUIRE_SIGNATURE`.
+- `golang.org/x/sys` 0.44.0 (GO-2026-5024).
+
+### Fixed
+
+- SIGTERM during a long call in HTTP mode now cancels the call, answers the client and exits 0, instead of an empty reply and exit 1.
+- The Homebrew formula passes `brew audit --strict`.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added
@@ -179,7 +203,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.5.0...v0.6.0

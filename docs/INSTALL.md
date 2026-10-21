@@ -8,7 +8,7 @@ Use the first one that works, then check with `app-store-connect-mcp version`:
 
 ```sh
 brew install idoo/tap/app-store-connect-mcp
-curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh   # verifies sha256, installs to ~/.local/bin
+curl -fsSL https://github.com/idoo/app-store-connect-mcp/releases/latest/download/install.sh | sh   # verifies sha256 and signatures, installs to ~/.local/bin
 go install github.com/idoo/app-store-connect-mcp/cmd/app-store-connect-mcp@latest
 ```
 

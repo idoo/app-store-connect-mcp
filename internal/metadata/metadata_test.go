@@ -124,6 +124,23 @@ func TestDiffRemoveDeletesOnlyListed(t *testing.T) {
 	}
 }
 
+// The locale union is built from deduplicated sets: thousands of aliases of
+// one locale in Remove still plan each deletion once (CodeQL #1 regression).
+func TestDiffRemoveDuplicateAliasesPlannedOnce(t *testing.T) {
+	_, remote := newRemote(t)
+	remove := make([]string, 0, 3000)
+	for range 1000 {
+		remove = append(remove, "de", "de-DE", "de_DE")
+	}
+	p, err := Diff(remote, &Listing{}, DiffOptions{Remove: remove})
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	if p.Counts.Deletes != 2 || len(p.Changes) != 2 {
+		t.Errorf("deletes = %d, changes = %v", p.Counts.Deletes, p.Changes)
+	}
+}
+
 func TestDiffValidation(t *testing.T) {
 	_, remote := newRemote(t)
 	desired := &Listing{Locales: map[string]*LocaleFields{

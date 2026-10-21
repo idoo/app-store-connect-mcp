@@ -593,7 +593,7 @@ No arguments.
 |`app`|string|||name, bundle id, SKU or id; "all" = every app|
 |`limit`|integer|||default 50, max 500|
 |`mark_seen`|boolean|||advance last_seen to the newest returned (kept when filtered)|
-|`rating`|integer[]||`1`, `2`, `3`, `4`, `5`|only these star ratings|
+|`rating`|integer[]|||star ratings|
 |`since`|string|||last_seen, today, yesterday, this_week, last_7_days, this_month, last_30_days or ISO time|
 |`territory`|string[]|||alpha-3 territory codes, e.g. USA, DEU|
 |`unanswered`|boolean|||only reviews without a response|

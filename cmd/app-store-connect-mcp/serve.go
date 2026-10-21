@@ -117,6 +117,7 @@ func parseServeArgs(args []string, out io.Writer) (*serveArgs, error) {
 	tlsKey := fs.String("tls-key", "", "TLS private key PEM for --http")
 	sessionTimeout := fs.Duration("http-session-timeout", 0, "close idle --http sessions after this long, e.g. 30m; negative never (default "+mcpserver.EnvHTTPSessionTimeout+" or "+mcpserver.DefaultSessionTimeout.String()+")")
 	maxSessions := fs.Int("http-max-sessions", 0, "cap open --http sessions; negative is unlimited (default "+mcpserver.EnvHTTPMaxSessions+" or "+strconv.Itoa(mcpserver.DefaultMaxSessions)+")")
+	maxConns := fs.Int("http-max-conns", 0, "cap open --http TCP connections; negative is unlimited (default "+mcpserver.EnvHTTPMaxConns+" or "+strconv.Itoa(mcpserver.DefaultMaxConns)+")")
 	var origins stringList
 	fs.Var(&origins, "allow-origin", "extra allowed browser Origin scheme://host[:port] for --http (repeatable; needs --allow-remote; also "+envHTTPAllowedOrigins+")")
 	if err := fs.Parse(args); err != nil {
@@ -150,6 +151,7 @@ func parseServeArgs(args []string, out io.Writer) (*serveArgs, error) {
 			AllowedOrigins: allowed,
 			SessionTimeout: *sessionTimeout,
 			MaxSessions:    *maxSessions,
+			MaxConns:       *maxConns,
 		},
 	}, nil
 }

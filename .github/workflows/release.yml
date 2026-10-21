@@ -1,9 +1,11 @@
 name: Release
 
-# Tag v* → goreleaser builds a DRAFT release (archives, checksums.txt + cosign
-# bundle, SBOMs, ghcr image) → .mcpb + its .sha256 + tools.json are uploaded
-# to the draft → provenance attestations (files + image) → the draft is
-# published as the last release step → Homebrew tap and MCP Registry follow.
+# Tag v* → goreleaser builds a DRAFT release (archives, install.sh,
+# checksums.txt + cosign bundle, SBOMs, ghcr image) → the .mcpb and tools.json
+# are listed in checksums-extra.txt, cosign-signed and uploaded to the draft →
+# provenance attestations (files + image) → the draft is published as the
+# last release step and must come out immutable → Homebrew tap and MCP
+# Registry follow.
 # Tags are immutable (ruleset), so dry-run with `goreleaser release --snapshot`.
 on:
   push:
@@ -70,15 +72,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Build .mcpb bundle
+      - name: Build .mcpb bundle and sign checksums-extra.txt
         id: mcpb
         run: |
           version="${GITHUB_REF_NAME#v}"
           mcpb=$(scripts/build-mcpb.sh "$version")
+          # Assets built after goreleaser signed checksums.txt get their own
+          # signed list (same "<sha256>  <name>" format, `sha256sum -c` works).
           {
-            echo "path=$mcpb"
-            echo "sha256=$(awk '{print $1}' "$mcpb.sha256")"
-          } >> "$GITHUB_OUTPUT"
+            (cd "$(dirname "$mcpb")" && sha256sum "$(basename "$mcpb")")
+            (cd docs && sha256sum tools.json)
+          } > dist/checksums-extra.txt
+          cosign sign-blob --yes --bundle dist/checksums-extra.txt.sigstore.json dist/checksums-extra.txt
+          echo "path=$mcpb" >> "$GITHUB_OUTPUT"
 
       - name: Resolve image digest
         id: image
@@ -95,6 +101,7 @@ jobs:
             dist/*.zip
             dist/*.mcpb
             dist/checksums.txt
+            dist/checksums-extra.txt
             docs/tools.json
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -102,17 +109,37 @@ jobs:
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
 
-      - name: Upload .mcpb, its sha256 and tools.json to the draft
+      # The unsigned .mcpb.sha256 sidecar is not uploaded: checksums-extra.txt
+      # (cosign-signed) covers the .mcpb, and registry.yml hashes it itself.
+      - name: Upload .mcpb, tools.json and the signed checksums-extra.txt to the draft
         env:
           GH_TOKEN: ${{ github.token }}
           MCPB: ${{ steps.mcpb.outputs.path }}
-        run: gh release upload "$GITHUB_REF_NAME" "$MCPB" "$MCPB.sha256" docs/tools.json --repo "$GITHUB_REPOSITORY"
+        run: |
+          gh release upload "$GITHUB_REF_NAME" "$MCPB" docs/tools.json \
+            dist/checksums-extra.txt dist/checksums-extra.txt.sigstore.json --repo "$GITHUB_REPOSITORY"
 
       # Last release step: after this the release is immutable.
       - name: Publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"
+
+      # install.sh trusts checksums.txt because the published release cannot
+      # change; a mutable release (immutability paused, asset edited after
+      # publish) must fail the run loudly.
+      - name: Assert the published release is immutable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            immutable=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .immutable)
+            [ "$immutable" = true ] && { echo "release $GITHUB_REF_NAME is immutable"; exit 0; }
+            echo "attempt $attempt: immutable=$immutable" >&2
+            sleep 5
+          done
+          echo "::error title=Release is not immutable::$GITHUB_REF_NAME was published with immutable=$immutable. Re-enable immutable releases (Settings > General > Releases) and do not edit assets after publishing; a mutable release lets checksums.txt be swapped." >&2
+          exit 1
 
   homebrew:
     needs: release

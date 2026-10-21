@@ -46,7 +46,7 @@ The form starts with what will happen and the profile (account), then the server
 
 **HTTP mode** needs a bearer token of at least 32 characters, checks `Origin`, answers CORS preflights only for origins you allowed, and binds to loopback unless you pass `--allow-remote` with TLS. Older clients get a session each with its own write guard; `2026-07-28` clients are stateless and get exactly the startup config.
 
-**Supply chain.** Pinned modules and Go toolchain, SHA-pinned Actions, no npm in the signing job, reproducible builds, SBOM, provenance attestations, govulncheck, CodeQL, gitleaks, and a CI check that no binary is committed. `install.sh` checks the sha256, verifies cosign against the exact release identity when cosign is installed, and runs `gh attestation verify` when `gh` is.
+**Supply chain.** Pinned modules and Go toolchain, SHA-pinned Actions, no npm in the signing job, reproducible builds, SBOM, provenance attestations, govulncheck, CodeQL, gitleaks, and a CI check that no binary is committed. Releases are immutable once published (the workflow fails if one isn't), and `install.sh`, the `.mcpb` and `tools.json` are covered by cosign-signed checksums. `install.sh` checks the sha256, verifies cosign against the exact release identity when cosign is installed, and runs `gh attestation verify` pinned to the release workflow and tag when `gh` is. If neither can check the release, it installs but doesn't run the binary and tells you how to verify it; `ASC_MCP_REQUIRE_SIGNATURE=1` makes it refuse instead.
 
 ## The review that says "ignore previous instructions"
 
