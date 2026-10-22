@@ -267,6 +267,80 @@ func TestUploadAssetFailedSurfacesErrors(t *testing.T) {
 	}
 }
 
+// libraryFixture registers an appAssetLibraryImages flow whose PATCH returns
+// UPLOAD_COMPLETE and whose GETs return states in order (the last repeats).
+func libraryFixture(t *testing.T, k *tooltest.Kit, data []byte, states ...map[string]any) AssetSpec {
+	t.Helper()
+	ops := splitOps(int64(len(data)), 1)
+	k.ASC.Handle("POST", "/v1/appAssetLibraryImages", http.StatusCreated, resourceJSON(t, "appAssetLibraryImages", "img-1", map[string]any{
+		"state": "AWAITING_UPLOAD", "uploadOperations": ops,
+	}))
+	k.ASC.Handle("PATCH", "/v1/appAssetLibraryImages/{id}", http.StatusOK, resourceJSON(t, "appAssetLibraryImages", "img-1", map[string]any{"state": "UPLOAD_COMPLETE"}))
+	for _, st := range states {
+		k.ASC.Handle("GET", "/v1/appAssetLibraryImages/{id}", http.StatusOK, resourceJSON(t, "appAssetLibraryImages", "img-1", st))
+	}
+	k.Fetch.Handle("PUT", partURL(0), http.StatusOK, nil)
+	return AssetSpec{
+		CreatePath: "/v1/appAssetLibraryImages", Type: "appAssetLibraryImages",
+		Parent:     Relationship{Name: "assetLibrary", Type: "appAssetLibraries", ID: "app-1"},
+		Attributes: map[string]any{"category": "APP_SCREENSHOTS_AND_PREVIEWS"},
+		FileName:   "01-home.png", FileSize: int64(len(data)), File: bytes.NewReader(data),
+		NoChecksum: true,
+	}
+}
+
+func TestUploadLibraryAssetNoChecksumStopsAtPrepare(t *testing.T) {
+	k := tooltest.New(t)
+	data := []byte("library-pixels")
+	spec := libraryFixture(t, k, data,
+		map[string]any{"state": "UPLOAD_COMPLETE"},
+		map[string]any{"state": "PREPARE_FOR_SUBMISSION"},
+		map[string]any{"state": "WAITING_FOR_REVIEW"},
+	)
+	res, err := Asset(writeCtx(t), DepsFromEnv(k.Env), spec)
+	if err != nil || res.State != StatePrepareForSubmission || res.StillProcessing {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if n := len(k.ASC.RequestsTo("GET", "/v1/appAssetLibraryImages/{id}")); n != 2 {
+		t.Errorf("polls = %d, want 2 (stop at PREPARE_FOR_SUBMISSION)", n)
+	}
+	patch := k.ASC.RequestsTo("PATCH", "/v1/appAssetLibraryImages/{id}")
+	if len(patch) != 1 {
+		t.Fatalf("patches = %d", len(patch))
+	}
+	body := tooltest.JSON(t, patch[0].Body)
+	if strings.Contains(body, "sourceFileChecksum") || !strings.Contains(body, `"uploaded":true`) {
+		t.Errorf("commit body %s: want uploaded:true without sourceFileChecksum", body)
+	}
+}
+
+func TestUploadLibraryAssetFailedSurfacesStateDetails(t *testing.T) {
+	for name, details := range map[string]any{
+		"object": map[string]any{"errors": []map[string]string{{"code": "IMAGE_INCORRECT_DIMENSIONS", "message": "The dimensions are wrong."}}},
+		"string": "IMAGE_INCORRECT_DIMENSIONS: The dimensions are wrong.",
+	} {
+		t.Run(name, func(t *testing.T) {
+			k := tooltest.New(t)
+			spec := libraryFixture(t, k, []byte("bad"), map[string]any{"state": "FAILED", "stateDetails": details})
+			res, err := Asset(writeCtx(t), DepsFromEnv(k.Env), spec)
+			if !errors.Is(err, ErrUploadFailed) {
+				t.Fatalf("err = %v", err)
+			}
+			mustContain(t, err, "IMAGE_INCORRECT_DIMENSIONS: The dimensions are wrong.")
+			if res == nil || res.State != StateFailed || len(res.Errors) != 1 {
+				t.Fatalf("result = %+v", res)
+			}
+		})
+	}
+}
+
+func TestUploadLibraryAssetRejectedIsError(t *testing.T) {
+	k := tooltest.New(t)
+	spec := libraryFixture(t, k, []byte("x"), map[string]any{"state": "REJECTED"})
+	_, err := Asset(writeCtx(t), DepsFromEnv(k.Env), spec)
+	mustContain(t, err, "processing REJECTED")
+}
+
 func TestUploadAssetStillProcessing(t *testing.T) {
 	k := tooltest.New(t)
 	data := []byte("pixels")
@@ -377,22 +451,60 @@ func FuzzParsePlist(f *testing.F) {
 	f.Fuzz(func(_ *testing.T, b []byte) { _, _ = ParsePlist(b) })
 }
 
-func TestIPAVersions(t *testing.T) {
+func TestReadIPA(t *testing.T) {
 	for name, plist := range map[string][]byte{
 		"binary": encodeBplist(t, map[string]any{"CFBundleShortVersionString": "2.3.1", "CFBundleVersion": "417"}),
 		"xml":    []byte(xmlInfoPlist),
 	} {
 		t.Run(name, func(t *testing.T) {
 			ipa := makeIPA(t, plist)
-			v, b, err := IPAVersions(bytes.NewReader(ipa), int64(len(ipa)))
-			if err != nil || v != "2.3.1" || b != "417" {
-				t.Fatalf("got %q %q %v", v, b, err)
+			info, err := ReadIPA(bytes.NewReader(ipa), int64(len(ipa)))
+			if err != nil || info.Version != "2.3.1" || info.Build != "417" {
+				t.Fatalf("got %+v %v", info, err)
 			}
 		})
 	}
 	ipa := makeIPA(t, []byte(`<plist><dict><key>CFBundleVersion</key><string>1</string></dict></plist>`))
-	_, _, err := IPAVersions(bytes.NewReader(ipa), int64(len(ipa)))
+	_, err := ReadIPA(bytes.NewReader(ipa), int64(len(ipa)))
 	mustContain(t, err, "lacks CFBundleShortVersionString")
+}
+
+func TestIPAPlatformInference(t *testing.T) {
+	plist := func(extra string) []byte {
+		return []byte(`<plist><dict><key>CFBundleShortVersionString</key><string>1.0</string>` +
+			`<key>CFBundleVersion</key><string>7</string>` + extra + `</dict></plist>`)
+	}
+	tests := []struct {
+		name     string
+		plist    []byte
+		explicit tool.Platform
+		want     tool.Platform
+		wantErr  string
+	}{
+		{"tvOS via DTPlatformName", plist(`<key>DTPlatformName</key><string>appletvos</string>`), "", tool.TVOS, ""},
+		{"visionOS via supported platforms", plist(`<key>CFBundleSupportedPlatforms</key><array><string>XROS</string></array>`), "", tool.VisionOS, ""},
+		{"iOS", plist(`<key>DTPlatformName</key><string>iphoneos</string>`), "", tool.IOS, ""},
+		{"unknown defaults to iOS", plist(""), "", tool.IOS, ""},
+		{"explicit agrees", plist(`<key>DTPlatformName</key><string>appletvos</string>`), tool.TVOS, tool.TVOS, ""},
+		{"explicit disagrees", plist(`<key>DTPlatformName</key><string>appletvos</string>`), tool.IOS, "", "is a TV_OS build"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ipa := makeIPA(t, tt.plist)
+			s := BuildSpec{AppID: "app-1", Platform: tt.explicit, FileName: "App.ipa", File: bytes.NewReader(ipa), FileSize: int64(len(ipa))}
+			_, err := s.normalize()
+			if tt.wantErr != "" {
+				mustContain(t, err, tt.wantErr)
+				if !errors.Is(err, tool.ErrInvalidArgs) {
+					t.Fatalf("err %v is not invalid args", err)
+				}
+				return
+			}
+			if err != nil || s.Platform != tt.want {
+				t.Fatalf("platform = %q, err %v; want %q", s.Platform, err, tt.want)
+			}
+		})
+	}
 }
 
 // buildFixture registers the build flow for ipa (3 parts).

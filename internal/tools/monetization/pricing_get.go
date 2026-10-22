@@ -254,9 +254,10 @@ func prcGetRowOf(p prcPrice, withPoint bool) prcGetRow {
 	return r
 }
 
-// prcMoney renders Apple's price string ("1.4", "29.0") with the currency's
-// decimals, as reports do ("1.40", "29.00", JPY "300"). Without a known
-// currency, or if the string is not a plain decimal, it is returned as is.
+// prcMoney renders Apple's price string ("1.4", "29.0") zero-filled to the
+// currency's decimals ("1.40", "29.00", JPY "300") without dropping digits
+// (JPY "255.5" stays "255.5"). Without a known currency, or if the string is
+// not a plain decimal, it is returned as is.
 func prcMoney(currency, s string) string {
 	if currency == "" || s == "" {
 		return s
@@ -265,7 +266,7 @@ func prcMoney(currency, s string) string {
 	if err != nil {
 		return s
 	}
-	return reports.FormatAmount(currency, v)
+	return reports.FormatExact(currency, v)
 }
 
 // prcProductRef is one IAP or subscription of an app.

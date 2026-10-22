@@ -21,6 +21,7 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 
 - `release_phased` with `complete` or `remove`;
 - `metadata_apply` when it changes promotional text on the live version (public at once, no review);
+- `library_apply` when it deletes placements or retires assets (`remove`, `archive`, or `mode:"replace"`). Placements go before their asset; an asset Apple has already reviewed is archived, not deleted;
 - `iap_upsert` / `subscriptions_upsert` when `availability` removes territories (sales stop there);
 - `signing_devices_register` when a device is new (each one uses a yearly device slot);
 - `iap_upsert` / `subscriptions_upsert` when they create a product (its id is burned for good), turn on family sharing or change a subscription's level;
@@ -40,7 +41,7 @@ The form starts with what will happen and the profile (account), then the server
 
 **Pins only narrow.** `.app-store-connect-mcp.toml` can turn writes off, never on. Outside `trusted_pins` it can only pick a read-only profile.
 
-**Nothing deleted by omission.** Metadata, screenshot and tester tools only remove what's listed in `remove`. `screenshots_sync` always needs a `plan_id` from `screenshots_plan`, so a folder in a cloned repo can't reach your version unseen. A 409 "already exists" counts as done. Mutations are never retried except after a 429. A timeout on one returns `outcome_unknown` instead of trying again and burning a product id.
+**Nothing deleted by omission.** Metadata, screenshot, library and tester tools only remove what's listed in `remove` (or, for `library_apply`, what `mode:"replace"` lists in its plan). `screenshots_sync` and `library_apply` always need a `plan_id` from their plan tool, so a folder in a cloned repo can't reach your version unseen. A 409 "already exists" counts as done. Mutations are never retried except after a 429. A timeout on one returns `outcome_unknown` instead of trying again and burning a product id.
 
 **Keys stay out of chat.** No tool takes or returns key material; only `app-store-connect-mcp auth` edits profiles. The config holds paths or keychain references and is refused if others can write it; so is a `.p8` key file, and `doctor` warns if others can read it. JWTs, PEM blocks (also base64-encoded or bare key bodies), `Authorization` headers and signed URL queries are redacted from results, errors and logs. JWTs only go to the API base URL. One-time offer codes go to `offer-codes/<batch_id>.csv` under the project root (git-ignored, mode 0600), not into the transcript.
 

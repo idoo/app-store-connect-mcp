@@ -44,6 +44,10 @@ var thirdPartyTypes = map[string]bool{
 	"customerReviews":                   true,
 }
 
+// IsThirdPartyType reports whether every attribute of resource type t is
+// customer- or tester-authored and so untrusted.
+func IsThirdPartyType(t string) bool { return thirdPartyTypes[t] }
+
 // WrapUntrusted replaces, in place, third-party text in rs with [Untrusted]
 // so it marshals as {"untrusted": text}. Every string attribute of a
 // third-party-authored type (customer reviews, tester feedback, testers,

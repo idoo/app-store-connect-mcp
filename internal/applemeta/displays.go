@@ -132,19 +132,22 @@ type DisplaySpec struct {
 // Pixel sizes per Apple's "Screenshot specifications" (App Store Connect
 // Help), portrait for iOS/watch, landscape for Mac/TV/Vision.
 var (
-	sizesIPhone67  = []Size{{1320, 2868}, {1290, 2796}, {1260, 2736}}
-	sizesIPhone65  = []Size{{1284, 2778}, {1242, 2688}}
-	sizesIPhone61  = []Size{{1206, 2622}, {1179, 2556}, {1170, 2532}, {1125, 2436}, {1080, 2340}}
-	sizesIPhone58  = []Size{{1125, 2436}, {1170, 2532}, {1080, 2340}}
-	sizesIPhone55  = []Size{{1242, 2208}}
-	sizesIPhone47  = []Size{{750, 1334}}
-	sizesIPhone40  = []Size{{640, 1136}, {640, 1096}}
-	sizesIPhone35  = []Size{{640, 960}, {640, 920}}
+	sizesIPhone67 = []Size{{1320, 2868}, {1290, 2796}, {1260, 2736}}
+	sizesIPhone65 = []Size{{1284, 2778}, {1242, 2688}}
+	sizesIPhone61 = []Size{{1206, 2622}, {1179, 2556}, {1170, 2532}, {1125, 2436}, {1080, 2340}}
+	sizesIPhone58 = []Size{{1125, 2436}, {1170, 2532}, {1080, 2340}}
+	sizesIPhone55 = []Size{{1242, 2208}}
+	sizesIPhone47 = []Size{{750, 1334}}
+	// 600x1136, 600x960, 320x480, 300x480, 320x460, 748x1024 and 1496x2048
+	// are legacy (status-bar-less or non-Retina) sizes Apple's asset-library
+	// ref data still accepts; either orientation via Rotates.
+	sizesIPhone40  = []Size{{640, 1136}, {640, 1096}, {600, 1136}}
+	sizesIPhone35  = []Size{{640, 960}, {640, 920}, {600, 960}, {320, 480}, {300, 480}, {320, 460}}
 	sizesIPad129   = []Size{{2064, 2752}, {2048, 2732}}
 	sizesIPad129v2 = []Size{{2048, 2732}}
 	sizesIPad11    = []Size{{1668, 2420}, {1668, 2388}, {1640, 2360}, {1488, 2266}}
 	sizesIPad105   = []Size{{1668, 2224}}
-	sizesIPad97    = []Size{{1536, 2048}, {1536, 2008}, {768, 1024}, {768, 1004}}
+	sizesIPad97    = []Size{{1536, 2048}, {1536, 2008}, {768, 1024}, {768, 1004}, {748, 1024}, {1496, 2048}}
 )
 
 func iphone(t DisplayType, diag string, sizes []Size, legacy bool, p PreviewType, aliases ...string) DisplaySpec {

@@ -4,15 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"regexp"
 	"sort"
 	"strings"
 )
 
 // ParseAmount parses a decimal string exactly ("1,234.56", "-0.70", "(3.10)",
-// ""). An empty string is zero. Commas are accepted only as thousands
-// separators of the integer part ("1,234.50", "1,234,567"); ambiguous commas
-// ("1,23", "1,234" which may be a decimal comma) are rejected, as are
-// exponents and fractions.
+// ""). An empty string is zero. The grammar is [-]digits[,ddd]*[.digits],
+// optionally in parentheses for a negative amount. Commas are accepted only
+// as thousands separators of the integer part ("1,234.50", "1,234,567");
+// ambiguous commas ("1,23", "1,234" which may be a decimal comma) are
+// rejected, as are signs other than a leading minus, hexadecimal, exponents
+// and fractions.
 func ParseAmount(s string) (*big.Rat, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -30,7 +33,7 @@ func ParseAmount(s string) (*big.Rat, error) {
 		}
 		s = ungrouped
 	}
-	if s == "" || strings.ContainsAny(s, "eE/,_ ") {
+	if !plainDecimal.MatchString(s) {
 		return nil, fmt.Errorf("reports: invalid amount %q: %w", raw, ErrCorrupt)
 	}
 	r, ok := new(big.Rat).SetString(s)
@@ -42,6 +45,10 @@ func ParseAmount(s string) (*big.Rat, error) {
 	}
 	return r, nil
 }
+
+// plainDecimal is the grammar of an ungrouped amount; it keeps big.Rat's
+// wider SetString syntax ("0x10", "1/2", "+1") out of reports.
+var plainDecimal = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+)?$`)
 
 // ungroupThousands removes thousands separators from s when its integer part
 // is grouped exactly as 1-3 digits followed by groups of 3 ("-1,234,567.8").
@@ -88,13 +95,32 @@ func Precision(currency string) int {
 	return 2
 }
 
-// FormatAmount renders v with currency-appropriate precision (half away from
-// zero rounding, display only; sums stay exact).
-func FormatAmount(currency string, v *big.Rat) string {
+// maxExactDecimals bounds FormatExact's search for an exact representation.
+const maxExactDecimals = 18
+
+// FormatExact renders an amount (an Apple price string or an exact sum): it
+// zero-fills to the currency's decimals ("1.4" USD → "1.40") but never drops
+// digits (JPY "255.5" stays "255.5"). Only a value with no finite decimal
+// representation within 18 places (e.g. a computed ratio) is rounded to the
+// currency's decimals.
+func FormatExact(currency string, v *big.Rat) string {
 	if v == nil {
 		v = new(big.Rat)
 	}
-	return v.FloatString(Precision(currency))
+	p := Precision(currency)
+	scaled := new(big.Rat)
+	ten := new(big.Rat).SetInt64(10)
+	scale := new(big.Rat).SetInt64(1)
+	for range p {
+		scale.Mul(scale, ten)
+	}
+	for n := p; n <= maxExactDecimals; n++ {
+		if scaled.Mul(v, scale).IsInt() {
+			return v.FloatString(n)
+		}
+		scale.Mul(scale, ten)
+	}
+	return v.FloatString(p)
 }
 
 // Money is an exact amount per ISO currency code.
@@ -138,7 +164,7 @@ func (m Money) Currencies() []string {
 func (m Money) Strings() map[string]string {
 	out := make(map[string]string, len(m))
 	for c, v := range m {
-		out[c] = FormatAmount(c, v)
+		out[c] = FormatExact(c, v)
 	}
 	return out
 }
@@ -147,7 +173,7 @@ func (m Money) Strings() map[string]string {
 func (m Money) String() string {
 	parts := make([]string, 0, len(m))
 	for _, c := range m.Currencies() {
-		parts = append(parts, c+" "+FormatAmount(c, m[c]))
+		parts = append(parts, c+" "+FormatExact(c, m[c]))
 	}
 	return strings.Join(parts, ", ")
 }

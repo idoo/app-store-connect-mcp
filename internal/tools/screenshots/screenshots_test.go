@@ -477,6 +477,8 @@ func TestPlanFastlaneLayoutDetectsDisplay(t *testing.T) {
 
 func TestPlanRejectsAlphaAndReportsAmbiguousAndUnknown(t *testing.T) {
 	k, _ := newKit(t)
+	// Unreadable ref data keeps the opaque rule.
+	k.ASC.Handle("GET", "/v1/appAssetLibraryRefData", 403, `{"errors":[{"status":"403","code":"FORBIDDEN"}]}`)
 	write(t, k, "shots/en-US/01.png", pngImage(t, 1290, 2796, true, 1))      // alpha
 	write(t, k, "shots/en-US/02.png", pngImage(t, 1125, 2436, false, 2))     // 6.1" capture: current slot, not 5.8"
 	write(t, k, "shots/xx-YY/01.png", pngImage(t, 1290, 2796, false, 3))     // unknown locale

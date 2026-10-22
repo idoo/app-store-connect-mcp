@@ -24,7 +24,7 @@ func TestParseToolsets(t *testing.T) {
 		{"+signing", append(slices.Clone(def), tool.Signing), ""},
 		{"+signing,-reports", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight, tool.Metadata, tool.Reviews, tool.Screenshots, tool.Signing}, ""},
 		{"release testflight", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight}, ""},
-		{"all,-admin,-webhooks", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight, tool.Metadata, tool.Reviews, tool.Reports, tool.Screenshots, tool.Uploads, tool.Monetization, tool.Signing, tool.XcodeCloud, tool.Store, tool.Insights}, ""},
+		{"all,-admin,-webhooks", []tool.Toolset{tool.Core, tool.Release, tool.TestFlight, tool.Metadata, tool.Reviews, tool.Reports, tool.Screenshots, tool.Uploads, tool.Monetization, tool.Signing, tool.XcodeCloud, tool.Store, tool.Insights, tool.Library}, ""},
 		{"STORE", []tool.Toolset{tool.Core, tool.Store}, ""},
 		{"-core", nil, "core cannot be disabled"},
 		{"bogus", nil, "unknown toolset"},

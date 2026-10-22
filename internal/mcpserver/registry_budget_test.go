@@ -110,6 +110,7 @@ var (
 		"asc_api_request":  tool.Destructive, // generic mutation, any method
 		"metadata_apply":   tool.Destructive, // overwrites listed locales and deletes those in remove
 		"screenshots_sync": tool.Destructive, // mode:replace deletes screenshots
+		"library_apply":    tool.Destructive, // uploads and places; deletes/retires on remove, archive or replace
 		"pricing_apply":    tool.Destructive, // apply-pricing (§4.2)
 		"users_invite":     tool.Destructive, // Apple emails the invitee immediately
 		// W verbs declared D in their packages; reported to Main, kept as shipped.

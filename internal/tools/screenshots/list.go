@@ -41,6 +41,9 @@ type localeOut struct {
 	// search-result art).
 	Library   []libraryGroup       `json:"library,omitempty"`
 	Creatives []assetlib.Placement `json:"creatives,omitempty"`
+	// LibraryDeduped counts library screenshots already listed in a set
+	// (same asset id), shown once.
+	LibraryDeduped int `json:"library_deduped,omitempty"`
 	// placements are the raw library placements (coverage).
 	placements []assetlib.Placement
 }
@@ -151,10 +154,19 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 		}
 	}
 	res := tool.OK(out)
+	if usesLibrary(out.Locales) {
+		res.Next = append(res.Next, tool.NextStep{Tool: "library_plan", Args: map[string]any{"app": t.App.ID}})
+	}
 	if in.Thumbnails {
 		addThumbnails(ctx, env, res, out.Locales)
 	}
 	return res, nil
+}
+
+// usesLibrary reports whether any shown localization has Asset Library
+// placements (then library_plan is the write path for it).
+func usesLibrary(locs []localeOut) bool {
+	return slices.ContainsFunc(locs, func(l localeOut) bool { return len(l.placements) > 0 })
 }
 
 // localeSets reads a localization's screenshot and preview sets, filtered
@@ -203,8 +215,17 @@ func addLibrary(ctx context.Context, env *tool.Env, out *listOut, placed []strin
 	for i := range out.Locales {
 		l := &out.Locales[i]
 		l.placements = lib.ByLocalization[l.LocalizationID]
+		inSets := map[string]bool{}
+		for _, s := range l.ScreenshotSets {
+			for _, sh := range s.Shots {
+				inSets[sh.ID] = true
+			}
+		}
 		for _, p := range l.placements {
 			switch {
+			case p.Type == assetlib.TypeScreenshot && (inSets[p.AssetID] || inSets[p.ID]):
+				// The same record is listed in its screenshot set.
+				l.LibraryDeduped++
 			case p.Creative():
 				l.Creatives = append(l.Creatives, p)
 			case display != "" && !assetlib.Covers([]assetlib.Placement{p}, display) && p.Type == assetlib.TypeScreenshot:

@@ -53,6 +53,12 @@ type fixture struct {
 	placed []string
 	// attachments are App Review attachment file names.
 	attachments []string
+	// devices are the deviceModel values App Store thinning lists for the
+	// attached build's App bundle (nil: none, i.e. unknown).
+	devices []string
+	// extraDisplays adds one COMPLETE screenshot set per display type to
+	// every localization.
+	extraDisplays []string
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -132,6 +138,13 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		bv = f.buildVersion
 	}
 	k.ASC.Handle("GET", "/v1/builds/{id}/preReleaseVersion", 200, doc(t, jres{Type: "preReleaseVersions", ID: "pre1", Attrs: map[string]any{"version": bv}}))
+	k.ASC.Handle("GET", "/v1/builds/{id}", 200, doc(t, jres{Type: "builds", ID: "b1", Rels: map[string]any{"buildBundles": []string{"buildBundles:bb1"}}},
+		jres{Type: "buildBundles", ID: "bb1", Attrs: map[string]any{"bundleType": "APP"}}))
+	var sizes []jres
+	for i, m := range f.devices {
+		sizes = append(sizes, jres{Type: "buildBundleFileSizes", ID: fmt.Sprintf("fs%d", i), Attrs: map[string]any{"deviceModel": m}})
+	}
+	k.ASC.Handle("GET", "/v1/buildBundles/{id}/buildBundleFileSizes", 200, doc(t, sizes))
 
 	prior := []jres{}
 	if !f.first {
@@ -231,6 +244,10 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		if !f.noIPad {
 			sets = append(sets, jres{Type: "appScreenshotSets", ID: "ipad-" + id, Attrs: map[string]any{"screenshotDisplayType": "APP_IPAD_PRO_3GEN_129"}, Rels: map[string]any{"appScreenshots": []string{"appScreenshots:p-" + id}}})
 			shots = append(shots, jres{Type: "appScreenshots", ID: "p-" + id, Attrs: map[string]any{"assetDeliveryState": map[string]any{"state": "COMPLETE"}}})
+		}
+		for _, d := range f.extraDisplays {
+			sets = append(sets, jres{Type: "appScreenshotSets", ID: d + "-" + id, Attrs: map[string]any{"screenshotDisplayType": d}, Rels: map[string]any{"appScreenshots": []string{"appScreenshots:" + d + "-s-" + id}}})
+			shots = append(shots, jres{Type: "appScreenshots", ID: d + "-s-" + id, Attrs: map[string]any{"assetDeliveryState": map[string]any{"state": "COMPLETE"}}})
 		}
 		return tooltest.Fixture{Status: 200, Body: []byte(doc(t, sets, shots...))}
 	})
@@ -413,8 +430,10 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 		t.Errorf("15-locale fixture not ready: %+v", out.Checks)
 	}
 	reqs := k.ASC.Requests()
-	if len(reqs) > 29 { // 26 + the custom product page list + placed-localization discovery + review attachments
-		t.Fatalf("%d requests for 15 locales, want ≤ 29", len(reqs))
+	// 26 + the custom product page list + placed-localization discovery + review attachments
+	// + the attached build's bundles + its App bundle's device models
+	if len(reqs) > 31 {
+		t.Fatalf("%d requests for 15 locales, want ≤ 31", len(reqs))
 	}
 	if got := k.ASC.RequestsTo("GET", "/v1/appStoreVersionLocalizations/{id}/placements"); len(got) != 0 {
 		t.Errorf("placements read without placed localizations: %d", len(got))
@@ -423,8 +442,8 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 	// 2 of 15 localizations have library placements: one read each.
 	k2 := setup(t, fixture{locales: locs, placed: []string{"loc0", "loc7"}})
 	call(t, k2, `{"app":"Hjul","version":"1.4"}`)
-	if n := len(k2.ASC.Requests()); n > 31 { // 27 + discovery + 2 placed + review attachments
-		t.Fatalf("%d requests with 2 placed localizations, want ≤ 31", n)
+	if n := len(k2.ASC.Requests()); n > 33 { // 27 + discovery + 2 placed + review attachments + build bundles + device models
+		t.Fatalf("%d requests with 2 placed localizations, want ≤ 33", n)
 	}
 	if got := k2.ASC.RequestsTo("GET", "/v1/appStoreVersionLocalizations/{id}/placements"); len(got) != 2 {
 		t.Errorf("placements reads = %d, want 2", len(got))

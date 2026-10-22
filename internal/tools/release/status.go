@@ -285,6 +285,13 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 			break
 		}
 	}
+	for _, ps := range s.Library {
+		if len(ps) > 0 {
+			// The version's screenshots live (also) in the Asset Library.
+			res.Then(tool.NextStep{Tool: "library_plan", Args: map[string]any{"app": app.ID, "platform": string(platform)}})
+			break
+		}
+	}
 	return res, nil
 }
 
@@ -365,6 +372,7 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 			s.Screenshots[l.Str("locale")] = sets
 		}
 		loadLibrary(ctx, env, s)
+		loadBuildDevices(ctx, env, s)
 		loadReviewAttachments(ctx, env, s)
 	}
 	if s.PriceSet, err = exists(ctx, env, "/v1/apps/"+app.ID+"/appPriceSchedule", url.Values{"include": {"baseTerritory"}}); err != nil {
@@ -456,7 +464,7 @@ func fetchScreenshotSets(ctx context.Context, env *tool.Env, locID string) ([]sc
 	for _, set := range resp.Data {
 		ss := screenshotSet{Display: applemeta.DisplayType(set.Str("screenshotDisplayType"))}
 		for _, id := range set.RelIDs("appScreenshots") {
-			ss.States = append(ss.States, shots[id])
+			ss.States, ss.IDs = append(ss.States, shots[id]), append(ss.IDs, id)
 		}
 		out = append(out, ss)
 	}
@@ -482,6 +490,58 @@ func loadLibrary(ctx context.Context, env *tool.Env, s *statusSnapshot) {
 	s.Library = map[string][]assetlib.Placement{}
 	for _, l := range locs {
 		s.Library[l.Str("locale")] = lib.ByLocalization[l.ID]
+	}
+}
+
+// loadBuildDevices reads which device kinds the attached iOS build's App
+// bundle ships to: the device models App Store thinning lists for it
+// (buildBundleFileSizes; live 2026-10-26: iPhone*, iPad*, Watch* and
+// "Universal"). Extensions are not listed as bundles. Any failure leaves
+// Devices nil, i.e. unknown.
+func loadBuildDevices(ctx context.Context, env *tool.Env, s *statusSnapshot) {
+	if s.Platform != tool.IOS {
+		return
+	}
+	b, ok := s.Version.one("build", "builds")
+	if !ok {
+		return
+	}
+	resp, err := env.ASC.Get(ctx, "/v1/builds/"+b.ID, url.Values{
+		"include": {"buildBundles"}, "fields[builds]": {"buildBundles"},
+		"fields[buildBundles]": {"bundleType"}, "limit[buildBundles]": {"50"},
+	})
+	if err != nil {
+		return
+	}
+	bundle := ""
+	for _, r := range resp.Included {
+		if r.Type == "buildBundles" && r.Str("bundleType") == "APP" {
+			bundle = r.ID
+			break
+		}
+	}
+	if bundle == "" {
+		return
+	}
+	sizes, err := env.ASC.List(ctx, "/v1/buildBundles/"+bundle+"/buildBundleFileSizes", tool.ListOptions{
+		Fields: map[string][]string{"buildBundleFileSizes": {"deviceModel"}}, MaxItems: 1000,
+	})
+	if err != nil {
+		return
+	}
+	d := &buildDevices{}
+	for _, r := range sizes.Data {
+		switch m := r.Str("deviceModel"); { // trusted: Apple device identifier, prefix-matched, never echoed
+		case strings.HasPrefix(m, "iPhone"), strings.HasPrefix(m, "iPod"):
+			d.IPhone = true
+		case strings.HasPrefix(m, "iPad"):
+			d.IPad = true
+		case strings.HasPrefix(m, "Watch"):
+			d.Watch = true
+		}
+	}
+	if d.IPhone || d.IPad || d.Watch {
+		s.Devices = d
 	}
 }
 

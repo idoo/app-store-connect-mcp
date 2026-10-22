@@ -25,6 +25,10 @@ const (
 	StateUploadComplete = "UPLOAD_COMPLETE"
 	StateComplete       = "COMPLETE"
 	StateFailed         = "FAILED"
+	// Asset Library states (flat "state" of appAssetLibraryImages/Videos).
+	StatePrepareForSubmission = "PREPARE_FOR_SUBMISSION"
+	StateRejected             = "REJECTED"
+	StateArchived             = "ARCHIVED"
 )
 
 // DefaultStateField is the delivery-state attribute of most media assets
@@ -106,17 +110,24 @@ type StateDetail struct {
 	Description string `json:"description,omitempty"`
 }
 
-// DeliveryError reports that Apple finished processing with FAILED.
+// DeliveryError reports that Apple finished processing with FAILED (or, for
+// library assets, REJECTED or ARCHIVED).
 type DeliveryError struct {
-	Type   string
-	ID     string
+	Type string
+	ID   string
+	// State is the terminal state; empty means FAILED.
+	State  string
 	Errors []StateDetail
 }
 
 // Error implements error.
 func (e *DeliveryError) Error() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s: processing FAILED", e.Type, e.ID)
+	st := e.State
+	if st == "" {
+		st = StateFailed
+	}
+	fmt.Fprintf(&b, "%s %s: processing %s", e.Type, e.ID, st)
 	for i, d := range e.Errors {
 		if i == 0 {
 			b.WriteString(": ")
@@ -156,6 +167,12 @@ type AssetSpec struct {
 	// (default [DefaultStateField]); appPreviews use "videoDeliveryState",
 	// whose state also passes through PROCESSING.
 	StateField string
+	// NoChecksum selects the Asset Library flow (appAssetLibraryImages and
+	// appAssetLibraryVideos): the commit sends uploaded:true without
+	// sourceFileChecksum, and the flat "state" attribute is polled until
+	// PREPARE_FOR_SUBMISSION (or a later review state); FAILED surfaces
+	// "stateDetails", REJECTED and ARCHIVED end the wait as errors.
+	NoChecksum bool
 	Poll       PollOptions
 }
 
@@ -215,7 +232,10 @@ func Asset(ctx context.Context, d Deps, s AssetSpec) (*AssetResult, error) {
 	if err := PutParts(ctx, d.Fetch, d.clock(), s.File, s.FileSize, ops, d.Progress); err != nil {
 		return nil, reserved(err)
 	}
-	commit := map[string]any{"uploaded": true, "sourceFileChecksum": sum}
+	commit := map[string]any{"uploaded": true}
+	if !s.NoChecksum {
+		commit["sourceFileChecksum"] = sum
+	}
 	for k, v := range s.CommitAttributes {
 		commit[k] = v
 	}
@@ -231,19 +251,22 @@ func Asset(ctx context.Context, d Deps, s AssetSpec) (*AssetResult, error) {
 		res = r
 	}
 	still, err := poll(ctx, d, itemPath, s.Poll, res, func(r tool.Resource) (bool, error) {
-		st, err := assetState(r, s.stateField())
+		st, err := s.state(r)
 		if err != nil {
 			return false, err
 		}
 		out.State, out.Errors, out.Warnings = st.State, st.Errors, st.Warnings
+		if s.NoChecksum {
+			return st.State != StateAwaitingUpload && st.State != StateUploadComplete, nil
+		}
 		return st.State == StateComplete || st.State == StateFailed, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: poll: %w", s.Type, res.ID, err)
 	}
 	out.StillProcessing = still
-	if out.State == StateFailed {
-		return out, &DeliveryError{Type: s.Type, ID: res.ID, Errors: out.Errors}
+	if out.State == StateFailed || (s.NoChecksum && (out.State == StateRejected || out.State == StateArchived)) {
+		return out, &DeliveryError{Type: s.Type, ID: res.ID, State: out.State, Errors: out.Errors}
 	}
 	return out, nil
 }
@@ -270,6 +293,55 @@ func (s AssetSpec) stateField() string {
 		return DefaultStateField
 	}
 	return s.StateField
+}
+
+// state reads the processing state of r: the flat state/stateDetails pair
+// for library assets, else the AppMediaAssetState at stateField.
+func (s AssetSpec) state(r tool.Resource) (mediaState, error) {
+	if !s.NoChecksum {
+		return assetState(r, s.stateField())
+	}
+	st := mediaState{State: r.Str("state")}
+	if st.State == "" {
+		st.State = StateAwaitingUpload
+	}
+	switch d := r.Attributes["stateDetails"].(type) {
+	case nil:
+	case string:
+		if d != "" {
+			st.Errors = []StateDetail{{Description: d}}
+		}
+	default:
+		var det struct {
+			Errors   []flatDetail `json:"errors"`
+			Warnings []flatDetail `json:"warnings"`
+		}
+		if err := decodeAttr(r, "stateDetails", &det); err != nil {
+			return st, err
+		}
+		st.Errors, st.Warnings = flatDetails(det.Errors), flatDetails(det.Warnings)
+	}
+	return st, nil
+}
+
+// flatDetail is one stateDetails entry of a library asset; Apple's schema
+// names the text "message", older media schemas "description".
+type flatDetail struct {
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Description string `json:"description"`
+}
+
+func flatDetails(in []flatDetail) []StateDetail {
+	out := make([]StateDetail, 0, len(in))
+	for _, d := range in {
+		msg := d.Message
+		if msg == "" {
+			msg = d.Description
+		}
+		out = append(out, StateDetail{Code: d.Code, Description: msg})
+	}
+	return out
 }
 
 func assetState(r tool.Resource, field string) (mediaState, error) {

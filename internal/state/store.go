@@ -153,10 +153,19 @@ func (s *Store) Delete(kind, key string) error {
 }
 
 func (s *Store) recordPath(kind, key string) (string, error) {
-	if !nameRE.MatchString(kind) || !nameRE.MatchString(key) || key == "." || key == ".." {
-		return "", fmt.Errorf("state: invalid record name %q/%q", kind, key)
+	if err := ValidRecordName(kind, key); err != nil {
+		return "", err
 	}
 	return filepath.Join(s.dir, kind, key+".json"), nil
+}
+
+// ValidRecordName reports whether kind/key can name a record file: letters,
+// digits and ._@- only (no "/"), at most 128 bytes, not "." or "..".
+func ValidRecordName(kind, key string) error {
+	if !nameRE.MatchString(kind) || !nameRE.MatchString(key) || key == "." || key == ".." {
+		return fmt.Errorf("state: invalid record name %q/%q", kind, key)
+	}
+	return nil
 }
 
 // readLegacyCursors reads the cursors.json map written by app-store-connect-mcp 0.1.0.

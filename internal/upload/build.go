@@ -3,6 +3,7 @@ package upload
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,7 +39,9 @@ var ErrDuplicateBuild = &tool.Error{
 // caller opens File through the confined filesystem.
 type BuildSpec struct {
 	AppID string
-	// Platform defaults to IOS for .ipa and MAC_OS for .pkg.
+	// Platform defaults to the .ipa's Info.plist platform (DTPlatformName,
+	// else CFBundleSupportedPlatforms; IOS when neither is known) and to
+	// MAC_OS for .pkg. An explicit value contradicting Info.plist is refused.
 	Platform tool.Platform
 	// FileName is the base name; its extension (.ipa or .pkg) selects the UTI.
 	FileName string
@@ -251,17 +254,23 @@ func (s *BuildSpec) normalize() (string, error) {
 	switch strings.ToLower(path.Ext(s.FileName)) {
 	case ".ipa":
 		uti = "com.apple.ipa"
-		if s.Platform == "" {
-			s.Platform = tool.IOS
-		}
-		version, build, err := IPAVersions(s.File, s.FileSize)
+		info, err := ReadIPA(s.File, s.FileSize)
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", s.FileName, err)
 		}
-		if (s.Version != "" && s.Version != version) || (s.BuildNumber != "" && s.BuildNumber != build) {
-			return "", fmt.Errorf("%w: %s contains %s (%s), not %s (%s)", tool.ErrInvalidArgs, s.FileName, version, build, s.Version, s.BuildNumber)
+		if (s.Version != "" && s.Version != info.Version) || (s.BuildNumber != "" && s.BuildNumber != info.Build) {
+			return "", fmt.Errorf("%w: %s contains %s (%s), not %s (%s)", tool.ErrInvalidArgs, s.FileName, info.Version, info.Build, s.Version, s.BuildNumber)
 		}
-		s.Version, s.BuildNumber = version, build
+		switch {
+		case info.Platform != "" && s.Platform != "" && s.Platform != info.Platform:
+			return "", fmt.Errorf("%w: %s is a %s build (Info.plist), not %s", tool.ErrInvalidArgs, s.FileName, info.Platform, s.Platform)
+		case s.Platform == "":
+			s.Platform = info.Platform
+			if s.Platform == "" {
+				s.Platform = tool.IOS
+			}
+		}
+		s.Version, s.BuildNumber = info.Version, info.Build
 	case ".pkg":
 		uti = "com.apple.pkg"
 		if s.Platform == "" {
@@ -276,55 +285,92 @@ func (s *BuildSpec) normalize() (string, error) {
 	return uti, nil
 }
 
-// IPAVersions reads CFBundleShortVersionString and CFBundleVersion from the
-// Payload/<name>.app/Info.plist of an IPA (binary or XML plist).
-func IPAVersions(r io.ReaderAt, size int64) (version, build string, err error) {
+// IPAInfo is what an IPA's Info.plist says about the build.
+type IPAInfo struct {
+	Version string
+	Build   string
+	// Platform comes from DTPlatformName, else CFBundleSupportedPlatforms;
+	// empty when neither names a known platform.
+	Platform tool.Platform
+}
+
+// plistPlatforms maps Info.plist platform names (device and simulator) to
+// App Store Connect platforms.
+var plistPlatforms = map[string]tool.Platform{
+	"iphoneos": tool.IOS, "iphonesimulator": tool.IOS,
+	"appletvos": tool.TVOS, "appletvsimulator": tool.TVOS,
+	"xros": tool.VisionOS, "xrsimulator": tool.VisionOS,
+}
+
+// ReadIPA reads CFBundleShortVersionString, CFBundleVersion and the platform
+// from the Payload/<name>.app/Info.plist of an IPA (binary or XML plist).
+func ReadIPA(r io.ReaderAt, size int64) (IPAInfo, error) {
+	version, build, dict, err := ipaPlist(r, size)
+	if err != nil {
+		return IPAInfo{}, err
+	}
+	info := IPAInfo{Version: version, Build: build}
+	names := []any{dict["DTPlatformName"]}
+	if list, ok := dict["CFBundleSupportedPlatforms"].([]any); ok {
+		names = append(names, list...)
+	}
+	for _, n := range names {
+		s, _ := n.(string)
+		if p, ok := plistPlatforms[strings.ToLower(s)]; ok {
+			info.Platform = p
+			break
+		}
+	}
+	return info, nil
+}
+
+func ipaPlist(r io.ReaderAt, size int64) (version, build string, dict map[string]any, err error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
-		return "", "", fmt.Errorf("read ipa: %w", err)
+		return "", "", nil, fmt.Errorf("read ipa: %w", err)
 	}
 	var info *zip.File
 	for _, f := range zr.File {
 		parts := strings.Split(f.Name, "/")
 		if len(parts) == 3 && parts[0] == "Payload" && strings.HasSuffix(parts[1], ".app") && parts[2] == "Info.plist" {
 			if info != nil {
-				return "", "", fmt.Errorf("read ipa: several apps in Payload/")
+				return "", "", nil, errors.New("read ipa: several apps in Payload/")
 			}
 			info = f
 		}
 	}
 	if info == nil {
-		return "", "", fmt.Errorf("read ipa: no Payload/*.app/Info.plist")
+		return "", "", nil, errors.New("read ipa: no Payload/*.app/Info.plist")
 	}
 	if info.UncompressedSize64 > maxInfoPlist {
-		return "", "", fmt.Errorf("read ipa: Info.plist larger than %d bytes", maxInfoPlist)
+		return "", "", nil, fmt.Errorf("read ipa: Info.plist larger than %d bytes", maxInfoPlist)
 	}
 	rc, err := info.Open()
 	if err != nil {
-		return "", "", fmt.Errorf("read ipa: %w", err)
+		return "", "", nil, fmt.Errorf("read ipa: %w", err)
 	}
 	defer func() { _ = rc.Close() }()
 	b, err := io.ReadAll(io.LimitReader(rc, maxInfoPlist+1))
 	if err != nil {
-		return "", "", fmt.Errorf("read ipa Info.plist: %w", err)
+		return "", "", nil, fmt.Errorf("read ipa Info.plist: %w", err)
 	}
 	if len(b) > maxInfoPlist {
-		return "", "", fmt.Errorf("read ipa: Info.plist larger than %d bytes", maxInfoPlist)
+		return "", "", nil, fmt.Errorf("read ipa: Info.plist larger than %d bytes", maxInfoPlist)
 	}
 	v, err := ParsePlist(b)
 	if err != nil {
-		return "", "", fmt.Errorf("read ipa Info.plist: %w", err)
+		return "", "", nil, fmt.Errorf("read ipa Info.plist: %w", err)
 	}
 	dict, ok := v.(map[string]any)
 	if !ok {
-		return "", "", fmt.Errorf("read ipa: Info.plist is not a dictionary")
+		return "", "", nil, errors.New("read ipa: Info.plist is not a dictionary")
 	}
 	version, _ = dict["CFBundleShortVersionString"].(string)
 	build, _ = dict["CFBundleVersion"].(string)
 	if version == "" || build == "" {
-		return "", "", fmt.Errorf("read ipa: Info.plist lacks CFBundleShortVersionString or CFBundleVersion")
+		return "", "", nil, errors.New("read ipa: Info.plist lacks CFBundleShortVersionString or CFBundleVersion")
 	}
-	return version, build, nil
+	return version, build, dict, nil
 }
 
 // loadResume returns a stored record matching want's identity.

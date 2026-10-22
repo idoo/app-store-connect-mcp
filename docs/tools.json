@@ -778,7 +778,7 @@
           "type": "string"
         },
         "platform": {
-          "description": "default: IOS for .ipa, MAC_OS for .pkg",
+          "description": "must match .ipa Info.plist; .pkg MAC_OS",
           "enum": [
             "IOS",
             "MAC_OS",
@@ -1171,6 +1171,161 @@
       "type": "object"
     },
     "default_toolset": true,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "library_apply",
+    "toolset": "library",
+    "class": "D",
+    "title": "Apply Asset Library plan",
+    "description": "Applies a library_plan: same arguments plus its plan_id. Uploads, creates placements, deletes, reorders, retires assets. Refused if placements changed since planning; remove/archive/replace need human approval.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Apply Asset Library plan"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "app id, bundle id or name",
+          "type": "string"
+        },
+        "archive": {
+          "description": "asset ids to retire (placements deleted first)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dir": {
+          "description": "\u003clocale\u003e/\u003cdisplay\u003e/NN-*; locale root: header.*, search.*, header-search.*, event-card.*, event-details.*",
+          "type": "string"
+        },
+        "id": {
+          "description": "version: version string (default editable); else the cpp version, treatment or event id",
+          "type": "string"
+        },
+        "mode": {
+          "description": "add (default) or replace placements of the groups in dir",
+          "enum": [
+            "add",
+            "replace"
+          ],
+          "type": "string"
+        },
+        "plan_id": {
+          "description": "from the preview call",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "IOS",
+            "MAC_OS",
+            "TV_OS",
+            "VISION_OS"
+          ],
+          "type": "string"
+        },
+        "remove": {
+          "description": "placement ids to delete",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "description": "what to place on, default version",
+          "enum": [
+            "version",
+            "cpp",
+            "experiment_treatment",
+            "event"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "plan"
+  },
+  {
+    "name": "library_plan",
+    "toolset": "library",
+    "class": "R",
+    "title": "Plan Asset Library changes",
+    "description": "Diffs a screenshots/creatives dir against Asset Library placements of a version, custom product page, experiment treatment or in-app event. Validates against Apple's specs and limits; returns a plan_id for library_apply.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Plan Asset Library changes"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "app id, bundle id or name",
+          "type": "string"
+        },
+        "archive": {
+          "description": "asset ids to retire (placements deleted first)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dir": {
+          "description": "\u003clocale\u003e/\u003cdisplay\u003e/NN-*; locale root: header.*, search.*, header-search.*, event-card.*, event-details.*",
+          "type": "string"
+        },
+        "id": {
+          "description": "version: version string (default editable); else the cpp version, treatment or event id",
+          "type": "string"
+        },
+        "mode": {
+          "description": "add (default) or replace placements of the groups in dir",
+          "enum": [
+            "add",
+            "replace"
+          ],
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "IOS",
+            "MAC_OS",
+            "TV_OS",
+            "VISION_OS"
+          ],
+          "type": "string"
+        },
+        "remove": {
+          "description": "placement ids to delete",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "description": "what to place on, default version",
+          "enum": [
+            "version",
+            "cpp",
+            "experiment_treatment",
+            "event"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
     "needs_team_key": false,
     "confirm": "none"
   },
@@ -4194,7 +4349,8 @@
               "webhooks",
               "admin",
               "store",
-              "insights"
+              "insights",
+              "library"
             ],
             "type": "string"
           },

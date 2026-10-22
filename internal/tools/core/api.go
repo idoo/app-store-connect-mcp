@@ -157,8 +157,8 @@ func apiDescribe(_ context.Context, env *tool.Env, in describeIn) (*tool.Result,
 }
 
 func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) {
-	if in.Limit > getMaxItems {
-		return nil, tool.InvalidArgs("limit must be at most %d", getMaxItems)
+	if in.Limit < 0 || in.Limit > getMaxItems {
+		return nil, tool.InvalidArgs("limit must be 0-%d", getMaxItems)
 	}
 	path, q, err := splitPath(in.Path)
 	if err != nil {
@@ -219,6 +219,9 @@ func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) 
 		if note != "" {
 			out["limit_note"] = note
 		}
+		if summary, ok, err := oversizeSingle(ctx, env, out, res.Data); err != nil || ok {
+			return summary, err
+		}
 		return tool.OK(out), nil
 	}
 	if in.Cursor != "" {
@@ -231,6 +234,11 @@ func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) 
 	trustAppleValues(resp.Data)
 	trustAppleValues(resp.Included)
 	addDocument(out, resp)
+	if !resp.Collection {
+		if summary, ok, err := oversizeSingle(ctx, env, out, resp.Data); err != nil || ok {
+			return summary, err
+		}
+	}
 	return tool.OK(out), nil
 }
 

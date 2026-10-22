@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/idoo/app-store-connect-mcp/internal/state"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -153,6 +154,9 @@ func (s *FakeStore) SetCursor(profile, app, name, value string) error {
 
 // Load implements tool.StateStore.
 func (s *FakeStore) Load(kind, key string, v any) (bool, error) {
+	if err := state.ValidRecordName(kind, key); err != nil {
+		return false, err
+	}
 	s.mu.Lock()
 	b, ok := s.records[kind+"/"+key]
 	s.mu.Unlock()
@@ -167,6 +171,9 @@ func (s *FakeStore) Load(kind, key string, v any) (bool, error) {
 
 // Save implements tool.StateStore.
 func (s *FakeStore) Save(kind, key string, v any) error {
+	if err := state.ValidRecordName(kind, key); err != nil {
+		return err
+	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("save %s/%s: %w", kind, key, err)
