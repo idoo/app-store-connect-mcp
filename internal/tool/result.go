@@ -36,10 +36,16 @@ type ResultMeta struct {
 	Profile   string      `json:"profile,omitempty"`
 	PinSource string      `json:"pin_source,omitempty"`
 	RateLimit *RateLimit  `json:"rate_limit,omitempty"`
+	Requests  *Requests   `json:"requests,omitempty"`
 	Truncated *Truncation `json:"truncated,omitempty"`
 	Warnings  []string    `json:"warnings,omitempty"`
 	// ApprovedBy is one of ApprovedHuman, ApprovedAgent, ApprovedNone.
 	ApprovedBy string `json:"approved_by,omitempty"`
+}
+
+// Requests counts the HTTP attempts one tool call sent to Apple.
+type Requests struct {
+	Apple int64 `json:"apple"`
 }
 
 // Link is a resource link rendered after the text content (MCP

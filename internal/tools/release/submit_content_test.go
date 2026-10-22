@@ -45,7 +45,10 @@ func TestReleaseSubmitPreviewListsContent(t *testing.T) {
 	if !slices.Equal(p.Untrusted, []string{"What's New (en-US): Bug fixes."}) {
 		t.Errorf("untrusted = %q", p.Untrusted)
 	}
-	if got := k.ASC.RequestsTo("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations"); len(got) != 1 || !strings.Contains(got[0].Path, "/v0/") {
+	got := slices.DeleteFunc(k.ASC.RequestsTo("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations"), func(r tool.Request) bool {
+		return r.Query.Get("include") == "placements" // Asset Library discovery, not the live content read
+	})
+	if len(got) != 1 || !strings.Contains(got[0].Path, "/v0/") {
 		t.Errorf("live localization reads = %+v", got)
 	}
 

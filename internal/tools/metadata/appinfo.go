@@ -60,14 +60,15 @@ type appinfoIn struct {
 	ContentRights     string          `json:"content_rights,omitempty"`
 	Copyright         *string         `json:"copyright,omitempty"`
 	Accessibility     *a11yIn         `json:"accessibility,omitempty" jsonschema:"Accessibility Nutrition Labels"`
+	ReviewAttachments *attachIn       `json:"review_attachments,omitempty"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "appinfo_update", Toolset: tool.Metadata, Class: tool.Write, Confirm: tool.ConfirmByFlag,
 		Title: "Update app info and review details",
-		Description: "Set categories, age rating, accessibility labels, App Review contact/demo/notes, content rights, " +
-			"copyright. Without confirm:true previews current→new. Listing text: metadata_plan.",
+		Description: "Set categories, age rating, a11y labels, App Review contact/demo/notes/attachments (add paths/" +
+			"remove ids), content rights, copyright. Previews until confirm:true. Listing text: metadata_plan.",
 		Enums: map[string][]any{
 			"platform":                    platformEnum,
 			"content_rights":              {"DOES_NOT_USE_THIRD_PARTY_CONTENT", "USES_THIRD_PARTY_CONTENT"},
@@ -92,6 +93,12 @@ type infoWrite struct {
 	req   tool.Request
 	// then, when set, builds a follow-up request from the created id.
 	then func(createdID string) tool.Request
+	// run, when set, replaces req (e.g. a multi-request upload) and
+	// returns the created id.
+	run func(ctx context.Context) (string, error)
+	// attach is the review attachment path (add) or id (remove) this
+	// write handles, if any.
+	attach string
 }
 
 // infoItem reports one sent request.
@@ -102,6 +109,8 @@ type infoItem struct {
 	Outcome string `json:"outcome"`
 	Error   string `json:"error,omitempty"`
 	Code    string `json:"code,omitempty"`
+	// File is the local path of an uploaded review attachment.
+	File string `json:"file,omitempty"`
 }
 
 type appinfoOut struct {
@@ -117,9 +126,9 @@ const maskedSecret = "(hidden)" //nolint:gosec // a mask, not a credential
 
 func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Result, error) {
 	needInfo := in.PrimaryCategory != "" || in.SecondaryCategory != nil || len(in.AgeRating) > 0
-	needVersion := in.Review != nil || in.Copyright != nil
+	needVersion := in.Review != nil || in.Copyright != nil || in.ReviewAttachments != nil
 	if !needInfo && !needVersion && in.ContentRights == "" && in.Accessibility == nil {
-		return nil, fmt.Errorf("%w: nothing to update; pass categories, age_rating, review, content_rights, copyright or accessibility", tool.ErrInvalidArgs)
+		return nil, fmt.Errorf("%w: nothing to update; pass categories, age_rating, review, review_attachments, content_rights, copyright or accessibility", tool.ErrInvalidArgs)
 	}
 	if in.Review != nil && in.Review.ContactEmail != nil && *in.Review.ContactEmail != "" {
 		if err := tool.ValidEmail(*in.Review.ContactEmail); err != nil {
@@ -131,7 +140,7 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 		return nil, err
 	}
 	platform := app.Platform(in.Platform)
-	out := appinfoOut{App: appOut{ID: app.ID, Name: app.Name, BundleID: app.BundleID}, Changes: []infoChange{}}
+	out := appinfoOut{App: appOut{ID: app.ID, Name: tool.Untrusted(app.Name), BundleID: app.BundleID}, Changes: []infoChange{}}
 	var writes []infoWrite
 
 	if needInfo {
@@ -186,6 +195,9 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 		return tool.Already(out), nil
 	}
 	for _, w := range writes {
+		if w.run != nil {
+			continue
+		}
 		if err := validate(env, w.req); err != nil {
 			return nil, err
 		}
@@ -210,9 +222,33 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 		return res, nil
 	}
 	var unknown, failed []error
+	// done holds attachment paths uploaded and ids deleted, dropped from the
+	// suggested re-run so it never duplicates them.
+	done := map[string]bool{}
 	for _, w := range writes {
 		it := infoItem{Target: w.label, Op: strings.ToLower(w.req.Method), Outcome: "ok"}
-		if r, err := env.ASC.Do(wctx, w.req); err != nil {
+		if w.run != nil {
+			it.Op, it.File = "upload", w.attach
+			id, err := w.run(wctx)
+			it.ID = id
+			if err == nil {
+				done[w.attach] = true
+			}
+			if err != nil {
+				it.Outcome, it.Error, it.Code = "error", err.Error(), tool.BodyFor(err).Error
+				e := fmt.Errorf("%s: %w", w.label, err)
+				if errors.Is(err, tool.ErrOutcomeUnknown) {
+					unknown = append(unknown, e)
+				} else {
+					failed = append(failed, e)
+				}
+			}
+			out.Items = append(out.Items, it)
+			continue
+		}
+		if r, err := env.ASC.Do(wctx, w.req); err == nil && w.attach != "" {
+			done[w.attach] = true
+		} else if err != nil {
 			it.Outcome, it.Error, it.Code = "error", err.Error(), tool.BodyFor(err).Error
 			e := fmt.Errorf("%s: %w", w.label, err)
 			if errors.Is(err, tool.ErrOutcomeUnknown) {
@@ -245,7 +281,7 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 		out.Status = "applied"
 		return tool.OK(&out), nil
 	}
-	replan := tool.NextStep{Tool: "appinfo_update", Args: appinfoReplanArgs(in, app.ID)}
+	replan := tool.NextStep{Tool: "appinfo_update", Args: appinfoReplanArgs(withoutDone(in, done), app.ID)}
 	if nFailed == len(out.Items) {
 		// Outcome-unknown items first, so the result reports outcome_unknown
 		// whenever any request may have been applied.
@@ -376,10 +412,17 @@ func planVersion(ctx context.Context, env *tool.Env, versionID string, in appinf
 				map[string]any{"copyright": *in.Copyright}, nil)})
 		}
 	}
+	detailID := ver.RelID("appStoreReviewDetail")
+	if in.ReviewAttachments != nil {
+		w, ch, err := planAttachments(ctx, env, versionID, detailID, in.ReviewAttachments)
+		if err != nil {
+			return nil, nil, err
+		}
+		writes, changes = append(writes, w...), append(changes, ch...)
+	}
 	if in.Review == nil {
 		return writes, changes, nil
 	}
-	detailID := ver.RelID("appStoreReviewDetail")
 	var detail tool.Resource
 	for _, r := range resp.Included {
 		if r.Type == "appStoreReviewDetails" && r.ID == detailID {

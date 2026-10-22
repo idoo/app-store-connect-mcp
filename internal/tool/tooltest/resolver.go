@@ -26,6 +26,9 @@ type FakeResolver struct {
 
 // App implements tool.Resolver.
 func (r *FakeResolver) App(_ context.Context, ref tool.AppRef) (tool.App, error) {
+	if ref.IsAll() {
+		return tool.App{}, tool.ErrAllAppsUnsupported()
+	}
 	s := string(ref)
 	if s == "" {
 		s = r.DefaultApp

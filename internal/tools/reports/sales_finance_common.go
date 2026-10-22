@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
@@ -131,17 +130,11 @@ type amountOut struct {
 	Amount   string `json:"amount"`
 }
 
-// sortedAmounts lists m's currencies by amount, largest first (ties by code).
-// Amounts in different currencies are compared numerically only to order the
-// list; they are never summed.
-func sortedAmounts(m reports.Money) []amountOut {
+// currencyAmounts lists m's currencies sorted by currency code. Amounts in
+// different currencies are never compared or summed: without exchange rates a
+// larger number (JPY 420) does not mean a larger earner (USD 19.54).
+func currencyAmounts(m reports.Money) []amountOut {
 	curs := m.Currencies()
-	sort.SliceStable(curs, func(i, j int) bool {
-		if c := m[curs[i]].Cmp(m[curs[j]]); c != 0 {
-			return c > 0
-		}
-		return curs[i] < curs[j]
-	})
 	out := make([]amountOut, 0, len(curs))
 	for _, c := range curs {
 		out = append(out, amountOut{Currency: c, Amount: reports.FormatAmount(c, m[c])})

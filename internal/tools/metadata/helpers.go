@@ -36,9 +36,9 @@ const maxShown = 160
 
 // appOut is the resolved app echoed in results.
 type appOut struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	BundleID string `json:"bundle_id,omitempty"`
+	ID       string         `json:"id"`
+	Name     tool.Untrusted `json:"name"`
+	BundleID string         `json:"bundle_id,omitempty"`
 }
 
 // versionOut is the resolved version echoed in results.
@@ -58,7 +58,7 @@ type appInfoOut struct {
 type target struct{ resolve.Resolved }
 
 func (t *target) appOut() appOut {
-	return appOut{ID: t.App.ID, Name: t.App.Name, BundleID: t.App.BundleID}
+	return appOut{ID: t.App.ID, Name: tool.Untrusted(t.App.Name), BundleID: t.App.BundleID}
 }
 
 func (t *target) versionOut() versionOut {

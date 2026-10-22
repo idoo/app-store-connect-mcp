@@ -4,6 +4,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-26
+
+### Added
+
+- **App Asset Library.** `screenshots_list` takes `source: sets|library|both` (default `both`) and shows library placements per locale, plus header and search-result creatives. `release_status` counts library placements toward required screenshot slots, using Apple's own placement-group table from `appAssetLibraryRefData`. iMessage groups never count, and unknown groups are listed.
+- `asset_packs_list` (toolset `uploads`): Background Assets packs and versions, with App Store, external and internal beta states and Apple's processing warnings (e.g. ITMS-91139).
+- `appinfo_update review_attachments: {add, remove}` uploads or removes App Review attachments; removal goes through confirm. After a partial failure the next step retries only what didn't land. `release_status` lists the attachments.
+- `reviews_list summary: true` returns Apple's review summaries per platform, or `none_yet`.
+- `signing_profiles_list expiring_within_days`.
+- Every result's `_meta` includes `requests.apple`: how many Apple requests that call made, retries and pages included.
+- `digest_summary app:"all"` puts apps with something in flight first, lists `skipped_apps`, and takes `offset` for the next batch. Its next steps use real app ids. `insights_summary` without an app lists in-flight versions across all apps from one request.
+- `sales_report` and the sales summaries show `refunds` next to net units. `pricing_get` shows year-2 subscription proceeds.
+
+### Fixed
+
+- `release_status` reported "no screenshots" for slots filled only through the Asset Library.
+- HUF, TWD and IDR amounts lost their decimals (ISO 4217 gives them 2).
+- Currencies in proceeds lists are sorted by code, not by raw amount, so JPY no longer outranks USD.
+- `pricing_get` prices use the currency's decimals (`1.40`, not `1.4`).
+- Amounts with thousands separators (`1,234.50`) no longer mark a report corrupt.
+- `asc_api_get` sent `limit` to endpoints that reject it (`appAssetLibraryRefData` returned 400) and ignored `query.limit`.
+- `asc_api_get` no longer wraps Apple timestamps and enum values as untrusted text.
+- `app:"all"` in a single-app tool returns a clear `invalid_arguments` listing the tools that accept it, instead of `not_found`.
+- The app name is untrusted text in every tool's output, not only some.
+
 ## [0.10.0] - 2026-10-26
 
 ### Added
@@ -228,7 +253,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.7.0...v0.8.0

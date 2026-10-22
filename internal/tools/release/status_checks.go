@@ -8,6 +8,7 @@ import (
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tools/assetlib"
 )
 
 // Check statuses.
@@ -42,7 +43,9 @@ type check struct {
 	Status string   `json:"status"`
 	Detail string   `json:"detail"`
 	Items  []string `json:"items,omitempty"`
-	FixVia *fixVia  `json:"fix_via,omitempty"`
+	// Untrusted is third-party text (e.g. attachment file names).
+	Untrusted []tool.Untrusted `json:"untrusted,omitempty"`
+	FixVia    *fixVia          `json:"fix_via,omitempty"`
 }
 
 // screenshotSet is one display slot of a localization.
@@ -81,6 +84,14 @@ type statusSnapshot struct {
 	A11yErr string
 	// Screenshots maps locale to its screenshot sets.
 	Screenshots map[string][]screenshotSet
+	// Library maps locale to its Asset Library placements; LibraryErr is
+	// set when the library could not be read.
+	Library    map[string][]assetlib.Placement
+	LibraryErr string
+	// ReviewAttachments are the App Review attachment file names;
+	// AttachmentsErr is set when they could not be read.
+	ReviewAttachments []string
+	AttachmentsErr    string
 	// PriceSet / AvailabilitySet report whether a schedule/availability exists.
 	PriceSet, AvailabilitySet bool
 	Submission                *tool.Resource
@@ -330,6 +341,11 @@ func checkScreenshots(s *statusSnapshot) check {
 			}
 		}
 	}
+	for _, ps := range s.Library {
+		if slices.ContainsFunc(ps, assetlib.Placement.IPad) {
+			supportsIPad = true
+		}
+	}
 	required := applemeta.RequiredDisplays(s.Platform, supportsIPad)
 	// The API does not say whether a build runs on iPad, so an iOS version
 	// with no iPad screenshots anywhere is never reported as covered.
@@ -361,17 +377,39 @@ func checkScreenshots(s *statusSnapshot) check {
 				}
 			}
 		}
-		if loc != primary && len(has) == 0 {
+		lib := s.Library[loc]
+		libShots := 0
+		for _, p := range lib {
+			if p.Type != assetlib.TypeScreenshot {
+				continue
+			}
+			libShots++
+			switch {
+			case p.Failed():
+				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s FAILED", loc, p.Group, p.ID))
+				c.Status = statusBlock
+			case p.Processing():
+				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s still processing", loc, p.Group, p.ID))
+				warn = true
+			}
+		}
+		for _, g := range assetlib.UnknownGroups(lib) {
+			c.Items = append(c.Items, fmt.Sprintf("%s: unknown placement group %s", loc, g))
+		}
+		if loc != primary && len(has) == 0 && libShots == 0 {
 			continue // falls back to the primary locale's screenshots
 		}
 		for _, group := range required {
-			if !slices.ContainsFunc(group, func(d applemeta.DisplayType) bool { return has[d] }) {
+			if !slices.ContainsFunc(group, func(d applemeta.DisplayType) bool { return has[d] || assetlib.Covers(lib, d) }) {
 				c.Items = append(c.Items, fmt.Sprintf("%s: no screenshots for %s", loc, joinDisplays(group)))
 				c.Status = statusBlock
 			}
 		}
 	}
 	slices.Sort(c.Items)
+	if s.LibraryErr != "" {
+		c.Items = append(c.Items, "Asset Library could not be read ("+s.LibraryErr+"); slots filled only there are not counted")
+	}
 	switch {
 	case c.Status == statusBlock:
 		c.Detail = "required screenshots missing or failed"
@@ -408,13 +446,28 @@ func checkReviewDetail(s *statusSnapshot) check {
 	}
 	if len(c.Items) > 0 {
 		c.Status, c.Detail = statusBlock, "App Review contact incomplete"
+		addAttachments(&c, s)
 		return c
 	}
 	c.Status, c.Detail, c.FixVia = statusOK, "App Review contact set", nil
 	if req, set := d.Bool("demoAccountRequired"); !set || !req {
 		c.Detail += "; no demo account (add one if the app needs a login)"
 	}
+	addAttachments(&c, s)
 	return c
+}
+
+// addAttachments lists the App Review attachments (informational only).
+func addAttachments(c *check, s *statusSnapshot) {
+	switch {
+	case s.AttachmentsErr != "":
+		c.Items = append(c.Items, "App Review attachments could not be read ("+s.AttachmentsErr+")")
+	case len(s.ReviewAttachments) > 0:
+		c.Items = append(c.Items, fmt.Sprintf("%d App Review attachment(s), file names under untrusted", len(s.ReviewAttachments)))
+		for _, n := range s.ReviewAttachments {
+			c.Untrusted = append(c.Untrusted, tool.Untrusted(n))
+		}
+	}
 }
 
 // ageRatingOptional are declaration attributes that may legitimately be null.

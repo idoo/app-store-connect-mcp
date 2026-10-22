@@ -42,6 +42,28 @@ func TestProfilesListCountsAndBundleFilter(t *testing.T) {
 	}
 }
 
+// PO5: expiring_within_days keeps profiles expiring within N days and every
+// INVALID profile, whatever its expiration.
+func TestProfilesListExpiringWithinDays(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/profiles", http.StatusOK, profilesDoc)
+	ids := func(args string) string {
+		out := tooltest.Decode[profilesListOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_profiles_list"), k.Env, args)))
+		var s []string
+		for _, p := range out.Profiles {
+			s = append(s, p.ID)
+		}
+		return strings.Join(s, ",")
+	}
+	if got := ids(`{"expiring_within_days":30}`); got != "P2" {
+		t.Fatalf("30 days = %q, want P2 (INVALID)", got)
+	}
+	if got := ids(`{"expiring_within_days":60}`); got != "P1,P2" {
+		t.Fatalf("60 days = %q", got)
+	}
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_profiles_list"), k.Env, `{"expiring_within_days":-1}`), tool.ErrInvalidArgs.Code)
+}
+
 func TestProfilesDownloadSingle(t *testing.T) {
 	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/profiles/{id}", http.StatusOK,

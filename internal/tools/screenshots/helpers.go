@@ -36,9 +36,9 @@ var errMissingLocalization = &tool.Error{
 }
 
 type appOut struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	BundleID string `json:"bundle_id"`
+	ID       string         `json:"id"`
+	Name     tool.Untrusted `json:"name"`
+	BundleID string         `json:"bundle_id"`
 }
 
 type versionOut struct {
@@ -51,7 +51,7 @@ type versionOut struct {
 type target struct{ resolve.Resolved }
 
 func (t *target) appOut() appOut {
-	return appOut{ID: t.App.ID, Name: t.App.Name, BundleID: t.App.BundleID}
+	return appOut{ID: t.App.ID, Name: tool.Untrusted(t.App.Name), BundleID: t.App.BundleID}
 }
 
 func (t *target) versionOut() versionOut {

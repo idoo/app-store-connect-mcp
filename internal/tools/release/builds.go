@@ -60,7 +60,7 @@ type buildRow struct {
 }
 
 type buildsListOut struct {
-	App      tool.App      `json:"app"`
+	App      appOut        `json:"app"`
 	Platform tool.Platform `json:"platform"`
 	Total    int           `json:"total,omitempty"`
 	Returned int           `json:"returned"`
@@ -110,7 +110,7 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 	if !in.IncludeExpired {
 		q.Set("filter[expired]", "false")
 	}
-	out := buildsListOut{App: app, Platform: platform}
+	out := buildsListOut{App: newAppOut(app), Platform: platform}
 	processing, err := fetchBuilds(ctx, env, q, &out)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 		if len(out.OtherPlatforms) == 1 {
 			for to := range out.OtherPlatforms {
 				q.Set("filter[preReleaseVersion.platform]", string(to))
-				out = buildsListOut{App: app, Platform: to, PlatformFallback: &platformFallback{From: platform, To: to}}
+				out = buildsListOut{App: newAppOut(app), Platform: to, PlatformFallback: &platformFallback{From: platform, To: to}}
 				if processing, err = fetchBuilds(ctx, env, q, &out); err != nil {
 					return nil, err
 				}
@@ -227,7 +227,7 @@ const (
 var buildTerminalStates = map[string]bool{"VALID": true, "INVALID": true, "FAILED": true}
 
 type buildsWaitOut struct {
-	App             tool.App      `json:"app"`
+	App             appOut        `json:"app"`
 	Platform        tool.Platform `json:"platform"`
 	BuildID         string        `json:"build_id"`
 	Number          string        `json:"number"`
@@ -258,7 +258,7 @@ func buildsWait(ctx context.Context, env *tool.Env, in buildsWaitIn) (*tool.Resu
 	if !env.HasProgress() {
 		timeout = min(timeout, tool.NoProgressWaitCap)
 	}
-	out := buildsWaitOut{App: app, Platform: platform, BuildID: build.ID, Number: build.Number}
+	out := buildsWaitOut{App: newAppOut(app), Platform: platform, BuildID: build.ID, Number: build.Number}
 	start := env.Clock.Now()
 	q := url.Values{"fields[builds]": {"version,processingState,uploadedDate"}}
 	for {

@@ -12,10 +12,24 @@ import (
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tools/assetlib"
 )
 
 // productsMax is the pagination ceiling for product lists (Apple's 5000 cap).
 const productsMax = 5000
+
+// appOut is a resolved app in tool output; the name is third-party text.
+type appOut struct {
+	ID        string          `json:"id"`
+	BundleID  string          `json:"bundle_id"`
+	Name      tool.Untrusted  `json:"name"`
+	SKU       string          `json:"sku,omitempty"`
+	Platforms []tool.Platform `json:"platforms,omitempty"`
+}
+
+func newAppOut(a tool.App) appOut {
+	return appOut{ID: a.ID, BundleID: a.BundleID, Name: tool.Untrusted(a.Name), SKU: a.SKU, Platforms: a.Platforms}
+}
 
 type statusIn struct {
 	App       tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
@@ -108,7 +122,7 @@ type statusPlan struct {
 }
 
 type statusOut struct {
-	App          tool.App        `json:"app"`
+	App          appOut          `json:"app"`
 	Version      statusVersion   `json:"version"`
 	InFlight     *statusInFlight `json:"in_flight,omitempty"`
 	Build        *statusBuild    `json:"build,omitempty"`
@@ -172,7 +186,7 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 	if err != nil {
 		return nil, err
 	}
-	out := statusOut{App: app, Checks: runChecks(s), AppStoreLink: versionURL(app.ID, platform)}
+	out := statusOut{App: newAppOut(app), Checks: runChecks(s), AppStoreLink: versionURL(app.ID, platform)}
 	if in.CheckURLs {
 		out.Checks = append(out.Checks, checkURLs(ctx, s))
 	}
@@ -350,6 +364,8 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 			}
 			s.Screenshots[l.Str("locale")] = sets
 		}
+		loadLibrary(ctx, env, s)
+		loadReviewAttachments(ctx, env, s)
 	}
 	if s.PriceSet, err = exists(ctx, env, "/v1/apps/"+app.ID+"/appPriceSchedule", url.Values{"include": {"baseTerritory"}}); err != nil {
 		return nil, err
@@ -445,6 +461,53 @@ func fetchScreenshotSets(ctx context.Context, env *tool.Env, locID string) ([]sc
 		out = append(out, ss)
 	}
 	return out, nil
+}
+
+// loadLibrary reads the Asset Library placements of the version's
+// localizations that have any (one discovery request, then one per placed
+// localization); a failure leaves the screenshots verdict as before and is
+// reported as an item.
+func loadLibrary(ctx context.Context, env *tool.Env, s *statusSnapshot) {
+	locs := s.Version.localizations()
+	ids, err := assetlib.Placed(ctx, env, s.Version.Version.ID)
+	if err != nil {
+		s.LibraryErr = libraryErr(err)
+		return
+	}
+	lib, err := assetlib.ForLocalizations(ctx, env, ids)
+	if err != nil {
+		s.LibraryErr = libraryErr(err)
+		return
+	}
+	s.Library = map[string][]assetlib.Placement{}
+	for _, l := range locs {
+		s.Library[l.Str("locale")] = lib.ByLocalization[l.ID]
+	}
+}
+
+func libraryErr(err error) string {
+	if st := tool.APIStatus(err); st != 0 {
+		return fmt.Sprintf("HTTP %d", st)
+	}
+	return "request failed"
+}
+
+// loadReviewAttachments reads the App Review attachment file names.
+func loadReviewAttachments(ctx context.Context, env *tool.Env, s *statusSnapshot) {
+	d, ok := s.Version.one("appStoreReviewDetail", "appStoreReviewDetails")
+	if !ok {
+		return
+	}
+	resp, err := env.ASC.List(ctx, "/v1/appStoreReviewDetails/"+d.ID+"/appStoreReviewAttachments", tool.ListOptions{
+		Fields: map[string][]string{"appStoreReviewAttachments": {"fileName"}}, Limit: 50, MaxItems: 50,
+	})
+	if err != nil {
+		s.AttachmentsErr = libraryErr(err)
+		return
+	}
+	for _, r := range resp.Data {
+		s.ReviewAttachments = append(s.ReviewAttachments, r.Str("fileName"))
+	}
 }
 
 // exists GETs path and reports false on 404.

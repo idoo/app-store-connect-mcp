@@ -157,11 +157,7 @@ func apiDescribe(_ context.Context, env *tool.Env, in describeIn) (*tool.Result,
 }
 
 func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) {
-	maxItems := in.Limit
-	if maxItems <= 0 {
-		maxItems = getDefaultMax
-	}
-	if maxItems > getMaxItems {
+	if in.Limit > getMaxItems {
 		return nil, tool.InvalidArgs("limit must be at most %d", getMaxItems)
 	}
 	path, q, err := splitPath(in.Path)
@@ -199,10 +195,17 @@ func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) 
 		out["operation"] = "unlisted"
 	}
 	if listed && isCollection(op.ID) {
-		res, err := env.ASC.List(ctx, path, tool.ListOptions{Query: q, MaxItems: maxItems, Cursor: in.Cursor})
+		opts, note, err := listLimits(env, op.ID, q, in.Limit)
 		if err != nil {
 			return nil, err
 		}
+		opts.Cursor = in.Cursor
+		res, err := env.ASC.List(ctx, path, opts)
+		if err != nil {
+			return nil, err
+		}
+		trustAppleValues(res.Data)
+		trustAppleValues(res.Included)
 		out["data"], out["returned"] = res.Data, res.Returned
 		if res.Included != nil {
 			out["included"] = res.Included
@@ -213,6 +216,9 @@ func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) 
 		if res.NextCursor != "" {
 			out["next_cursor"] = res.NextCursor
 		}
+		if note != "" {
+			out["limit_note"] = note
+		}
 		return tool.OK(out), nil
 	}
 	if in.Cursor != "" {
@@ -222,6 +228,8 @@ func apiGet(ctx context.Context, env *tool.Env, in getIn) (*tool.Result, error) 
 	if err != nil {
 		return nil, err
 	}
+	trustAppleValues(resp.Data)
+	trustAppleValues(resp.Included)
 	addDocument(out, resp)
 	return tool.OK(out), nil
 }

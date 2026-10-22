@@ -37,8 +37,11 @@ type profilesListIn struct {
 	State    string `json:"state,omitempty"`
 	Name     string `json:"name,omitempty" jsonschema:"profile name filter passed to Apple"`
 	BundleID string `json:"bundle_id,omitempty" jsonschema:"keep only profiles of this bundle identifier"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"maximum profiles to read (default 200, max 1000)"`
-	Cursor   string `json:"cursor,omitempty" jsonschema:"next_cursor"`
+	// ExpiringWithinDays keeps profiles expiring (or expired) within N days
+	// and every INVALID profile, as signing_certificates_list does.
+	ExpiringWithinDays int    `json:"expiring_within_days,omitempty" jsonschema:"only profiles expiring within N days, including expired and INVALID ones"`
+	Limit              int    `json:"limit,omitempty" jsonschema:"maximum profiles to read (default 200, max 1000)"`
+	Cursor             string `json:"cursor,omitempty" jsonschema:"next_cursor"`
 }
 
 type profilesListOut struct {
@@ -51,6 +54,9 @@ type profilesListOut struct {
 func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.Result, error) {
 	if in.Limit < 0 || in.Limit > 1000 {
 		return nil, tool.InvalidArgs("limit must be between 1 and 1000")
+	}
+	if in.ExpiringWithinDays < 0 {
+		return nil, tool.InvalidArgs("expiring_within_days must not be negative")
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.Download && in.ID == "" {
@@ -80,6 +86,9 @@ func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.
 	for _, r := range res.Data {
 		p := flattenProfile(r, inc, now)
 		if in.BundleID != "" && !strings.EqualFold(p.BundleID, in.BundleID) {
+			continue
+		}
+		if in.ExpiringWithinDays > 0 && p.State != "INVALID" && (p.DaysLeft == nil || *p.DaysLeft >= in.ExpiringWithinDays) {
 			continue
 		}
 		out.Profiles = append(out.Profiles, p)

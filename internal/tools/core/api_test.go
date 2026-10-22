@@ -93,7 +93,7 @@ func TestAPIGetCollectionPaginates(t *testing.T) {
 		k := kit(t)
 		k.ASC.Handle("GET", "/v1/apps", 200, page1).Handle("GET", "/v1/apps", 200, page2)
 		res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_get"), k.Env,
-			`{"path":"/v1/apps?limit=1","fields":{"apps":"name"}}`))
+			`{"path":"/v1/apps?limit=1","limit":5,"fields":{"apps":"name"}}`))
 		out := data(t, res)
 		if out["operation"] != "apps_getCollection" || out["returned"] != float64(2) || out["next_cursor"] != nil {
 			t.Errorf("out = %v", out)

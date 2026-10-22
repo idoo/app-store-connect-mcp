@@ -48,7 +48,7 @@ type rejectionOut struct {
 }
 
 type reviewStatusOut struct {
-	App              tool.App              `json:"app"`
+	App              appOut                `json:"app"`
 	Platform         tool.Platform         `json:"platform"`
 	Current          *reviewSubmissionOut  `json:"current,omitempty"`
 	History          []reviewSubmissionOut `json:"history"`
@@ -163,7 +163,7 @@ func loadReviewStatus(ctx context.Context, env *tool.Env, app tool.App, platform
 		subs = subs[:limit]
 	}
 	rc := ascURL(app.ID, "distribution/reviewsubmissions")
-	out := reviewStatusOut{App: app, Platform: platform, History: []reviewSubmissionOut{}, ResolutionCenter: rc}
+	out := reviewStatusOut{App: newAppOut(app), Platform: platform, History: []reviewSubmissionOut{}, ResolutionCenter: rc}
 	byKey := map[string]tool.Resource{}
 	for _, r := range resp.Included {
 		byKey[r.Type+":"+r.ID] = r

@@ -114,6 +114,8 @@ type releaseInsight struct {
 	section
 	Live     *versionInsight  `json:"live,omitempty"`
 	InFlight []versionInsight `json:"in_flight,omitempty"`
+	// Apps lists in-flight versions per app when no app was selected.
+	Apps []portfolioApp `json:"apps,omitempty"`
 }
 
 type feedbackInsight struct {
@@ -148,7 +150,9 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 
 	var app *tool.App
 	noApp := ""
-	if a, err := env.Resolve.App(ctx, in.App); err == nil {
+	if in.App.IsAll() {
+		noApp = `needs one app for this section: app "all" covers sales, ratings and releases`
+	} else if a, err := env.Resolve.App(ctx, in.App); err == nil {
 		app = &a
 		out.App = app
 	} else if in.App != "" {
@@ -167,7 +171,7 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 	}
 	if app == nil {
 		out.Ratings = allAppsRatings(ctx, env, from, to, pFrom)
-		out.Release.section = unavailable(noApp)
+		out.Release = portfolioRelease(ctx, env)
 		out.TestFlight.section = unavailable(noApp)
 		out.Analytics.section = unavailable(noApp)
 		return res, ctx.Err()
@@ -257,19 +261,19 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 			out.UnitsChange[c] = ch
 		}
 	}
-	for _, a := range sortedAmounts(curAgg.Proceeds) {
-		p := prevAgg.Proceeds[a.Currency]
-		out.Proceeds = append(out.Proceeds, proceedsChange{
-			Currency: a.Currency, Amount: a.Amount, Previous: reports.FormatAmount(a.Currency, p),
-			Change: pctChange(curAgg.Proceeds[a.Currency], p),
-		})
-	}
-	for _, c := range prevAgg.Proceeds.Currencies() {
-		if _, ok := curAgg.Proceeds[c]; !ok {
-			out.Proceeds = append(out.Proceeds, proceedsChange{
-				Currency: c, Amount: reports.FormatAmount(c, nil), Previous: reports.FormatAmount(c, prevAgg.Proceeds[c]), Change: "-100.0%",
-			})
+	// One row per currency of either period, sorted by currency code.
+	all := reports.Money{}
+	all.AddMoney(curAgg.Proceeds)
+	all.AddMoney(prevAgg.Proceeds)
+	for _, c := range all.Currencies() {
+		cur, p := curAgg.Proceeds[c], prevAgg.Proceeds[c]
+		ch := "-100.0%"
+		if cur != nil {
+			ch = pctChange(cur, p)
 		}
+		out.Proceeds = append(out.Proceeds, proceedsChange{
+			Currency: c, Amount: reports.FormatAmount(c, cur), Previous: reports.FormatAmount(c, p), Change: ch,
+		})
 	}
 	if len(prevPending) > 0 {
 		note := fmt.Sprintf("previous period has %d unpublished day(s); its totals may be low", len(prevPending))

@@ -78,7 +78,7 @@ type wantedItem struct {
 }
 
 type submitOut struct {
-	App        tool.App       `json:"app"`
+	App        appOut         `json:"app"`
 	Platform   tool.Platform  `json:"platform"`
 	Version    prepareVersion `json:"version"`
 	Submission submissionView `json:"submission"`
@@ -102,7 +102,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 		return nil, errNoVersion(app, platform, in.Version)
 	}
 	ver := snap.Detail.Version
-	out := submitOut{App: app, Platform: platform, Version: prepareVersion{ID: ver.ID, String: ver.Str("versionString")}}
+	out := submitOut{App: newAppOut(app), Platform: platform, Version: prepareVersion{ID: ver.ID, String: ver.Str("versionString")}}
 	if snap.Submission != nil {
 		out.Submission = submissionView{ID: snap.Submission.ID, State: snap.Submission.Str("state")}
 		if out.Submission.Items, err = fetchSubmissionItems(ctx, env, snap.Submission.ID); err != nil {
@@ -516,7 +516,7 @@ func groupVersion(ctx context.Context, env *tool.Env, g tool.Resource) (*wantedI
 }
 
 type cancelOut struct {
-	App        tool.App       `json:"app"`
+	App        appOut         `json:"app"`
 	Platform   tool.Platform  `json:"platform"`
 	Submission submissionView `json:"submission"`
 	Action     string         `json:"action"`
@@ -540,7 +540,7 @@ func releaseCancel(ctx context.Context, env *tool.Env, in cancelIn) (*tool.Resul
 	if err != nil {
 		return nil, err
 	}
-	out := cancelOut{App: app, Platform: platform, Submission: submissionView{ID: sub.ID, State: sub.Str("state"), Items: items}}
+	out := cancelOut{App: newAppOut(app), Platform: platform, Submission: submissionView{ID: sub.ID, State: sub.Str("state"), Items: items}}
 	preview := tool.PlanPreview{Current: out.Submission, Affected: []string{app.ID, sub.ID}}
 	var remove []submissionItem
 	if out.Submission.State == "READY_FOR_REVIEW" {

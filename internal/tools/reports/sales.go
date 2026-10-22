@@ -178,6 +178,7 @@ type salesOut struct {
 	PendingDays []string             `json:"pending_days,omitempty"`
 	Rows        int                  `json:"rows"`
 	Units       reports.Units        `json:"units,omitempty"`
+	Refunds     reports.Units        `json:"refunds,omitempty"`
 	Proceeds    []amountOut          `json:"proceeds,omitempty"`
 	Groups      []reports.SalesGroup `json:"groups,omitempty"`
 	Omitted     int                  `json:"groups_omitted,omitempty"`
@@ -326,7 +327,8 @@ func salesAggregate(out *salesOut, tables []dayTable, app *tool.App, groupBy []s
 	agg := reports.AggregateSales(rows, dims, topN, reports.DefaultCategory)
 	out.Rows = len(rows)
 	out.Units = agg.Totals.Units
-	out.Proceeds = sortedAmounts(agg.Totals.Proceeds)
+	out.Refunds = agg.Totals.Refunds
+	out.Proceeds = currencyAmounts(agg.Totals.Proceeds)
 	out.Groups = agg.Groups
 	out.Omitted = agg.Omitted
 	return nil
@@ -397,7 +399,7 @@ func subscribers(out *salesOut, tables []dayTable, app *tool.App) error {
 			}
 		}
 	}
-	s.Proceeds = sortedAmounts(proceeds)
+	s.Proceeds = currencyAmounts(proceeds)
 	out.Subscribers = &s
 	return nil
 }

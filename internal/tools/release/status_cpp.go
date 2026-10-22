@@ -9,6 +9,7 @@ import (
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tools/assetlib"
 )
 
 // checkPendingDisplays reports announced screenshot slots the pinned spec
@@ -50,6 +51,11 @@ func checkPendingDisplays(s *statusSnapshot) check {
 func hasDisplay(s *statusSnapshot, d applemeta.DisplayType) bool {
 	for _, sets := range s.Screenshots {
 		if slices.ContainsFunc(sets, func(set screenshotSet) bool { return set.Display == d && len(set.States) > 0 }) {
+			return true
+		}
+	}
+	for _, ps := range s.Library {
+		if assetlib.Covers(ps, d) {
 			return true
 		}
 	}

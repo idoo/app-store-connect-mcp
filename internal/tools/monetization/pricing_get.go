@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 
+	"github.com/idoo/app-store-connect-mcp/internal/reports"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -42,6 +43,7 @@ type prcGetRow struct {
 	Currency  string `json:"currency,omitempty"`
 	Price     string `json:"customer_price"`
 	Proceeds  string `json:"proceeds,omitempty"`
+	Year2     string `json:"proceeds_year2,omitempty"`
 	Manual    bool   `json:"manual,omitempty"`
 	StartDate string `json:"start_date,omitempty"`
 	EndDate   string `json:"end_date,omitempty"`
@@ -211,7 +213,7 @@ func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []str
 				row.Missing = append(row.Missing, t)
 				continue
 			}
-			row.Prices = append(row.Prices, prcProductRow{Territory: t, Currency: p.Currency, Price: p.CustomerPrice})
+			row.Prices = append(row.Prices, prcProductRow{Territory: t, Currency: p.Currency, Price: prcMoney(p.Currency, p.CustomerPrice)})
 		}
 		return
 	}
@@ -223,7 +225,7 @@ func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []str
 		}
 		p = top[0]
 	}
-	row.Territory, row.Currency, row.Price = p.Territory, p.Currency, p.CustomerPrice
+	row.Territory, row.Currency, row.Price = p.Territory, p.Currency, prcMoney(p.Currency, p.CustomerPrice)
 }
 
 // prcGetRows reads all price rows of one product (schedule id and base
@@ -242,13 +244,28 @@ func prcGetRows(ctx context.Context, env *tool.Env, k *prcKind, id string, terrs
 
 func prcGetRowOf(p prcPrice, withPoint bool) prcGetRow {
 	r := prcGetRow{
-		Territory: p.Territory, Currency: p.Currency, Price: p.CustomerPrice, Proceeds: p.Proceeds, Manual: p.Manual,
+		Territory: p.Territory, Currency: p.Currency, Price: prcMoney(p.Currency, p.CustomerPrice),
+		Proceeds: prcMoney(p.Currency, p.Proceeds), Year2: prcMoney(p.Currency, p.ProceedsYear2), Manual: p.Manual,
 		StartDate: p.StartDate, EndDate: p.EndDate, PlanType: p.PlanType, Preserved: p.Preserved,
 	}
 	if withPoint {
 		r.PointID = p.ID
 	}
 	return r
+}
+
+// prcMoney renders Apple's price string ("1.4", "29.0") with the currency's
+// decimals, as reports do ("1.40", "29.00", JPY "300"). Without a known
+// currency, or if the string is not a plain decimal, it is returned as is.
+func prcMoney(currency, s string) string {
+	if currency == "" || s == "" {
+		return s
+	}
+	v, err := reports.ParseAmount(s)
+	if err != nil {
+		return s
+	}
+	return reports.FormatAmount(currency, v)
 }
 
 // prcProductRef is one IAP or subscription of an app.

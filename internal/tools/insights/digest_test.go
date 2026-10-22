@@ -280,16 +280,107 @@ func TestDigestSalesUnavailableWithoutVendor(t *testing.T) {
 	}
 }
 
-func TestDigestAllCapped(t *testing.T) {
+// PO1: app:"all" ranks apps with an in-flight version first, then by latest
+// activity, from one /v1/apps call; the rest are skipped_apps with a next
+// step at the following offset.
+func TestDigestAllRankedInFlightFirstWithSkipped(t *testing.T) {
 	k, _ := digestKit(t)
-	apps := make([]digestRes, 0, 12)
+	data := make([]map[string]any, 0, 12)
+	var included []map[string]any
 	for i := range 12 {
-		apps = append(apps, digestRes{ID: fmt.Sprintf("a%d", i), Attrs: map[string]any{"name": fmt.Sprintf("App %d", i)}})
+		id := fmt.Sprintf("a%d", i)
+		app := map[string]any{"type": "apps", "id": id, "attributes": map[string]any{"name": fmt.Sprintf("App %d", i)}}
+		state, created := "READY_FOR_DISTRIBUTION", fmt.Sprintf("2026-01-%02dT00:00:00Z", i+1)
+		if i == 0 {
+			state = "REJECTED" // oldest activity but in flight
+		}
+		vid := "v" + id
+		app["relationships"] = map[string]any{"appStoreVersions": map[string]any{"data": []any{map[string]any{"type": "appStoreVersions", "id": vid}}}}
+		included = append(included, map[string]any{"type": "appStoreVersions", "id": vid, "attributes": map[string]any{
+			"appVersionState": state, "createdDate": created, "platform": "IOS", "versionString": "1.0",
+		}})
+		data = append(data, app)
 	}
-	k.ASC.Handle(http.MethodGet, "/v1/apps", 200, digestDoc(t, "apps", apps))
-	out, res := digestCall(t, k, `{"app":"all","sources":["reviews"]}`)
-	if len(out.Apps) != 10 || !strings.Contains(strings.Join(res.Meta.Warnings, "\n"), "capped at 10") {
-		t.Errorf("apps = %d warnings = %v", len(out.Apps), res.Meta.Warnings)
+	b, err := json.Marshal(map[string]any{"data": data, "included": included, "links": map[string]any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	k.ASC.Handle(http.MethodGet, "/v1/apps", 200, string(b))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustDigest(t), k.Env, `{"app":"all","sources":["reviews"]}`))
+	type ranked struct {
+		Apps []struct {
+			App struct{ ID string } `json:"app"`
+		} `json:"apps"`
+		Skipped []struct {
+			ID   string         `json:"id"`
+			Name map[string]any `json:"name"`
+		} `json:"skipped_apps"`
+	}
+	out := tooltest.Decode[ranked](t, res)
+	if len(out.Apps) != 10 || out.Apps[0].App.ID != "a0" || out.Apps[1].App.ID != "a11" {
+		t.Fatalf("apps = %+v", out.Apps)
+	}
+	if len(out.Skipped) != 2 || out.Skipped[0].ID != "a2" || out.Skipped[1].ID != "a1" || out.Skipped[0].Name["untrusted"] != "App 2" {
+		t.Fatalf("skipped = %+v", out.Skipped)
+	}
+	var next *tool.NextStep
+	for i := range res.Next {
+		if res.Next[i].Tool == "digest_summary" && res.Next[i].Args["offset"] == 10 {
+			next = &res.Next[i]
+		}
+	}
+	if next == nil || next.Args["app"] != "all" {
+		t.Fatalf("next = %+v", res.Next)
+	}
+	if got := len(k.ASC.Requests()); got != 1+10 { // one portfolio call, then reviews per app
+		t.Fatalf("requests = %d", got)
+	}
+	// The second batch starts at the offset and skips nothing.
+	res = tooltest.MustOK(t, tooltest.Call(t, mustDigest(t), k.Env, `{"app":"all","offset":10,"sources":["reviews"]}`))
+	if o := tooltest.Decode[digestOut](t, res); len(o.Apps) != 2 {
+		t.Fatalf("second batch apps = %d", len(o.Apps))
+	}
+	if res := tooltest.Call(t, mustDigest(t), k.Env, `{"app":"Hjul","offset":3}`); !res.IsError {
+		t.Fatal("offset without all accepted")
+	}
+}
+
+func mustDigest(t *testing.T) tool.Tool {
+	t.Helper()
+	tl, ok := tool.Lookup("digest_summary")
+	if !ok {
+		t.Fatal("digest_summary not registered")
+	}
+	return tl
+}
+
+// app "all": single-app detail tools get concrete app ids (≤ 5 steps), never
+// app:"all"; reviews_list, which accepts "all", keeps it.
+func TestDigestNextAllUsesAppIDs(t *testing.T) {
+	var outs []digestAppOut
+	for i := range 7 {
+		outs = append(outs, digestAppOut{App: digestAppRef{ID: fmt.Sprintf("a%d", i)}, Sources: map[string]digestSourceOut{
+			digestSrcRev:   {Returned: 1},
+			digestSrcState: {Returned: 1},
+		}})
+	}
+	res := &tool.Result{}
+	digestNext(res, outs, digestIn{App: "all", MarkSeen: true}, false)
+	var perApp []string
+	for _, n := range res.Next {
+		switch {
+		case n.Tool == "reviews_list" || n.Tool == "digest_summary":
+			if n.Tool == "reviews_list" && n.Args["app"] != "all" {
+				t.Errorf("reviews_list args = %v", n.Args)
+			}
+		case n.Args["app"] == "all":
+			t.Errorf("%s got app \"all\"", n.Tool)
+		default:
+			perApp = append(perApp, n.Tool+":"+fmt.Sprint(n.Args["app"]))
+		}
+	}
+	if got := strings.Join(perApp, ","); got != "release_review_status:a0,release_review_status:a1,release_review_status:a2,release_review_status:a3,release_review_status:a4" {
+		t.Fatalf("per-app steps = %s", got)
 	}
 }
 

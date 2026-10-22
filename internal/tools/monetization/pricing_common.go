@@ -182,6 +182,8 @@ type prcPoint struct {
 	Currency      string `json:"currency,omitempty"`
 	CustomerPrice string `json:"customer_price"`
 	Proceeds      string `json:"proceeds,omitempty"`
+	// ProceedsYear2 is a subscription's proceeds after one year of paid service.
+	ProceedsYear2 string `json:"proceeds_year2,omitempty"`
 }
 
 // prcPrice is one scheduled price (manual or automatic) of a territory.
@@ -208,7 +210,10 @@ func prcCurrencies(inc []tool.Resource) map[string]string {
 // prcPointOf flattens a price point resource.
 func prcPointOf(r tool.Resource, cur map[string]string) prcPoint {
 	terr := r.RelID("territory")
-	return prcPoint{ID: r.ID, Territory: terr, Currency: cur[terr], CustomerPrice: r.Str("customerPrice"), Proceeds: r.Str("proceeds")}
+	return prcPoint{
+		ID: r.ID, Territory: terr, Currency: cur[terr], CustomerPrice: r.Str("customerPrice"),
+		Proceeds: r.Str("proceeds"), ProceedsYear2: r.Str("proceedsYear2"),
+	}
 }
 
 // prcPointQuery is the shared query of price point collections.
@@ -399,7 +404,7 @@ func prcSubPrices(ctx context.Context, env *tool.Env, id string, territories []s
 		Include: []string{"territory", "subscriptionPricePoint"},
 		Fields: map[string][]string{
 			"subscriptionPrices":      {"startDate", "preserved", "planType", "territory", "subscriptionPricePoint"},
-			"subscriptionPricePoints": {"customerPrice", "proceeds", "territory"},
+			"subscriptionPricePoints": {"customerPrice", "proceeds", "proceedsYear2", "territory"},
 			"territories":             {"currency"},
 		},
 		Limit:    200,

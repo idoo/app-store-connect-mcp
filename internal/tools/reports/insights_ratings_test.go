@@ -2,7 +2,6 @@ package reports
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
@@ -30,7 +29,9 @@ func TestInsightsSummaryAllAppsRatings(t *testing.T) {
 		tooltest.JSON(t, rt["stars"]) != `[0,2,0,0,2]` {
 		t.Errorf("ratings = %s", tooltest.JSON(t, rt))
 	}
-	if reason, _ := got.Release["reason"].(string); got.Release["status"] == "ok" || !strings.HasPrefix(reason, "needs one app") {
+	// PO2: without an app the release section lists in-flight versions per
+	// app from the one /v1/apps call (none in this fixture).
+	if got.Release["status"] != "ok" || got.Release["apps"] != nil {
 		t.Errorf("release = %v", got.Release)
 	}
 	if n := len(k.ASC.RequestsTo(http.MethodGet, "/v1/apps/{id}/customerReviews")); n != 2 {

@@ -1,6 +1,7 @@
 package reports
 
 import (
+	"math/big"
 	"sort"
 	"strings"
 )
@@ -18,19 +19,25 @@ const (
 	DimCurrency        Dim = "currency"
 )
 
-// SalesGroup is the aggregate for one combination of dimension values.
+// SalesGroup is the aggregate for one combination of dimension values. Units
+// are net (refund rows carry negative units); Refunds is the magnitude of the
+// negative units per category, so gross = Units + Refunds.
 type SalesGroup struct {
 	Key      map[Dim]string `json:"key,omitempty"`
 	Units    Units          `json:"units"`
+	Refunds  Units          `json:"refunds,omitempty"`
 	Proceeds Money          `json:"proceeds"`
 }
 
 func newSalesGroup(key map[Dim]string) *SalesGroup {
-	return &SalesGroup{Key: key, Units: Units{}, Proceeds: Money{}}
+	return &SalesGroup{Key: key, Units: Units{}, Refunds: Units{}, Proceeds: Money{}}
 }
 
 func (g *SalesGroup) add(r SalesRow, c Category) {
 	g.Units.Add(c, r.Units)
+	if r.Units != nil && r.Units.Sign() < 0 {
+		g.Refunds.Add(c, new(big.Rat).Neg(r.Units))
+	}
 	g.Proceeds.Add(r.ProceedsCurrency, r.TotalProceeds())
 }
 
