@@ -17,14 +17,14 @@ func init() {
 		Title: "List provisioning profiles",
 		Description: "Provisioning profiles with type, state, bundle identifier, expiration, device and certificate counts. " +
 			"Filter by type, state, name or bundle identifier. download:true with one id returns profile_content (base64 .mobileprovision).",
-		Enums: map[string][]any{"type": s13bProfileTypes, "state": s13bProfileStates},
+		Enums: map[string][]any{"type": profileTypes, "state": profileStates},
 	}, profilesList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "signing_profile_create", Toolset: tool.Signing, Class: tool.Write, NeedsTeamKey: true,
 		Title: "Create a provisioning profile",
 		Description: "Create a profile for a bundle ID (identifier or id). certificates: ids or [\"all\"] (all unexpired of the matching type); " +
 			"devices: ids or [\"all\"] (enabled devices), only for development/ad hoc types. An active profile with the same name, type and bundle is already:true.",
-		Enums: map[string][]any{"profile_type": s13bProfileTypes},
+		Enums: map[string][]any{"profile_type": profileTypes},
 	}, profileCreate))
 }
 
@@ -42,24 +42,24 @@ type profilesListIn struct {
 }
 
 type profilesListOut struct {
-	Profiles   []s13bProfileOut `json:"profiles"`
-	Returned   int              `json:"returned"`
-	Total      int              `json:"total,omitempty"`
-	NextCursor string           `json:"next_cursor,omitempty"`
+	Profiles   []profileOut `json:"profiles"`
+	Returned   int          `json:"returned"`
+	Total      int          `json:"total,omitempty"`
+	NextCursor string       `json:"next_cursor,omitempty"`
 }
 
 func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.Result, error) {
 	if in.MaxItems < 0 || in.MaxItems > 1000 {
-		return nil, s13aInvalid("max_items must be between 1 and 1000")
+		return nil, invalidArgs("max_items must be between 1 and 1000")
 	}
 	in.ID = strings.TrimSpace(in.ID)
 	if in.Download && in.ID == "" {
-		return nil, s13aInvalid("download needs the id of one profile; list first to find it")
+		return nil, invalidArgs("download needs the id of one profile; list first to find it")
 	}
 	if in.ID != "" {
 		return profileGet(ctx, env, in.ID, in.Download)
 	}
-	q := s13bProfileQuery(false)
+	q := profileQuery(false)
 	q.Set("sort", "name")
 	if in.Type != "" {
 		q.Set("filter[profileType]", in.Type)
@@ -74,11 +74,11 @@ func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.
 	if err != nil {
 		return nil, fmt.Errorf("list profiles: %w", err)
 	}
-	inc := s13aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	now := env.Clock.Now()
-	out := profilesListOut{Profiles: []s13bProfileOut{}, Total: res.Total, NextCursor: res.NextCursor}
+	out := profilesListOut{Profiles: []profileOut{}, Total: res.Total, NextCursor: res.NextCursor}
 	for _, r := range res.Data {
-		p := s13bProfile(r, inc, now)
+		p := flattenProfile(r, inc, now)
 		if in.BundleID != "" && !strings.EqualFold(p.BundleID, in.BundleID) {
 			continue
 		}
@@ -90,32 +90,32 @@ func profilesList(ctx context.Context, env *tool.Env, in profilesListIn) (*tool.
 
 // profileGet reads one profile, with its content when download is set.
 func profileGet(ctx context.Context, env *tool.Env, id string, download bool) (*tool.Result, error) {
-	p, err := s13bReadProfile(ctx, env, id, download)
+	p, err := readProfile(ctx, env, id, download)
 	if err != nil {
 		return nil, err
 	}
-	res := tool.OK(profilesListOut{Profiles: []s13bProfileOut{p}, Returned: 1})
+	res := tool.OK(profilesListOut{Profiles: []profileOut{p}, Returned: 1})
 	if download && p.Content == "" {
 		res.Warn("Apple returned no profile content; an INVALID profile must be regenerated")
 	}
 	return res, nil
 }
 
-// s13bReadProfile reads one profile by id.
-func s13bReadProfile(ctx context.Context, env *tool.Env, id string, content bool) (s13bProfileOut, error) {
-	resp, err := env.ASC.Get(ctx, "/v1/profiles/"+url.PathEscape(id), s13bProfileQuery(content))
+// readProfile reads one profile by id.
+func readProfile(ctx context.Context, env *tool.Env, id string, content bool) (profileOut, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/profiles/"+url.PathEscape(id), profileQuery(content))
 	notFound := &tool.ErrNotFound{Kind: "profile", Ref: id, Next: []tool.NextStep{{Tool: "signing_profiles_list"}}}
-	if s13aStatus(err) == http.StatusNotFound {
-		return s13bProfileOut{}, notFound
+	if apiStatus(err) == http.StatusNotFound {
+		return profileOut{}, notFound
 	}
 	if err != nil {
-		return s13bProfileOut{}, fmt.Errorf("read profile %s: %w", id, err)
+		return profileOut{}, fmt.Errorf("read profile %s: %w", id, err)
 	}
 	r, ok := resp.First()
 	if !ok {
-		return s13bProfileOut{}, notFound
+		return profileOut{}, notFound
 	}
-	return s13bProfile(r, s13aIncluded(resp.Included), env.Clock.Now()), nil
+	return flattenProfile(r, indexIncluded(resp.Included), env.Clock.Now()), nil
 }
 
 // --- signing_profile_create ---
@@ -129,58 +129,58 @@ type profileCreateIn struct {
 }
 
 type profileCreateOut struct {
-	Profile      s13bProfileOut `json:"profile"`
-	Created      bool           `json:"created"`
-	Certificates []string       `json:"certificate_ids,omitempty"`
-	Devices      []string       `json:"device_ids,omitempty"`
+	Profile      profileOut `json:"profile"`
+	Created      bool       `json:"created"`
+	Certificates []string   `json:"certificate_ids,omitempty"`
+	Devices      []string   `json:"device_ids,omitempty"`
 }
 
 func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*tool.Result, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
-		return nil, s13aInvalid("name is required")
+		return nil, invalidArgs("name is required")
 	}
-	kind := s13bKind(in.ProfileType)
+	kind := profileKindOf(in.ProfileType)
 	if len(kind.CertTypes) == 0 {
-		return nil, s13aInvalid("profile_type %q is not supported", in.ProfileType)
+		return nil, invalidArgs("profile_type %q is not supported", in.ProfileType)
 	}
 	if len(in.Certificates) == 0 {
-		return nil, s13aInvalid("certificates is required (ids or [\"all\"])")
+		return nil, invalidArgs("certificates is required (ids or [\"all\"])")
 	}
 	switch {
 	case kind.DevicePlatform == "" && len(in.Devices) > 0:
-		return nil, s13aInvalid("%s profiles take no devices", in.ProfileType)
+		return nil, invalidArgs("%s profiles take no devices", in.ProfileType)
 	case kind.DevicePlatform != "" && len(in.Devices) == 0:
-		return nil, s13aInvalid("%s profiles need devices (ids or [\"all\"])", in.ProfileType)
+		return nil, invalidArgs("%s profiles need devices (ids or [\"all\"])", in.ProfileType)
 	}
-	bundle, err := s13aLookupBundle(ctx, env, in.BundleID)
+	bundle, err := lookupBundle(ctx, env, in.BundleID)
 	if err != nil {
 		return nil, err
 	}
-	next := func(p s13bProfileOut) tool.NextStep {
+	next := func(p profileOut) tool.NextStep {
 		return tool.NextStep{Tool: "signing_profiles_list", Args: map[string]any{"id": p.ID, "download": true}}
 	}
-	if p, ok, err := s13bFindProfile(ctx, env, in.Name, in.ProfileType, bundle.ID); err != nil {
+	if p, ok, err := findProfile(ctx, env, in.Name, in.ProfileType, bundle.ID); err != nil {
 		return nil, err
 	} else if ok {
 		return tool.Already(profileCreateOut{Profile: p}).Then(next(p)), nil
 	}
-	certs, err := s13bCertIDs(ctx, env, in.Certificates, kind.CertTypes)
+	certs, err := resolveCertIDs(ctx, env, in.Certificates, kind.CertTypes)
 	if err != nil {
 		return nil, err
 	}
 	var devices []string
 	if kind.DevicePlatform != "" {
-		if devices, err = s13bDeviceIDs(ctx, env, in.Devices, kind.DevicePlatform); err != nil {
+		if devices, err = deviceIDs(ctx, env, in.Devices, kind.DevicePlatform); err != nil {
 			return nil, err
 		}
 	}
 	rels := map[string]any{
-		"bundleId":     s13bRelData("bundleIds", bundle.ID),
-		"certificates": s13bRelList("certificates", certs),
+		"bundleId":     relData("bundleIds", bundle.ID),
+		"certificates": relList("certificates", certs),
 	}
 	if len(devices) > 0 {
-		rels["devices"] = s13bRelList("devices", devices)
+		rels["devices"] = relList("devices", devices)
 	}
 	body := map[string]any{"data": map[string]any{
 		"type":          "profiles",
@@ -188,8 +188,8 @@ func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*too
 		"relationships": rels,
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/profiles", Body: body, Write: true})
-	if s13aStatus(err) == http.StatusConflict {
-		if p, ok, rerr := s13bFindProfile(ctx, env, in.Name, in.ProfileType, bundle.ID); rerr == nil && ok {
+	if apiStatus(err) == http.StatusConflict {
+		if p, ok, rerr := findProfile(ctx, env, in.Name, in.ProfileType, bundle.ID); rerr == nil && ok {
 			return tool.Already(profileCreateOut{Profile: p}).Then(next(p)), nil
 		}
 	}
@@ -200,7 +200,7 @@ func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*too
 	if !ok {
 		return nil, fmt.Errorf("create profile %s: %w: empty response", in.Name, tool.ErrInternal)
 	}
-	p := s13bProfile(r, nil, env.Clock.Now())
+	p := flattenProfile(r, nil, env.Clock.Now())
 	p.Content = "" // large; fetched on demand via download
 	p.BundleID, p.BundleIDRef = bundle.Identifier, bundle.ID
 	p.DeviceCount, p.CertificateCount = len(devices), len(certs)
@@ -208,31 +208,31 @@ func profileCreate(ctx context.Context, env *tool.Env, in profileCreateIn) (*too
 	return tool.OK(profileCreateOut{Profile: p, Created: true, Certificates: certs, Devices: devices}).Then(next(p)), nil
 }
 
-// s13bFindProfile returns the ACTIVE profile with exactly name, type and
+// findProfile returns the ACTIVE profile with exactly name, type and
 // bundle ID, if any.
-func s13bFindProfile(ctx context.Context, env *tool.Env, name, profileType, bundleRef string) (s13bProfileOut, bool, error) {
-	q := s13bProfileQuery(false)
+func findProfile(ctx context.Context, env *tool.Env, name, profileType, bundleRef string) (profileOut, bool, error) {
+	q := profileQuery(false)
 	q.Set("filter[name]", name)
 	res, err := env.ASC.List(ctx, "/v1/profiles", tool.ListOptions{Query: q, MaxItems: 200})
 	if err != nil {
-		return s13bProfileOut{}, false, fmt.Errorf("find profile %s: %w", name, err)
+		return profileOut{}, false, fmt.Errorf("find profile %s: %w", name, err)
 	}
-	inc := s13aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	now := env.Clock.Now()
 	for _, r := range res.Data {
-		p := s13bProfile(r, inc, now)
+		p := flattenProfile(r, inc, now)
 		if p.Name == name && p.Type == profileType && p.BundleIDRef == bundleRef && p.State == "ACTIVE" {
 			return p, true, nil
 		}
 	}
-	return s13bProfileOut{}, false, nil
+	return profileOut{}, false, nil
 }
 
-// s13bCertIDs returns refs, or for ["all"] the ids of every unexpired
+// resolveCertIDs returns refs, or for ["all"] the ids of every unexpired
 // certificate of types.
-func s13bCertIDs(ctx context.Context, env *tool.Env, refs, types []string) ([]string, error) {
-	if !s13bIsAll(refs) {
-		return s13bCleanIDs("certificates", refs)
+func resolveCertIDs(ctx context.Context, env *tool.Env, refs, types []string) ([]string, error) {
+	if !isAll(refs) {
+		return cleanIDs("certificates", refs)
 	}
 	q := url.Values{
 		"fields[certificates]":    {"certificateType,expirationDate"},
@@ -245,7 +245,7 @@ func s13bCertIDs(ctx context.Context, env *tool.Env, refs, types []string) ([]st
 	now := env.Clock.Now()
 	var ids []string
 	for _, r := range res.Data {
-		if d := s13bDaysLeft(r.Str("expirationDate"), now); d != nil && *d < 0 {
+		if d := daysLeft(r.Str("expirationDate"), now); d != nil && *d < 0 {
 			continue
 		}
 		if slices.Contains(types, r.Str("certificateType")) {
@@ -261,11 +261,11 @@ func s13bCertIDs(ctx context.Context, env *tool.Env, refs, types []string) ([]st
 	return ids, nil
 }
 
-// s13bDeviceIDs returns refs, or for ["all"] the ids of every enabled device
+// deviceIDs returns refs, or for ["all"] the ids of every enabled device
 // of platform.
-func s13bDeviceIDs(ctx context.Context, env *tool.Env, refs []string, platform string) ([]string, error) {
-	if !s13bIsAll(refs) {
-		return s13bCleanIDs("devices", refs)
+func deviceIDs(ctx context.Context, env *tool.Env, refs []string, platform string) ([]string, error) {
+	if !isAll(refs) {
+		return cleanIDs("devices", refs)
 	}
 	q := url.Values{
 		"fields[devices]":  {"udid"},
@@ -288,13 +288,13 @@ func s13bDeviceIDs(ctx context.Context, env *tool.Env, refs []string, platform s
 	return ids, nil
 }
 
-// s13bCleanIDs trims, deduplicates and validates explicit ids.
-func s13bCleanIDs(arg string, refs []string) ([]string, error) {
+// cleanIDs trims, deduplicates and validates explicit ids.
+func cleanIDs(arg string, refs []string) ([]string, error) {
 	ids := make([]string, 0, len(refs))
 	for _, r := range refs {
 		r = strings.TrimSpace(r)
 		if r == "" || strings.EqualFold(r, "all") {
-			return nil, s13aInvalid(`%s: pass ids, or exactly ["all"]`, arg)
+			return nil, invalidArgs(`%s: pass ids, or exactly ["all"]`, arg)
 		}
 		if !slices.Contains(ids, r) {
 			ids = append(ids, r)

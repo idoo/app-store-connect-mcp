@@ -17,16 +17,16 @@ import (
 )
 
 const (
-	s10cApp      = "1000000001"
-	requestsPath = "/v1/apps/{id}/analyticsReportRequests"
-	emptyList    = `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/x"},"meta":{"paging":{"total":0,"limit":50}}}`
-	ongoingList  = `{"data":[{"type":"analyticsReportRequests","id":"req-1","attributes":{"accessType":"ONGOING","stoppedDueToInactivity":false}}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/x"}}`
+	analyticsAppID = "1000000001"
+	requestsPath   = "/v1/apps/{id}/analyticsReportRequests"
+	emptyList      = `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/x"},"meta":{"paging":{"total":0,"limit":50}}}`
+	ongoingList    = `{"data":[{"type":"analyticsReportRequests","id":"req-1","attributes":{"accessType":"ONGOING","stoppedDueToInactivity":false}}],"links":{"self":"https://api.appstoreconnect.apple.com/v1/x"}}`
 )
 
-// gzFile returns the gzip bytes of a testdata/s10c file.
+// gzFile returns the gzip bytes of a testdata/analytics file.
 func gzFile(t *testing.T, name string) []byte {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "s10c", name))
+	raw, err := os.ReadFile(filepath.Join("testdata", "analytics", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func res(typ, id string, attrs map[string]any) map[string]any {
 }
 
 func TestAnalyticsSetupAlready(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, ongoingList)
 	r := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "analytics_setup"), k.Env, `{"app":"Example Notes"}`))
 	got := tooltest.Decode[map[string]any](t, r)
@@ -72,7 +72,7 @@ func TestAnalyticsSetupAlready(t *testing.T) {
 }
 
 func TestAnalyticsSetupCreates(t *testing.T) {
-	k := s10bKit(t)
+	k := reportsKit(t)
 	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, emptyList)
 	k.ASC.HandleFunc(http.MethodPost, "/v1/analyticsReportRequests", func(req tool.Request) tooltest.Fixture {
 		access := req.Body.(map[string]any)["data"].(map[string]any)["attributes"].(map[string]any)["accessType"].(string)
@@ -101,7 +101,7 @@ func TestAnalyticsSetupCreates(t *testing.T) {
 }
 
 func TestAnalyticsSetupWithheldReadOnly(t *testing.T) {
-	k := s10bKit(t).ReadOnly()
+	k := reportsKit(t).ReadOnly()
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "analytics_setup"), k.Env, ``), "writes_disabled")
 	if n := len(k.ASC.Requests()); n != 0 {
 		t.Errorf("requests = %d", n)
@@ -109,11 +109,11 @@ func TestAnalyticsSetupWithheldReadOnly(t *testing.T) {
 }
 
 func TestAnalyticsReportNotSetUp(t *testing.T) {
-	k := s10bKit(t).ReadOnly()
+	k := reportsKit(t).ReadOnly()
 	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, emptyList)
 	r := tooltest.Call(t, mustTool(t, "analytics_report"), k.Env, `{"report":"App Store Discovery"}`)
 	body := tooltest.MustFail(t, r, "analytics_not_set_up")
-	if len(r.Next) != 1 || r.Next[0].Tool != "analytics_setup" || r.Next[0].Args["app"] != s10cApp {
+	if len(r.Next) != 1 || r.Next[0].Tool != "analytics_setup" || r.Next[0].Args["app"] != analyticsAppID {
 		t.Errorf("next = %+v", r.Next)
 	}
 	if !strings.Contains(body.Hint, "--allow-writes") {
@@ -122,7 +122,7 @@ func TestAnalyticsReportNotSetUp(t *testing.T) {
 }
 
 func analyticsKit(t *testing.T) *tooltest.Kit {
-	k := s10bKit(t).ReadOnly()
+	k := reportsKit(t).ReadOnly()
 	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, ongoingList)
 	k.ASC.Handle(http.MethodGet, "/v1/analyticsReportRequests/req-1/reports", http.StatusOK, doc(t,
 		res("analyticsReports", "rep-1", map[string]any{"name": "App Store Discovery and Engagement Standard", "category": "APP_STORE_ENGAGEMENT"}),
