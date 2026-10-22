@@ -11,17 +11,17 @@ import (
 )
 
 type buildsListIn struct {
-	App            tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform       tool.Platform `json:"platform,omitempty" jsonschema:"default: the app's platform"`
-	Version        string        `json:"version,omitempty" jsonschema:"marketing version (CFBundleShortVersionString), e.g. 1.4"`
+	App            tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform       tool.Platform `json:"platform,omitempty"`
+	Version        string        `json:"version,omitempty" jsonschema:"marketing version, e.g. 1.4"`
 	State          string        `json:"state,omitempty" jsonschema:"processing state filter"`
 	IncludeExpired bool          `json:"include_expired,omitempty" jsonschema:"also list expired builds"`
-	Limit          int           `json:"limit,omitempty" jsonschema:"builds to return, newest first (1-200, default 20)"`
+	Limit          int           `json:"limit,omitempty" jsonschema:"newest first, 1-200, default 20"`
 }
 
 type buildsWaitIn struct {
-	App            tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform       tool.Platform `json:"platform,omitempty" jsonschema:"default: the app's platform"`
+	App            tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform       tool.Platform `json:"platform,omitempty"`
 	Build          tool.BuildRef `json:"build,omitempty" jsonschema:"latest (default), build number or build id"`
 	TimeoutSeconds int           `json:"timeout_seconds,omitempty" jsonschema:"how long to wait (default 45, max 300)"`
 }
@@ -30,15 +30,15 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "builds_list", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "List builds",
-		Description: "Builds newest first with number, version, processing state, upload/expiry dates, export compliance, TestFlight internal/external state and beta groups. " +
-			"Expired builds are hidden unless include_expired.",
+		Description: "Builds newest first: number, version, processing state, dates, export compliance, TestFlight state " +
+			"and groups. Expired hidden unless include_expired.",
 		Enums: map[string][]any{"platform": platformEnum, "state": {"PROCESSING", "VALID", "INVALID", "FAILED"}},
 	}, buildsList))
 	tool.Register(tool.New(tool.Meta{
 		Name: "builds_wait", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "Wait for build processing",
-		Description: "Poll a build until processing ends (VALID, INVALID or FAILED) with progress notifications. " +
-			"At the timeout (default 45 s, max 300 s) returns still_processing; call again with the same args to keep waiting.",
+		Description: "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. At the timeout returns " +
+			"still_processing; call again with the same args to keep waiting.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, buildsWait))
 }

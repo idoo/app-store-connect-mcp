@@ -20,7 +20,7 @@ const (
 )
 
 type insightsIn struct {
-	App    tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned/default app (sales then cover all apps if none)"`
+	App    tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default: pinned, else sales of all apps"`
 	Period string      `json:"period,omitempty" jsonschema:"preset in Pacific time; default last_7_days"`
 }
 
@@ -32,9 +32,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "insights_summary", Toolset: tool.Reports, Class: tool.Read, Idempotent: true,
 		Title: "How is my app doing",
-		Description: `Use first for "how is my app doing / sales this week": units and proceeds vs the previous period, ` +
-			"new ratings, live/in-flight version and phased release, new TestFlight feedback, analytics status. " +
-			"Each section says ok or unavailable and why.",
+		Description: "Use first for \"how is my app doing\": units and proceeds vs the previous period, ratings, versions, " +
+			"TestFlight feedback, analytics status; each section ok or unavailable and why.",
 		Enums: map[string][]any{"period": periods},
 	}, insightsSummary))
 }

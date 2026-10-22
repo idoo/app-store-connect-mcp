@@ -50,9 +50,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "doctor", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "Check setup",
-		Description: "Health check of the active profile: key kind, JWT acceptance, Apple reachability, " +
-			"clock skew, rate-limit budget, spec version, write mode, toolsets and vendor number. " +
-			"Each check is ok|warn|fail with a fix. Run first when any call fails with 401/403.",
+		Description: "Health check of the active profile: key, JWT, Apple reachability, clock skew, rate limit, spec, " +
+			"write mode, toolsets, vendor number, each with a fix. Run first on 401/403.",
 	}, doctor))
 }
 

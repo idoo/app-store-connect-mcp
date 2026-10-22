@@ -42,8 +42,9 @@ the human with `hamn auth add`).
 6. `release_status` again: everything must be `ok` or an accepted `warn`.
 7. Ask the user: "Submit <app> <version> with build <n> for App Review now?"
    Only after a yes: `release_submit` with `app`, `version` (and
-   `include_iaps` / `include_subscriptions` for first-time products) — first
-   call previews and returns a `plan_id`, second call passes `confirm`.
+   `include_iaps` / `include_subscriptions` for first-time products). The first
+   call previews and returns a `plan_id`; the second call passes the same
+   arguments plus that `plan_id`, and the client asks the user to approve.
    `already_submitted` means it is already in review: report, do not retry.
 8. Watch: `release_review_status` with `app`. Rejections are not exposed by the
    API: give the Resolution Center link, help fix, then submit again.

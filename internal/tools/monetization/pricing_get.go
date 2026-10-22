@@ -25,7 +25,7 @@ func init() {
 }
 
 type pricingGetIn struct {
-	App         tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App         tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Kind        string      `json:"kind,omitempty" jsonschema:"default app"`
 	ProductID   string      `json:"product_id,omitempty" jsonschema:"IAP or subscription: product id or the id from iap_list/subscriptions_list"`
 	Products    []string    `json:"products,omitempty" jsonschema:"up to 10 product ids or ids of kind iap/subscription; compact summary per product"`

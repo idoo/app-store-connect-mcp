@@ -16,11 +16,11 @@ import (
 )
 
 type pullIn struct {
-	App       tool.AppRef     `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Platform  tool.Platform   `json:"platform,omitempty" jsonschema:"default: inferred from the app"`
-	Version   tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, falls back to live), live or a version string"`
+	App       tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform  tool.Platform   `json:"platform,omitempty"`
+	Version   tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, else live), live or a version string"`
 	Locales   tool.LocaleSet  `json:"locales,omitempty" jsonschema:"locales or aliases; default all"`
-	ExportDir string          `json:"export_dir,omitempty" jsonschema:"write a fastlane deliver metadata dir here (new, empty or named metadata), inside the project"`
+	ExportDir string          `json:"export_dir,omitempty" jsonschema:"fastlane dir to write (new, empty or named metadata)"`
 }
 
 type pullOut struct {
@@ -43,8 +43,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "metadata_pull", Toolset: tool.Metadata, Class: tool.Read, Idempotent: true,
 		Title: "Pull store listing",
-		Description: "Every locale's listing (name, subtitle, privacy URLs; description, keywords, What's New, URLs) of the " +
-			"editable version, else live. export_dir writes a fastlane metadata dir locally. Edit with metadata_plan.",
+		Description: "Every locale's listing (app info and version text) of the editable version, else live. export_dir " +
+			"writes a fastlane metadata dir. Edit with metadata_plan.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, metadataPull))
 }

@@ -23,8 +23,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_testers_list", Toolset: tool.TestFlight, Class: tool.Read, Idempotent: true,
 		Title: "List TestFlight testers",
-		Description: "Beta testers of an app or one group (name or id), optionally by exact email, state or invite type. " +
-			"Returns email, name, state, invite type and the app's groups per tester. Names/emails are tester-provided data.",
+		Description: "Beta testers of an app or group, filterable by email, state or invite type, with their groups. " +
+			"Names/emails are tester-provided data.",
 		Enums: map[string][]any{
 			"state":       {"NOT_INVITED", "INVITED", "ACCEPTED", "INSTALLED", "REVOKED"},
 			"invite_type": {"EMAIL", "PUBLIC_LINK"},
@@ -34,16 +34,15 @@ func init() {
 		Name: "testflight_testers_add", Toolset: tool.TestFlight, Class: tool.Write, Idempotent: true,
 		Confirm: tool.ConfirmByFlag,
 		Title:   "Add TestFlight testers",
-		Description: "Add or invite up to 100 testers (email, optional names) to a beta group. New emails are invited; " +
-			"existing testers are linked; members are reported as already. External groups need confirm:true and " +
-			"human approval after a preview.",
+		Description: "Add or invite up to 100 testers to a beta group; existing members are reported as already. External " +
+			"groups need confirm:true and human approval after a preview.",
 	}, testersAdd))
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_testers_remove", Toolset: tool.TestFlight, Class: tool.Destructive,
 		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Remove TestFlight testers",
-		Description: "Remove up to 100 testers (emails or ids) from a beta group, or with scope app from every group " +
-			"and build of the app. Without confirm:true returns a preview listing the matched testers; nothing changes.",
+		Description: "Remove up to 100 testers from a beta group, or with scope app from every group and build. Without " +
+			"confirm:true previews the matched testers; nothing changes.",
 		Enums: map[string][]any{"scope": {"group", "app"}},
 	}, testersRemove))
 }
@@ -51,10 +50,10 @@ func init() {
 // --- testflight_testers_list ---
 
 type testersListIn struct {
-	App        tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Group      tool.GroupRef `json:"group,omitempty" jsonschema:"beta group name or id; default: all testers of the app"`
+	App        tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Group      tool.GroupRef `json:"group,omitempty" jsonschema:"beta group name or id; default: all"`
 	Email      string        `json:"email,omitempty" jsonschema:"exact tester email"`
-	State      string        `json:"state,omitempty" jsonschema:"keep testers in this state (applied to the fetched page)"`
+	State      string        `json:"state,omitempty" jsonschema:"filters the fetched page"`
 	InviteType string        `json:"invite_type,omitempty"`
 	MaxItems   int           `json:"max_items,omitempty" jsonschema:"testers to fetch, default 200, max 1000"`
 	Cursor     string        `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
@@ -135,7 +134,7 @@ type testerInput struct {
 }
 
 type testersAddIn struct {
-	App     tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App     tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Group   tool.GroupRef `json:"group" jsonschema:"beta group name or id"`
 	Testers []testerInput `json:"testers" jsonschema:"1-100 testers to add or invite"`
 	tool.ConfirmFlag
@@ -393,8 +392,8 @@ func failAll(ts []testerInput, err error, set setOutcome) {
 
 type testersRemoveIn struct {
 	tool.ConfirmFlag
-	App     tool.AppRef   `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
-	Scope   string        `json:"scope,omitempty" jsonschema:"group (default): leave one group; app: remove from every group and build of the app"`
+	App     tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Scope   string        `json:"scope,omitempty" jsonschema:"group (default) or app: every group and build"`
 	Group   tool.GroupRef `json:"group,omitempty" jsonschema:"beta group name or id; required for scope group"`
 	Testers []string      `json:"testers" jsonschema:"1-100 tester emails or ids"`
 }

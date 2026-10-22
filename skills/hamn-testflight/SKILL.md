@@ -26,7 +26,11 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
    - `needs_input` (usually `uses_non_exempt_encryption`): nothing was changed.
      Ask the user the exact question from the result, then call again with the
      same arguments plus the answer.
-   - External groups trigger Beta App Review; say so before calling.
+   - External groups trigger Beta App Review; say so before calling. Adding a
+     build to a new external group, submitting it for beta review, answering
+     export compliance or overwriting beta review details returns a preview
+     first: show it, then call again with `confirm: true`; the user approves in
+     their client.
    - Emoji or unsupported characters in some locales are reported per locale;
      fix the text, do not drop the locale silently.
    - Steps reported `already` are done; that is success.
@@ -36,12 +40,13 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
 - Add: `testflight_testers_add` with `app`, `group` and
   `testers: [{email, first_name, last_name}]` (up to 100). Each email returns
   added, already or error. Confirm the email list with the user first: Apple
-  sends invitations immediately.
+  sends invitations immediately. For external groups the first call is a
+  preview and `confirm: true` asks the user to approve in their client.
 - Remove: `testflight_testers_remove` with `app`, `group` (or `scope: "app"`)
   and `testers`. The first call is a preview; show it, ask, then call again with
-  `confirm: true`.
+  `confirm: true`; the user approves in their client.
 - Expire old builds: `builds_expire` with `app` and `builds`; preview, ask,
-  then `confirm: true`. Expiry is irreversible.
+  then `confirm: true` (the user approves in their client). Expiry is irreversible.
 
 ## Feedback digest
 1. `testflight_feedback_list` with `app`, `since: "last_seen"` (or a date),

@@ -114,7 +114,7 @@ key_source = "keychain"      # instead of key_path; `hamn auth add` can store it
 | `vendor_number` | For sales and finance reports |
 | `default_app` | App id or bundle id used when a tool gets no `app` |
 | `allow_writes` | Enable writes for this profile |
-| `allow_no_elicit` | Let human-approval tools proceed with `confirm:true` when the client can't show an approval dialog. Only for clients you trust to prompt you themselves |
+| `allow_no_elicit` | Let human-approval tools proceed on the agent's `confirm:true` / `plan_id` when the client can't show an approval form (no elicitation capability, or MCP protocol `2026-07-28` or newer). Results then report `_meta.hamn.approved_by: "agent"`. This removes the human gate; only for clients you trust to prompt you themselves |
 
 ### Team keys and individual keys
 
@@ -168,7 +168,7 @@ HAMN_HTTP_TOKEN=$(openssl rand -hex 32) hamn serve --http 127.0.0.1:8765
 - Non-loopback `Origin` headers are rejected, which blocks DNS rebinding from browser pages.
 - Binding to a non-loopback address needs `--allow-remote` and `--tls-cert`/`--tls-key`.
 - `/healthz` is unauthenticated and returns no data.
-- Each HTTP session gets its own server, so enabled toolsets and write mode are per session.
+- Each HTTP session gets its own server, so enabled toolsets and write mode are per session. Sessions share one token cache and rate limit per profile, but each has its own write guard: `enable_writes` in one session doesn't let another write.
 
 A Docker image (`ghcr.io/idoo/hamn`) is published with each release for this mode.
 

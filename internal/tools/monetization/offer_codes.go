@@ -34,7 +34,7 @@ func init() {
 }
 
 type offerCodesIn struct {
-	App            tool.AppRef `json:"app,omitempty" jsonschema:"app id, bundle id, SKU or name; default: pinned app"`
+	App            tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	OfferCodeID    string      `json:"offer_code_id,omitempty" jsonschema:"subscriptionOfferCodes id (offers_list); or product_id + campaign"`
 	ProductID      string      `json:"product_id,omitempty" jsonschema:"subscription product id (with campaign)"`
 	Campaign       string      `json:"campaign,omitempty" jsonschema:"offer-code campaign name"`
