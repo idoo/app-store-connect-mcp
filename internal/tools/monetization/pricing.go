@@ -104,6 +104,27 @@ type prcManual struct {
 	EndDate   string `json:"end_date,omitempty"`
 }
 
+// prcScheduled is one manual price row named in a plan: carried over with
+// its dates, or dropped by the schedule replacement.
+type prcScheduled struct {
+	Territory string `json:"territory"`
+	Price     string `json:"price"`
+	Currency  string `json:"currency,omitempty"`
+	StartDate string `json:"start_date,omitempty"`
+	EndDate   string `json:"end_date,omitempty"`
+}
+
+func (s prcScheduled) String() string {
+	out := strings.TrimSpace(s.Territory + " " + s.Price + " " + s.Currency)
+	if s.StartDate != "" {
+		out += " from " + s.StartDate
+	}
+	if s.EndDate != "" {
+		out += " until " + s.EndDate
+	}
+	return out
+}
+
 // prcCall is one line of the call plan.
 type prcCall struct {
 	Method string `json:"method"`
@@ -115,21 +136,23 @@ type prcCall struct {
 // pricing_apply.
 type prcPlan struct {
 	k            *prcKind
-	T            prcTarget     `json:"target"`
-	Date         string        `json:"effective_date"`
-	Base         string        `json:"base_territory,omitempty"`
-	BasePrice    *prcPoint     `json:"base_price,omitempty"`
-	Exact        bool          `json:"exact_match,omitempty"`
-	Changes      []prcChange   `json:"changes"`
-	Increases    int           `json:"increases,omitempty"`
-	Decreases    int           `json:"decreases,omitempty"`
-	OldBase      string        `json:"old_base_territory,omitempty"`
-	Kept         []string      `json:"kept_manual,omitempty"`
-	Filtered     []string      `json:"territories,omitempty"`
-	Manual       []prcManual   `json:"schedule,omitempty"`
-	Avail        *prcAvailPlan `json:"availability,omitempty"`
-	CallPlan     []prcCall     `json:"call_plan"`
-	Calls        int           `json:"calls"`
+	T            prcTarget      `json:"target"`
+	Date         string         `json:"effective_date"`
+	Base         string         `json:"base_territory,omitempty"`
+	BasePrice    *prcPoint      `json:"base_price,omitempty"`
+	Exact        bool           `json:"exact_match,omitempty"`
+	Changes      []prcChange    `json:"changes"`
+	Increases    int            `json:"increases,omitempty"`
+	Decreases    int            `json:"decreases,omitempty"`
+	OldBase      string         `json:"old_base_territory,omitempty"`
+	Kept         []string       `json:"kept_manual,omitempty"`
+	Carried      []prcScheduled `json:"carried_manual,omitempty"`
+	Dropped      []prcScheduled `json:"dropped_manual,omitempty"`
+	Filtered     []string       `json:"territories,omitempty"`
+	Manual       []prcManual    `json:"schedule,omitempty"`
+	Avail        *prcAvailPlan  `json:"availability,omitempty"`
+	CallPlan     []prcCall      `json:"call_plan"`
+	Calls        int            `json:"calls"`
 	priceCalls   int
 	key          map[string]any
 	state        map[string]any
@@ -256,6 +279,7 @@ func prcCompute(ctx context.Context, env *tool.Env, in pricingPlanIn) (*prcPlan,
 func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanIn) error {
 	k := p.k
 	var cur map[string]prcPrice
+	var manualRows []prcPrice
 	oldBase := ""
 	if k == prcSub {
 		rows, err := prcSubPrices(ctx, env, p.T.ID, nil, in.PlanType)
@@ -269,6 +293,7 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 			return err
 		}
 		oldBase = s.Base
+		manualRows = s.Manual
 		cur = prcEffective(append(append([]prcPrice{}, s.Manual...), s.Automatic...), p.Date)
 		p.state["schedule"] = s
 	}
@@ -389,6 +414,9 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 	} else if len(p.Changes) > 0 || p.OldBase != "" {
 		for _, terr := range order {
 			w, c := want[terr], cur[terr]
+			if w.source == "kept" {
+				continue // re-posted with their dates below
+			}
 			if w.source == "equalized" {
 				// A manual price that now follows equalization keeps
 				// applying until the start date.
@@ -397,21 +425,62 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 				}
 				continue
 			}
-			if in.StartDate != "" && w.source != "kept" && c.Manual && c.ID != "" && c.ID != w.ID {
+			if in.StartDate != "" && c.Manual && c.ID != "" && c.ID != w.ID {
 				p.Manual = append(p.Manual, prcManual{Territory: terr, PointID: c.ID, EndDate: in.StartDate})
 			}
-			m := prcManual{Territory: terr, PointID: w.ID}
-			if w.source != "kept" {
-				m.StartDate = in.StartDate
-			}
-			p.Manual = append(p.Manual, m)
+			p.Manual = append(p.Manual, prcManual{Territory: terr, PointID: w.ID, StartDate: in.StartDate})
 		}
+		p.carryManual(manualRows, cur, in, prcToday(env))
 		p.priceCalls = 1
 		p.CallPlan = append(p.CallPlan, prcCall{Method: "POST", Path: k.createPath, Count: 1})
-		p.irreversible = append(p.irreversible, "replaces the whole price schedule; scheduled manual price changes not listed are dropped")
+		if len(p.Dropped) > 0 {
+			names := make([]string, 0, len(p.Dropped))
+			for _, d := range p.Dropped {
+				names = append(names, d.String())
+			}
+			p.irreversible = append(p.irreversible, fmt.Sprintf("replaces the whole price schedule; %d scheduled manual prices are dropped: %s",
+				len(names), strings.Join(names, "; ")))
+		} else {
+			p.irreversible = append(p.irreversible, "replaces the whole price schedule; manual prices of territories not changed are re-posted with their dates")
+		}
 	}
 	p.Calls += p.priceCalls
 	return nil
+}
+
+// carryManual re-posts every live (not yet ended) manual row of territories
+// the plan does not set, with its dates, so a temporary price keeps its end
+// and a scheduled future price survives the schedule replacement. Live rows
+// of territories the plan sets, other than the one it replaces or ends,
+// cannot be carried and are named in Dropped.
+func (p *prcPlan) carryManual(rows []prcPrice, cur map[string]prcPrice, in pricingPlanIn, today string) {
+	rows = slices.Clone(rows)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Territory != rows[j].Territory {
+			return rows[i].Territory < rows[j].Territory
+		}
+		return rows[i].StartDate < rows[j].StartDate
+	})
+	for _, r := range rows {
+		if !r.Manual || r.Territory == "" || r.ID == "" || (r.EndDate != "" && r.EndDate <= today) {
+			continue
+		}
+		named := prcScheduled{Territory: r.Territory, Price: r.CustomerPrice, Currency: r.Currency, StartDate: r.StartDate, EndDate: r.EndDate}
+		_, over := in.Overrides[r.Territory]
+		if r.Territory != p.Base && r.Territory != p.OldBase && !over && !in.ResetManualPrices {
+			m := prcManual{Territory: r.Territory, PointID: r.ID, EndDate: r.EndDate}
+			if r.StartDate > today {
+				m.StartDate = r.StartDate // started rows apply from now (null)
+			}
+			p.Manual = append(p.Manual, m)
+			p.Carried = append(p.Carried, named)
+			continue
+		}
+		if c := cur[r.Territory]; c.Manual && c.ID == r.ID && c.StartDate == r.StartDate && c.EndDate == r.EndDate {
+			continue // replaced or ended by the plan, listed in changes
+		}
+		p.Dropped = append(p.Dropped, named)
+	}
 }
 
 // preserve is preserve_current_price with its default (true).
@@ -473,8 +542,19 @@ func (p *prcPlan) preview() tool.PlanPreview {
 			ch = ch[:20]
 		}
 		intended["changes"] = ch
+		if len(p.Carried) > 0 {
+			intended["carried_manual"] = p.Carried
+		}
+		if len(p.Dropped) > 0 {
+			intended["dropped_manual"] = p.Dropped
+		}
 		for _, c := range p.Changes {
 			affected = append(affected, c.Territory)
+		}
+		for _, d := range p.Dropped {
+			if !slices.Contains(affected, d.Territory) {
+				affected = append(affected, d.Territory)
+			}
 		}
 	}
 	if p.Avail != nil && p.Avail.Calls > 0 {

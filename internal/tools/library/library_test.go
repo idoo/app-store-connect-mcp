@@ -44,6 +44,8 @@ type fake struct {
 	hidden map[string]bool
 	// headers records every part PUT's headers.
 	headers []http.Header
+	// onAssetPost, when set, runs inside every asset reservation POST.
+	onAssetPost func()
 }
 
 func (f *fake) id(prefix string) string {
@@ -218,6 +220,9 @@ func (f *fake) routes() {
 			attrs := d["attributes"].(map[string]any)
 			a := &fAsset{id: f.id("asset"), kind: kind, name: attrs["fileName"].(string), size: int(attrs["fileSize"].(float64)), state: "AWAITING_UPLOAD"}
 			f.assets[a.id] = a
+			if f.onAssetPost != nil {
+				f.onAssetPost()
+			}
 			u := "https://upload.example.com/" + a.id + "?sig=x"
 			k.Fetch.Handle("PUT", u, 200, nil)
 			r := a.res()
@@ -663,5 +668,91 @@ func TestPlatformFiltersGroups(t *testing.T) {
 		if !strings.Contains(p.Problems[i].Message, want) {
 			t.Errorf("problem %q lacks %q", p.Problems[i].Message, want)
 		}
+	}
+}
+
+const (
+	replaceArgs = `{"app":"app1","dir":"lib","mode":"replace"}`
+	bigGroup    = "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE"
+)
+
+func stepsOf(t *testing.T, r *tool.Result, step string) []stepOut {
+	t.Helper()
+	var out []stepOut
+	for _, s := range tooltest.Decode[applyOut](t, r).Steps {
+		if s.Step == step {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Replace never deletes the old placement when the new one failed to land.
+func TestReplaceKeepsOldWhenCreateFails(t *testing.T) {
+	k, f := newKit(t, "PREPARE_FOR_SUBMISSION")
+	_, old := f.seed("old.png", "PREPARE_FOR_SUBMISSION", "loc-en", typeScreenshot, bigGroup, 1320, 2868, 10)
+	write(t, k, "lib/en-US/iphone/01.png", pngImage(1320, 2868, 'x'))
+	f.failPlace, f.failStatus = 1, http.StatusUnprocessableEntity
+	k.Elicit(true)
+	r := call(t, k, "library_apply", withPlan(t, k, replaceArgs))
+	if n := count(mutations(k), "DELETE /v1/appAssetLibraryPlacements/"); n != 0 {
+		t.Fatalf("deleted despite failed create: %v", mutations(k))
+	}
+	if _, ok := f.placements[old]; !ok {
+		t.Fatal("old placement gone")
+	}
+	ds := stepsOf(t, r, "delete_placement")
+	if len(ds) != 1 || ds[0].Status != "not_attempted" || !strings.Contains(ds[0].Hint, "library_plan") {
+		t.Fatalf("delete steps = %+v", ds)
+	}
+}
+
+// Replacing a full group frees one slot right before each create instead of
+// emptying the group up front, and stops deleting after a failed create.
+func TestReplaceFullGroupDeletesOnlyOverflow(t *testing.T) {
+	k, f := newKit(t, "PREPARE_FOR_SUBMISSION")
+	for i := range 10 {
+		f.seed(fmt.Sprintf("old%d.png", i), "PREPARE_FOR_SUBMISSION", "loc-en", typeScreenshot, bigGroup, 1320, 2868, 10+i)
+		write(t, k, fmt.Sprintf("lib/en-US/iphone/%02d.png", i+1), pngImage(1320, 2868, byte('a'+i)))
+	}
+	f.failPlace, f.failStatus = 3, http.StatusUnprocessableEntity
+	k.Elicit(true)
+	call(t, k, "library_apply", withPlan(t, k, replaceArgs))
+	var seq []string
+	for _, m := range mutations(k) {
+		switch {
+		case strings.HasPrefix(m, "DELETE /v1/appAssetLibraryPlacements/"):
+			seq = append(seq, "D")
+		case m == "POST /v1/appAssetLibraryPlacements":
+			seq = append(seq, "P")
+		}
+	}
+	// Slots 1–3 each free one placement; create 3 fails, create 4 reuses its
+	// slot, and nothing more is deleted.
+	if got := strings.Join(seq, ""); got != "DPDPDPP" {
+		t.Fatalf("placement mutations = %s (%v)", got, mutations(k))
+	}
+	if len(f.placements) != 10 {
+		t.Fatalf("placements = %d, want 10", len(f.placements))
+	}
+}
+
+// Overlapping applies keep each other's MD5 index entries.
+func TestIndexKeepsConcurrentEntries(t *testing.T) {
+	k, f := newKit(t, "PREPARE_FOR_SUBMISSION")
+	write(t, k, "lib/en-US/iphone/01.png", pngImage(1320, 2868, 'x'))
+	key := stateKey(k.Env, "app1")
+	f.onAssetPost = func() {
+		if err := k.Env.State.Save(stateKind, key, map[string]string{"other-md5": "asset-other"}); err != nil {
+			t.Error(err)
+		}
+	}
+	tooltest.MustOK(t, call(t, k, "library_apply", withPlan(t, k, addArgs)))
+	var index map[string]string
+	if _, err := k.Env.State.Load(stateKind, key, &index); err != nil {
+		t.Fatal(err)
+	}
+	if index["other-md5"] != "asset-other" || len(index) != 2 {
+		t.Fatalf("index = %v", index)
 	}
 }

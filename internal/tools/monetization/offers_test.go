@@ -138,6 +138,41 @@ func TestOffersCreatePromoRepeatIsAlready(t *testing.T) {
 	}
 }
 
+// A promotional offer clashing by identifier with different terms is an
+// error naming the existing offer, never "already".
+func TestOffersCreatePromoClashWithOtherTermsFails(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/promotionalOffers", http.StatusOK, jsonapiDoc(
+		`[{"type":"subscriptionPromotionalOffers","id":"po1","attributes":{"name":"Winter","offerCode":"winter","offerMode":"FREE_TRIAL","duration":"ONE_WEEK","numberOfPeriods":1}}]`))
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
+		"kind":"promotional","name":"Summer","identifier":"winter","mode":"PAY_UP_FRONT","duration":"ONE_YEAR",
+		"prices":[{"territory":"USA","price_point_id":"ppUSA"}]}`), "invalid_arguments")
+	if !strings.Contains(body.Message, "po1") || !strings.Contains(body.Message, `"Winter"`) ||
+		!strings.Contains(body.Message, "offerMode is FREE_TRIAL, requested PAY_UP_FRONT") || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("body = %+v", body)
+	}
+}
+
+// A win-back offer with the same identifier but other eligibility is an
+// error, not "already".
+func TestOffersCreateWinBackClashWithOtherTermsFails(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/winBackOffers", http.StatusOK, jsonapiDoc(
+		`[{"type":"winBackOffers","id":"wb1","attributes":{"referenceName":"Back","offerId":"back","offerMode":"FREE_TRIAL","duration":"ONE_WEEK",
+		  "periodCount":1,"priority":"NORMAL","startDate":"2026-11-01","customerEligibilityPaidSubscriptionDurationInMonths":6,
+		  "customerEligibilityTimeSinceLastSubscribedInMonths":{"minimum":1,"maximum":12}}}]`))
+	args := `{"product_id":"` + offerTestProduct + `","kind":"win_back","name":"Back","identifier":"back","mode":"FREE_TRIAL","duration":"ONE_WEEK",
+		"start_date":"2026-11-01","paid_months":6,"lapsed_min_months":%d,"lapsed_max_months":12,"prices":[{"territory":"USA","price_point_id":"ppUSA"}]}`
+	same := tooltest.Decode[map[string]any](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, fmt.Sprintf(args, 1))))
+	if same["already"] != true {
+		t.Fatalf("identical win-back = %v", same)
+	}
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, fmt.Sprintf(args, 3)), "invalid_arguments")
+	if !strings.Contains(body.Message, "wb1") || !strings.Contains(body.Message, "customerEligibilityTimeSinceLastSubscribedInMonths") {
+		t.Fatalf("body = %+v", body)
+	}
+}
+
 func TestOffersCreatePromoBody(t *testing.T) {
 	k := offerKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/promotionalOffers", http.StatusOK, jsonapiDoc(`[]`))
@@ -395,6 +430,42 @@ func TestOffersCreateIntroDifferentTermsReplaces(t *testing.T) {
 	out := tooltest.Decode[offersCreateOut](t, res)
 	if out.Created != 1 || len(out.Skipped) != 0 || strings.Join(out.Ended, ",") != "USA" {
 		t.Fatalf("out = %+v", out)
+	}
+}
+
+// When creating the replacement fails after the old intro offer was ended,
+// the error says which offer was ended and when.
+func TestOffersCreateIntroReplaceFailureNamesEndedOffer(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/introductoryOffers", http.StatusOK, jsonapiDoc(
+		`[`+introDoc("io1", "USA", "FREE_TRIAL", "ONE_WEEK", 1, "2025-06-01")+`]`))
+	k.ASC.Handle(http.MethodPatch, "/v1/subscriptionIntroductoryOffers/{id}", http.StatusOK,
+		`{"data":{"type":"subscriptionIntroductoryOffers","id":"io1"}}`)
+	k.ASC.Handle(http.MethodPost, "/v1/subscriptionIntroductoryOffers", http.StatusUnprocessableEntity,
+		`{"errors":[{"status":"422","code":"ENTITY_ERROR","title":"invalid"}]}`)
+	k.Elicit(true)
+	res := tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`","kind":"intro","mode":"FREE_TRIAL",
+		"duration":"ONE_MONTH","start_date":"2026-11-01","prices":[{"territory":"USA"}],"confirm":true}`)
+	msg := tooltest.JSON(t, res.Data)
+	if !res.IsError || !strings.Contains(msg, "USA intro offer io1") || !strings.Contains(msg, "end on 2026-11-01") || !strings.Contains(msg, "no replacement") {
+		t.Fatalf("result = %s", msg)
+	}
+}
+
+// A 409 on an intro offer create is "skipped" only when a read-back finds
+// an identical offer; otherwise it is a conflict error.
+func TestOffersCreateIntroConflictWithoutIdenticalIsError(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/introductoryOffers", http.StatusOK, jsonapiDoc(`[]`))
+	k.ASC.Handle(http.MethodPost, "/v1/subscriptionIntroductoryOffers", http.StatusConflict, conflictBody)
+	k.Elicit(true)
+	res := tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`","kind":"intro","mode":"FREE_TRIAL",
+		"duration":"ONE_MONTH","prices":[{"territory":"USA"}],"confirm":true}`)
+	if !res.IsError || strings.Contains(tooltest.JSON(t, res.Data), "skipped") {
+		t.Fatalf("result = %s", tooltest.JSON(t, res.Data))
+	}
+	if n := len(k.ASC.RequestsTo(http.MethodPost, "/v1/subscriptionIntroductoryOffers")); n != 1 {
+		t.Fatalf("POSTs = %d, want 1", n)
 	}
 }
 

@@ -19,7 +19,7 @@ func insightsKit(t *testing.T) *tooltest.Kit {
 		d := req.Query.Get("filter[reportDate]")
 		switch {
 		case d == "2026-10-21":
-			return tooltest.Fixture{Status: http.StatusNotFound, Body: []byte(notFound)}
+			return tooltest.Fixture{Status: http.StatusNotFound, Body: []byte(notYet)}
 		case d >= "2026-10-15":
 			return tooltest.Fixture{Header: http.Header{"Content-Type": {"application/a-gzip"}}, Body: day1}
 		default:
@@ -46,6 +46,29 @@ func insightsKit(t *testing.T) *tooltest.Kit {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaFeedbackCrashSubmissions", http.StatusOK, emptyList)
 	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, emptyList)
 	return k
+}
+
+// A published zero-sales day (Apple's "no sales" 404) keeps the full 7-day
+// comparison instead of being dropped like an unpublished day.
+func TestInsightsSummaryZeroSalesDayKeepsWindow(t *testing.T) {
+	k := reportsKit(t).ReadOnly()
+	day1 := gz(t, "sales_day1.tsv")
+	k.ASC.HandleFunc(http.MethodGet, "/v1/salesReports", func(req tool.Request) tooltest.Fixture {
+		if req.Query.Get("filter[reportDate]") == "2026-10-21" {
+			return tooltest.Fixture{Status: http.StatusNotFound, Body: []byte(notFound)}
+		}
+		return tooltest.Fixture{Header: http.Header{"Content-Type": {"application/a-gzip"}}, Body: day1}
+	})
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/customerReviews", http.StatusOK, emptyList)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions", http.StatusOK, emptyList)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaFeedbackScreenshotSubmissions", http.StatusOK, emptyList)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaFeedbackCrashSubmissions", http.StatusOK, emptyList)
+	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, emptyList)
+	r := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "insights_summary"), k.Env, ``))
+	sales := tooltest.Decode[map[string]any](t, r)["sales"].(map[string]any)
+	if sales["status"] != "ok" || sales["compared_days"] != 7.0 || sales["pending_days"] != nil {
+		t.Errorf("sales = %s", tooltest.JSON(t, sales))
+	}
 }
 
 func TestInsightsSummaryWithSales(t *testing.T) {

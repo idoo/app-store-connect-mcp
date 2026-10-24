@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -235,6 +236,38 @@ type buildsWaitOut struct {
 	Uploaded        string        `json:"uploaded,omitempty"`
 	Polls           int           `json:"polls"`
 	WaitedSeconds   int           `json:"waited_seconds"`
+	// PlatformFallback is set when the build was not on the inferred
+	// platform but on another of the app's platforms.
+	PlatformFallback *platformFallback `json:"platform_fallback,omitempty"`
+}
+
+// resolveWaitBuild resolves ref on platform and, when the platform was
+// inferred and has no match, on the app's other platforms (like builds_list's
+// fallback). The not-found error names every platform searched.
+func resolveWaitBuild(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, inferred bool, ref tool.BuildRef) (tool.Build, tool.Platform, error) {
+	build, err := env.Resolve.Build(ctx, app.ID, platform, ref)
+	if err == nil || !inferred || len(app.Platforms) < 2 || !tool.IsNotFound(err) {
+		return build, platform, err
+	}
+	searched := []string{string(platform)}
+	for _, p := range app.Platforms {
+		if p == platform {
+			continue
+		}
+		searched = append(searched, string(p))
+		b, perr := env.Resolve.Build(ctx, app.ID, p, ref)
+		switch {
+		case perr == nil:
+			return b, p, nil
+		case !tool.IsNotFound(perr):
+			return tool.Build{}, platform, perr
+		}
+	}
+	return tool.Build{}, platform, &tool.ErrNotFound{
+		Kind: "build", Ref: string(ref),
+		Hint: "no matching build on " + strings.Join(searched, ", ") + "; uploads take a few minutes to appear",
+		Next: []tool.NextStep{{Tool: "builds_list", Args: map[string]any{"app": app.ID}}},
+	}
 }
 
 func buildsWait(ctx context.Context, env *tool.Env, in buildsWaitIn) (*tool.Result, error) {
@@ -247,7 +280,7 @@ func buildsWait(ctx context.Context, env *tool.Env, in buildsWaitIn) (*tool.Resu
 	if ref == "" {
 		ref = tool.BuildLatest
 	}
-	build, err := env.Resolve.Build(ctx, app.ID, platform, ref)
+	build, found, err := resolveWaitBuild(ctx, env, app, platform, in.Platform == "", ref)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +291,11 @@ func buildsWait(ctx context.Context, env *tool.Env, in buildsWaitIn) (*tool.Resu
 	if !env.HasProgress() {
 		timeout = min(timeout, tool.NoProgressWaitCap)
 	}
-	out := buildsWaitOut{App: newAppOut(app), Platform: platform, BuildID: build.ID, Number: build.Number}
+	out := buildsWaitOut{App: newAppOut(app), Platform: found, BuildID: build.ID, Number: build.Number}
+	if found != platform {
+		out.PlatformFallback = &platformFallback{From: platform, To: found}
+		platform = found
+	}
 	start := env.Clock.Now()
 	q := url.Values{"fields[builds]": {"version,processingState,uploadedDate"}}
 	for {

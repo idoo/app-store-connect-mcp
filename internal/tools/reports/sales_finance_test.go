@@ -3,6 +3,8 @@ package reports
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +21,9 @@ import (
 var fixedNow = time.Date(2026, 10, 22, 19, 0, 0, 0, time.UTC)
 
 const notFound = `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"There were no sales for the date specified."}]}`
+
+// notYet is Apple's 404 for a report that is not published yet.
+const notYet = `{"errors":[{"status":"404","code":"NOT_FOUND","title":"The specified resource does not exist","detail":"The request expected results but none were found - Report is not available yet."}]}`
 
 func reportsKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
@@ -69,7 +74,7 @@ func thisWeekKit(t *testing.T) *tooltest.Kit {
 	k := reportsKit(t)
 	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-19", "sales_day1.tsv")
 	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-20", "sales_day2.tsv")
-	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-21", http.StatusNotFound, notFound)
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-21", http.StatusNotFound, notYet)
 	return k
 }
 
@@ -115,6 +120,52 @@ func TestSalesReportThisWeek(t *testing.T) {
 			q.Get("filter[version]") != "1_0" || r.Accept != "application/a-gzip" {
 			t.Errorf("query = %s accept=%q", q.Encode(), r.Accept)
 		}
+	}
+}
+
+// A 404 saying "no sales", or any 404 older than yesterday (Pacific), is a
+// published zero-sales day, not a pending one.
+func TestSalesReportNoSalesDays(t *testing.T) {
+	k := reportsKit(t)
+	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-19", "sales_day1.tsv")
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-20", http.StatusNotFound, notYet)
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-21", http.StatusNotFound, notFound)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"from":"2026-10-19","to":"2026-10-21"}`))
+	got := tooltest.Decode[map[string]any](t, res)
+	if s := tooltest.JSON(t, got["covered_days"]); s != `["2026-10-19","2026-10-20","2026-10-21"]` {
+		t.Errorf("covered_days = %s", s)
+	}
+	if s := tooltest.JSON(t, got["no_sales_days"]); s != `["2026-10-20","2026-10-21"]` {
+		t.Errorf("no_sales_days = %s", s)
+	}
+	if _, ok := got["pending_days"]; ok || len(res.Meta.Warnings) != 0 {
+		t.Errorf("pending_days = %v, warnings %v", got["pending_days"], res.Meta.Warnings)
+	}
+}
+
+// A sales 500 or finance 403 hint keeps the original cause and adds the
+// wrong-vendor-number cause.
+func TestReportErrorsMentionVendorNumber(t *testing.T) {
+	for _, c := range []struct{ tool, path, args string }{
+		{"sales_report", "/v1/salesReports", `{"frequency":"DAILY","report_date":"2026-10-20"}`},
+		{"finance_report", "/v1/financeReports", `{"month":"2026-08"}`},
+	} {
+		k := reportsKit(t)
+		status, body := http.StatusForbidden, `{"errors":[{"status":"403","code":"FORBIDDEN_ERROR","title":"forbidden","detail":"not allowed"}]}`
+		if c.tool == "sales_report" {
+			status, body = http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"error","detail":"oops"}]}`
+		}
+		k.ASC.Handle(http.MethodGet, c.path, status, body)
+		eb := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, c.tool), k.Env, c.args), "api_error")
+		if eb.API == nil || eb.API.Status != status || !strings.Contains(eb.Hint, "vendor number 12345") {
+			t.Errorf("%s: body = %+v", c.tool, eb)
+		}
+	}
+	// An existing hint (e.g. system-status for a 500) is kept.
+	err := vendorCause(fmt.Errorf("wrap: %w", &tool.APIError{Status: 500, Hint: "check status"}), "9")
+	var api *tool.APIError
+	if !errors.As(err, &api) || !strings.HasPrefix(api.Hint, "check status; or the vendor number 9") {
+		t.Errorf("hint = %q", api.Hint)
 	}
 }
 

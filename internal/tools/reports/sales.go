@@ -168,14 +168,16 @@ func checkReportDate(f applemeta.Frequency, date string) error {
 
 // salesOut is the sales_report result.
 type salesOut struct {
-	ReportType  string               `json:"report_type"`
-	SubType     string               `json:"report_subtype"`
-	Frequency   string               `json:"frequency"`
-	From        string               `json:"from"`
-	To          string               `json:"to"`
-	App         *tool.App            `json:"app,omitempty"`
-	CoveredDays []string             `json:"covered_days"`
-	PendingDays []string             `json:"pending_days,omitempty"`
+	ReportType  string    `json:"report_type"`
+	SubType     string    `json:"report_subtype"`
+	Frequency   string    `json:"frequency"`
+	From        string    `json:"from"`
+	To          string    `json:"to"`
+	App         *tool.App `json:"app,omitempty"`
+	CoveredDays []string  `json:"covered_days"`
+	PendingDays []string  `json:"pending_days,omitempty"`
+	// NoSalesDays are covered days Apple published without any sales.
+	NoSalesDays []string             `json:"no_sales_days,omitempty"`
 	Rows        int                  `json:"rows"`
 	Units       reports.Units        `json:"units,omitempty"`
 	Refunds     reports.Units        `json:"refunds,omitempty"`
@@ -255,6 +257,10 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 			continue
 		}
 		out.CoveredDays = append(out.CoveredDays, d.Date)
+		if d.NoSales {
+			out.NoSalesDays = append(out.NoSalesDays, d.Date)
+			continue
+		}
 		tables = append(tables, d)
 	}
 	slices.Sort(out.PendingDays)

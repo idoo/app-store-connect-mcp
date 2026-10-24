@@ -1,13 +1,16 @@
 package screenshots
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 // A set screenshot and the library placement of the same asset are one
-// record: listed once, and the library write path is suggested.
+// record: listed once, and the library write path is named in a hint (never
+// as a library_plan next step without the dir/remove/archive it requires).
 func TestListBothDedupesSameAssetID(t *testing.T) {
 	k, f := newKit(t)
 	id := f.addShot("loc-en", "APP_IPHONE_67", "01.png", "abc")
@@ -35,7 +38,12 @@ func TestListBothDedupesSameAssetID(t *testing.T) {
 	if shots != 1 || lib != 1 || l.LibraryDeduped != 1 {
 		t.Errorf("shots=%d library=%d deduped=%d", shots, lib, l.LibraryDeduped)
 	}
-	if len(res.Next) == 0 || res.Next[len(res.Next)-1].Tool != "library_plan" {
-		t.Errorf("next = %+v, want library_plan", res.Next)
+	for _, n := range res.Next {
+		if n.Tool == "library_plan" {
+			t.Errorf("next suggests library_plan with args it rejects: %+v", n)
+		}
+	}
+	if !slices.ContainsFunc(res.Meta.Warnings, func(w string) bool { return strings.Contains(w, "library_plan (pass dir, remove or archive)") }) {
+		t.Errorf("warnings = %q, want library_plan hint", res.Meta.Warnings)
 	}
 }

@@ -328,7 +328,15 @@ type deleteOut struct {
 	Locale string `json:"locale,omitempty"`
 	Group  string `json:"group,omitempty"`
 	Why    string `json:"why"`
+	typ    string
 }
+
+// groupInfo is one locale's placement group as planned: its placement
+// count when read and Apple's maximum (0 = unknown).
+type groupInfo struct{ have, limit int }
+
+// gkey names a placement group of one locale.
+func gkey(locale, typ, group string) string { return locale + "\x00" + typ + "\x00" + group }
 
 // orderOut is one ordering request; ids may hold "new:<md5>" placeholders
 // resolved after the placements are created.
@@ -373,6 +381,7 @@ type planOut struct {
 	human      bool
 	locByID    map[string]string
 	assetKinds map[string]string
+	groups     map[string]groupInfo
 }
 
 // planKey is the canonical argument set a library_apply plan is bound to.
@@ -441,7 +450,7 @@ func computePlan(ctx context.Context, env *tool.Env, in planIn) (*planOut, error
 		Status: "ready", App: app.ID, Target: par, Mode: mode,
 		Uploads: []uploadOut{}, Reuse: []reuseOut{}, Already: []alreadyOut{}, Create: []placementOut{},
 		Delete: []deleteOut{}, Order: []orderOut{}, Archive: []archiveOut{}, Problems: []problem{},
-		locByID: map[string]string{}, assetKinds: map[string]string{},
+		locByID: map[string]string{}, assetKinds: map[string]string{}, groups: map[string]groupInfo{},
 	}
 	if !par.Editable {
 		out.Problems = append(out.Problems, problem{Kind: "parent_not_editable", Message: fmt.Sprintf("%s %s is in state %s; placements need an editable parent", par.Kind, par.ID, par.State)})
@@ -581,7 +590,7 @@ func computePlan(ctx context.Context, env *tool.Env, in planIn) (*planOut, error
 				if p.ID == id {
 					found = true
 					removed[id] = true
-					out.Delete = append(out.Delete, deleteOut{ID: id, Locale: out.locByID[locID], Group: p.Group, Why: "remove"})
+					out.Delete = append(out.Delete, deleteOut{ID: id, Locale: out.locByID[locID], Group: p.Group, Why: "remove", typ: p.Type})
 				}
 			}
 		}
@@ -596,6 +605,8 @@ func computePlan(ctx context.Context, env *tool.Env, in planIn) (*planOut, error
 				have = append(have, p)
 			}
 		}
+		limit := ref.MaxCount(par.feature, s.typ, s.group)
+		out.groups[gkey(s.locale, s.typ, s.group)] = groupInfo{have: len(have), limit: limit}
 		keep := map[string]string{} // asset → placement id
 		for _, p := range have {
 			if !removed[p.ID] {
@@ -624,14 +635,14 @@ func computePlan(ctx context.Context, env *tool.Env, in planIn) (*planOut, error
 				continue
 			}
 			if mode == modeReplace {
-				out.Delete = append(out.Delete, deleteOut{ID: p.ID, Locale: s.locale, Group: s.group, Why: "replace"})
+				out.Delete = append(out.Delete, deleteOut{ID: p.ID, Locale: s.locale, Group: s.group, Why: "replace", typ: s.typ})
 				deleted = true
 				continue
 			}
 			kept = append(kept, p.ID)
 		}
 		final = append(kept, final...)
-		if limit := ref.MaxCount(par.feature, s.typ, s.group); limit > 0 && len(final) > limit {
+		if limit > 0 && len(final) > limit {
 			out.Problems = append(out.Problems, problem{Kind: "limit", Message: fmt.Sprintf("%s %s %s: %d placements, Apple allows %d", s.locale, s.typ, s.group, len(final), limit)})
 		}
 		var cur []string
@@ -902,10 +913,6 @@ func (a *applier) skip(s stepOut) {
 func (a *applier) run(ctx context.Context) {
 	env, p := a.env, a.p
 	// 1. Uploads.
-	var index map[string]string
-	if _, err := env.State.Load(stateKind, stateKey(env, p.App), &index); err != nil || index == nil {
-		index = map[string]string{}
-	}
 	for _, u := range p.Uploads {
 		s := stepOut{Step: "upload", File: u.File}
 		if a.stopped != nil {
@@ -915,10 +922,9 @@ func (a *applier) run(ctx context.Context) {
 		r, err := a.upload(ctx, u)
 		if r != nil && r.ID != "" {
 			a.ids["new:"+u.MD5] = r.ID
-			index[u.MD5] = r.ID
 			s.ID, s.State = r.ID, r.State
 			if err == nil {
-				_ = env.State.Save(stateKind, stateKey(env, p.App), index)
+				rememberAsset(env, stateKey(env, p.App), u.MD5, r.ID)
 			}
 		}
 		if err == nil && r != nil && r.StillProcessing {
@@ -931,45 +937,9 @@ func (a *applier) run(ctx context.Context) {
 		}
 		a.step(s, err)
 	}
-	// 2. Create placements.
-	for i, c := range p.Create {
-		s := stepOut{Step: "place", File: c.File}
-		asset := c.Asset
-		if strings.HasPrefix(asset, "new:") {
-			id, ok := a.ids[asset]
-			ready := ok && a.uploadReady(asset)
-			if !ready {
-				a.skip(s)
-				continue
-			}
-			asset = id
-		}
-		if a.stopped != nil {
-			a.skip(s)
-			continue
-		}
-		id, already, err := a.place(ctx, c, asset)
-		if err == nil {
-			s.ID, s.Status = id, "done"
-			if already {
-				s.Status = "already"
-			}
-			a.ids[fmt.Sprintf("place:%d", i)] = id
-		}
-		a.step(s, err)
-	}
-	// 3. Delete placements.
-	for _, d := range p.Delete {
-		s := stepOut{Step: "delete_placement", ID: d.ID}
-		if a.stopped != nil {
-			a.skip(s)
-			continue
-		}
-		err := a.del(ctx, "/v1/appAssetLibraryPlacements/"+d.ID)
-		if err == nil {
-			s.Status = "done"
-		}
-		a.step(s, err)
+	// 2–3. Create and delete placements, one locale group at a time.
+	for _, g := range a.groupWork() {
+		a.applyGroup(ctx, g)
 	}
 	// 4. Reorder.
 	for _, o := range p.Order {
@@ -1007,6 +977,142 @@ func (a *applier) run(ctx context.Context) {
 		}
 		a.step(s, err)
 	}
+}
+
+// rememberAsset records md5 → asset id in the reuse index. It reloads the
+// index right before saving and sets only this entry, so entries saved by an
+// overlapping apply survive.
+func rememberAsset(env *tool.Env, key, sum, id string) {
+	var index map[string]string
+	if _, err := env.State.Load(stateKind, key, &index); err != nil || index == nil {
+		index = map[string]string{}
+	}
+	index[sum] = id
+	_ = env.State.Save(stateKind, key, index)
+}
+
+// group is the work of one locale's placement group: indexes into Create,
+// explicit removes and replaced placements.
+type group struct {
+	info     groupInfo
+	creates  []int
+	removes  []deleteOut
+	replaces []deleteOut
+}
+
+// groupWork splits the plan's creates and deletes by locale group, in plan
+// order.
+func (a *applier) groupWork() []*group {
+	var order []*group
+	by := map[string]*group{}
+	get := func(k string) *group {
+		g := by[k]
+		if g == nil {
+			g = &group{info: a.p.groups[k]}
+			by[k] = g
+			order = append(order, g)
+		}
+		return g
+	}
+	for i, c := range a.p.Create {
+		g := get(gkey(c.Locale, c.Type, c.Group))
+		g.creates = append(g.creates, i)
+	}
+	for _, d := range a.p.Delete {
+		g := get(gkey(d.Locale, d.typ, d.Group))
+		if d.Why == "replace" {
+			g.replaces = append(g.replaces, d)
+		} else {
+			g.removes = append(g.removes, d)
+		}
+	}
+	return order
+}
+
+// applyGroup runs one group. Explicit removes go first. A replaced placement
+// is deleted before a create only when the group is at Apple's limit; the
+// rest are deleted only after every create of the group landed, so a failed
+// or skipped create never leaves the group short. After a create fails, no
+// further placement of the group is deleted.
+func (a *applier) applyGroup(ctx context.Context, g *group) {
+	const keptHint = "old placement kept: a new placement of this group did not land; run library_plan again"
+	cur := g.info.have
+	for _, d := range g.removes {
+		if a.deletePlacement(ctx, d) {
+			cur--
+		}
+	}
+	landed := true
+	for _, i := range g.creates {
+		c := a.p.Create[i]
+		s := stepOut{Step: "place", File: c.File}
+		asset := c.Asset
+		if strings.HasPrefix(asset, "new:") {
+			id, ok := a.ids[asset]
+			if !ok || !a.uploadReady(asset) {
+				landed = false
+				a.skip(s)
+				continue
+			}
+			asset = id
+		}
+		if a.stopped != nil {
+			landed = false
+			a.skip(s)
+			continue
+		}
+		if g.info.limit > 0 && cur >= g.info.limit {
+			if !landed || len(g.replaces) == 0 {
+				landed = false
+				s.Hint = "the group is at Apple's limit and no old placement may be deleted; run library_plan again"
+				a.skip(s)
+				continue
+			}
+			d := g.replaces[0]
+			g.replaces = g.replaces[1:]
+			if !a.deletePlacement(ctx, d) {
+				landed = false
+				s.Hint = "the group is at Apple's limit and the old placement could not be deleted; run library_plan again"
+				a.skip(s)
+				continue
+			}
+			cur--
+		}
+		id, already, err := a.place(ctx, c, asset)
+		if err == nil {
+			s.ID, s.Status = id, "done"
+			if already {
+				s.Status = "already"
+			}
+			a.ids[fmt.Sprintf("place:%d", i)] = id
+			cur++
+		} else {
+			landed = false
+		}
+		a.step(s, err)
+	}
+	for _, d := range g.replaces {
+		if !landed {
+			a.skip(stepOut{Step: "delete_placement", ID: d.ID, Hint: keptHint})
+			continue
+		}
+		a.deletePlacement(ctx, d)
+	}
+}
+
+// deletePlacement deletes one placement, reporting success.
+func (a *applier) deletePlacement(ctx context.Context, d deleteOut) bool {
+	s := stepOut{Step: "delete_placement", ID: d.ID}
+	if a.stopped != nil {
+		a.skip(s)
+		return false
+	}
+	err := a.del(ctx, "/v1/appAssetLibraryPlacements/"+d.ID)
+	if err == nil {
+		s.Status = "done"
+	}
+	a.step(s, err)
+	return err == nil
 }
 
 func refs(typ string, ids []string) []map[string]any {

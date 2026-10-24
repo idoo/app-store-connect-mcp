@@ -2,10 +2,13 @@ package mcpserver
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 func TestTranslateMetadataPromptPlatform(t *testing.T) {
@@ -61,6 +64,26 @@ func TestDigestAndPostReleasePrompts(t *testing.T) {
 	for _, want := range []string{"Hjul (platform: MAC_OS)", "release_health_report", "never pause without my explicit approval", "analytics_funnel_report", "reviews_list"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("post_release_check lacks %q: %s", want, p)
+		}
+	}
+}
+
+// Prompts whose tools sit in the off-by-default insights toolset tell the
+// agent to enable it first.
+func TestInsightsPromptsEnableToolset(t *testing.T) {
+	if slices.Contains(tool.DefaultToolsets, tool.Insights) {
+		t.Skip("insights is on by default; the hint is unnecessary")
+	}
+	for _, d := range prompts {
+		if d.name != "daily_digest" && d.name != "post_release_check" {
+			continue
+		}
+		res, err := d.handle(context.Background(), &mcp.GetPromptRequest{Params: &mcp.GetPromptParams{Name: d.name, Arguments: map[string]string{"app": "Hjul"}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := res.Messages[0].Content.(*mcp.TextContent).Text; !strings.Contains(got, `call toolsets with action:"enable" and toolsets:["insights"]`) {
+			t.Errorf("%s lacks the enable step: %s", d.name, got)
 		}
 	}
 }

@@ -115,6 +115,13 @@ type setPlan struct {
 	order          []slot
 }
 
+// overflowDeletes is how many of Deletes must run before the uploads so the
+// set never holds more than maxScreenshotsPerSet; the rest wait until the new
+// uploads are COMPLETE.
+func (s *setPlan) overflowDeletes() int {
+	return min(max(0, s.remoteCount+len(s.Uploads)-maxScreenshotsPerSet), len(s.Deletes))
+}
+
 func (s *setPlan) changed() bool {
 	return s.CreateSet || len(s.Uploads) > 0 || len(s.Deletes) > 0 || s.Reorder
 }
@@ -683,8 +690,16 @@ func (p *planned) preview() tool.PlanPreview {
 		current[k] = s.remoteCount
 		intended[k] = s.Order
 		pv.Affected = append(pv.Affected, k)
-		for _, d := range s.Deletes {
-			pv.Irreversible = append(pv.Irreversible, fmt.Sprintf("delete %s %s (%s)", k, d.FileName, d.ID))
+		overflow := s.overflowDeletes()
+		for i, d := range s.Deletes {
+			when := "after the new uploads reach COMPLETE (kept if they fail)"
+			if i < overflow || len(s.Uploads) == 0 {
+				when = "first"
+				if len(s.Uploads) > 0 {
+					when = fmt.Sprintf("first, before uploading, to stay within %d per set", maxScreenshotsPerSet)
+				}
+			}
+			pv.Irreversible = append(pv.Irreversible, fmt.Sprintf("delete %s %s (%s) %s", k, d.FileName, d.ID, when))
 		}
 	}
 	pv.Current, pv.Intended = current, intended

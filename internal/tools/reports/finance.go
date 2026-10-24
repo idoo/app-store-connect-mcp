@@ -100,12 +100,12 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 		skipped []string
 	)
 	for _, month = range months {
-		var pending bool
-		t, pending, err = download(ctx, env, "/v1/financeReports", financeQuery(vendor, rt, region, month))
+		var nf *tool.APIError
+		t, nf, err = download(ctx, env, "/v1/financeReports", financeQuery(vendor, rt, region, month))
 		if err != nil {
 			return nil, err
 		}
-		if !pending {
+		if nf == nil {
 			break
 		}
 		skipped = append(skipped, month)

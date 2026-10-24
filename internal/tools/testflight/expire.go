@@ -118,7 +118,13 @@ func buildsExpire(ctx context.Context, env *tool.Env, in expireIn) (*tool.Result
 		return tool.Already(out), nil
 	}
 
-	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
+	targets := make([]string, 0, len(todo))
+	for _, i := range todo {
+		targets = append(targets, out.Builds[i].ID)
+	}
+	// Refs like "latest" can resolve to another build by the time confirm
+	// arrives; bind the previewed build ids so confirm expires exactly them.
+	wctx, res := tool.RequireConfirmTarget(ctx, env, in.Confirm, targets, tool.PlanPreview{
 		Summary:  fmt.Sprintf("expire %d build(s) of %q: %s", len(todo), app.Name, strings.Join(affected, ", ")),
 		Current:  out.Builds,
 		Intended: "expired:true on " + strconv.Itoa(len(todo)) + " build(s)",

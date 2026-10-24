@@ -1,6 +1,7 @@
 package monetization
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/url"
@@ -42,6 +43,7 @@ type subsGroupLocOut struct {
 	Locale        string         `json:"locale"`
 	Name          tool.Untrusted `json:"name,omitempty"`
 	CustomAppName tool.Untrusted `json:"custom_app_name,omitempty"`
+	State         string         `json:"state,omitempty"`
 }
 
 type subsOffersOut struct {
@@ -88,7 +90,7 @@ func subsList(ctx context.Context, env *tool.Env, in subsListIn) (*tool.Result, 
 		Include: []string{"subscriptionGroupLocalizations"},
 		Fields: map[string][]string{
 			"subscriptionGroups":             {"referenceName", "subscriptionGroupLocalizations"},
-			"subscriptionGroupLocalizations": {"locale", "name", "customAppName"},
+			"subscriptionGroupLocalizations": {"locale", "name", "customAppName", "state"},
 		},
 	})
 	if err != nil {
@@ -100,9 +102,13 @@ func subsList(ctx context.Context, env *tool.Env, in subsListIn) (*tool.Result, 
 	for i, g := range groups.Data {
 		gout := subsGroupOut{ID: g.ID, ReferenceName: g.Text("referenceName"), Subscriptions: []subsOut{}}
 		for _, l := range related(g, "subscriptionGroupLocalizations", "subscriptionGroupLocalizations", ginc) {
-			gout.Localizations = append(gout.Localizations, subsGroupLocOut{Locale: l.Str("locale"), Name: l.Text("name"), CustomAppName: l.Text("customAppName")})
+			gout.Localizations = append(gout.Localizations, subsGroupLocOut{
+				Locale: l.Str("locale"), Name: l.Text("name"), CustomAppName: l.Text("customAppName"), State: l.Str("state"),
+			})
 		}
-		slices.SortFunc(gout.Localizations, func(a, b subsGroupLocOut) int { return strings.Compare(a.Locale, b.Locale) })
+		slices.SortFunc(gout.Localizations, func(a, b subsGroupLocOut) int {
+			return cmp.Or(strings.Compare(a.Locale, b.Locale), strings.Compare(a.State, b.State))
+		})
 		if i >= subsMaxGroups {
 			gout.Detail = "subscriptions not listed (group limit); call again with fewer groups or use asc_api_request"
 			out.Groups = append(out.Groups, gout)

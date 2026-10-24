@@ -172,8 +172,17 @@ func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[st
 	if err == nil {
 		r, ok := resp.First()
 		if !ok {
-			err = fmt.Errorf("%w: empty response", tool.ErrInternal)
-		} else {
+			// Apple accepted the POST without a body: read the device back.
+			found, rerr := devicesByUDID(ctx, env, []string{d.UDID})
+			r, ok = found[strings.ToLower(d.UDID)]
+			if !ok {
+				err = fmt.Errorf("%w: empty response and the device was not found on read-back", tool.ErrOutcomeUnknown)
+				if rerr != nil {
+					err = fmt.Errorf("%w: empty response; read-back failed: %v", tool.ErrOutcomeUnknown, rerr) //nolint:errorlint // one %w
+				}
+			}
+		}
+		if ok {
 			item.Action, item.ID, item.Status = devRegistered, r.ID, r.Str("status")
 			return item, nil
 		}

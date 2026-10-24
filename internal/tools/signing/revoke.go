@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -77,6 +78,19 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 	default:
 		return nil, tool.InvalidArgs("kind must be certificate or profile")
 	}
+	if tool.IsNotFound(err) {
+		gone := map[string]string{"certificate": "revoked", "profile": "deleted"}[in.Kind]
+		if in.Confirm {
+			// A confirmed re-run after an outcome_unknown DELETE that applied.
+			next := tool.NextStep{Tool: "signing_profiles_list", Args: map[string]any{"state": "INVALID"}}
+			return tool.Already(revokeOut{Revoked: revokeTarget{Kind: in.Kind, ID: in.ID}}).
+				Warn(fmt.Sprintf("%s %s no longer exists; an earlier attempt already %s it", in.Kind, in.ID, gone)).Then(next), nil
+		}
+		var nf *tool.ErrNotFound
+		if errors.As(err, &nf) && nf.Hint == "" {
+			nf.Hint = "it may already be " + gone + " by an earlier attempt"
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +149,7 @@ func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, er
 		"fields[profiles]":     {"name,profileState,certificates"},
 		"fields[certificates]": {"name"},
 		"include":              {"certificates"},
-		"limit[certificates]":  {"50"},
+		"limit[certificates]":  {strconv.Itoa(certRelLimit)},
 	}
 	res, err := env.ASC.List(ctx, "/v1/profiles", tool.ListOptions{Query: q, MaxItems: 5000})
 	if err != nil {
@@ -143,7 +157,11 @@ func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, er
 	}
 	n := 0
 	for _, p := range res.Data {
-		if !slices.Contains(p.RelIDs("certificates"), id) {
+		uses, err := profileUsesCert(ctx, env, p, id)
+		if err != nil {
+			return revokeTarget{}, err
+		}
+		if !uses {
 			continue
 		}
 		n++
@@ -153,6 +171,28 @@ func certTarget(ctx context.Context, env *tool.Env, id string) (revokeTarget, er
 	}
 	t.AffectedCount = &n
 	return t, nil
+}
+
+// certRelLimit is the included certificates per profile; Apple truncates
+// the relationship there.
+const certRelLimit = 50
+
+// profileUsesCert reports whether profile p lists certificate id, paging
+// the full relationship when the included list was truncated.
+func profileUsesCert(ctx context.Context, env *tool.Env, p tool.Resource, id string) (bool, error) {
+	ids := p.RelIDs("certificates")
+	if slices.Contains(ids, id) {
+		return true, nil
+	}
+	if len(ids) < certRelLimit {
+		return false, nil
+	}
+	rel, err := env.ASC.List(ctx, "/v1/profiles/"+url.PathEscape(p.ID)+"/relationships/certificates",
+		tool.ListOptions{Query: url.Values{"limit": {"200"}}, MaxItems: 5000})
+	if err != nil {
+		return false, fmt.Errorf("list certificates of profile %s: %w", p.ID, err)
+	}
+	return slices.ContainsFunc(rel.Data, func(r tool.Resource) bool { return r.ID == id }), nil
 }
 
 // orDefault returns s, or def when s is empty.

@@ -285,14 +285,30 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 			break
 		}
 	}
-	for _, ps := range s.Library {
-		if len(ps) > 0 {
-			// The version's screenshots live (also) in the Asset Library.
-			res.Then(tool.NextStep{Tool: "library_plan", Args: map[string]any{"app": app.ID, "platform": string(platform)}})
-			break
-		}
+	if shotsNeedWork(out.Checks) && hasPlacements(s.Library) {
+		// The version's screenshots live (also) in the Asset Library. The
+		// suggestion carries no dir: library_plan needs dir, remove or archive.
+		res.Then(tool.NextStep{Tool: "library_plan", Args: map[string]any{"app": app.ID, "platform": string(platform)}}).
+			Warn("screenshots are (also) placed from the Asset Library: to fix them call library_plan with dir (a folder of screenshots to upload), remove or archive")
 	}
 	return res, nil
+}
+
+// shotsNeedWork reports a screenshots check that is not ok.
+func shotsNeedWork(checks []check) bool {
+	return slices.ContainsFunc(checks, func(c check) bool {
+		return c.ID == "screenshots" && (c.Status == statusWarn || c.Status == statusBlock)
+	})
+}
+
+// hasPlacements reports any Asset Library placement.
+func hasPlacements(lib map[string][]assetlib.Placement) bool {
+	for _, ps := range lib {
+		if len(ps) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // releasePhase classifies where the inspected version is in its lifecycle.
@@ -897,7 +913,8 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 	}
 
 	if d.Submit {
-		fp, err := intendedState(current, buildID, intendedWN).fingerprint()
+		products := readyProducts(s)
+		fp, err := submitFingerprint(intendedState(current, buildID, intendedWN), products)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -906,7 +923,7 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 			Affected:     []string{s.App.ID},
 			Irreversible: []string{"App Review starts; the version is locked until review ends or the submission is cancelled"},
 		}
-		if products := readyProducts(s); len(products) > 0 {
+		if len(products) > 0 {
 			preview.Intended = append([]string{"submit the version"}, products...)
 		}
 		id, err := env.Plans.Propose(ctx, "release_submit", submitArgsKey(s.App, s.Platform, versionString), fp, preview)

@@ -155,7 +155,9 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 	}
 	res := tool.OK(out)
 	if usesLibrary(out.Locales) {
-		res.Next = append(res.Next, tool.NextStep{Tool: "library_plan", Args: map[string]any{"app": t.App.ID}})
+		// library_plan needs dir, remove or archive, none of which a listing
+		// knows, so point at it in prose instead of a next step that fails.
+		res.Warn("some screenshots here are Asset Library placements; change them with library_plan (pass dir, remove or archive), not screenshots_sync")
 	}
 	if in.Thumbnails {
 		addThumbnails(ctx, env, res, out.Locales)

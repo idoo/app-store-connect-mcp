@@ -512,7 +512,7 @@ func authAdd(p *prompter, o addOptions, stdout, stderr io.Writer) (string, error
 	if keyPath == "" {
 		return "", errors.New("key path is required")
 	}
-	if keyPath, err = absPath(keyPath); err != nil {
+	if keyPath, err = pastedKeyPath(keyPath); err != nil {
 		return "", err
 	}
 	if id, bad := keyIDMismatch(prof.KeyID, keyPath); bad {
@@ -556,6 +556,39 @@ func absPath(p string) (string, error) {
 	abs, err := filepath.Abs(config.ExpandHome(p, os.Getenv))
 	if err != nil {
 		return "", fmt.Errorf("key path: %w", err)
+	}
+	return abs, nil
+}
+
+// pastedKeyPath resolves a path as users paste it: one pair of matching
+// outer quotes is stripped (Windows "Copy as path"), and when that file is
+// missing, backslash escapes are undone (macOS Terminal drag-and-drop gives
+// `/my\ keys/AuthKey_X.p8`).
+func pastedKeyPath(p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if len(p) >= 2 && (p[0] == '"' || p[0] == '\'') && p[len(p)-1] == p[0] {
+		p = p[1 : len(p)-1]
+	}
+	abs, err := absPath(p)
+	if err != nil || !strings.Contains(p, `\`) {
+		return abs, err
+	}
+	if _, serr := os.Stat(abs); serr == nil {
+		return abs, nil
+	}
+	var b strings.Builder
+	for i := 0; i < len(p); i++ {
+		if p[i] == '\\' && i+1 < len(p) {
+			i++
+		}
+		b.WriteByte(p[i])
+	}
+	unescaped, err := absPath(b.String())
+	if err != nil {
+		return abs, nil //nolint:nilerr // keep the literal path; its own error surfaces later
+	}
+	if _, serr := os.Stat(unescaped); serr == nil {
+		return unescaped, nil
 	}
 	return abs, nil
 }
@@ -627,7 +660,7 @@ func authImport(p *prompter, o addOptions, stdout, stderr io.Writer) (string, er
 		if err != nil {
 			return "", err
 		}
-		if keyPath, err = absPath(keyPath); err != nil {
+		if keyPath, err = pastedKeyPath(keyPath); err != nil {
 			return "", err
 		}
 		if err := askKeyStorage(p, &prof, keyPath); err != nil {
