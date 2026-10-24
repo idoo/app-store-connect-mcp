@@ -100,7 +100,7 @@ func prcKindFor(kind string) (*prcKind, error) {
 	case prcKindSub:
 		return prcSub, nil
 	}
-	return nil, s12aInvalid("kind must be app, iap or subscription, got %q", kind)
+	return nil, invalidArgs("kind must be app, iap or subscription, got %q", kind)
 }
 
 // prcTarget is the resolved product whose prices are read or changed.
@@ -121,12 +121,12 @@ func prcResolve(ctx context.Context, env *tool.Env, ref tool.AppRef, k *prcKind,
 	t := prcTarget{Kind: k.name, AppID: app.ID, AppName: app.Name, ProductID: productID}
 	if k == prcApp {
 		if productID != "" {
-			return t, s12aInvalid("product_id applies to kind iap or subscription only")
+			return t, invalidArgs("product_id applies to kind iap or subscription only")
 		}
 		t.ID = app.ID
 		return t, nil
 	}
-	if err := s12aCheckProductID(productID); err != nil {
+	if err := checkProductID(productID); err != nil {
 		return t, err
 	}
 	if k == prcIAP {
@@ -164,9 +164,9 @@ func prcFindSub(ctx context.Context, env *tool.Env, appID, productID string) (st
 	if err != nil {
 		return "", fmt.Errorf("look up subscription %s: %w", productID, err)
 	}
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	for _, g := range res.Data {
-		for _, s := range s12aRelated(g, "subscriptions", "subscriptions", inc) {
+		for _, s := range related(g, "subscriptions", "subscriptions", inc) {
 			if s.Str("productId") == productID {
 				return s.ID, nil
 			}
@@ -255,7 +255,7 @@ func prcRat(s string) (*big.Rat, bool) {
 func prcMatch(points []prcPoint, price, territory string) (best prcPoint, exact bool, err error) {
 	want, ok := prcRat(price)
 	if !ok || want.Sign() < 0 {
-		return best, false, s12aInvalid("price %q for %s is not a decimal customer price", price, territory)
+		return best, false, invalidArgs("price %q for %s is not a decimal customer price", price, territory)
 	}
 	var bestDiff, bestVal *big.Rat
 	for _, p := range points {
@@ -270,7 +270,7 @@ func prcMatch(points []prcPoint, price, territory string) (best prcPoint, exact 
 		}
 	}
 	if bestDiff == nil {
-		return best, false, s12aInvalid("no price points in territory %s", territory)
+		return best, false, invalidArgs("no price points in territory %s", territory)
 	}
 	return best, bestDiff.Sign() == 0, nil
 }
@@ -362,7 +362,7 @@ func prcSchedulePrices(ctx context.Context, env *tool.Env, k *prcKind, scheduleI
 
 // prcPricesOf flattens price rows with their included price points.
 func prcPricesOf(k *prcKind, res *tool.ListResult, manual bool) []prcPrice {
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	cur := prcCurrencies(res.Included)
 	out := make([]prcPrice, 0, len(res.Data))
 	for _, r := range res.Data {
@@ -450,7 +450,7 @@ func prcTerritories(arg string, in []string) ([]string, error) {
 	for _, t := range in {
 		t = strings.ToUpper(strings.TrimSpace(t))
 		if !prcTerritoryRE.MatchString(t) {
-			return nil, s12aInvalid("%s: %q is not a 3-letter territory code (e.g. USA, SWE)", arg, t)
+			return nil, invalidArgs("%s: %q is not a 3-letter territory code (e.g. USA, SWE)", arg, t)
 		}
 		if !slices.Contains(out, t) {
 			out = append(out, t)

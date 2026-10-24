@@ -18,7 +18,7 @@ func TestJobSalesThisWeek(t *testing.T) {
 	// Thursday 2026-10-22 12:00 Pacific: this_week = Mon 19 … Thu 22.
 	k.Clock.Set(time.Date(2026, 10, 22, 19, 0, 0, 0, time.UTC))
 	k.Resolve.Apps = append(k.Resolve.Apps, tool.App{ID: "1000000001", BundleID: "com.example.notes", Name: "Example Notes", SKU: "com.example.notes"})
-	raw, err := os.ReadFile("../../internal/tools/reports/testdata/s10b/sales_day1.tsv")
+	raw, err := os.ReadFile("../../internal/tools/reports/testdata/sales/sales_day1.tsv")
 	if err != nil {
 		t.Fatal(err)
 	}

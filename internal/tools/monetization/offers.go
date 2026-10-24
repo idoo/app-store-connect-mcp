@@ -162,7 +162,7 @@ func offerIAPCodes(ctx context.Context, env *tool.Env, app tool.App, productID s
 	if err != nil {
 		return nil, fmt.Errorf("list IAP offer codes: %w", err)
 	}
-	inc := s12aIncluded(res.Included)
+	inc := indexIncluded(res.Included)
 	out := offerIAPOut{ID: iap.ID, ProductID: productID, Offers: []offerOut{}}
 	for _, r := range res.Data {
 		o := offerRow(offerKindIAPCode, r, inc)
@@ -249,7 +249,7 @@ func offerFetch(ctx context.Context, env *tool.Env, subID, kind string) ([]tool.
 	if err != nil {
 		return nil, nil, fmt.Errorf("list %s offers: %w", kind, err)
 	}
-	return res.Data, s12aIncluded(res.Included), nil
+	return res.Data, indexIncluded(res.Included), nil
 }
 
 // offerRow summarizes one offer resource.
@@ -306,7 +306,7 @@ func offerRow(kind string, r tool.Resource, inc map[string]tool.Resource) offerO
 		if kind == offerKindIAPCode {
 			customType = "inAppPurchaseOfferCodeCustomCodes"
 		}
-		for _, cc := range s12aRelated(r, "customCodes", customType, inc) {
+		for _, cc := range related(r, "customCodes", customType, inc) {
 			c.CustomCodes = append(c.CustomCodes, cc.Str("customCode"))
 		}
 		o.Codes = c
@@ -443,7 +443,7 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	}, included)
 	created, err := offerPostDoc(wctx, env, sp.path, sp.typ, doc)
 	if err != nil {
-		if s12aConflict(err) {
+		if isConflict(err) {
 			if r, ok, rerr := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); rerr == nil && ok {
 				out.Offer = &r
 				out.Territories = r.Territories
@@ -510,10 +510,10 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		periods = 1
 	}
 	if periods < 1 {
-		return nil, offerSpec{}, s12aInvalid("periods must be ≥ 1")
+		return nil, offerSpec{}, invalidArgs("periods must be ≥ 1")
 	}
 	if strings.TrimSpace(in.ProductID) == "" {
-		return nil, offerSpec{}, s12aInvalid("product_id is required")
+		return nil, offerSpec{}, invalidArgs("product_id is required")
 	}
 	for arg, v := range map[string]string{"start_date": in.StartDate, "end_date": in.EndDate} {
 		if err := offerDate(arg, v); err != nil {
@@ -529,7 +529,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 	}
 	need := func(arg, v string) error {
 		if strings.TrimSpace(v) == "" {
-			return s12aInvalid("%s is required for a %s offer", arg, in.Kind)
+			return invalidArgs("%s is required for a %s offer", arg, in.Kind)
 		}
 		return nil
 	}
@@ -544,7 +544,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		delete(attrs, "startDate")
 		delete(attrs, "endDate")
 		if in.StartDate != "" || in.EndDate != "" {
-			return nil, sp, s12aInvalid("promotional offers have no start/end date")
+			return nil, sp, invalidArgs("promotional offers have no start/end date")
 		}
 		attrs["name"], attrs["offerCode"], attrs["numberOfPeriods"] = in.Name, in.ID, periods
 		sp = offerSpec{
@@ -556,7 +556,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 			return nil, sp, err
 		}
 		if in.PaidMonths < 1 || in.LapsedMinMonths < 1 || in.LapsedMaxMonths < in.LapsedMinMonths {
-			return nil, sp, s12aInvalid("win-back needs paid_months ≥ 1 and 1 ≤ lapsed_min_months ≤ lapsed_max_months")
+			return nil, sp, invalidArgs("win-back needs paid_months ≥ 1 and 1 ≤ lapsed_min_months ≤ lapsed_max_months")
 		}
 		prio := in.Priority
 		if prio == "" {
@@ -577,10 +577,10 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 			return nil, sp, err
 		}
 		if len(in.Customers) == 0 {
-			return nil, sp, s12aInvalid("customer_eligibilities is required for an offer code (NEW, EXISTING, EXPIRED)")
+			return nil, sp, invalidArgs("customer_eligibilities is required for an offer code (NEW, EXISTING, EXPIRED)")
 		}
 		if in.StartDate != "" || in.EndDate != "" {
-			return nil, sp, s12aInvalid("offer codes have no start/end date; set expiration_date when generating codes")
+			return nil, sp, invalidArgs("offer codes have no start/end date; set expiration_date when generating codes")
 		}
 		delete(attrs, "startDate")
 		delete(attrs, "endDate")
@@ -593,7 +593,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 			match: func(r tool.Resource) bool { return r.Str("name") == in.Name },
 		}
 	default:
-		return nil, sp, s12aInvalid("unknown kind %q", in.Kind)
+		return nil, sp, invalidArgs("unknown kind %q", in.Kind)
 	}
 	return attrs, sp, nil
 }
@@ -660,7 +660,7 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		r, err := offerPostDoc(wctx, env, "/v1/subscriptionIntroductoryOffers", "subscriptionIntroductoryOffers",
 			offerDoc("subscriptionIntroductoryOffers", attrs, rels, nil))
 		if err != nil {
-			if s12aConflict(err) {
+			if isConflict(err) {
 				out.Skipped = append(out.Skipped, p.Territory)
 				continue
 			}

@@ -103,7 +103,7 @@ func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*t
 		r, err := offerPostDoc(wctx, env, "/v1/subscriptionOfferCodeCustomCodes", "subscriptionOfferCodeCustomCodes",
 			offerDoc("subscriptionOfferCodeCustomCodes", attrs, rel, nil))
 		if err != nil {
-			if s12aConflict(err) {
+			if isConflict(err) {
 				if r, ok, rerr := offerFindCustom(ctx, env, codeID, in.CustomCode); rerr == nil && ok {
 					offerFillCustom(&out, r)
 					return tool.Already(out), nil
@@ -138,10 +138,10 @@ func offerCodesGenerate(ctx context.Context, env *tool.Env, in offerCodesIn) (*t
 // offerCodesValidate checks generate arguments before any request.
 func offerCodesValidate(in offerCodesIn) error {
 	if in.OfferCodeID == "" && (in.ProductID == "" || in.Campaign == "") {
-		return s12aInvalid("pass offer_code_id, or product_id and campaign")
+		return invalidArgs("pass offer_code_id, or product_id and campaign")
 	}
 	if in.NumberOfCodes < 1 {
-		return s12aInvalid("number_of_codes must be ≥ 1")
+		return invalidArgs("number_of_codes must be ≥ 1")
 	}
 	if err := offerDate("expiration_date", in.ExpirationDate); err != nil {
 		return err
@@ -149,20 +149,20 @@ func offerCodesValidate(in offerCodesIn) error {
 	switch in.Type {
 	case offerCodeOneTime:
 		if in.ExpirationDate == "" {
-			return s12aInvalid("expiration_date is required for one_time codes")
+			return invalidArgs("expiration_date is required for one_time codes")
 		}
 		if in.CustomCode != "" {
-			return s12aInvalid("custom_code applies to type custom only")
+			return invalidArgs("custom_code applies to type custom only")
 		}
 	case offerCodeCustom:
 		if c := in.CustomCode; c == "" || strings.ContainsAny(c, " \t\r\n") {
-			return s12aInvalid("custom_code is required and must not contain whitespace")
+			return invalidArgs("custom_code is required and must not contain whitespace")
 		}
 		if in.Environment != "" {
-			return s12aInvalid("environment applies to one_time codes only")
+			return invalidArgs("environment applies to one_time codes only")
 		}
 	default:
-		return s12aInvalid("type must be one_time or custom")
+		return invalidArgs("type must be one_time or custom")
 	}
 	return nil
 }
@@ -248,7 +248,7 @@ func offerCodeValues(ctx context.Context, env *tool.Env, out *offerCodesResultOu
 		return tool.OK(out).Then(tool.NextStep{Tool: "offer_codes_generate", Args: map[string]any{"batch_id": out.ID}}), nil
 	}
 	if strings.ContainsAny(out.ID, `/\`) || out.ID == "." || out.ID == ".." {
-		return nil, s12aInvalid("batch id %q is not a valid file name", out.ID)
+		return nil, invalidArgs("batch id %q is not a valid file name", out.ID)
 	}
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)

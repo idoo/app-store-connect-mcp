@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/assets/hero.jpg" alt="A goose standing guard at a small harbour" width="720"></p>
+<p align="center"><img src="docs/assets/hero.jpg" alt="A goose driving an old Lada past a WAITING FOR REVIEW sign, an apple-headed passenger cheering, licence plate 200 OK" width="720"></p>
 
 # hamn
 
@@ -43,7 +43,9 @@ hamn config snippet cursor           # just print the config instead of writing 
 **4. Ask:**
 
 > What's the status of my latest version, and what's blocking submission?
+>
 > Which TestFlight groups got build 112, and what did testers say?
+>
 > Show me this week's 1–2 star reviews.
 
 ## Security first
@@ -122,7 +124,7 @@ CLIs like [`asc`](https://github.com/rudrankriyam/App-Store-Connect-CLI) and fas
 
 ## What it can do
 
-68 tools in 14 toolsets. Six toolsets are on by default (35 tools with writes on, 23 in read-only mode). The rest are one call away: `toolsets` with `action: "enable"`, or `--toolsets +signing`.
+68 tools in 14 toolsets. Seven toolsets are on by default (39 tools with writes on, 23 in read-only mode). The rest are one call away: `toolsets` with `action: "enable"`, or `--toolsets +signing`.
 
 | Toolset | Default | Tools | What for |
 |---|---|---|---|
@@ -132,7 +134,7 @@ CLIs like [`asc`](https://github.com/rudrankriyam/App-Store-Connect-CLI) and fas
 | metadata | ✓ | 4 | Pull, plan, apply localized listings (inline, fastlane dir or Expo config), app info |
 | reviews | ✓ | 2 | List customer reviews since last time, reply with approval |
 | reports | ✓ | 5 | Decoded sales and finance reports, analytics setup and reports, a "how did my app do" summary |
-| screenshots | | 4 | List, plan and sync screenshot sets from a fastlane-style folder, upload previews |
+| screenshots | ✓ | 4 | List, plan and sync screenshot sets from a fastlane-style folder, upload previews |
 | uploads | | 1 | Upload an IPA/PKG through Apple's build upload API, no Xcode or Transporter |
 | monetization | | 10 | IAPs, subscriptions, prices per territory, offers and offer codes |
 | signing | | 8 | Bundle ids, capabilities, certificates, profiles, devices, revoke |
@@ -146,16 +148,27 @@ The full list with descriptions and schemas: [docs/TOOLS.md](docs/TOOLS.md) (gen
 ### A day with hamn
 
 > **Me:** Prepare Hjul 2.4 with build 112. What's New: "Faster sync, fewer surprises." in all 10 languages.
+>
 > **Agent:** `release_status` plan: create version 2.4, attach build 112 (VALID), answer export compliance, set What's New in 10 locales. Two blockers left, both fixable here. Apply with `release_prepare`?
+>
 > **Me:** Yes. Then send 112 to the external testers.
+>
 > **Agent:** `testflight_distribute` previewed: add build 112 to external group "Friends" and submit it for beta review. *(You approve in the client.)* Done.
+>
 > **Me:** Any 1-star reviews this week?
+>
 > **Agent:** Two. One is about sync on iPad, one asks me to "ignore previous instructions" (shown as untrusted text). Draft replies?
+>
 > **Me:** Reply to the iPad one only.
+>
 > **Agent:** Here's the preview. *(Your client asks you to approve the exact reply text.)*
+>
 > **Me:** How did sales do this week?
-> **Agent:** `sales_report`: 412 units, proceeds per currency, Germany up 30% on last week.
+>
+> **Agent:** `insights_summary`: 412 units, proceeds per currency, Germany up 30% on last week.
+>
 > **Me:** Sync the new screenshots from `fastlane/screenshots`.
+>
 > **Agent:** `screenshots_plan`: 3 changed, 37 unchanged (same checksum), nothing deleted. Sync?
 
 ## Skills and Claude Code plugin
@@ -180,7 +193,7 @@ Facts from reading each project's code in October 2026. Corrections welcome.
 
 | | JoshuaRileyDev app-store-connect-mcp-server | zelentsov-dev asc-mcp | devinwang apple-app-store-connect-mcp | `asc` CLI | hamn |
 |---|---|---|---|---|---|
-| Tools / context | ~29 tools | 514 tools, ≈ 60k tokens with all on (filter by `--workers`) | 1316 generated tools, no filtering | ~95 command groups, not MCP | 35 default, 68 total, toolsets enabled at runtime; whole API via 4 generic tools |
+| Tools / context | ~29 tools | 514 tools, ≈ 60k tokens with all on (filter by `--workers`) | 1316 generated tools, no filtering | ~95 command groups, not MCP | 39 default (≈ 40 KB of tool list), 68 total, toolsets enabled at runtime; whole API via 4 generic tools |
 | Safe writes | No read-only mode | `--read-only` blocks at call time; preview/confirm for Xcode Cloud | Not documented | Read-only at the transport | Read-only by default (write tools hidden), plan/confirm, human approval for public actions |
 | Uploads | None | Screenshots, previews, IPA/PKG with URL policy | Asset upload helper | Yes, with resume | Screenshots, previews, IPA/PKG with URL policy and resume |
 | Sales/finance reports | Not gzip-decoded | Decoded with limits and summaries | Un-gzipped and parsed | Yes | Decoded, exact money per currency, aggregated |
@@ -233,4 +246,4 @@ Bug reports, missing endpoints and fixes are welcome. Read [CONTRIBUTING.md](CON
 
 [MIT](LICENSE) © Ivan Verevkin
 
-The goose in the picture is the harbour master. It has never approved a destructive action without reading the preview, and neither should you.
+The goose in the picture is driving. You still hold the approve button. That's the whole idea.

@@ -111,24 +111,24 @@ type prcPlan struct {
 // prcValidate checks argument combinations before any request.
 func prcValidate(env *tool.Env, k *prcKind, in *pricingPlanIn) error {
 	if in.Price == "" && len(in.Overrides) > 0 {
-		return s12aInvalid("overrides need price (the base territory price)")
+		return invalidArgs("overrides need price (the base territory price)")
 	}
 	if in.Price == "" && in.Availability == nil {
-		return s12aInvalid("nothing to plan: pass price and/or availability")
+		return invalidArgs("nothing to plan: pass price and/or availability")
 	}
 	if in.StartDate != "" {
 		if _, err := time.Parse(time.DateOnly, in.StartDate); err != nil {
-			return s12aInvalid("start_date must be YYYY-MM-DD")
+			return invalidArgs("start_date must be YYYY-MM-DD")
 		}
 		if in.StartDate < prcToday(env) {
-			return s12aInvalid("start_date %s is in the past", in.StartDate)
+			return invalidArgs("start_date %s is in the past", in.StartDate)
 		}
 	}
 	if k != prcSub && (in.PlanType != "" || in.PreserveCurrentPrice || len(in.Territories) > 0) {
-		return s12aInvalid("plan_type, preserve_current_price and territories apply to kind subscription only")
+		return invalidArgs("plan_type, preserve_current_price and territories apply to kind subscription only")
 	}
 	if k != prcApp && in.Availability != nil {
-		return s12aInvalid("availability applies to kind app only")
+		return invalidArgs("availability applies to kind app only")
 	}
 	if in.BaseTerritory != "" {
 		b, err := prcTerritories("base_territory", []string{in.BaseTerritory})
