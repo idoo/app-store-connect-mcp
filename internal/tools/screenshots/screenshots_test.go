@@ -209,6 +209,7 @@ func body(req tool.Request) map[string]any {
 
 func (f *fake) routes() {
 	t, k := f.t, f.k
+	k.ASC.Handle("GET", "/v1/apps/{id}", 200, `{"data":{"type":"apps","id":"app1","attributes":{"primaryLocale":"en-US"}}}`)
 	k.ASC.HandleFunc("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", func(tool.Request) tooltest.Fixture {
 		var data []jres
 		for _, l := range []string{"de-DE", "en-US"} {
@@ -440,7 +441,7 @@ func TestPlanFastlaneLayoutDetectsDisplay(t *testing.T) {
 func TestPlanRejectsAlphaAndReportsAmbiguousAndUnknown(t *testing.T) {
 	k, _ := newKit(t)
 	write(t, k, "shots/en-US/01.png", pngImage(t, 1290, 2796, true, 1))      // alpha
-	write(t, k, "shots/en-US/02.png", pngImage(t, 1125, 2436, false, 2))     // 6.1" and 5.8"
+	write(t, k, "shots/en-US/02.png", pngImage(t, 1125, 2436, false, 2))     // 6.1" capture: current slot, not 5.8"
 	write(t, k, "shots/xx-YY/01.png", pngImage(t, 1290, 2796, false, 3))     // unknown locale
 	write(t, k, "shots/en-US/6.9/03.png", pngImage(t, 1290, 2796, false, 4)) // explicit display: fine
 	res := tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots"}`))
@@ -455,8 +456,8 @@ func TestPlanRejectsAlphaAndReportsAmbiguousAndUnknown(t *testing.T) {
 	if pr, ok := kinds[problemInvalidImage]; !ok || pr.File != "en-US/01.png" || !strings.Contains(pr.Message, "alpha") {
 		t.Errorf("alpha problem = %+v", kinds)
 	}
-	if pr, ok := kinds[problemAmbiguousSize]; !ok || len(pr.Candidates) < 2 {
-		t.Errorf("ambiguous problem = %+v", pr)
+	if pr, ok := kinds[problemAmbiguousSize]; ok {
+		t.Errorf("1125x2436 reported ambiguous: %+v", pr)
 	}
 	if _, ok := kinds[problemUnknownLocale]; !ok {
 		t.Errorf("unknown locale not reported: %+v", p.Problems)
@@ -619,8 +620,8 @@ func TestListWithThumbnails(t *testing.T) {
 	if len(res.Images) != 1 || res.Images[0].MIMEType != "image/jpeg" {
 		t.Errorf("images = %+v", res.Images)
 	}
-	if n := len(k.ASC.Requests()); n != 3 {
-		t.Errorf("requests = %d, want 3", n)
+	if n := len(k.ASC.Requests()); n != 4 {
+		t.Errorf("requests = %d, want 4", n)
 	}
 }
 

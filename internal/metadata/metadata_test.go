@@ -72,13 +72,13 @@ func TestDiffUpdatesCreatesAndKeepsOmitted(t *testing.T) {
 	_, remote := newRemote(t)
 	desired := &Listing{Locales: map[string]*LocaleFields{
 		"en_us":  {Description: ptr("New desc"), Keywords: ptr("a,b")}, // keywords identical → skipped
-		"French": {Description: ptr("Desc FR")},
+		"French": {Name: ptr("Hamn"), Description: ptr("Desc FR")},
 	}}
 	p, err := Diff(remote, desired, DiffOptions{})
 	if err != nil {
 		t.Fatalf("Diff: %v", err)
 	}
-	if p.Counts != (Counts{Updates: 1, Creates: 1, Unchanged: 3}) {
+	if p.Counts != (Counts{Updates: 1, Creates: 2, Unchanged: 3}) {
 		t.Errorf("counts = %+v", p.Counts)
 	}
 	for _, c := range p.Changes {
@@ -90,7 +90,7 @@ func TestDiffUpdatesCreatesAndKeepsOmitted(t *testing.T) {
 	if up.Locale != "en-US" || up.Op != OpUpdate || up.ID != "V-EN" || len(up.Fields) != 1 || *up.Fields[0].Old != "Old desc" {
 		t.Errorf("update = %+v", up)
 	}
-	cr := p.Changes[1]
+	cr := p.Changes[2]
 	if cr.Locale != "fr-FR" || cr.Op != OpCreate || cr.Level != LevelVersion {
 		t.Errorf("create = %+v", cr)
 	}
