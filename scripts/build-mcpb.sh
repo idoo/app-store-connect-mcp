@@ -43,7 +43,7 @@ cp "$root/packaging/mcpb/icon.png" "$root/LICENSE" "$stage/"
 jq --arg v "$version" '.version = $v' "$root/packaging/mcpb/manifest.json" >"$stage/manifest.json"
 
 if command -v npx >/dev/null 2>&1; then
-	npx -y @anthropic-ai/mcpb validate "$stage/manifest.json"
+	npx -y @anthropic-ai/mcpb validate "$stage/manifest.json" >&2
 else
 	echo "build-mcpb: npx not found, skipping manifest validation" >&2
 fi
