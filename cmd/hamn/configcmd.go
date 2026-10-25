@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -32,16 +33,22 @@ const serverName = "hamn"
 // tool registry).
 var sessionTools = []string{"toolsets"}
 
+// configUsage is printed for `hamn config --help` and misuse.
+var configUsage = "usage: hamn config <snippet|install> <client> [--profile NAME]\nclients: " + strings.Join(clients, ", ")
+
+// credentialsNote reminds that GUI clients don't inherit shell env.
+const credentialsNote = "credentials: run `hamn auth import` (or `hamn auth add`) once; GUI clients don't see ASC_* from your shell"
+
 func runConfig(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return usageErr("usage: hamn config <snippet|install> <client> [--profile NAME]\nclients: " + strings.Join(clients, ", "))
+		return usageErr(configUsage)
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("config "+sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	profile := fs.String("profile", "", "pin the server to this profile via HAMN_PROFILE")
 	if len(rest) == 0 || strings.HasPrefix(rest[0], "-") {
-		return usageErr(fmt.Sprintf("usage: hamn config %s <client> [--profile NAME]\nclients: %s", sub, strings.Join(clients, ", ")))
+		return usageErr(configUsage)
 	}
 	client := rest[0]
 	if err := fs.Parse(rest[1:]); err != nil {
@@ -60,29 +67,70 @@ func runConfig(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		_, err = io.WriteString(stdout, s)
-		return err
+		if _, err = io.WriteString(stdout, s); err != nil {
+			return err
+		}
+		fmt.Fprintln(stderr, credentialsNote) // stderr keeps stdout pasteable
+		return nil
 	case "install":
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("home dir: %w", err)
 		}
-		return install(client, bin, *profile, home, stdout)
+		if err := install(client, bin, *profile, home, stdout); err != nil {
+			return err
+		}
+		warnNoProfile(stdout, stderr)
+		return nil
 	default:
 		return usageErr(fmt.Sprintf("unknown config subcommand %q (snippet, install)", sub))
 	}
 }
 
-// binaryPath returns the absolute, symlink-resolved path of this executable.
+// warnNoProfile tells the user the installed server has no credentials yet.
+func warnNoProfile(stdout, stderr io.Writer) {
+	if envCredentialsSet() {
+		fmt.Fprintln(stdout, credentialsNote)
+		return
+	}
+	path, cfg, err := loadConfig(stderr)
+	if err == nil && len(cfg.Profiles) == 0 {
+		fmt.Fprintf(stdout, "warning: no profile in %s yet, so every tool will fail.\n%s\n", path, credentialsNote)
+	}
+}
+
+// binaryPath returns the path clients should launch: a stable PATH location
+// (e.g. /opt/homebrew/bin/hamn), never the versioned Homebrew Cellar path,
+// which `brew upgrade` deletes.
 func binaryPath() (string, error) {
 	p, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locate hamn binary: %w", err)
 	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		p = r
+	return stableBinaryPath(p, exec.LookPath), nil
+}
+
+// stableBinaryPath prefers the PATH entry for exe, then the Homebrew prefix
+// bin for a Cellar path, else exe as invoked.
+func stableBinaryPath(exe string, lookPath func(string) (string, error)) string {
+	exeInfo, err := os.Stat(exe)
+	if err != nil {
+		return exe
 	}
-	return p, nil
+	if lp, err := lookPath(serverName); err == nil {
+		if abs, err := filepath.Abs(lp); err == nil {
+			if fi, err := os.Stat(abs); err == nil && os.SameFile(fi, exeInfo) {
+				return abs
+			}
+		}
+	}
+	if i := strings.Index(filepath.ToSlash(exe), "/Cellar/"); i >= 0 {
+		cand := filepath.Join(exe[:i], "bin", filepath.Base(exe))
+		if fi, err := os.Stat(cand); err == nil && os.SameFile(fi, exeInfo) {
+			return cand
+		}
+	}
+	return exe
 }
 
 // profileEnv returns the server env: only profile selection, never key material.
@@ -177,10 +225,17 @@ func shellJoin(args ...string) string {
 	return strings.Join(q, " ")
 }
 
+// Codex timeouts: Codex's defaults (10 s startup, 60 s per tool) cut off
+// builds_wait and report fan-outs before hamn's own limits.
+const (
+	codexStartupTimeout = "startup_timeout_sec = 20"
+	codexToolTimeout    = "tool_timeout_sec = 330"
+)
+
 // codexBlock renders the [mcp_servers.hamn] table.
 func codexBlock(bin, profile string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[mcp_servers.%s]\ncommand = %s\nargs = []\n", serverName, tomlString(bin))
+	fmt.Fprintf(&b, "[mcp_servers.%s]\ncommand = %s\nargs = []\n%s\n%s\n", serverName, tomlString(bin), codexStartupTimeout, codexToolTimeout)
 	if profile != "" {
 		fmt.Fprintf(&b, "env = { %s = %s }\n", config.EnvProfile, tomlString(profile))
 	}
@@ -230,42 +285,77 @@ func appSupportDir(home string) string {
 	}
 }
 
+// claudeTimeout bounds `claude mcp add`, which can hang on a first run.
+var claudeTimeout = 20 * time.Second
+
+// runClaude runs the claude CLI without stdin; tests replace it.
+var runClaude = func(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // fixed program, our own args.
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, stdout, stderr
+	return cmd.Run()
+}
+
+func installClaudeCode(bin, profile string, stdout io.Writer) error {
+	args := claudeAddArgs(bin, profile)
+	ctx, cancel := context.WithTimeout(context.Background(), claudeTimeout)
+	defer cancel()
+	err := runClaude(ctx, args, stdout, os.Stderr)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, exec.ErrNotFound):
+		fmt.Fprintf(stdout, "Claude Code CLI not found. Run this once it's installed (or see `hamn config snippet claude-code`):\n  %s\n", shellJoin(args...))
+		return nil
+	case ctx.Err() != nil:
+		fmt.Fprintf(stdout, "`claude mcp add` didn't finish in %s. Run it yourself:\n  %s\n", claudeTimeout, shellJoin(args...))
+		return fmt.Errorf("claude mcp add timed out after %s", claudeTimeout)
+	default:
+		fmt.Fprintf(stdout, "`claude mcp add` failed. Run it yourself:\n  %s\n", shellJoin(args...))
+		return fmt.Errorf("claude mcp add: %w", err)
+	}
+}
+
 func install(client, bin, profile, home string, stdout io.Writer) error {
 	if client == "claude-code" {
-		args := claudeAddArgs(bin, profile)
-		cmd := exec.Command(args[0], args[1:]...) //nolint:gosec // fixed program, our own args.
-		cmd.Stdout, cmd.Stderr = stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("%s: %w", shellJoin(args...), err)
-		}
-		return nil
+		return installClaudeCode(bin, profile, stdout)
 	}
 	path := clientConfigPath(client, home)
 	var (
-		backup string
-		err    error
+		res mergeResult
+		err error
 	)
 	if client == "codex" {
-		backup, err = mergeFile(path, func(old []byte) ([]byte, error) { return mergeCodexTOML(old, codexBlock(bin, profile)) })
+		res, err = mergeFile(path, func(old []byte) ([]byte, error) { return mergeCodexTOML(old, codexBlock(bin, profile)) })
 	} else {
-		backup, err = mergeFile(path, func(old []byte) ([]byte, error) {
+		res, err = mergeFile(path, func(old []byte) ([]byte, error) {
 			return mergeJSONServer(old, serversKey(client), serverName, serverEntry(client, bin, profile))
 		})
 	}
 	if err != nil {
 		return err
 	}
-	if backup != "" {
-		fmt.Fprintf(stdout, "backup: %s\n", backup)
+	if res.unchanged {
+		fmt.Fprintf(stdout, "already installed in %s (unchanged)\n", path)
+		return nil
+	}
+	if res.backup != "" {
+		fmt.Fprintf(stdout, "backup: %s\n", res.backup)
 	}
 	fmt.Fprintf(stdout, "installed %s into %s\n", serverName, path)
 	return nil
 }
 
+// mergeResult says what mergeFile did.
+type mergeResult struct {
+	backup    string // backup file name, empty when none was made
+	unchanged bool   // the file already had this content; nothing written
+}
+
 // mergeFile rewrites path with merge(old). An existing file is first copied
-// to path.hamn-backup-<timestamp>, whose name is returned. The new content is
-// written atomically, keeping the old file mode (0600 for new files).
-func mergeFile(path string, merge func(old []byte) ([]byte, error)) (string, error) {
+// to path.hamn-backup-<timestamp>. The new content is written atomically,
+// keeping the old file mode (0600 for new files). Identical content is left
+// alone: no backup, no write.
+func mergeFile(path string, merge func(old []byte) ([]byte, error)) (mergeResult, error) {
 	old, err := os.ReadFile(path) //nolint:gosec // client config path we chose.
 	mode := os.FileMode(0o600)
 	exists := err == nil
@@ -276,25 +366,28 @@ func mergeFile(path string, merge func(old []byte) ([]byte, error)) (string, err
 		}
 	case errors.Is(err, os.ErrNotExist):
 	default:
-		return "", fmt.Errorf("read %s: %w", path, err)
+		return mergeResult{}, fmt.Errorf("read %s: %w", path, err)
 	}
 	out, err := merge(old)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", path, err)
+		return mergeResult{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if exists && bytes.Equal(out, old) {
+		return mergeResult{unchanged: true}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return "", fmt.Errorf("create %s: %w", filepath.Dir(path), err)
+		return mergeResult{}, fmt.Errorf("create %s: %w", filepath.Dir(path), err)
 	}
 	backup := ""
 	if exists {
 		backup = path + ".hamn-backup-" + time.Now().UTC().Format("20060102T150405Z")
 		if err := os.WriteFile(backup, old, mode); err != nil { //nolint:gosec // backup next to the client config path we chose.
-			return "", fmt.Errorf("backup %s: %w", path, err)
+			return mergeResult{}, fmt.Errorf("backup %s: %w", path, err)
 		}
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
-		return "", fmt.Errorf("write %s: %w", path, err)
+		return mergeResult{}, fmt.Errorf("write %s: %w", path, err)
 	}
 	name := tmp.Name()
 	if _, err = tmp.Write(out); err == nil {
@@ -308,9 +401,9 @@ func mergeFile(path string, merge func(old []byte) ([]byte, error)) (string, err
 	}
 	if err != nil {
 		_ = os.Remove(name)
-		return "", fmt.Errorf("write %s: %w", path, err)
+		return mergeResult{}, fmt.Errorf("write %s: %w", path, err)
 	}
-	return backup, nil
+	return mergeResult{backup: backup}, nil
 }
 
 // mergeJSONServer sets doc[key][name] = entry, keeping every other key and
@@ -340,8 +433,8 @@ func mergeJSONServer(old []byte, key, name string, entry map[string]any) ([]byte
 }
 
 // mergeCodexTOML replaces the [mcp_servers.hamn] table (and its sub-tables)
-// with block, keeping every other line, including comments. The result must
-// parse as TOML.
+// with block, keeping every other line, including comments. Timeouts the user
+// set in the old table are kept. The result must parse as TOML.
 func mergeCodexTOML(old []byte, block string) ([]byte, error) {
 	if len(old) > 0 {
 		var probe map[string]any
@@ -351,13 +444,29 @@ func mergeCodexTOML(old []byte, block string) ([]byte, error) {
 	}
 	own := "mcp_servers." + serverName
 	var kept []string
-	skipping := false
+	userTimeouts := map[string]string{}
+	skipping, inOwn := false, false
 	for _, line := range strings.SplitAfter(string(old), "\n") {
 		if name, ok := tableHeader(line); ok {
 			skipping = name == own || strings.HasPrefix(name, own+".")
+			inOwn = name == own
+		}
+		if inOwn {
+			if k, _, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
+				if k = strings.TrimSpace(k); k == "startup_timeout_sec" || k == "tool_timeout_sec" {
+					userTimeouts[k] = strings.TrimRight(strings.TrimSpace(line), "\r")
+				}
+			}
 		}
 		if !skipping && line != "" {
 			kept = append(kept, line)
+		}
+	}
+	for k, line := range userTimeouts {
+		for _, def := range []string{codexStartupTimeout, codexToolTimeout} {
+			if strings.HasPrefix(def, k+" ") {
+				block = strings.Replace(block, def, line, 1)
+			}
 		}
 	}
 	out := strings.TrimRight(strings.Join(kept, ""), "\n")

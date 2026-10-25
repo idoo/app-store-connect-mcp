@@ -6,6 +6,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/idoo/hamn/internal/app"
 	"github.com/idoo/hamn/internal/config"
@@ -48,9 +49,18 @@ func (s *optionalString) String() string {
 
 func (s *optionalString) Set(v string) error { s.v = &v; return nil }
 
-func runServe(ctx context.Context, args []string, stderr io.Writer) error {
+// serveArgs is the parsed `hamn serve` command line.
+type serveArgs struct {
+	flags    config.Flags
+	httpAddr string
+	http     mcpserver.HTTPOptions
+	root     string
+}
+
+// parseServeArgs parses serve flags; it returns nil, nil after printing help.
+func parseServeArgs(args []string, out io.Writer) (*serveArgs, error) {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs.SetOutput(out)
 	profile := fs.String("profile", "", "profile name (overrides HAMN_PROFILE and .hamn.toml)")
 	var writes, discovery optionalBool
 	var toolsets optionalString
@@ -58,38 +68,57 @@ func runServe(ctx context.Context, args []string, stderr io.Writer) error {
 	fs.Var(&toolsets, "toolsets", `toolsets expression, e.g. "all" or "+signing,-reports"`)
 	fs.Var(&discovery, "discovery", "list only core tools; enable others at runtime")
 	noConfirm := fs.Bool("no-confirm", false, "skip previews (honored only with HAMN_CI=1)")
+	root := fs.String("root", "", "directory file tools may read and write (default: HAMN_ROOT, the client's MCP roots, or the git root)")
 	httpAddr := fs.String("http", "", "serve Streamable HTTP on ADDR (e.g. 127.0.0.1:8765) instead of stdio")
 	allowRemote := fs.Bool("allow-remote", false, "allow a non-loopback --http address (requires TLS)")
 	tlsCert := fs.String("tls-cert", "", "TLS certificate PEM for --http")
 	tlsKey := fs.String("tls-key", "", "TLS private key PEM for --http")
+	sessionTimeout := fs.Duration("http-session-timeout", 0, "close idle --http sessions after this long, e.g. 30m; negative never (default "+mcpserver.EnvHTTPSessionTimeout+" or "+mcpserver.DefaultSessionTimeout.String()+")")
+	maxSessions := fs.Int("http-max-sessions", 0, "cap open --http sessions; negative is unlimited (default "+mcpserver.EnvHTTPMaxSessions+" or "+strconv.Itoa(mcpserver.DefaultMaxSessions)+")")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			return nil
+			return nil, nil
 		}
-		return usageErr(err.Error())
+		return nil, usageErr(err.Error())
 	}
 	if fs.NArg() > 0 {
-		return usageErr("serve takes no arguments")
+		return nil, usageErr("serve takes no arguments")
 	}
-	r, err := config.Resolve(config.Options{Flags: config.Flags{
-		Profile:     *profile,
-		AllowWrites: writes.v,
-		Toolsets:    toolsets.v,
-		Discovery:   discovery.v,
-		NoConfirm:   *noConfirm,
-	}})
+	return &serveArgs{
+		flags: config.Flags{
+			Profile:     *profile,
+			AllowWrites: writes.v,
+			Toolsets:    toolsets.v,
+			Discovery:   discovery.v,
+			NoConfirm:   *noConfirm,
+		},
+		httpAddr: *httpAddr,
+		root:     *root,
+		http: mcpserver.HTTPOptions{
+			Token:          os.Getenv(mcpserver.EnvHTTPToken),
+			AllowRemote:    *allowRemote,
+			TLSCert:        *tlsCert,
+			TLSKey:         *tlsKey,
+			SessionTimeout: *sessionTimeout,
+			MaxSessions:    *maxSessions,
+		},
+	}, nil
+}
+
+func runServe(ctx context.Context, args []string, stderr io.Writer) error {
+	sa, err := parseServeArgs(args, stderr)
+	if sa == nil || err != nil {
+		return err
+	}
+	r, err := config.Resolve(config.Options{Flags: sa.flags})
 	if err != nil {
 		return err
 	}
 	return app.Serve(ctx, app.ServeOptions{
 		Resolved: r,
 		Version:  buildVersion(),
-		HTTPAddr: *httpAddr,
-		HTTP: mcpserver.HTTPOptions{
-			Token:       os.Getenv(mcpserver.EnvHTTPToken),
-			AllowRemote: *allowRemote,
-			TLSCert:     *tlsCert,
-			TLSKey:      *tlsKey,
-		},
+		HTTPAddr: sa.httpAddr,
+		HTTP:     sa.http,
+		Root:     sa.root,
 	})
 }
