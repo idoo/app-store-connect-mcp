@@ -198,7 +198,7 @@ func writesCheck(allow bool) check {
 	}
 	return check{
 		Name: "writes", Status: statusOK, Detail: "read-only: write tools are hidden",
-		Fix: "to change App Store Connect, call toolsets action:\"enable_writes\" or restart with --allow-writes",
+		Fix: tool.EnableWritesHint,
 	}
 }
 
