@@ -49,6 +49,10 @@ type statusOption struct {
 	Tool   string         `json:"tool"`
 	Args   map[string]any `json:"args,omitempty"`
 	Reason string         `json:"reason"`
+	// Locked/Unlock mirror tool.NextStep: set when Tool is hidden because
+	// writes are disabled.
+	Locked string         `json:"locked,omitempty"`
+	Unlock *tool.NextStep `json:"unlock,omitempty"`
 }
 
 // statusInFlight is a submitted-but-unreleased version reported when no
@@ -167,10 +171,15 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 		f := s.InFlight
 		out.InFlight = &statusInFlight{ID: f.ID, String: f.Str("versionString"), AppVersionState: f.Str("appVersionState")}
 		if slices.Contains([]string{"WAITING_FOR_REVIEW", "IN_REVIEW"}, out.InFlight.AppVersionState) {
-			out.InFlight.Options = []statusOption{{
+			opt := statusOption{
 				Tool: "release_cancel", Args: map[string]any{"app": app.ID, "platform": string(platform)},
 				Reason: "only if the user wants to change " + out.InFlight.String + " before review; withdrawing loses its place in the review queue",
-			}}
+			}
+			if !env.Profile.AllowWrites {
+				opt.Locked = "writes_disabled"
+				opt.Unlock = &tool.NextStep{Tool: "toolsets", Args: map[string]any{"action": "enable_writes"}}
+			}
+			out.InFlight.Options = []statusOption{opt}
 		}
 		res.Then(reviewNext)
 	} else if out.Summary.Phase == phaseInReview {
@@ -248,6 +257,11 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 	if ver, err := env.Resolve.Version(ctx, app.ID, platform, ref); err == nil {
 		if s.Version, err = fetchVersionDetail(ctx, env, ver.ID); err != nil {
 			return nil, err
+		}
+		if b, ok := s.build(); ok {
+			if s.BuildVersion, err = buildMarketingVersion(ctx, env, b.ID); err != nil {
+				return nil, err
+			}
 		}
 	} else if !isNotFound(err) {
 		return nil, err
@@ -439,13 +453,25 @@ func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 		for _, id := range p.RelIDs("versions") {
 			states = append(states, versionState[id])
 		}
+		st := ""
 		switch {
 		case slices.Contains(states, "READY_FOR_REVIEW"):
-			s.IAPs[name] = "READY_FOR_REVIEW"
+			st = "READY_FOR_REVIEW"
 		case slices.Contains(states, "PREPARE_FOR_SUBMISSION") && p.Str("state") != "APPROVED":
-			s.IAPs[name] = "PREPARE_FOR_SUBMISSION"
+			st = "PREPARE_FOR_SUBMISSION"
+		case slices.Contains(states, "REJECTED"):
+			st = "REJECTED"
+		case slices.Contains(states, "DEVELOPER_REJECTED"):
+			st = "DEVELOPER_REJECTED"
 		case len(states) == 0:
-			s.IAPs[name] = p.Str("state")
+			st = p.Str("state")
+		}
+		if st == "" {
+			continue
+		}
+		s.IAPs[name] = st
+		if slices.Contains(iapReady, st) {
+			s.ReadyIAPs = append(s.ReadyIAPs, productLabel(p))
 		}
 	}
 	groups, err := env.ASC.List(ctx, "/v1/apps/"+s.App.ID+"/subscriptionGroups", tool.ListOptions{Include: []string{"subscriptions"}, Query: url.Values{"limit[subscriptions]": {"50"}}})
@@ -459,6 +485,9 @@ func loadProducts(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 				name = r.Str("productId")
 			}
 			s.Subscriptions[name] = r.Str("state")
+			if slices.Contains(subReady, r.Str("state")) {
+				s.ReadySubscriptions = append(s.ReadySubscriptions, productLabel(r))
+			}
 		}
 	}
 	return nil
@@ -501,7 +530,7 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 		}
 	}
 	if d.Build != "" {
-		b, err := env.Resolve.Build(ctx, s.App.ID, s.Platform, d.Build)
+		b, err := env.Resolve.Build(ctx, s.App.ID, s.Platform, versionedBuildRef(d.Build, versionString))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -527,6 +556,19 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 		switch {
 		case !s.PriorReleased:
 			plan.Notes = append(plan.Notes, "first version: What's New is skipped (Apple rejects it on a first release)")
+		case s.Version == nil:
+			// The new version's locales are copied from the previous one;
+			// release_prepare sets What's New on them in the same call.
+			for _, loc := range slices.Sorted(maps.Keys(wn)) {
+				if err := applemeta.Check(applemeta.FieldWhatsNew, wn[loc]); err != nil {
+					return nil, nil, fmt.Errorf("%w: whats_new %s: %v", tool.ErrInvalidArgs, loc, err)
+				}
+				if loc == "*" {
+					plan.Changes = append(plan.Changes, "set What's New for every locale of the new version")
+					continue
+				}
+				plan.Changes = append(plan.Changes, "set What's New for "+loc+" (if the new version has it)")
+			}
 		default:
 			if all, ok := wn["*"]; ok {
 				for loc := range existing {
@@ -637,11 +679,15 @@ func planRelease(ctx context.Context, env *tool.Env, s *statusSnapshot, in statu
 		if err != nil {
 			return nil, nil, err
 		}
-		id, err := env.Plans.Propose(ctx, "release_submit", submitArgsKey(s.App, s.Platform, versionString), fp, tool.PlanPreview{
+		preview := tool.PlanPreview{
 			Summary:      fmt.Sprintf("submit %s %s %s for App Review", s.App.Name, s.Platform, versionString),
 			Affected:     []string{s.App.ID},
 			Irreversible: []string{"App Review starts; the version is locked until review ends or the submission is cancelled"},
-		})
+		}
+		if products := readyProducts(s); len(products) > 0 {
+			preview.Intended = append([]string{"submit the version"}, products...)
+		}
+		id, err := env.Plans.Propose(ctx, "release_submit", submitArgsKey(s.App, s.Platform, versionString), fp, preview)
 		if err != nil {
 			return nil, nil, fmt.Errorf("propose release_submit: %w", err)
 		}

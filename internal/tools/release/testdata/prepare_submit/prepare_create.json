@@ -41,6 +41,32 @@
           "type": "appStoreVersionPhasedReleases"
         }
       }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersionLocalizations/loc0",
+      "body": {
+        "data": {
+          "attributes": {
+            "whatsNew": "Hi"
+          },
+          "id": "loc0",
+          "type": "appStoreVersionLocalizations"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersionLocalizations/loc1",
+      "body": {
+        "data": {
+          "attributes": {
+            "whatsNew": "Hi"
+          },
+          "id": "loc1",
+          "type": "appStoreVersionLocalizations"
+        }
+      }
     }
   ],
   "result": {
@@ -70,8 +96,30 @@
       },
       {
         "step": "whats_new",
-        "status": "skipped",
-        "detail": "version was just created; run release_status again to plan What's New on its locales"
+        "status": "done",
+        "detail": "2 locales"
+      }
+    ],
+    "whats_new": [
+      {
+        "locale": "de-DE",
+        "level": "version",
+        "op": "update",
+        "fields": [
+          "whatsNew"
+        ],
+        "id": "loc1",
+        "outcome": "ok"
+      },
+      {
+        "locale": "en-US",
+        "level": "version",
+        "op": "update",
+        "fields": [
+          "whatsNew"
+        ],
+        "id": "loc0",
+        "outcome": "ok"
       }
     ]
   }

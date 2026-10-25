@@ -75,10 +75,16 @@ type statusSnapshot struct {
 	// PriceSet / AvailabilitySet report whether a schedule/availability exists.
 	PriceSet, AvailabilitySet bool
 	Submission                *tool.Resource
+	// BuildVersion is the marketing version (preReleaseVersion.version) of
+	// the attached build; "" when unknown.
+	BuildVersion string
 	// IAPs: product name → version state (or product state when unversioned).
 	IAPs map[string]string
 	// Subscriptions: product name → state.
 	Subscriptions map[string]string
+	// ReadyIAPs / ReadySubscriptions are the product ids checkProducts lists
+	// as ready; release_submit attaches them unless told not to.
+	ReadyIAPs, ReadySubscriptions []string
 }
 
 func fixTool(name string) *fixVia { return &fixVia{Tool: name} }
@@ -96,14 +102,34 @@ func runChecks(s *statusSnapshot) []check {
 		out = append(out, checkPhased(s))
 	}
 	if st := s.lockedState(); st != "" {
-		for i, c := range out {
-			if slices.Contains(versionScopedChecks, c.ID) && (c.Status == statusWarn || c.Status == statusBlock) {
-				out[i].Status, out[i].FixVia = statusInfo, nil
-				out[i].Detail = "locked while " + st + ": " + c.Detail
-			}
-		}
+		relabel(out, "locked while "+st+": ")
+	} else if st := s.releasedState(); st != "" {
+		relabel(out, "informational, "+st+" version is not editable: ")
 	}
 	return out
+}
+
+// relabel turns the version-scoped problems of a non-editable version into
+// info, keeping their items (e.g. the missing screenshot slots per locale).
+func relabel(out []check, prefix string) {
+	for i, c := range out {
+		if slices.Contains(versionScopedChecks, c.ID) && (c.Status == statusWarn || c.Status == statusBlock) {
+			out[i].Status, out[i].FixVia = statusInfo, nil
+			out[i].Detail = prefix + c.Detail
+		}
+	}
+}
+
+// releasedState returns the state of the inspected version when it already
+// reached the store, else "".
+func (s *statusSnapshot) releasedState() string {
+	if s.Version == nil {
+		return ""
+	}
+	if st := s.Version.Version.Str("appVersionState"); slices.Contains(releasedStates, st) {
+		return st
+	}
+	return ""
 }
 
 // lockedState returns the state of the inspected version when it is
@@ -172,9 +198,15 @@ func checkBuild(s *statusSnapshot) check {
 	default:
 		if exp, _ := b.Bool("expired"); exp {
 			c.Status, c.Detail, c.FixVia = statusBlock, "build "+b.Str("version")+" is expired", fixTool("release_prepare")
-		} else {
-			c.Status, c.Detail = statusOK, "build "+b.Str("version")+" attached and VALID"
+			break
 		}
+		want := s.Version.Version.Str("versionString")
+		if s.BuildVersion != "" && want != "" && s.BuildVersion != want {
+			c.Status, c.FixVia = statusBlock, fixTool("release_prepare")
+			c.Detail = fmt.Sprintf("build %s belongs to version %s, not %s; attach a %s build (build: \"latest\" picks the newest one)", b.Str("version"), s.BuildVersion, want, want)
+			break
+		}
+		c.Status, c.Detail = statusOK, "build "+b.Str("version")+" attached and VALID"
 	}
 	return c
 }
@@ -288,8 +320,17 @@ func checkScreenshots(s *statusSnapshot) check {
 		}
 	}
 	required := applemeta.RequiredDisplays(s.Platform, supportsIPad)
+	// The API does not say whether a build runs on iPad, so an iOS version
+	// with no iPad screenshots anywhere is never reported as covered.
+	ipadUnknown := s.Platform == tool.IOS && !supportsIPad
+	if ipadUnknown {
+		ipad := applemeta.RequiredDisplays(s.Platform, true)
+		if len(ipad) > len(required) {
+			c.Items = append(c.Items, fmt.Sprintf("%s: no iPad screenshots; if the build supports iPad, %s is required", s.AppAttrs.Str("primaryLocale"), joinDisplays(ipad[len(ipad)-1])))
+		}
+	}
 	primary := s.AppAttrs.Str("primaryLocale")
-	warn := false
+	warn := ipadUnknown && len(c.Items) > 0
 	for _, l := range s.Version.localizations() {
 		loc := l.Str("locale")
 		has := map[applemeta.DisplayType]bool{}
@@ -324,7 +365,7 @@ func checkScreenshots(s *statusSnapshot) check {
 	case c.Status == statusBlock:
 		c.Detail = "required screenshots missing or failed"
 	case warn:
-		c.Status, c.Detail = statusWarn, "some screenshots are still processing"
+		c.Status, c.Detail = statusWarn, "some screenshots are still processing or iPad support is unknown"
 	default:
 		c.Detail, c.FixVia = "required display types covered", nil
 	}
@@ -409,7 +450,7 @@ func checkAgeRating(s *statusSnapshot) check {
 	korea := len(c.Items) - general
 	switch {
 	case general > 0:
-		c.Status, c.Detail = statusWarn, fmt.Sprintf("%d age rating question(s) unanswered", len(c.Items))
+		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d age rating question(s) unanswered; Apple refuses the submission until they are answered", general)
 	case korea > 0 && s.KoreaAvailable != nil && *s.KoreaAvailable:
 		c.Status, c.Detail = statusWarn, fmt.Sprintf("%d Korea (GRAC) age rating question(s) unanswered; required because the app is available in South Korea", korea)
 	case korea > 0:
@@ -447,22 +488,33 @@ func checkPricing(s *statusSnapshot) check {
 	return c
 }
 
+// Product readiness by state. IAP states are the version state when the
+// product has versions, else InAppPurchaseState; subscriptions use
+// Subscription.state.
+var (
+	iapReady       = []string{"READY_FOR_REVIEW", "READY_TO_SUBMIT"}
+	iapPending     = []string{"PREPARE_FOR_SUBMISSION", "MISSING_METADATA", "WAITING_FOR_UPLOAD", "DEVELOPER_ACTION_NEEDED", "REJECTED", "DEVELOPER_REJECTED"}
+	subReady       = []string{"READY_TO_SUBMIT"}
+	subPending     = []string{"MISSING_METADATA", "DEVELOPER_ACTION_NEEDED", "REJECTED"}
+	productPending = map[bool][]string{true: iapPending, false: subPending}
+)
+
 func checkProducts(s *statusSnapshot) check {
 	c := check{ID: "in_app_products", Status: statusOK}
 	var ready, pending []string
 	for name, st := range s.IAPs {
-		switch st {
-		case "READY_FOR_REVIEW":
+		switch {
+		case slices.Contains(iapReady, st):
 			ready = append(ready, "iap "+name)
-		case "PREPARE_FOR_SUBMISSION", "MISSING_METADATA", "DEVELOPER_ACTION_NEEDED", "REJECTED":
+		case slices.Contains(productPending[true], st):
 			pending = append(pending, "iap "+name+": "+st)
 		}
 	}
 	for name, st := range s.Subscriptions {
-		switch st {
-		case "READY_TO_SUBMIT":
+		switch {
+		case slices.Contains(subReady, st):
 			ready = append(ready, "subscription "+name)
-		case "MISSING_METADATA", "DEVELOPER_ACTION_NEEDED", "REJECTED":
+		case slices.Contains(productPending[false], st):
 			pending = append(pending, "subscription "+name+": "+st)
 		}
 	}
@@ -472,9 +524,9 @@ func checkProducts(s *statusSnapshot) check {
 	switch {
 	case len(pending) > 0:
 		c.Status, c.FixVia = statusWarn, fixTool("iap_list")
-		c.Detail = fmt.Sprintf("%d product(s) not ready; %d ready to attach to the submission", len(pending), len(ready))
+		c.Detail = fmt.Sprintf("%d product(s) not ready; %d ready, release_submit attaches those", len(pending), len(ready))
 	case len(ready) > 0:
-		c.Detail = fmt.Sprintf("%d product(s) ready; release_submit attaches them", len(ready))
+		c.Detail = fmt.Sprintf("%d product(s) ready; release_submit attaches them (attach_first_time_products:false skips them)", len(ready))
 	default:
 		c.Detail = "no products waiting for review"
 	}
