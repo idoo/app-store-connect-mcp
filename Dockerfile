@@ -7,7 +7,7 @@
 #                     hamn serve --http 0.0.0.0:8765 --allow-remote
 # Publish the port on loopback only and put a TLS proxy in front of anything
 # reachable from another host; the bearer token is required either way.
-FROM golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS build
+FROM golang:1.27.3@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
