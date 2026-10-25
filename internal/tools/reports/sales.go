@@ -34,7 +34,6 @@ type salesIn struct {
 	GroupBy    []string    `json:"group_by,omitempty" jsonschema:"SALES grouping dimensions"`
 	TopN       int         `json:"top_n,omitempty" jsonschema:"groups kept, default 10, max 100"`
 	App        tool.AppRef `json:"app,omitempty" jsonschema:"only this app's rows; default: all apps"`
-	WithUSD    bool        `json:"with_usd_estimate,omitempty" jsonschema:"add proceeds_estimate_usd via Apple's latest FX rates"`
 }
 
 func init() {
@@ -166,20 +165,19 @@ func checkReportDate(f applemeta.Frequency, date string) error {
 
 // salesOut is the sales_report result.
 type salesOut struct {
-	ReportType  string                     `json:"report_type"`
-	SubType     string                     `json:"report_subtype"`
-	Frequency   string                     `json:"frequency"`
-	From        string                     `json:"from"`
-	To          string                     `json:"to"`
-	App         *tool.App                  `json:"app,omitempty"`
-	CoveredDays []string                   `json:"covered_days"`
-	PendingDays []string                   `json:"pending_days,omitempty"`
-	Rows        int                        `json:"rows"`
-	Units       map[reports.Category]int64 `json:"units,omitempty"`
-	Proceeds    []amountOut                `json:"proceeds,omitempty"`
-	Groups      []reports.SalesGroup       `json:"groups,omitempty"`
-	Omitted     int                        `json:"groups_omitted,omitempty"`
-	USD         *usdEstimate               `json:"proceeds_estimate_usd,omitempty"`
+	ReportType  string               `json:"report_type"`
+	SubType     string               `json:"report_subtype"`
+	Frequency   string               `json:"frequency"`
+	From        string               `json:"from"`
+	To          string               `json:"to"`
+	App         *tool.App            `json:"app,omitempty"`
+	CoveredDays []string             `json:"covered_days"`
+	PendingDays []string             `json:"pending_days,omitempty"`
+	Rows        int                  `json:"rows"`
+	Units       reports.Units        `json:"units,omitempty"`
+	Proceeds    []amountOut          `json:"proceeds,omitempty"`
+	Groups      []reports.SalesGroup `json:"groups,omitempty"`
+	Omitted     int                  `json:"groups_omitted,omitempty"`
 	// Typed summaries for subscription report types.
 	Subscriptions *reports.SubscriptionsSummary `json:"subscriptions,omitempty"`
 	SnapshotDay   string                        `json:"snapshot_day,omitempty"`
@@ -188,17 +186,6 @@ type salesOut struct {
 	// Columns/Sample are decoded rows for report types without aggregation.
 	Columns []string            `json:"columns,omitempty"`
 	Sample  []map[string]string `json:"sample,omitempty"`
-
-	proceedsMoney reports.Money // exact totals for the USD estimate
-}
-
-// usdEstimate converts proceeds with Apple's own FX rates; it is labelled as
-// an estimate because rates come from a closed fiscal month.
-type usdEstimate struct {
-	Amount      string `json:"amount"`
-	Label       string `json:"label"`
-	FXSource    string `json:"fx_source"`
-	SourceMonth string `json:"fx_source_month"`
 }
 
 // subscriberSummary totals a SUBSCRIBER report.
@@ -272,16 +259,6 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 		if err := salesAggregate(&out, tables, app, in.GroupBy, topN); err != nil {
 			return nil, err
 		}
-		if in.WithUSD {
-			est, warn, err := salesUSDEstimate(ctx, env, vendor, out.proceedsMoney)
-			if err != nil {
-				return nil, err
-			}
-			out.USD = est
-			if warn != "" {
-				res.Warn(warn)
-			}
-		}
 	case applemeta.ReportSubscription:
 		if err := subscriptionSnapshot(&out, tables, app); err != nil {
 			return nil, err
@@ -299,13 +276,9 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 			res.Warn(warn)
 		}
 	}
-	if in.WithUSD && rt != applemeta.ReportSales {
-		res.Warn("with_usd_estimate applies to report_type SALES only")
-	}
 	if len(out.CoveredDays) == 0 && len(out.PendingDays) > 0 {
 		res.Warn("no report published yet for this range; Apple publishes daily reports the next day (Pacific time)")
 	}
-	out.proceedsMoney = nil
 	return res, nil
 }
 
@@ -343,54 +316,9 @@ func salesAggregate(out *salesOut, tables []dayTable, app *tool.App, groupBy []s
 	out.Rows = len(rows)
 	out.Units = agg.Totals.Units
 	out.Proceeds = sortedAmounts(agg.Totals.Proceeds)
-	out.proceedsMoney = agg.Totals.Proceeds
 	out.Groups = agg.Groups
 	out.Omitted = agg.Omitted
 	return nil
-}
-
-// salesUSDEstimate converts proceeds with the FX rates of the latest closed
-// fiscal month's FINANCE_DETAIL report. It returns no estimate (and a warning)
-// when no such report is published or a currency has no rate; it never guesses.
-func salesUSDEstimate(ctx context.Context, env *tool.Env, vendor string, proceeds reports.Money) (*usdEstimate, string, error) {
-	if len(proceeds) == 0 {
-		return nil, "", nil
-	}
-	region, _ := applemeta.FinanceRegion(applemeta.ReportFinanceDetail)
-	now := env.Clock.Now()
-	for back := range 2 {
-		month := lastClosedMonth(now, back)
-		t, pending, err := download(ctx, env, "/v1/financeReports", financeQuery(vendor, applemeta.ReportFinanceDetail, region, month))
-		if err != nil {
-			return nil, "", err
-		}
-		if pending {
-			continue
-		}
-		rows, err := reports.FinanceRows(t)
-		if err != nil {
-			return nil, "", fmt.Errorf("finance report %s: %w", month, err)
-		}
-		rates := fxRates(rows)
-		total := new(big.Rat)
-		var missing []string
-		for _, c := range proceeds.Currencies() {
-			rate, ok := rates[c]
-			if !ok {
-				missing = append(missing, c)
-				continue
-			}
-			total.Add(total, new(big.Rat).Mul(proceeds[c], rate))
-		}
-		if len(missing) > 0 {
-			return nil, fmt.Sprintf("no USD estimate: finance report %s has no exchange rate for %s", month, strings.Join(missing, ", ")), nil
-		}
-		return &usdEstimate{
-			Amount: reports.FormatAmount("USD", total), Label: "estimate",
-			FXSource: "Apple exchange rates, finance detail report", SourceMonth: month,
-		}, "", nil
-	}
-	return nil, "no USD estimate: no finance report for the last closed fiscal months is published yet", nil
 }
 
 func subscriptionSnapshot(out *salesOut, tables []dayTable, app *tool.App) error {
@@ -419,7 +347,7 @@ func subscriptionEvents(out *salesOut, tables []dayTable, app *tool.App) error {
 			return fmt.Errorf("subscription event report %s: %w", d.Date, err)
 		}
 		for _, r := range rs {
-			if app == nil || strings.EqualFold(r.AppName, app.Name) {
+			if subscriptionRowMatches(r.AppAppleID, r.AppName, app) {
 				rows = append(rows, r)
 			}
 		}
@@ -438,7 +366,7 @@ func subscribers(out *salesOut, tables []dayTable, app *tool.App) error {
 			return fmt.Errorf("subscriber report %s: %w", d.Date, err)
 		}
 		for _, r := range rs {
-			if app != nil && !strings.EqualFold(r.AppName, app.Name) {
+			if !subscriptionRowMatches(r.AppAppleID, r.AppName, app) {
 				continue
 			}
 			out.Rows++
@@ -457,6 +385,19 @@ func subscribers(out *salesOut, tables []dayTable, app *tool.App) error {
 	s.Proceeds = sortedAmounts(proceeds)
 	out.Subscribers = &s
 	return nil
+}
+
+// subscriptionRowMatches filters SUBSCRIPTION_EVENT / SUBSCRIBER rows by App
+// Apple ID, which survives renames. Reports without that column fall back to
+// the app name.
+func subscriptionRowMatches(appAppleID, appName string, app *tool.App) bool {
+	if app == nil {
+		return true
+	}
+	if appAppleID != "" {
+		return appAppleID == app.ID
+	}
+	return strings.EqualFold(appName, app.Name)
 }
 
 // rawRows returns decoded rows for report types without a typed summary,

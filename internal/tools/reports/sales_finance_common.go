@@ -5,12 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/idoo/hamn/internal/applemeta"
@@ -104,43 +102,17 @@ type dayTable struct {
 // concurrency. Results keep the order of dates; 404s are marked pending. The
 // first real error cancels the rest.
 func fetchSalesDates(ctx context.Context, env *tool.Env, vendor string, rs applemeta.ReportSpec, subType string, freq applemeta.Frequency, dates []string) ([]dayTable, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	out := make([]dayTable, len(dates))
-	errs := make([]error, len(dates))
-	sem := make(chan struct{}, reportFetchConcurrency)
-	var wg sync.WaitGroup
-	for i, d := range dates {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				errs[i] = ctx.Err()
-				return
-			}
-			defer func() { <-sem }()
-			t, pending, err := download(ctx, env, "/v1/salesReports", salesQuery(vendor, rs, subType, freq, d))
-			if err != nil {
-				errs[i] = err
-				cancel()
-				return
-			}
-			out[i] = dayTable{Date: d, Table: t, Pending: pending}
-		}()
-	}
-	wg.Wait()
-	// Report the root cause, not the cancellations it triggered.
-	for _, err := range errs {
-		if err != nil && !errors.Is(err, context.Canceled) {
-			return nil, err
-		}
-	}
-	for _, err := range errs {
+	err := tool.Parallel(ctx, reportFetchConcurrency, dates, func(ctx context.Context, i int, d string) error {
+		t, pending, err := download(ctx, env, "/v1/salesReports", salesQuery(vendor, rs, subType, freq, d))
 		if err != nil {
-			return nil, err
+			return err
 		}
+		out[i] = dayTable{Date: d, Table: t, Pending: pending}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -151,22 +123,6 @@ func lastClosedMonth(now time.Time, extra int) string {
 	d := applemeta.PacificDay(now)
 	first := d.AddDate(0, 0, 1-d.Day())
 	return first.AddDate(0, -1-extra, 0).Format("2006-01")
-}
-
-// fxRates collects Apple's per-currency USD exchange rates from finance rows
-// (USD = amount × rate). USD itself is always 1.
-func fxRates(rows []reports.FinanceRow) map[string]*big.Rat {
-	rates := map[string]*big.Rat{"USD": big.NewRat(1, 1)}
-	for _, r := range rows {
-		cur := strings.ToUpper(strings.TrimSpace(r.PartnerShareCurrency))
-		if cur == "" || r.ExchangeRate == nil {
-			continue
-		}
-		if _, ok := rates[cur]; !ok {
-			rates[cur] = new(big.Rat).Set(r.ExchangeRate)
-		}
-	}
-	return rates
 }
 
 // amountOut is one currency amount, formatted with its precision.

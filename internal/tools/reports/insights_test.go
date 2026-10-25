@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
@@ -123,5 +124,38 @@ func TestInsightsSummaryVendorMissing(t *testing.T) {
 	r = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "insights_summary"), ind.Env, ``))
 	if s := tooltest.Decode[map[string]any](t, r)["sales"].(map[string]any); !strings.Contains(s["reason"].(string), "Team API key") {
 		t.Errorf("individual sales = %v", s)
+	}
+}
+
+// last_month March (31 days) vs February (28 days) at a flat daily rate must
+// not read as growth: both windows are cut to 28 days and both lengths shown.
+func TestInsightsLastMonthEqualLengthWindows(t *testing.T) {
+	k := reportsKit(t).ReadOnly()
+	k.Clock.Set(time.Date(2026, 4, 10, 19, 0, 0, 0, time.UTC))
+	day := gz(t, "sales_day1.tsv")
+	k.ASC.HandleFunc(http.MethodGet, "/v1/salesReports", func(tool.Request) tooltest.Fixture {
+		return tooltest.Fixture{Header: http.Header{"Content-Type": {"application/a-gzip"}}, Body: day}
+	})
+	for _, p := range []string{
+		"/v1/apps/{id}/customerReviews", "/v1/apps/{id}/appStoreVersions",
+		"/v1/apps/{id}/betaFeedbackScreenshotSubmissions", "/v1/apps/{id}/betaFeedbackCrashSubmissions", requestsPath,
+	} {
+		k.ASC.Handle(http.MethodGet, p, http.StatusOK, emptyList)
+	}
+	r := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "insights_summary"), k.Env, `{"period":"last_month"}`))
+	sales := tooltest.Decode[map[string]any](t, r)["sales"].(map[string]any)
+	if sales["compared_days"] != 28.0 || sales["current_days"] != 31.0 || sales["previous_days"] != 28.0 {
+		t.Fatalf("sales = %s", tooltest.JSON(t, sales))
+	}
+	if cur, prev := tooltest.JSON(t, sales["units"]), tooltest.JSON(t, sales["previous_units"]); cur != prev {
+		t.Errorf("flat rate compared unequal windows: units %s vs previous %s", cur, prev)
+	}
+	for c, ch := range sales["units_change"].(map[string]any) {
+		if ch != "+0.0%" && ch != "0.0%" {
+			t.Errorf("units_change[%s] = %v, want no change", c, ch)
+		}
+	}
+	if !strings.Contains(sales["reason"].(string), "first 28 days") {
+		t.Errorf("reason = %v", sales["reason"])
 	}
 }
