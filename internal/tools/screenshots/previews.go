@@ -82,6 +82,10 @@ func previewsUpload(ctx context.Context, env *tool.Env, in previewIn) (*tool.Res
 	if err != nil {
 		return nil, fmt.Errorf("stat %s: %w", in.File, err)
 	}
+	warnings, err := checkPreview(fh, st.Size(), pvType, in.PreviewFrameTimeCode)
+	if err != nil {
+		return nil, err
+	}
 	sum, err := upload.FileMD5(fh)
 	if err != nil {
 		return nil, fmt.Errorf("checksum %s: %w", in.File, err)
@@ -110,7 +114,7 @@ func previewsUpload(ctx context.Context, env *tool.Env, in previewIn) (*tool.Res
 		out.SetID = set.ID
 		if j := slices.IndexFunc(set.Previews, func(p remotePreview) bool { return p.Checksum == sum }); j >= 0 {
 			out.Existing = &set.Previews[j]
-			return tool.Already(out), nil
+			return withWarnings(tool.Already(out), warnings), nil
 		}
 		if len(set.Previews) >= maxPreviewsPerSet {
 			return nil, tool.WithNext(fmt.Errorf("%w: %s %s already has %d previews (the maximum); delete one first", tool.ErrInvalidArgs, locale, pvType, len(set.Previews)),
@@ -161,10 +165,17 @@ func previewsUpload(ctx context.Context, env *tool.Env, in previewIn) (*tool.Res
 		return nil, err
 	}
 	if res.StillProcessing {
-		return tool.StillProcessing(out, "Apple is still processing the video; check it later with screenshots_list").
+		return withWarnings(tool.StillProcessing(out, "Apple is still processing the video; check it later with screenshots_list"), warnings).
 			Then(tool.NextStep{Tool: "screenshots_list", Args: map[string]any{"app": t.App.ID, "locales": []string{locale}}}), nil
 	}
-	return tool.OK(out), nil
+	return withWarnings(tool.OK(out), warnings), nil
+}
+
+func withWarnings(res *tool.Result, ws []string) *tool.Result {
+	for _, w := range ws {
+		res.Warn(w)
+	}
+	return res
 }
 
 // parsePreviewType accepts a PreviewType enum value or a display name; empty

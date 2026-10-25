@@ -123,6 +123,33 @@ func NormalizeLocale(in string) (string, error) {
 	return "", &LocaleError{Input: in, Valid: Locales()}
 }
 
+// sameLocale lists lowercased regional inputs that name exactly the ASC
+// locale they normalize to (the region adds nothing), so mapping them is not
+// a fold.
+var sameLocale = map[string]bool{
+	"ja-jp": true, "ko-kr": true, "sv-se": true, "it-it": true, "fi-fi": true, "da-dk": true, "cs-cz": true,
+	"el-gr": true, "he-il": true, "hi-in": true, "hr-hr": true, "hu-hu": true, "id-id": true, "ms-my": true,
+	"pl-pl": true, "ro-ro": true, "ru-ru": true, "sk-sk": true, "th-th": true, "tr-tr": true, "uk-ua": true,
+	"vi-vn": true, "ca-es": true, "nb-no": true, "no-no": true, "en-uk": true, "es-419": true,
+	"zh-cn": true, "zh-hans-cn": true, "zh-tw": true, "zh-hant-tw": true,
+}
+
+// LocaleFolded reports whether NormalizeLocale(in) == out folded a regional
+// variant into a different listing locale (de-CH → de-DE, en-IN → en-GB,
+// nn → no), as opposed to a case, "_" or alias spelling change of the same
+// locale. Folded inputs silently overwrite the target listing, so callers
+// should warn about them.
+func LocaleFolded(in, out string) bool {
+	key := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(in)), "_", "-")
+	if key == strings.ToLower(out) || sameLocale[key] {
+		return false
+	}
+	if key == "nn" {
+		return true
+	}
+	return strings.Contains(key, "-") && !strings.Contains(key, " ")
+}
+
 // TerritoryLanguage maps ASC territory codes (ISO 3166-1 alpha-3, as in
 // customer reviews) to the ASC locale a reply most likely should use. It is a
 // hint, not a rule: multilingual territories map to the majority language.

@@ -206,11 +206,16 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 // planAppInfo diffs categories and the age rating declaration of the
 // editable app info.
 func planAppInfo(ctx context.Context, env *tool.Env, appID string, platform tool.Platform, in appinfoIn) ([]infoWrite, []infoChange, error) {
-	editable, _, included, err := appInfos(ctx, env, appID, "ageRatingDeclaration,primaryCategory,secondaryCategory")
+	infos, err := appInfos(ctx, env, appID, "ageRatingDeclaration,primaryCategory,secondaryCategory")
 	if err != nil {
 		return nil, nil, err
 	}
+	editable, included := infos.Editable, infos.Included
 	if editable == nil {
+		if st := infos.lockedState(); st != "" {
+			return nil, nil, tool.WithNext(fmt.Errorf("%w: app info is %s, so categories and age rating can't change until review ends", tool.ErrInvalidArgs, st),
+				tool.NextStep{Tool: "release_review_status", Args: map[string]any{"app": appID}})
+		}
 		return nil, nil, tool.WithNext(fmt.Errorf("%w: categories and age rating can change only while a new version is being prepared", tool.ErrInvalidArgs),
 			tool.NextStep{Tool: "release_prepare", Args: map[string]any{"app": appID}})
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -77,6 +78,8 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 		}
 	}
 	raw := map[string]*LocaleFields{}
+	unknown := map[string][]string{}
+	var appInfoFiles []string
 	err = files.WalkDir(root, func(p string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
@@ -91,16 +94,23 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 			return nil
 		case len(parts) == 1 && d.IsDir():
 			if slices.Contains(fastlaneNonLocale, parts[0]) {
+				appInfoFiles = append(appInfoFiles, parts[0]+"/")
 				return fs.SkipDir
 			}
 			return nil
 		case len(parts) == 1:
-			return nil // copyright.txt, primary_category.txt …
+			if strings.HasSuffix(parts[0], ".txt") {
+				appInfoFiles = append(appInfoFiles, parts[0]) // copyright.txt, primary_category.txt …
+			}
+			return nil
 		case d.IsDir():
 			return fs.SkipDir
 		}
 		key, ok := byFile[parts[1]]
 		if !ok {
+			if strings.HasSuffix(parts[1], ".txt") {
+				unknown[parts[0]] = append(unknown[parts[0]], parts[1])
+			}
 			return nil
 		}
 		b, err := files.ReadFile(p)
@@ -120,6 +130,18 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 	def := raw[fastlaneDefault]
 	delete(raw, fastlaneDefault)
 	l := &Listing{Locales: raw}
+	for _, loc := range slices.Sorted(maps.Keys(unknown)) {
+		l.Notes = append(l.Notes, Issue{
+			Locale: loc, Code: IssueUnknownSourceKey,
+			Message: fmt.Sprintf("%s/%s not read: not a deliver listing file", loc, strings.Join(unknown[loc], ", ")),
+		})
+	}
+	if len(appInfoFiles) > 0 {
+		l.Notes = append(l.Notes, Issue{
+			Code:    IssueUnknownSourceKey,
+			Message: fmt.Sprintf("%s not read here; set copyright, categories and review details with appinfo_update", strings.Join(appInfoFiles, ", ")),
+		})
+	}
 	if def != nil {
 		for _, lf := range raw {
 			for _, f := range Fields {
@@ -162,28 +184,41 @@ func ToFastlane(files tool.Files, dir string, l *Listing) ([]string, error) {
 // FromExpo reads EAS Metadata's store.config.json at path:
 // apple.info.<locale>.{title,subtitle,description,keywords[],releaseNotes,
 // promoText,marketingUrl,supportUrl,privacyPolicyUrl,privacyChoicesUrl,
-// privacyPolicyText}. Keywords are joined with commas; other keys are ignored.
+// privacyPolicyText}. Keywords are joined with commas. Other keys under
+// apple.info.<locale> and the app-level apple.copyright, categories, review
+// and advisory become notes, since metadata_plan does not apply them.
 func FromExpo(files tool.Files, path string) (*Listing, error) {
 	b, err := files.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("metadata: read %s: %w", path, err)
 	}
 	var doc struct {
-		Apple struct {
-			Info map[string]map[string]json.RawMessage `json:"info"`
-		} `json:"apple"`
+		Apple map[string]json.RawMessage `json:"apple"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return nil, fmt.Errorf("%w: %s: %v", tool.ErrInvalidArgs, path, err)
 	}
-	if doc.Apple.Info == nil {
+	var info map[string]map[string]json.RawMessage
+	if rawInfo, ok := doc.Apple["info"]; ok {
+		if err := json.Unmarshal(rawInfo, &info); err != nil {
+			return nil, fmt.Errorf("%w: %s apple.info: %v", tool.ErrInvalidArgs, path, err)
+		}
+	}
+	if info == nil {
 		return nil, fmt.Errorf("%w: %s has no apple.info", tool.ErrInvalidArgs, path)
 	}
+	known := map[string]bool{}
+	for _, f := range Fields {
+		if f.Expo != "" {
+			known[f.Expo] = true
+		}
+	}
 	l := &Listing{Locales: map[string]*LocaleFields{}}
-	for code, info := range doc.Apple.Info {
+	for _, code := range slices.Sorted(maps.Keys(info)) {
+		loc := info[code]
 		lf := &LocaleFields{}
 		for _, f := range Fields {
-			v, ok := info[f.Expo]
+			v, ok := loc[f.Expo]
 			if !ok || f.Expo == "" {
 				continue
 			}
@@ -193,7 +228,31 @@ func FromExpo(files tool.Files, path string) (*Listing, error) {
 			}
 			_ = lf.Set(f.Key, s) // key comes from Fields
 		}
+		var extra []string
+		for _, k := range slices.Sorted(maps.Keys(loc)) {
+			if !known[k] {
+				extra = append(extra, k)
+			}
+		}
+		if len(extra) > 0 {
+			l.Notes = append(l.Notes, Issue{
+				Locale: code, Code: IssueUnknownSourceKey,
+				Message: fmt.Sprintf("apple.info.%s.{%s} ignored: not an EAS listing key (title, subtitle, description, keywords, releaseNotes, promoText, marketingUrl, supportUrl, privacyPolicyUrl, privacyChoicesUrl, privacyPolicyText)", code, strings.Join(extra, ",")),
+			})
+		}
 		l.Locales[code] = lf
+	}
+	var appLevel []string
+	for _, k := range []string{"copyright", "categories", "review", "advisory"} {
+		if _, ok := doc.Apple[k]; ok {
+			appLevel = append(appLevel, "apple."+k)
+		}
+	}
+	if len(appLevel) > 0 {
+		l.Notes = append(l.Notes, Issue{
+			Code:    IssueUnknownSourceKey,
+			Message: fmt.Sprintf("%s not read here; set them with appinfo_update", strings.Join(appLevel, ", ")),
+		})
 	}
 	return l.Normalize()
 }

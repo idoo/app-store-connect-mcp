@@ -3,6 +3,8 @@ package screenshots
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -37,7 +39,24 @@ type listOut struct {
 	App      appOut        `json:"app"`
 	Platform tool.Platform `json:"platform"`
 	Version  versionOut    `json:"version"`
+	Coverage *coverageOut  `json:"coverage,omitempty"`
 	Locales  []localeOut   `json:"locales"`
+}
+
+// missingDisplay is a locale lacking every slot of one required group.
+type missingDisplay struct {
+	Locale string                  `json:"locale"`
+	OneOf  []applemeta.DisplayType `json:"one_of"`
+}
+
+// coverageOut says whether the shown locales have the screenshots App Review
+// requires. Locales with no screenshots at all use the primary locale's.
+type coverageOut struct {
+	PrimaryLocale      string                    `json:"primary_locale,omitempty"`
+	Required           [][]applemeta.DisplayType `json:"required"`
+	MissingRequired    []missingDisplay          `json:"missing_required"`
+	FallsBackToPrimary []string                  `json:"falls_back_to_primary,omitempty"`
+	Note               string                    `json:"note,omitempty"`
 }
 
 func init() {
@@ -45,7 +64,8 @@ func init() {
 		Name: "screenshots_list", Toolset: tool.Screenshots, Class: tool.Read, Idempotent: true,
 		Title: "List screenshots and previews",
 		Description: "Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, " +
-			"file names, checksums, delivery states, sizes. thumbnails:true attaches up to 4 small images.",
+			"file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back " +
+			"to the primary). thumbnails:true attaches up to 4 small images.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, screenshotsList))
 }
@@ -101,11 +121,69 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 		}
 		out.Locales = append(out.Locales, localeOut{Locale: code, LocalizationID: loc.ID, ScreenshotSets: sets, PreviewSets: previews})
 	}
+	if display == "" {
+		if out.Coverage, err = coverage(ctx, env, t, out.Locales); err != nil {
+			return nil, err
+		}
+	}
 	res := tool.OK(out)
 	if in.Thumbnails {
 		addThumbnails(ctx, env, res, out.Locales)
 	}
 	return res, nil
+}
+
+// coverage checks the required display types per shown locale, mirroring
+// release_status: a non-primary locale without screenshots falls back to
+// the primary locale, and iPad is required once any iPad set exists (the API
+// does not say whether a build runs on iPad).
+func coverage(ctx context.Context, env *tool.Env, t *target, locs []localeOut) (*coverageOut, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/apps/"+t.App.ID, url.Values{"fields[apps]": {"primaryLocale"}})
+	if err != nil {
+		return nil, fmt.Errorf("read primary locale: %w", err)
+	}
+	c := &coverageOut{MissingRequired: []missingDisplay{}}
+	if r, ok := resp.First(); ok {
+		c.PrimaryLocale = r.Str("primaryLocale")
+	}
+	supportsIPad := false
+	for _, l := range locs {
+		for _, s := range l.ScreenshotSets {
+			if strings.HasPrefix(string(s.Display), "APP_IPAD") && len(s.Shots) > 0 {
+				supportsIPad = true
+			}
+		}
+	}
+	c.Required = applemeta.RequiredDisplays(t.Platform, supportsIPad)
+	if c.Required == nil {
+		c.Required = [][]applemeta.DisplayType{}
+	}
+	for _, l := range locs {
+		has := map[applemeta.DisplayType]bool{}
+		for _, s := range l.ScreenshotSets {
+			if len(s.Shots) > 0 {
+				has[s.Display] = true
+			}
+		}
+		if len(has) == 0 && l.Locale != c.PrimaryLocale {
+			c.FallsBackToPrimary = append(c.FallsBackToPrimary, l.Locale)
+			continue
+		}
+		for _, group := range c.Required {
+			if !slices.ContainsFunc(group, func(d applemeta.DisplayType) bool { return has[d] }) {
+				c.MissingRequired = append(c.MissingRequired, missingDisplay{Locale: l.Locale, OneOf: group})
+			}
+		}
+	}
+	var notes []string
+	if len(c.FallsBackToPrimary) > 0 {
+		notes = append(notes, fmt.Sprintf("%d locale(s) have no screenshots and show the %s ones in the store; that is not an error", len(c.FallsBackToPrimary), c.PrimaryLocale))
+	}
+	if t.Platform == tool.IOS && !supportsIPad {
+		notes = append(notes, "no iPad screenshots; if the build supports iPad, APP_IPAD_PRO_3GEN_129 is required too")
+	}
+	c.Note = strings.Join(notes, "; ")
+	return c, nil
 }
 
 // addThumbnails fetches up to maxThumbnails rendered screenshots through the
