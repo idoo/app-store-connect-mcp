@@ -4,10 +4,10 @@
   "name": "hamn",
   "display_name": "hamn: App Store Connect",
   "version": "0.0.0",
-  "description": "Ship iOS & macOS apps by asking your agent: App Store Connect workflows plus the complete API, read-only by default.",
-  "long_description": "hamn is an App Store Connect MCP server: releases, TestFlight, metadata, reviews, sales and finance reports, plus every App Store Connect API operation via a spec-validated generic layer. Writes are off unless you enable them, and every destructive or public action needs an explicit plan/confirm step.",
+  "description": "MCP server for App Store Connect. Ask Claude about releases, TestFlight, reviews and sales. Read-only by default.",
+  "long_description": "hamn is an MCP server for App Store Connect, made by one indie developer in Sweden. Ask Claude what's blocking your next release, set What's New in ten languages, send a build to TestFlight testers, read this week's reviews or check last week's sales. It can also call any App Store Connect API endpoint. It starts read-only. Anything public or irreversible, like submitting for review or replying to a customer, shows you a preview first and waits for your yes. Your key stays on your machine. MIT, free, no telemetry.",
   "author": {
-    "name": "Ivan Dyachenko",
+    "name": "Ivan Verevkin",
     "url": "https://github.com/idoo"
   },
   "repository": {

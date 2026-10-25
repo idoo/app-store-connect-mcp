@@ -82,7 +82,7 @@ dockers_v2:
       - linux/arm64
     labels:
       org.opencontainers.image.title: hamn
-      org.opencontainers.image.description: App Store Connect MCP server
+      org.opencontainers.image.description: MCP server for App Store Connect, read-only by default
       org.opencontainers.image.source: https://github.com/idoo/hamn
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
