@@ -216,6 +216,7 @@ func (t Tool) ListedIn(p ProfileInfo) bool {
 // tools obtain it from their confirm gate. It never returns nil.
 func (t Tool) Call(ctx context.Context, env *Env, raw json.RawMessage) (res *Result) {
 	env = env.complete()
+	env.Files = withRoots(ctx, env.Files, env.Roots)
 	c := &call{meta: t.meta}
 	defer func() {
 		if p := recover(); p != nil {

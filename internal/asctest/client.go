@@ -50,7 +50,7 @@ type staticTokens struct{}
 func (staticTokens) Token(context.Context) (string, error) { return TestToken, nil }
 
 // Invalidate implements asc.TokenSource.
-func (staticTokens) Invalidate() {}
+func (staticTokens) Invalidate(string) {}
 
 // instantClock is a tool.Clock whose Sleep does not wait.
 type instantClock struct{}

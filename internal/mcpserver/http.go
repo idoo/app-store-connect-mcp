@@ -15,7 +15,9 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +28,20 @@ import (
 
 // EnvHTTPToken is the environment variable holding the HTTP bearer token.
 const EnvHTTPToken = "HAMN_HTTP_TOKEN" //nolint:gosec // variable name, not a credential.
+
+// Session limits for HTTP mode, overridable by HTTPOptions or env.
+const (
+	EnvHTTPSessionTimeout = "HAMN_HTTP_SESSION_TIMEOUT"
+	EnvHTTPMaxSessions    = "HAMN_HTTP_MAX_SESSIONS"
+	// DefaultSessionTimeout closes idle sessions; it outlives PlanTTL so a
+	// pending plan never loses its session first.
+	DefaultSessionTimeout = 30 * time.Minute
+	// DefaultMaxSessions caps concurrently open sessions.
+	DefaultMaxSessions = 64
+)
+
+// sessionIDHeader is the Streamable HTTP session header.
+const sessionIDHeader = "Mcp-Session-Id"
 
 // ErrTokenRequired means HTTP mode has no token and cannot print a generated
 // one because stderr is not a terminal.
@@ -50,6 +66,13 @@ type HTTPOptions struct {
 	Stderr io.Writer
 	// StderrIsTTY overrides terminal detection of os.Stderr (tests).
 	StderrIsTTY *bool
+	// SessionTimeout closes sessions idle this long; 0 reads
+	// HAMN_HTTP_SESSION_TIMEOUT (a Go duration), else DefaultSessionTimeout.
+	// Negative never expires sessions.
+	SessionTimeout time.Duration
+	// MaxSessions caps open sessions (new ones get 503); 0 reads
+	// HAMN_HTTP_MAX_SESSIONS, else DefaultMaxSessions. Negative is unlimited.
+	MaxSessions int
 }
 
 // ServeHTTP serves MCP over Streamable HTTP on addr until ctx ends. It binds
@@ -127,7 +150,12 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 		return nil, errors.New("mcpserver: http: NewServer is required")
 	}
 	want := sha256.Sum256([]byte(opts.Token))
-	mcpHandler := mcp.NewStreamableHTTPHandler(opts.NewServer, &mcp.StreamableHTTPOptions{Logger: opts.Logger})
+	timeout, maxSessions, err := sessionLimits(opts)
+	if err != nil {
+		return nil, err
+	}
+	mcpHandler := mcp.NewStreamableHTTPHandler(opts.NewServer, &mcp.StreamableHTTPOptions{Logger: opts.Logger, SessionTimeout: timeout})
+	limit := &sessionLimiter{max: maxSessions}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -144,9 +172,89 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		mcpHandler.ServeHTTP(w, r)
+		if r.Header.Get(sessionIDHeader) != "" {
+			mcpHandler.ServeHTTP(w, r)
+			return
+		}
+		if !limit.acquire() {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "too many open sessions; close one or wait for idle ones to expire", http.StatusServiceUnavailable)
+			return
+		}
+		slot := &buildSlot{}
+		mcpHandler.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), buildSlotKey{}, slot)))
+		limit.release(slot.srv)
 	}))
 	return mux, nil
+}
+
+// sessionLimits resolves the idle timeout (0 = never, for the SDK) and the
+// session cap (0 = unlimited) from opts, then env, then defaults.
+func sessionLimits(opts HTTPOptions) (time.Duration, int, error) {
+	timeout, maxSessions := opts.SessionTimeout, opts.MaxSessions
+	if timeout == 0 {
+		timeout = DefaultSessionTimeout
+		if v := os.Getenv(EnvHTTPSessionTimeout); v != "" {
+			d, err := time.ParseDuration(v)
+			if err != nil || d == 0 {
+				return 0, 0, fmt.Errorf("mcpserver: http: %s=%q: want a duration such as 30m (negative never expires)", EnvHTTPSessionTimeout, v)
+			}
+			timeout = d
+		}
+	}
+	if maxSessions == 0 {
+		maxSessions = DefaultMaxSessions
+		if v := os.Getenv(EnvHTTPMaxSessions); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n == 0 {
+				return 0, 0, fmt.Errorf("mcpserver: http: %s=%q: want a session count (negative is unlimited)", EnvHTTPMaxSessions, v)
+			}
+			maxSessions = n
+		}
+	}
+	return max(timeout, 0), max(maxSessions, 0), nil
+}
+
+// buildSlotKey carries a *buildSlot through one session-less HTTP request.
+type buildSlotKey struct{}
+
+// buildSlot memoizes the server built for one new-session request: the SDK
+// asks for a server twice on it (protocol check, then session creation).
+type buildSlot struct{ srv *mcp.Server }
+
+// sessionLimiter counts open sessions: each new-session request reserves a
+// place, and afterwards its server counts while it still has a session (the
+// SDK drops sessions on DELETE and idle timeout).
+type sessionLimiter struct {
+	max     int // 0 = unlimited
+	mu      sync.Mutex
+	pending int
+	servers []*mcp.Server
+}
+
+func (l *sessionLimiter) acquire() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.servers = slices.DeleteFunc(l.servers, func(s *mcp.Server) bool {
+		for range s.Sessions() {
+			return false
+		}
+		return true
+	})
+	if l.max > 0 && len(l.servers)+l.pending >= l.max {
+		return false
+	}
+	l.pending++
+	return true
+}
+
+func (l *sessionLimiter) release(srv *mcp.Server) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.pending--
+	if srv != nil {
+		l.servers = append(l.servers, srv)
+	}
 }
 
 func originAllowed(origin string, extra []string) bool {
@@ -175,6 +283,10 @@ func isLoopbackHost(host string) bool {
 // per HTTP session from deps, so toolset and write-mode state stay per
 // session. Build failures are logged and answered with 400 by the SDK.
 //
+// The SDK also asks for a server on every request only to read its protocol
+// versions; requests of an existing session get a tool-less probe with the
+// same versions, and a new session's two lookups share one Build.
+//
 // All sessions share deps.Env.ASC (one token cache and rate limit per
 // profile), so each session wraps it in its own write guard: enable_writes in
 // one session opens the shared client but only that session's guard.
@@ -183,11 +295,25 @@ func SessionFactory(deps Deps) func(*http.Request) *mcp.Server {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
+	probe := mcp.NewServer(&mcp.Implementation{Name: "hamn", Version: deps.Version}, &mcp.ServerOptions{
+		Logger:                    logger,
+		SupportedProtocolVersions: legacyProtocolVersions(),
+	})
 	return func(req *http.Request) *mcp.Server {
+		if req.Header.Get(sessionIDHeader) != "" {
+			return probe
+		}
+		slot, _ := req.Context().Value(buildSlotKey{}).(*buildSlot)
+		if slot != nil && slot.srv != nil {
+			return slot.srv
+		}
 		srv, err := Build(req.Context(), sessionDeps(deps))
 		if err != nil {
 			logger.Error("build session server", "err", err)
 			return nil
+		}
+		if slot != nil {
+			slot.srv = srv
 		}
 		return srv
 	}
