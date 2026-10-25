@@ -18,14 +18,25 @@ import (
 const usage = `hamn — App Store Connect MCP server
 
 Usage:
-  hamn [serve] [flags]          serve MCP over stdio (or --http ADDR)
+  hamn [serve] [flags]          serve MCP over stdio (or --http ADDR); hamn serve --help lists flags
   hamn auth <add|import|list|test|remove|set>
   hamn doctor [--profile NAME]  check config, key, Apple reachability
   hamn config snippet <client>  print client config (claude-code, claude-desktop, codex, cursor, vscode, windsurf)
   hamn config install <client>  write it into the client's config (with backup)
   hamn skills <list|install>    install agent skills (--client claude-code|codex|cursor|omp, --dir, --force)
   hamn version
+
+Any subcommand with --help prints its usage and does nothing else.
 `
+
+// subUsage is the usage text printed for `hamn <cmd> --help`.
+var subUsage = map[string]string{
+	"auth":    authUsage,
+	"config":  configUsage,
+	"skills":  skillsUsage,
+	"doctor":  "usage: hamn doctor [--profile NAME]\n  checks the config, key, JWT, Apple reachability, clock skew and rate limit",
+	"version": "usage: hamn version",
+}
 
 // usageError is a command-line misuse; it exits with status 2.
 type usageError struct{ msg string }
@@ -52,12 +63,25 @@ func main() {
 
 // run dispatches a subcommand. Only serve writes the MCP protocol to stdout.
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "-help" || args[0] == "--help") {
+		if _, err := io.WriteString(stdout, usage+"\nserve flags:\n"); err != nil {
+			return err
+		}
+		return runServe(ctx, []string{"-h"}, stdout)
+	}
 	if len(args) == 0 || (args[0] != "" && args[0][0] == '-') {
 		return runServe(ctx, args, stderr)
 	}
 	cmd, rest := args[0], args[1:]
+	if u, ok := subUsage[cmd]; ok && wantsHelp(rest) {
+		_, err := fmt.Fprintln(stdout, u)
+		return err
+	}
 	switch cmd {
 	case "serve":
+		if wantsHelp(rest) {
+			return runServe(ctx, []string{"-h"}, stdout)
+		}
 		return runServe(ctx, rest, stderr)
 	case "auth":
 		return runAuth(ctx, rest, stdin, stdout, stderr)
@@ -69,9 +93,6 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runSkills(rest, stdout, stderr)
 	case "version", "--version":
 		_, err := fmt.Fprintln(stdout, "hamn", buildVersion())
-		return err
-	case "help", "-h", "--help":
-		_, err := io.WriteString(stdout, usage)
 		return err
 	default:
 		return usageErr(fmt.Sprintf("unknown command %q\n\n%s", cmd, usage))

@@ -230,12 +230,12 @@ func TestSetField(t *testing.T) {
 	p.ok = []string{"vendor_number=123", "default_app=com.x", "allow_writes=true", "issuer_id=i", "key_kind=individual"}
 	p.bad = []string{"nokey", "allow_writes=maybe", "key_kind=other", "key_path=/x"}
 	for _, kv := range p.ok {
-		if err := setField(new(config.Profile), kv); err != nil {
+		if _, err := setField(new(config.Profile), kv); err != nil {
 			t.Errorf("%s: %v", kv, err)
 		}
 	}
 	for _, kv := range p.bad {
-		if err := setField(new(config.Profile), kv); err == nil {
+		if _, err := setField(new(config.Profile), kv); err == nil {
 			t.Errorf("%s: want error", kv)
 		}
 	}
