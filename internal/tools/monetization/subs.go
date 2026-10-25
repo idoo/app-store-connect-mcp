@@ -25,11 +25,11 @@ func init() {
 			"state, latest version state and offer counts. One request per group. Prices: pricing_get.",
 	}, subsList))
 	tool.Register(tool.New(tool.Meta{
-		Name: "subscriptions_upsert", Toolset: tool.Monetization, Class: tool.Write, Idempotent: true,
+		Name: "subscriptions_upsert", Toolset: tool.Monetization, Class: tool.Write, Idempotent: true, Confirm: tool.ConfirmByFlag,
 		Title: "Create or update a subscription",
-		Description: "Find or create a subscription group by reference name, then a subscription by product_id (PATCH only " +
-			"changed fields; never re-creates a product id). Writes localizations on the open versions and a review " +
-			"screenshot. Never deletes.",
+		Description: "Find or create a subscription group by reference name and a subscription by product_id; PATCH only " +
+			"changed fields, plus localizations, review screenshot and availability. Overwrites need confirm:true; " +
+			"creating, family sharing on and group level changes need a human.",
 		Enums: map[string][]any{"period": subsPeriods},
 	}, subsUpsert))
 }
@@ -122,6 +122,13 @@ func subsList(ctx context.Context, env *tool.Env, in subsListIn) (*tool.Result, 
 	if len(groups.Data) > subsMaxGroups {
 		res.Warn(strconv.Itoa(len(groups.Data)-subsMaxGroups) + " group(s) listed without their subscriptions")
 	}
+	var all []subsOut
+	for _, g := range out.Groups {
+		all = append(all, g.Subscriptions...)
+	}
+	if ids := listIDs(all, func(s subsOut) string { return s.ID }); len(ids) > 0 {
+		res.Then(tool.NextStep{Tool: "pricing_get", Args: map[string]any{"app": app.ID, "kind": prcKindSub, "products": ids}})
+	}
 	return res, nil
 }
 
@@ -190,6 +197,8 @@ type subsUpsertIn struct {
 	FamilySharable     *bool                     `json:"family_sharable,omitempty" jsonschema:"cannot be turned off once on"`
 	Localizations      map[string]locIn          `json:"localizations,omitempty" jsonschema:"by locale: display name (max 30) and description (max 45)"`
 	ReviewScreenshot   string                    `json:"review_screenshot,omitempty" jsonschema:"path to a PNG/JPEG screenshot for App Review"`
+	Availability       *availIn                  `json:"availability,omitempty" jsonschema:"territories it is sold in"`
+	tool.ConfirmFlag
 }
 
 type subsUpsertOut struct {
@@ -202,6 +211,7 @@ type subsUpsertOut struct {
 	Version            *versionOut  `json:"version,omitempty"`
 	Localizations      []upsertItem `json:"localizations,omitempty"`
 	ReviewScreenshot   *upsertItem  `json:"review_screenshot,omitempty"`
+	Availability       *upsertItem  `json:"availability,omitempty"`
 	Failed             int          `json:"failed,omitempty"`
 }
 
@@ -260,37 +270,62 @@ func subsValidate(env *tool.Env, in subsUpsertIn) (glocs, locs map[string]map[st
 	return glocs, locs, nil
 }
 
+// subsPlan is what subscriptions_upsert read before its gate.
+type subsPlan struct {
+	group, sub, shot    tool.Resource
+	groupFound, found   bool
+	gver, ver           tool.Resource
+	gverFound, verFound bool
+	gexisting, existing []tool.Resource
+	want, changed       map[string]any
+	names               []string
+	avail               *availPlan
+}
+
 func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Result, error) {
 	glocs, locs, err := subsValidate(env, in)
 	if err != nil {
+		return nil, err
+	}
+	if in.Availability != nil && in.ProductID == "" {
+		return nil, invalidArgs("availability needs product_id")
+	}
+	if err := checkAvail(in.Availability); err != nil {
 		return nil, err
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
 		return nil, err
 	}
-	out := subsUpsertOut{App: app, ProductID: in.ProductID}
-
-	group, found, err := subsFindGroup(ctx, env, app.ID, in.Group)
+	var g upsertGate
+	p, err := subsPlanAll(ctx, env, &g, app.ID, in, glocs, locs)
 	if err != nil {
 		return nil, err
 	}
-	if found {
+	wctx, gres := g.open(ctx, env, in.Confirm, "subscriptions_upsert "+in.Group+" "+in.ProductID+" in "+app.Name)
+	if gres != nil {
+		return gres, nil
+	}
+
+	out := subsUpsertOut{App: app, ProductID: in.ProductID}
+	group := p.group
+	if p.groupFound {
 		out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionUnchanged}
 	} else {
-		group, err = postResource(ctx, env, "/v1/subscriptionGroups", "subscriptionGroups",
+		group, err = postResource(wctx, env, "/v1/subscriptionGroups", "subscriptionGroups",
 			map[string]any{"referenceName": in.Group}, map[string][2]string{"app": {"apps", app.ID}})
 		switch {
 		case err == nil:
 			out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionCreated}
 		case isConflict(err):
-			if group, found, err = subsFindGroup(ctx, env, app.ID, in.Group); err != nil {
+			if group, _, err = subsFindGroup(ctx, env, app.ID, in.Group); err != nil {
 				return nil, err
 			}
-			if !found {
-				return nil, fmt.Errorf("create subscription group %q: Apple reports a conflict but no such group is readable: %w", in.Group, tool.ErrOutcomeUnknown)
+			out.Group = upsertItem{
+				Kind: "subscriptionGroups", ID: group.ID, Action: actionAlready,
+				Note: "created elsewhere; rerun to preview changes to it",
 			}
-			out.Group = upsertItem{Kind: "subscriptionGroups", ID: group.ID, Action: actionAlready}
+			return tool.Already(out), nil
 		default:
 			return nil, fmt.Errorf("create subscription group %q: %w", in.Group, err)
 		}
@@ -298,40 +333,47 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 	items := []upsertItem{out.Group}
 
 	if len(glocs) > 0 {
-		v, existing, err := openVersion(ctx, env, groupVersions, group.ID)
+		v, litems, err := writeLocs(wctx, env, groupVersions, group.ID, p.gverFound, p.gver, p.gexisting, glocs)
 		if err != nil {
 			return nil, err
 		}
-		out.GroupVersion = &v
-		out.GroupLocalizations = upsertLocs(ctx, env, groupVersions, v.ID, existing, glocs)
-		items = append(items, out.GroupLocalizations...)
+		out.GroupVersion, out.GroupLocalizations = &v, litems
+		items = append(items, litems...)
 		if v.Created {
 			items = append(items, upsertItem{Kind: "subscriptionGroupVersions", Action: actionCreated})
 		}
 	}
 
 	if in.ProductID != "" {
-		sub, shot, it, err := subsUpsertProduct(ctx, env, app.ID, out.Group, in)
+		sub, it, err := subsWriteProduct(wctx, env, app.ID, group.ID, in, p)
 		if err != nil {
 			return nil, err
 		}
 		out.Subscription = &it
 		items = append(items, it)
+		if it.Action == actionAlready {
+			// Created by someone else meanwhile: nothing else was previewed for it.
+			return tool.Already(out), nil
+		}
 		if len(locs) > 0 {
-			v, existing, err := openVersion(ctx, env, subVersions, sub.ID)
+			v, litems, err := writeLocs(wctx, env, subVersions, sub.ID, p.verFound, p.ver, p.existing, locs)
 			if err != nil {
 				return nil, err
 			}
-			out.Version = &v
-			out.Localizations = upsertLocs(ctx, env, subVersions, v.ID, existing, locs)
-			items = append(items, out.Localizations...)
+			out.Version, out.Localizations = &v, litems
+			items = append(items, litems...)
 			if v.Created {
 				items = append(items, upsertItem{Kind: "subscriptionVersions", Action: actionCreated})
 			}
 		}
 		if in.ReviewScreenshot != "" {
-			it := uploadScreenshot(ctx, env, subShot, sub.ID, in.ReviewScreenshot, shot)
+			it := uploadScreenshot(wctx, env, subShot, sub.ID, in.ReviewScreenshot, p.shot)
 			out.ReviewScreenshot = &it
+			items = append(items, it)
+		}
+		if p.avail != nil {
+			it := applyAvail(wctx, env, subAvail, sub.ID, p.avail)
+			out.Availability = &it
 			items = append(items, it)
 		}
 	}
@@ -350,84 +392,135 @@ func subsUpsert(ctx context.Context, env *tool.Env, in subsUpsertIn) (*tool.Resu
 	return res, nil
 }
 
-// subsUpsertProduct finds the subscription by product id in the group (skipped
-// for a just-created group) and PATCHes its changed fields, or creates it.
-// A 409 on create triggers a read-back across all of the app's groups.
-func subsUpsertProduct(ctx context.Context, env *tool.Env, appID string, group upsertItem, in subsUpsertIn) (sub, shot tool.Resource, it upsertItem, err error) {
-	want := map[string]any{}
+// subsPlanAll reads the group, subscription, open versions and availability
+// and records every write the upsert would make in g. It never writes.
+func subsPlanAll(ctx context.Context, env *tool.Env, g *upsertGate, appID string, in subsUpsertIn, glocs, locs map[string]map[string]any) (*subsPlan, error) {
+	var err error
+	p := &subsPlan{want: map[string]any{}}
+	if p.group, p.groupFound, err = subsFindGroup(ctx, env, appID, in.Group); err != nil {
+		return nil, err
+	}
+	if !p.groupFound {
+		g.add(gateAdditive, "POST /v1/subscriptionGroups "+in.Group)
+	}
+	if len(glocs) > 0 {
+		if p.groupFound {
+			if p.gver, p.gexisting, p.gverFound, err = findOpenVersion(ctx, env, groupVersions, p.group.ID); err != nil {
+				return nil, err
+			}
+		}
+		if err := g.planLocs(groupVersions, p.gexisting, glocs); err != nil {
+			return nil, err
+		}
+	}
+	if in.ProductID == "" {
+		return p, nil
+	}
 	if in.Name != "" {
-		want["name"] = in.Name
+		p.want["name"] = in.Name
 	}
 	if in.Period != "" {
-		want["subscriptionPeriod"] = in.Period
+		p.want["subscriptionPeriod"] = in.Period
 	}
 	if in.GroupLevel != nil {
-		want["groupLevel"] = *in.GroupLevel
+		p.want["groupLevel"] = *in.GroupLevel
 	}
 	if in.ReviewNote != nil {
-		want["reviewNote"] = *in.ReviewNote
+		p.want["reviewNote"] = *in.ReviewNote
 	}
 	if in.FamilySharable != nil {
-		want["familySharable"] = *in.FamilySharable
+		p.want["familySharable"] = *in.FamilySharable
 	}
-	it = upsertItem{Kind: "subscriptions"}
-	found := false
-	if group.Action != actionCreated {
-		if sub, shot, found, err = subsFind(ctx, env, group.ID, in.ProductID); err != nil {
-			return sub, shot, it, err
+	if p.groupFound {
+		if p.sub, p.shot, p.found, err = subsFind(ctx, env, p.group.ID, in.ProductID); err != nil {
+			return nil, err
 		}
 	}
-	if !found {
+	if !p.found {
 		if in.Name == "" {
-			return sub, shot, it, invalidArgs("subscription %q does not exist; name is required to create it", in.ProductID)
+			return nil, invalidArgs("subscription %q does not exist; name is required to create it", in.ProductID)
 		}
-		attrs := map[string]any{"productId": in.ProductID}
-		for k, v := range want {
-			attrs[k] = v
+		g.add(gateHuman, "POST /v1/subscriptions "+in.ProductID+" in group "+in.Group)
+		g.irreversible("product id " + in.ProductID + " is used up for good: it can never be reused, even after deletion")
+		if on, _ := p.want["familySharable"].(bool); on {
+			g.irreversible("family sharing cannot be turned off again; family members get it from one purchase")
 		}
-		created, cerr := postResource(ctx, env, "/v1/subscriptions", "subscriptions", attrs, map[string][2]string{"group": {"subscriptionGroups", group.ID}})
-		switch {
-		case cerr == nil:
-			it.ID, it.Action = created.ID, actionCreated
-			return created, shot, it, nil
-		case isConflict(cerr):
-			gid, rerr := subsFindAnywhere(ctx, env, appID, in.ProductID)
-			if rerr != nil {
-				return sub, shot, it, rerr
+	} else {
+		if p.changed, p.names, err = attrDiff(p.sub, p.want); err != nil {
+			return nil, err
+		}
+		g.planAttrs("subscription "+in.ProductID, "/v1/subscriptions/"+p.sub.ID, p.sub, p.changed, "groupLevel")
+		if _, ok := p.changed["groupLevel"]; ok {
+			g.p.Irreversible = append(g.p.Irreversible, "changing the group level changes upgrade/downgrade billing for existing subscribers")
+		}
+	}
+	if len(locs) > 0 {
+		if p.found {
+			if p.ver, p.existing, p.verFound, err = findOpenVersion(ctx, env, subVersions, p.sub.ID); err != nil {
+				return nil, err
 			}
-			switch gid {
-			case "":
-				return sub, shot, it, fmt.Errorf("create subscription %s: Apple reports a conflict but the product is not in this app; product ids are unique per account and cannot be reused: %w", in.ProductID, tool.ErrInvalidArgs)
-			case group.ID:
-			default:
-				return sub, shot, it, invalidArgs("subscription %s already exists in another group (%s); subscriptions cannot move between groups", in.ProductID, gid)
+		}
+		if err := g.planLocs(subVersions, p.existing, locs); err != nil {
+			return nil, err
+		}
+	}
+	if in.ReviewScreenshot != "" && p.shot.ID == "" {
+		g.add(gateAdditive, "POST "+subShot.CreatePath+" "+in.ReviewScreenshot)
+	}
+	if p.avail, err = planAvail(ctx, env, subAvail, p.sub.ID, in.Availability); err != nil {
+		return nil, err
+	}
+	p.avail.gate(g, subAvail)
+	return p, nil
+}
+
+// subsWriteProduct creates the planned subscription or PATCHes its planned
+// diff. A 409 on create triggers a read-back across all of the app's groups.
+func subsWriteProduct(ctx context.Context, env *tool.Env, appID, groupID string, in subsUpsertIn, p *subsPlan) (tool.Resource, upsertItem, error) {
+	it := upsertItem{Kind: "subscriptions"}
+	if p.found {
+		it.ID, it.Action = p.sub.ID, actionUnchanged
+		if len(p.changed) > 0 {
+			if err := patch(ctx, env, "/v1/subscriptions/"+url.PathEscape(p.sub.ID), "subscriptions", p.sub.ID, p.changed); err != nil {
+				return p.sub, it, fmt.Errorf("update subscription %s: %w", in.ProductID, err)
 			}
-			if sub, shot, found, err = subsFind(ctx, env, group.ID, in.ProductID); err != nil {
-				return sub, shot, it, err
-			}
-			if !found {
-				return sub, shot, it, fmt.Errorf("subscription %s: conflict but not readable: %w", in.ProductID, tool.ErrOutcomeUnknown)
-			}
-			it.Action = actionAlready
+			it.Action, it.Changed = actionUpdated, p.names
+		}
+		return p.sub, it, nil
+	}
+	attrs := map[string]any{"productId": in.ProductID}
+	for k, v := range p.want {
+		attrs[k] = v
+	}
+	created, cerr := postResource(ctx, env, "/v1/subscriptions", "subscriptions", attrs, map[string][2]string{"group": {"subscriptionGroups", groupID}})
+	switch {
+	case cerr == nil:
+		it.ID, it.Action = created.ID, actionCreated
+		return created, it, nil
+	case isConflict(cerr):
+		gid, rerr := subsFindAnywhere(ctx, env, appID, in.ProductID)
+		if rerr != nil {
+			return created, it, rerr
+		}
+		switch gid {
+		case "":
+			return created, it, fmt.Errorf("create subscription %s: Apple reports a conflict but the product is not in this app; product ids are unique per account and cannot be reused: %w", in.ProductID, tool.ErrInvalidArgs)
+		case groupID:
 		default:
-			return sub, shot, it, fmt.Errorf("create subscription %s: %w", in.ProductID, cerr)
+			return created, it, invalidArgs("subscription %s already exists in another group (%s); subscriptions cannot move between groups", in.ProductID, gid)
 		}
-	}
-	it.ID = sub.ID
-	if it.Action == "" {
-		it.Action = actionUnchanged
-	}
-	changed, names, err := attrDiff(sub, want)
-	if err != nil {
-		return sub, shot, it, err
-	}
-	if len(changed) > 0 {
-		if err := patch(ctx, env, "/v1/subscriptions/"+url.PathEscape(sub.ID), "subscriptions", sub.ID, changed); err != nil {
-			return sub, shot, it, fmt.Errorf("update subscription %s: %w", in.ProductID, err)
+		sub, _, found, err := subsFind(ctx, env, groupID, in.ProductID)
+		if err != nil {
+			return sub, it, err
 		}
-		it.Action, it.Changed = actionUpdated, names
+		if !found {
+			return sub, it, fmt.Errorf("subscription %s: conflict but not readable: %w", in.ProductID, tool.ErrOutcomeUnknown)
+		}
+		it.ID, it.Action, it.Note = sub.ID, actionAlready, "created elsewhere; rerun to update it"
+		return sub, it, nil
+	default:
+		return created, it, fmt.Errorf("create subscription %s: %w", in.ProductID, cerr)
 	}
-	return sub, shot, it, nil
 }
 
 // subsFindGroup looks a subscription group up by exact reference name.

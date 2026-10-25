@@ -59,10 +59,11 @@ func TestSubscriptionsUpsertCreatesGroupAndSubscription(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v2/subscriptionLocalizations", http.StatusCreated,
 		`{"data":{"type":"subscriptionLocalizations","id":"slN"}}`)
 
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env, `{
 		"group":"Hjul Plus","group_localizations":{"en-US":{"name":"Hjul Plus","custom_app_name":"Hjul"}},
 		"product_id":"`+subsTestProduct+`","name":"Yearly","period":"ONE_YEAR","group_level":1,
-		"localizations":{"en-US":{"name":"Plus yearly","description":"All features, billed yearly"}}}`))
+		"localizations":{"en-US":{"name":"Plus yearly","description":"All features, billed yearly"}},"confirm":true}`))
 
 	equalLines(t, requestLog(k.ASC.Requests()), []string{
 		"GET /v1/apps/app1/subscriptionGroups",
@@ -107,8 +108,9 @@ func TestSubscriptionsUpsertExistingPatchesDiff(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/subscriptionGroups/{id}/subscriptions", http.StatusOK, jsonapiDoc(
 		`[{"type":"subscriptions","id":"s1","attributes":{"name":"Yearly","productId":"`+subsTestProduct+`","subscriptionPeriod":"ONE_YEAR","groupLevel":2}}]`))
 	k.ASC.Handle(http.MethodPatch, "/v1/subscriptions/{id}", http.StatusOK, `{"data":{"type":"subscriptions","id":"s1"}}`)
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env,
-		`{"group":"Hjul Plus","product_id":"`+subsTestProduct+`","name":"Yearly","period":"ONE_YEAR","group_level":1}`))
+		`{"group":"Hjul Plus","product_id":"`+subsTestProduct+`","name":"Yearly","period":"ONE_YEAR","group_level":1,"confirm":true}`))
 	equalLines(t, requestLog(k.ASC.Mutations()), []string{"PATCH /v1/subscriptions/s1"})
 	if a := reqAttrs(t, k.ASC.Mutations()[0]); len(a) != 1 || a["groupLevel"] != float64(1) {
 		t.Fatalf("PATCH attrs = %v", a)
@@ -141,8 +143,9 @@ func TestSubscriptionsUpsertConflictInOtherGroup(t *testing.T) {
 		`{"type":"subscriptions","id":"sx","attributes":{"productId":"`+subsTestProduct+`"}}`))
 	k.ASC.Handle(http.MethodGet, "/v1/subscriptionGroups/{id}/subscriptions", http.StatusOK, jsonapiDoc(`[]`))
 	k.ASC.Handle(http.MethodPost, "/v1/subscriptions", http.StatusConflict, conflictBody)
+	k.Elicit(true)
 	res := tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env,
-		`{"group":"Hjul Plus","product_id":"`+subsTestProduct+`","name":"Yearly"}`)
+		`{"group":"Hjul Plus","product_id":"`+subsTestProduct+`","name":"Yearly","confirm":true}`)
 	if !res.IsError || !strings.Contains(tooltest.JSON(t, res.Data), "another group (g2)") {
 		t.Fatalf("want another-group error, got %s", tooltest.JSON(t, res.Data))
 	}
