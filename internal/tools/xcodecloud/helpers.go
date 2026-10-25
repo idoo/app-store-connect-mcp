@@ -199,13 +199,31 @@ func listWorkflows(ctx context.Context, env *tool.Env, productID string) ([]work
 	return out, nil
 }
 
-// resolveWorkflow finds a workflow by id or by exact (case-insensitive) name
-// among the app's products.
-func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref string) (workflowOut, error) {
-	ref = strings.TrimSpace(ref)
-	if ref == "" {
-		return workflowOut{}, invalid("workflow is required (name or id)")
+// fanOut is how many Xcode Cloud reads run at once (the client's in-flight
+// limit per profile).
+const fanOut = 4
+
+// productWorkflows lists the workflows of each product, fanOut at a time,
+// in product order.
+func productWorkflows(ctx context.Context, env *tool.Env, products []tool.Resource) ([][]workflowOut, error) {
+	out := make([][]workflowOut, len(products))
+	err := tool.Parallel(ctx, fanOut, products, func(ctx context.Context, i int, p tool.Resource) error {
+		ws, err := listWorkflows(ctx, env, p.ID)
+		out[i] = ws
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
+	return out, nil
+}
+
+// resolveWorkflow finds a workflow by id or by exact (case-insensitive) name
+// among the app's products. An empty ref picks the only workflow there is.
+// Ambiguity lists candidates labelled with their product (app) name and a
+// nextTool call per candidate.
+func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref, nextTool string) (workflowOut, error) {
+	ref = strings.TrimSpace(ref)
 	next := []tool.NextStep{{Tool: "xcc_workflows_list"}}
 	if uuidRE.MatchString(ref) {
 		resp, err := env.ASC.Get(ctx, "/v1/ciWorkflows/"+url.PathEscape(ref), url.Values{
@@ -229,15 +247,20 @@ func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref st
 	if err != nil {
 		return workflowOut{}, err
 	}
+	if ref == "" && len(products) > maxProducts {
+		return workflowOut{}, invalid("%d Xcode Cloud products; pass app or the workflow id", len(products))
+	}
+	lists, err := productWorkflows(ctx, env, products)
+	if err != nil {
+		return workflowOut{}, err
+	}
 	var hits []workflowOut
-	for _, p := range products {
-		ws, err := listWorkflows(ctx, env, p.ID)
-		if err != nil {
-			return workflowOut{}, err
-		}
+	var labels []string
+	for i, ws := range lists {
 		for _, w := range ws {
-			if strings.EqualFold(w.Name, ref) {
+			if ref == "" || strings.EqualFold(w.Name, ref) {
 				hits = append(hits, w)
+				labels = append(labels, w.Name+" ("+products[i].Str("name")+")")
 			}
 		}
 	}
@@ -245,11 +268,20 @@ func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref st
 	case 1:
 		return hits[0], nil
 	case 0:
+		if ref == "" {
+			return workflowOut{}, &tool.ErrNotFound{Kind: "workflow", Hint: "no Xcode Cloud workflow found; set up Xcode Cloud for the app in Xcode first", Next: next}
+		}
 		return workflowOut{}, &tool.ErrNotFound{Kind: "workflow", Ref: ref, Hint: "pass the exact workflow name or its id", Next: next}
 	}
-	amb := &tool.ErrAmbiguous{Kind: "workflow", Ref: ref, Next: next}
-	for _, w := range hits {
-		amb.Candidates = append(amb.Candidates, tool.Candidate{ID: w.ID, Label: w.Name + " (product " + w.ProductID + ")"})
+	if ref == "" {
+		ref = "(any)"
+	}
+	amb := &tool.ErrAmbiguous{Kind: "workflow", Ref: ref}
+	for i, w := range hits {
+		amb.Candidates = append(amb.Candidates, tool.Candidate{ID: w.ID, Label: labels[i]})
+		if i < 5 {
+			amb.Next = append(amb.Next, tool.NextStep{Tool: nextTool, Args: map[string]any{"workflow": w.ID}})
+		}
 	}
 	return workflowOut{}, amb
 }

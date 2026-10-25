@@ -17,6 +17,9 @@ import (
 // maxPlistDepth bounds nesting of arrays and dictionaries.
 const maxPlistDepth = 64
 
+// maxPlistNodes bounds the objects decoded from one binary plist.
+const maxPlistNodes = 1 << 20
+
 var errPlist = errors.New("plist")
 
 // ParsePlist decodes a binary (bplist00) or XML property list. Values map to
@@ -36,6 +39,11 @@ type bplist struct {
 	offsets []uint64
 	refSize uint64
 	active  []bool
+	// budget is the number of objects still allowed to be decoded. A plain
+	// tree decodes one object per reference (each at least one byte), so
+	// more visits than bytes means shared references are being expanded
+	// over and over: a DAG that grows exponentially with depth.
+	budget uint64
 }
 
 func parseBinaryPlist(b []byte) (any, error) {
@@ -57,7 +65,10 @@ func parseBinaryPlist(b []byte) (any, error) {
 	case tableAt < header || tableAt > body || (body-tableAt)/offSize < numObjects:
 		return nil, fmt.Errorf("%w: offset table out of range", errPlist)
 	}
-	p := &bplist{data: b[:body], refSize: refSize, offsets: make([]uint64, numObjects), active: make([]bool, numObjects)}
+	p := &bplist{
+		data: b[:body], refSize: refSize, offsets: make([]uint64, numObjects), active: make([]bool, numObjects),
+		budget: min(body+1, maxPlistNodes),
+	}
 	for i := range numObjects {
 		at := tableAt + i*offSize
 		p.offsets[i] = beUint(b[at : at+offSize])
@@ -126,6 +137,10 @@ func (p *bplist) object(ref uint64, depth int) (any, error) {
 	if depth > maxPlistDepth || p.active[ref] {
 		return nil, fmt.Errorf("%w: nesting too deep or cyclic", errPlist)
 	}
+	if p.budget == 0 {
+		return nil, fmt.Errorf("%w: too many objects (shared references expand too far)", errPlist)
+	}
+	p.budget--
 	off := p.offsets[ref]
 	m, err := p.bytesAt(off, 1)
 	if err != nil {

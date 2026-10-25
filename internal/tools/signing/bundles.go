@@ -32,7 +32,7 @@ func init() {
 		Confirm: tool.ConfirmByFlag,
 		Title:   "Enable or disable bundle ID capabilities",
 		Description: "Enable capabilities (with settings) on a bundle ID, or disable them. Enabling missing ones applies at once; " +
-			"already enabled ones are skipped. Disabling or changing settings returns a preview and needs confirm:true; it invalidates profiles.",
+			"already enabled ones are skipped. Changing settings needs confirm:true; disabling also needs the user's approval. Both invalidate profiles.",
 		Enums: map[string][]any{
 			"enable.type":                 capabilityTypes,
 			"enable.settings.key":         settingKeys,
@@ -53,10 +53,42 @@ type bundleIDsListIn struct {
 }
 
 type bundleIDsListOut struct {
-	BundleIDs  []bundleOut `json:"bundle_ids"`
+	// SeedID is hoisted here when every listed bundle ID shares it (the
+	// usual single-team case); rows then omit it.
+	SeedID     string      `json:"seed_id,omitempty"`
+	BundleIDs  []bundleRow `json:"bundle_ids"`
 	Returned   int         `json:"returned"`
 	Total      int         `json:"total,omitempty"`
 	NextCursor string      `json:"next_cursor,omitempty"`
+}
+
+// bundleRow is a compact bundle ID: capabilities by type only (their ids are
+// just <bundle id>_<type>), settings only for capabilities that have some.
+type bundleRow struct {
+	ID           string                  `json:"id"`
+	Identifier   string                  `json:"identifier"`
+	Name         string                  `json:"name"`
+	Platform     string                  `json:"platform"`
+	SeedID       string                  `json:"seed_id,omitempty"`
+	Capabilities []string                `json:"capabilities"`
+	Settings     map[string][]settingOut `json:"settings,omitempty"`
+}
+
+func compactBundle(b bundleOut) bundleRow {
+	r := bundleRow{
+		ID: b.ID, Identifier: b.Identifier, Name: b.Name, Platform: b.Platform, SeedID: b.SeedID,
+		Capabilities: make([]string, len(b.Capabilities)),
+	}
+	for i, c := range b.Capabilities {
+		r.Capabilities[i] = c.Type
+		if len(c.Settings) > 0 {
+			if r.Settings == nil {
+				r.Settings = map[string][]settingOut{}
+			}
+			r.Settings[c.Type] = c.Settings
+		}
+	}
+	return r
 }
 
 func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*tool.Result, error) {
@@ -77,13 +109,23 @@ func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*too
 	}
 	inc := indexIncluded(res.Included)
 	needle := strings.ToLower(strings.TrimSpace(in.Query))
-	out := bundleIDsListOut{BundleIDs: []bundleOut{}, Total: res.Total, NextCursor: res.NextCursor}
+	out := bundleIDsListOut{BundleIDs: []bundleRow{}, Total: res.Total, NextCursor: res.NextCursor}
+	seeds := map[string]bool{}
 	for _, r := range res.Data {
 		b := flattenBundle(r, inc)
 		if needle != "" && !strings.Contains(strings.ToLower(b.Identifier), needle) && !strings.Contains(strings.ToLower(b.Name), needle) {
 			continue
 		}
-		out.BundleIDs = append(out.BundleIDs, b)
+		seeds[b.SeedID] = true
+		out.BundleIDs = append(out.BundleIDs, compactBundle(b))
+	}
+	if len(seeds) == 1 {
+		for s := range seeds {
+			out.SeedID = s
+		}
+		for i := range out.BundleIDs {
+			out.BundleIDs[i].SeedID = ""
+		}
 	}
 	out.Returned = len(out.BundleIDs)
 	return tool.OK(out), nil
@@ -288,7 +330,7 @@ func capabilitiesSet(ctx context.Context, env *tool.Env, in capsSetIn) (*tool.Re
 	}
 	out := capsSetOut{BundleID: b.ID, Identifier: b.Identifier, Items: []capItem{}}
 	var changes []capChange
-	gated := false
+	gated, disabling := false, false
 	for _, e := range in.Enable {
 		cur, ok := current[e.Type]
 		switch {
@@ -308,7 +350,7 @@ func capabilitiesSet(ctx context.Context, env *tool.Env, in capsSetIn) (*tool.Re
 			continue
 		}
 		changes = append(changes, capChange{enable: capEnableIn{Type: d}, cur: cur, action: capDisabled})
-		gated = true
+		gated, disabling = true, true
 	}
 	if len(changes) == 0 {
 		return tool.Already(out), nil
@@ -316,9 +358,14 @@ func capabilitiesSet(ctx context.Context, env *tool.Env, in capsSetIn) (*tool.Re
 
 	var wctx context.Context
 	var res *tool.Result
-	if gated {
+	switch {
+	case disabling:
+		// Disabling removes entitlements shipped apps rely on (push, iCloud,
+		// App Groups) and invalidates every profile: a human must approve.
+		wctx, res = tool.RequireHumanConfirm(ctx, env, in.Confirm, capPreview(b, changes))
+	case gated:
 		wctx, res = tool.RequireConfirm(ctx, env, in.Confirm, capPreview(b, changes))
-	} else {
+	default:
 		wctx, res = tool.Unconfirmed(ctx, env)
 	}
 	if res != nil {
