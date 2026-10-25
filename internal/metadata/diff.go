@@ -56,9 +56,10 @@ type DiffOptions struct {
 	// only promotionalText there, so other version fields (and app-info
 	// fields when no app info is editable) become warnings, not changes.
 	PromoOnly bool
-	// AppInfoState is the state of the app info when none is editable and
-	// its localizations were not pulled; it explains why app-info fields
-	// cannot change.
+	// AppInfoState is the state of the live app info when none is editable.
+	// If its localizations were pulled (read-only) unchanged app-info fields
+	// are skipped and changes or new locales are errors; if not pulled, any
+	// app-info field is an error.
 	AppInfoState string
 	// AppInfoLocked is the state of an app info in review or approved whose
 	// localizations were pulled read-only: unchanged app-info fields are
@@ -253,7 +254,7 @@ func (p *Plan) planLocale(remote *Listing, code string, lf *LocaleFields, opts D
 			p.errorf(code, "", IssueLevelUnavailable, "%s-level fields given for %s but that level was not pulled", level, code)
 			continue
 		}
-		if level == LevelAppInfo && opts.AppInfoLocked != "" {
+		if level == LevelAppInfo && (opts.AppInfoLocked != "" || opts.AppInfoState != "") {
 			p.diffLockedInfo(remote, code, lf, rf, opts, touched)
 			continue
 		}
@@ -265,12 +266,14 @@ func (p *Plan) planLocale(remote *Listing, code string, lf *LocaleFields, opts D
 				continue
 			}
 			p.validate(code, f, v)
-			old, had := rf.Get(f.Key)
-			if id != "" && had && old == v {
+			if id == "" && v == "" {
+				continue // a new localization never sends empty fields
+			}
+			if id != "" && sameValue(rf, f.Key, v) {
 				continue
 			}
 			fc := FieldChange{Field: f.Key, New: v}
-			if id != "" && had {
+			if old, had := rf.Get(f.Key); id != "" && had {
 				fc.Old = &old
 			}
 			changes = append(changes, fc)
@@ -329,15 +332,19 @@ func (p *Plan) requireName(remote *Listing, code string, lf *LocaleFields, opts 
 		p.errorf(code, "", IssueLevelUnavailable, "can't add %s while app info is %s; wait for %s review", code, opts.AppInfoLocked, wait)
 		return true
 	}
+	if opts.AppInfoState != "" {
+		p.errorf(code, "", IssueLevelUnavailable, "can't add %s while app info is %s; create a new version with release_prepare first", code, opts.AppInfoState)
+		return true
+	}
 	if v, ok := lf.Get("name"); !ok || strings.TrimSpace(v) == "" {
 		p.errorf(code, "name", IssueIncompleteLocale, "new locale %s needs a name (fastlane name.txt or default/name.txt, Expo title); without it the locale is created half-way", code)
 	}
 	return false
 }
 
-// diffLockedInfo compares app-info fields against a read-only locked app
-// info: unchanged fields are skipped, each changed field is an error naming
-// the version that holds the lock.
+// diffLockedInfo compares app-info fields against a read-only app info
+// (locked in review, or live with nothing editable): unchanged fields are
+// skipped, each changed field is an error explaining the lock.
 func (p *Plan) diffLockedInfo(remote *Listing, code string, lf, rf *LocaleFields, opts DiffOptions, touched map[Level]map[string]bool) {
 	if remote.LocalizationID(LevelAppInfo, code) == "" {
 		return // new locales are rejected by requireName
@@ -349,10 +356,14 @@ func (p *Plan) diffLockedInfo(remote *Listing, code string, lf, rf *LocaleFields
 		if f.Level != LevelAppInfo || !ok {
 			continue
 		}
-		if old, had := rf.Get(f.Key); had && old == v {
+		if sameValue(rf, f.Key, v) {
 			continue
 		}
 		changed = true
+		if opts.AppInfoLocked == "" {
+			p.errorf(code, f.Key, IssueLevelUnavailable, "app info is %s, so %s of %s can't change until a new version is being prepared", opts.AppInfoState, f.Key, code)
+			continue
+		}
 		why := "a version is in review"
 		if opts.Blocker != "" {
 			why = opts.Blocker + " is in review"
@@ -362,6 +373,17 @@ func (p *Plan) diffLockedInfo(remote *Listing, code string, lf, rf *LocaleFields
 	if !changed {
 		p.Counts.Unchanged++
 	}
+}
+
+// sameValue reports whether desired v matches the remote field key; an
+// empty desired value equals an absent or null remote one, so exports with
+// empty files (fastlane writes one per unset field) converge.
+func sameValue(rf *LocaleFields, key, v string) bool {
+	old, had := rf.Get(key)
+	if !had {
+		return v == ""
+	}
+	return old == v
 }
 
 // lockToPromo drops every field Apple refuses on a live or in-review
@@ -380,13 +402,13 @@ func (p *Plan) lockToPromo(remote *Listing, code string, lf, rf *LocaleFields, o
 		case LevelVersion:
 			keep = f.Key == "promotionalText" && remote.LocalizationID(LevelVersion, code) != ""
 		case LevelAppInfo:
-			keep = remote.pulled(LevelAppInfo) && opts.AppInfoLocked == ""
+			keep = remote.pulled(LevelAppInfo) && opts.AppInfoLocked == "" && opts.AppInfoState == ""
 		}
 		if keep {
 			continue
 		}
 		lf.Clear(f.Key)
-		if old, had := rf.Get(f.Key); !had || old != v {
+		if !sameValue(rf, f.Key, v) {
 			locked = append(locked, f.Key)
 		}
 	}

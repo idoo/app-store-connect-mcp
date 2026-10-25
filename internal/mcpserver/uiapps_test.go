@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -175,6 +176,101 @@ func TestUIScreensSafeDOM(t *testing.T) {
 			if !strings.Contains(src, need) {
 				t.Errorf("%s.html lacks %s", screen, need)
 			}
+		}
+	}
+}
+
+// TestReleaseViewArgLists: the release view only adds version/platform to
+// a Fix button for tools whose schemas take them (schemas reject unknown args).
+func TestReleaseViewArgLists(t *testing.T) {
+	v := readView(t, "release")
+	list := func(name string) map[string]bool {
+		m := regexp.MustCompile(`const ` + name + `=\[([^\]]*)\]`).FindStringSubmatch(v)
+		if m == nil {
+			t.Fatalf("release.html: no %s list", name)
+		}
+		out := map[string]bool{}
+		for _, q := range strings.Split(m[1], ",") {
+			out[strings.Trim(q, `" `)] = true
+		}
+		return out
+	}
+	ver, plat := list("VER"), list("PLAT")
+	for n := range ver {
+		plat[n] = true // PLAT=[…].concat(VER)
+	}
+	b, err := os.ReadFile("../../docs/tools.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tools []struct {
+		Name   string `json:"name"`
+		Schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"input_schema"`
+	}
+	if err := json.Unmarshal(b, &tools); err != nil {
+		t.Fatal(err)
+	}
+	for _, tl := range tools {
+		_, hasV := tl.Schema.Properties["version"]
+		_, hasP := tl.Schema.Properties["platform"]
+		if hasV != ver[tl.Name] {
+			t.Errorf("%s: takes version = %v, VER lists it = %v", tl.Name, hasV, ver[tl.Name])
+		}
+		if hasP != plat[tl.Name] {
+			t.Errorf("%s: takes platform = %v, PLAT lists it = %v", tl.Name, hasP, plat[tl.Name])
+		}
+	}
+}
+
+// TestUIViewsRenderR13Fields pins the round-13 view fixes: locked steps run
+// their unlock call first (or are disabled without one), the release view
+// shows other platforms, the inferred-platform note, next steps and
+// third-party attachment names, Fix buttons carry the version asked about,
+// and the metadata view shows an unapplicable plan and its warnings.
+func TestUIViewsRenderR13Fields(t *testing.T) {
+	// Every locked shape has a label; without unlock the button is disabled;
+	// unlock runs first and a declined/unsupported unlock stops; an unmarked
+	// call failing writes_disabled/toolset_disabled offers the unlock.
+	shared := []string{
+		`writes_disabled:"`, `toolset_disabled:"`, `stateless_fixed:"`,
+		`off=!!a.locked&&!a.unlock`, `if(off){b.disabled=true;return b}`,
+		`if(unlock){const u=await rpc("tools/call",{name:unlock.tool`,
+		`(data(u)||{}).writes===false)return`,
+		`const u=unlockOf(r);if(u){unlock=u;relabel()}`,
+		`str(a.hint)`,
+	}
+	views := map[string][]string{
+		"release": {
+			"d.other_platforms", "o.version_state", `/REJECT/.test(`, `"Check "+str(o.platform)`,
+			"d.platform_inferred", "(w||{}).next", "arr(x.untrusted))add(card,ut(u", "fixArgs(fx.tool,inp,app,v,fx.args)",
+			"VER.includes(tool))a.version=ver", "unlock:fx.unlock", "unlock:n.unlock",
+		},
+		"metadata":    {"d.applicable===false", "badge(na?\"block\"", "str(d.reason)", "arr(d.warnings)", "if(d.plan_id&&!na)"},
+		"reviews":     {`s.tool==="reviews_reply"`, "unlock:lk.unlock"},
+		"screenshots": {`d.version_source==="live_fallback"`},
+		"funnel":      {"action(a,"},
+	}
+	var first string
+	for _, name := range uiScreens {
+		v := readView(t, name)
+		for _, want := range append(append([]string{}, shared...), views[name]...) {
+			if !strings.Contains(v, want) {
+				t.Errorf("%s.html lacks %q", name, want)
+			}
+		}
+		if strings.Contains(v, "the host will be asked") {
+			t.Errorf("%s.html still claims the host asks before a locked call", name)
+		}
+		i, j := strings.Index(v, "/* Writes:"), strings.Index(v, "function resize()")
+		if i < 0 || j < i {
+			t.Fatalf("%s.html: shared button block not found", name)
+		}
+		if first == "" {
+			first = v[i:j]
+		} else if v[i:j] != first {
+			t.Errorf("%s.html: button/action block differs from %s.html", name, uiScreens[0])
 		}
 	}
 }

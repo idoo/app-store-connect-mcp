@@ -458,6 +458,49 @@ func TestRenderMarksWriteLockedSteps(t *testing.T) {
 	}
 }
 
+// Steps naming a tool of a disabled toolset are marked toolset_disabled with
+// the enable call (UI-5); on stateless HTTP every hidden tool is
+// stateless_fixed with a restart hint and never a toolsets unlock (HCS-1).
+func TestRenderMarksToolsetAndStatelessLockedSteps(t *testing.T) {
+	steps := func(deps Deps) []tool.NextStep {
+		t.Helper()
+		s, err := newSession(deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := tool.OK(map[string]any{"fix_via": map[string]any{"tool": "signing_bundle_ids_list"}}).
+			Then(tool.NextStep{Tool: "signing_bundle_ids_list"}, tool.NextStep{Tool: "release_submit"}, tool.NextStep{Tool: "builds_list"})
+		var got struct {
+			Data struct {
+				FixVia tool.NextStep `json:"fix_via"`
+			} `json:"data"`
+			Next []tool.NextStep `json:"next"`
+		}
+		if err := json.Unmarshal([]byte(s.render(r).Content[0].(*mcp.TextContent).Text), &got); err != nil {
+			t.Fatal(err)
+		}
+		return append(got.Next, got.Data.FixVia)
+	}
+	got := steps(Deps{Tools: (&fixture{}).tools(), Profile: team(false)})
+	ts := got[0]
+	if ts.Locked != "toolset_disabled" || ts.Unlock == nil || ts.Unlock.Args["action"] != "enable" ||
+		fmt.Sprint(ts.Unlock.Args["toolsets"]) != "[signing]" || got[3].Locked != "toolset_disabled" {
+		t.Errorf("toolset steps = %+v", got)
+	}
+	if got[1].Locked != "writes_disabled" || got[2].Locked != "" {
+		t.Errorf("steps = %+v", got)
+	}
+	got = steps(Deps{Tools: (&fixture{}).tools(), Profile: team(false), Stateless: true})
+	for _, i := range []int{0, 1, 3} {
+		if got[i].Locked != "stateless_fixed" || got[i].Unlock != nil || !strings.Contains(got[i].Hint, "restart") {
+			t.Errorf("stateless step %d = %+v", i, got[i])
+		}
+	}
+	if got[2].Locked != "" {
+		t.Errorf("listed step locked: %+v", got[2])
+	}
+}
+
 func TestInstructionsBudget(t *testing.T) {
 	if len(Instructions) > 1536 {
 		t.Fatalf("instructions = %d bytes, max 1536", len(Instructions))

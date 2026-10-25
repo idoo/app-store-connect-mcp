@@ -4023,7 +4023,7 @@
           "type": "integer"
         },
         "mark_seen": {
-          "description": "advance last_seen past these items",
+          "description": "advance last_seen past these items (kept when filtered)",
           "type": "boolean"
         },
         "platform": {

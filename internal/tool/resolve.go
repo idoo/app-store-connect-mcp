@@ -2,6 +2,7 @@ package tool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -155,6 +156,26 @@ func (e *ErrAmbiguous) Error() string {
 			"or pin one with app = \"…\" in .app-store-connect-mcp.toml", n)
 	}
 	return fmt.Sprintf("%s %q is ambiguous (%d matches); pass an id", e.Kind, e.Ref, n)
+}
+
+// allAppsHint extends a "which app?" error of a tool that accepts app:"all".
+type allAppsHint struct{ error }
+
+func (e allAppsHint) Error() string {
+	return e.error.Error() + `; or pass app:"all" to cover every app in one call`
+}
+
+func (e allAppsHint) Unwrap() error { return e.error }
+
+// offerAllApps marks a "which app?" ambiguity raised by a tool in
+// [AllAppsTools] so its message and next steps offer app:"all".
+func offerAllApps(name string, err error) error {
+	var amb *ErrAmbiguous
+	if !slices.Contains(AllAppsTools, name) || !errors.As(err, &amb) || amb.Kind != "app" || amb.Ref != "" {
+		return err
+	}
+	amb.Next = append([]NextStep{{Tool: name, Args: map[string]any{"app": string(AllApps)}}}, amb.Next...)
+	return allAppsHint{err}
 }
 
 // NextSteps implements [NextStepper].

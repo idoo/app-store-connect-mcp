@@ -11,26 +11,45 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
-// CP1: the pending iPhone Duo slot warns before 2027-04-01; after it, it
-// blocks only when the spec can upload the slot.
+// CP1: the pending iPhone Duo slot warns before 2027-04-01 and blocks from
+// it; the Asset Library (IPHONE_DUO_PROFILE) uploads and fills it.
 func TestIPhoneDuoByDate(t *testing.T) {
 	before := setup(t, readyFixture())
 	out, _ := call(t, before, `{"app":"Hjul"}`)
 	c := checkByID(t, out, "iphone_duo_screenshots")
-	if c.Status != statusWarn || !strings.Contains(c.Detail, "required for submissions from 2027-04-01") || !ready(out) {
+	if c.Status != statusWarn || !strings.Contains(c.Detail, "required for submissions from 2027-04-01") ||
+		!strings.Contains(c.Detail, "library_plan with dir holding <locale>/APP_IPHONE_DUO/ (1398x2034 PNG)") || !ready(out) {
 		t.Errorf("before cutoff: %+v ready=%v", c, ready(out))
 	}
 
-	// The pinned spec (4.5.1) lacks APP_IPHONE_DUO: warn, never block.
+	// The pinned spec (4.5.1) lacks APP_IPHONE_DUO as a set type, but the
+	// library uploads it: block, with the manual route as fix_via.
 	after := setup(t, readyFixture())
 	after.Clock.Set(time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC))
 	out, _ = call(t, after, `{"app":"Hjul"}`)
-	if c := checkByID(t, out, "iphone_duo_screenshots"); c.Status != statusWarn || !strings.Contains(c.Detail, "can't upload them yet") ||
-		c.FixVia == nil || c.FixVia.Manual == "" || !ready(out) {
+	if c := checkByID(t, out, "iphone_duo_screenshots"); c.Status != statusBlock || !strings.Contains(c.Detail, "library_plan") ||
+		c.FixVia == nil || c.FixVia.Manual == "" || ready(out) {
 		t.Errorf("after cutoff, unknown to spec: %+v ready=%v", c, ready(out))
 	}
 	if specKnowsDisplay(after.Spec, "APP_IPHONE_DUO") || !specKnowsDisplay(after.Spec, "APP_IPHONE_67") {
 		t.Error("specKnowsDisplay disagrees with the pinned spec")
+	}
+
+	// A usable Duo library placement fills the slot; a failed one does not.
+	f := readyFixture()
+	f.library = libraryPlacements(t, "IPHONE_DUO_PROFILE", "ACTIVE")
+	lib := setup(t, f)
+	lib.Clock.Set(time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC))
+	out, _ = call(t, lib, `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "iphone_duo_screenshots"); c.Status != statusOK {
+		t.Errorf("Duo filled through the library: %+v", c)
+	}
+	f.library = libraryPlacements(t, "IPHONE_DUO_PROFILE", "FAILED")
+	lib = setup(t, f)
+	lib.Clock.Set(time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC))
+	out, _ = call(t, lib, `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "iphone_duo_screenshots"); c.Status != statusBlock {
+		t.Errorf("failed Duo placement counted: %+v", c)
 	}
 
 	s := &statusSnapshot{App: tool.App{ID: "1"}, Platform: tool.IOS, Now: time.Date(2027, 4, 2, 0, 0, 0, 0, time.UTC)}
@@ -39,7 +58,7 @@ func TestIPhoneDuoByDate(t *testing.T) {
 		t.Errorf("after cutoff, uploadable: %+v", c)
 	}
 	s.Uploadable = nil
-	if c := checkPendingDisplays(s); c.Status != statusWarn {
+	if c := checkPendingDisplays(s); c.Status != statusBlock || c.FixVia == nil || c.FixVia.Manual == "" {
 		t.Errorf("after cutoff, not uploadable: %+v", c)
 	}
 	s.Screenshots = map[string][]screenshotSet{"en-US": {{Display: "APP_IPHONE_DUO", States: []string{"COMPLETE"}}}}

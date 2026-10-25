@@ -185,6 +185,19 @@ func Displays(group string) ([]applemeta.DisplayType, bool) {
 	return d, ok
 }
 
+// GroupsForDisplay returns, sorted, the APP_SCREENSHOT placement groups that
+// fill display d per Apple's group table (none for an unmapped display).
+func GroupsForDisplay(d applemeta.DisplayType) []string {
+	var out []string
+	for g, ds := range groupDisplays {
+		if slices.Contains(ds, d) {
+			out = append(out, g)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // IPad reports a screenshot placement in an iPad group.
 func (p Placement) IPad() bool {
 	ds, _ := Displays(p.Group)

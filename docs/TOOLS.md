@@ -846,7 +846,7 @@ No arguments.
 |`include_crash_logs`|boolean|||fetch log text of up to 3 crashes (8 KB each)|
 |`kind`|string||`all`, `screenshots`, `crashes`|default all|
 |`limit`|integer|||items per kind, 1-50 (default 20)|
-|`mark_seen`|boolean|||advance last_seen past these items|
+|`mark_seen`|boolean|||advance last_seen past these items (kept when filtered)|
 |`platform`|string||`IOS`, `MAC_OS`, `TV_OS`, `VISION_OS`||
 |`since`|string|||last_seen, YYYY-MM-DD or RFC 3339|
 

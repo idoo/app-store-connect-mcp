@@ -19,14 +19,16 @@ const LIMIT={name:30,subtitle:30,keywords:100,promotionalText:170,description:40
 function len(s){return[...str(s)].length}
 function render(root,d,inp){const v=d.version||{},c=d.counts||{};
  add(root,add(el("h1"),ut(d.app&&d.app.name),el("span",null," · "+str(d.platform)+" "+str(v.version)+" ("+str(v.state)+")")));
- add(root,add(el("div","row"),badge(d.status==="planned"?"ok":"warn"),el("span","muted",`${c.updates||0} updates · ${c.creates||0} creates · ${c.deletes||0} deletes · ${c.unchanged||0} unchanged`+(d.plan_id?" · plan "+d.plan_id:""))));
+ const na=d.applicable===false;add(root,add(el("div","row"),badge(na?"block":d.status==="planned"?"ok":"warn"),el("span","muted",`${c.updates||0} updates · ${c.creates||0} creates · ${c.deletes||0} deletes · ${c.unchanged||0} unchanged`+(d.plan_id?" · plan "+d.plan_id:""))));
+ if(na)add(root,add(el("div","card"),badge("block"),el("span",null," Cannot be applied"+(d.reason?": "+str(d.reason):""))));
  for(const e of arr(d.errors))add(root,add(el("div","card"),badge("block"),el("span",null," "+[str(e.locale),str(e.field),str(e.message||e.detail/*trusted*/)].filter(Boolean).join(" · "))));
+ for(const e of arr(d.warnings))add(root,add(el("div","card"),badge("warn"),el("span",null," "+[str(e.locale),str(e.field),str(e.message||e.detail/*trusted*/)].filter(Boolean).join(" · "))));
  for(const ch of arr(d.changes)){add(root,el("h2",null,str(ch.locale)+" · "+str(ch.level)+" · "+str(ch.op)));
   for(const f of arr(ch.fields)){const card=el("div","card"),row=el("div","row"),lim=LIMIT[f.field],n=len(f.new);
    add(row,el("strong","grow",str(f.field)),el("span","muted",f.old!=null?len(f.old)+" →":""),badge(lim&&n>lim?"block":"ok"));row.lastChild.textContent=n+(lim?"/"+lim:"")+" chars";
    add(card,row);if(f.old!=null&&f.old!=="")add(card,add(el("div","old"),ut(f.old,"txt")));add(card,add(el("div","new"),ut(f.new,"txt")));add(root,card)}}
  if(!arr(d.changes).length)add(root,el("p","muted","No changes: the listing already matches."));
- if(d.plan_id){const a=Object.assign({},inp);delete a.plan_id;add(root,el("h2",null,"Apply"),action({tool:"metadata_apply",args:a},"Apply plan"))}}
+ if(d.plan_id&&!na){const a=Object.assign({},inp);delete a.plan_id;add(root,el("h2",null,"Apply"),action({tool:"metadata_apply",args:a},"Apply plan"))}}
 
 
 const S={input:{},result:null};let seq=0;const pend={};
@@ -54,16 +56,24 @@ const GATED=["appinfo_update","metadata_apply","release_cancel","release_phased"
 /* Writes: the first click calls the tool without confirm/plan_id. Only a
  result carrying preview or plan_id arms a second "Confirm" click (sending the
  plan_id, or confirm:true for flag-confirmed tools); any other result means the
- tool already ran, so the button shows "Done". The server gates stay authoritative. */
-function writeButton(label,tool,args,out){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ tool already ran, so the button shows "Done". The server gates stay authoritative.
+ Locked steps ({locked, unlock}): the click first runs unlock (a toolsets call;
+ the server asks the user to approve), then the step. A locked step without
+ unlock (stateless_fixed) is disabled with its hint. A call that fails
+ writes_disabled/toolset_disabled offers the unlock from the error's next steps. */
+const LOCKED={writes_disabled:"writes are off: the first click asks to turn them on",toolset_disabled:"toolset is off: the first click enables it",stateless_fixed:"unavailable on this server: restart it with the needed flags"};
+function unlockOf(r){const d=data(r)||{};if(!r||!r.isError||!LOCKED[d.error])return null;return arr(wrap(r).next).find(s=>s&&s.tool==="toolsets")||null}
+function writeButton(label,tool,args,out,unlock,off){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ const relabel=()=>{b.textContent=(unlock?"Unlock & ":"")+label+(now?" (runs now)":"")};relabel();if(off){b.disabled=true;return b}
  b.onclick=async()=>{if(done)return;b.disabled=true;try{
-  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError)return;const d=data(r)||{};
+  if(unlock){const u=await rpc("tools/call",{name:unlock.tool,arguments:unlock.args||{}});show(out,u);if(u&&u.isError||(data(u)||{}).writes===false)return;unlock=null;relabel()}
+  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError){const u=unlockOf(r);if(u){unlock=u;relabel()}return}const d=data(r)||{};
    if(d.plan_id||d.preview){plan=d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm: "+label;b.className="armed"}else{done=true;b.textContent="Done: "+label}}
   else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";show(out,r);if(r&&r.isError)b.textContent=label;else{done=true;b.textContent="Done: "+label}}
  }catch(e){out.replaceChildren(el("pre","block",str(e&&e.message||e/*trusted*/)))}finally{b.disabled=done;resize()}};return b}
-/* action renders a {tool,args,locked,reason} suggestion as a button. */
-function action(a,label){const box=el("div"),out=el("div"),row=el("div","row");add(row,writeButton(label||a.tool,a.tool,a.args,out));
- if(a.locked)add(row,el("span","muted",a.locked==="writes_disabled"?"writes are off: the host will be asked to enable them first":str(a.locked)));
+/* action renders a {tool,args,locked,unlock,hint,reason} suggestion as a button. */
+function action(a,label){const box=el("div"),out=el("div"),row=el("div","row"),off=!!a.locked&&!a.unlock;add(row,writeButton(label||a.tool,a.tool,a.args,out,a.unlock||null,off));
+ if(a.locked)add(row,el("span","muted",LOCKED[a.locked]||str(a.locked)));if(a.hint)add(row,el("span","muted",str(a.hint)));
  if(a.reason)add(row,el("span","muted",str(a.reason)));return add(box,row,out)}
 function resize(){note("ui/notifications/size-changed",{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight})}
 function draw(){const root=document.getElementById("app");root.replaceChildren();if(!S.result){add(root,el("p","muted","Waiting for tool result…"));return resize()}

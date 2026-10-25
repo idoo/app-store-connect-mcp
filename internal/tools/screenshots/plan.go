@@ -44,6 +44,7 @@ const (
 	problemUnknownLocale       = "unknown_locale"
 	problemMissingLocalization = "missing_localization"
 	problemTooMany             = "too_many_screenshots"
+	problemStillProcessing     = "still_processing"
 	problemLayout              = "unexpected_layout"
 	problemDuplicateLocale     = "duplicate_locale"
 	problemSymlink             = "symlink_skipped"
@@ -109,10 +110,14 @@ type setPlan struct {
 	Uploads        []localFile           `json:"uploads"`
 	Skips          []skipItem            `json:"skips"`
 	Deletes        []deleteItem          `json:"deletes"`
-	Reorder        bool                  `json:"reorder,omitempty"`
-	Order          []string              `json:"order"`
-	remoteCount    int
-	order          []slot
+	// Waiting are replace-mode deletes held back because a screenshot kept
+	// for a local file is still processing at Apple: the old ones stay until
+	// it is COMPLETE (then plan again), so a FAILED one never empties a slot.
+	Waiting     []deleteItem `json:"waiting,omitempty"`
+	Reorder     bool         `json:"reorder,omitempty"`
+	Order       []string     `json:"order"`
+	remoteCount int
+	order       []slot
 }
 
 // overflowDeletes is how many of Deletes must run before the uploads so the
@@ -132,6 +137,7 @@ type summaryOut struct {
 	Uploads    int `json:"uploads"`
 	Skips      int `json:"skips"`
 	Deletes    int `json:"deletes"`
+	Waiting    int `json:"waiting,omitempty"`
 	Reorders   int `json:"reorders"`
 }
 
@@ -195,7 +201,7 @@ func screenshotsPlan(ctx context.Context, env *tool.Env, in sourceIn) (*tool.Res
 		}
 		return res, nil
 	case statusNoChanges:
-		return tool.OK(out), nil
+		return p.holdNote(tool.OK(out), out), nil
 	}
 	fp, err := p.fingerprint()
 	if err != nil {
@@ -208,7 +214,18 @@ func screenshotsPlan(ctx context.Context, env *tool.Env, in sourceIn) (*tool.Res
 	out.PlanID = id
 	args := p.nextArgs()
 	args["plan_id"] = id
-	return tool.OK(out).Then(tool.NextStep{Tool: "screenshots_sync", Args: args}), nil
+	return p.holdNote(tool.OK(out).Then(tool.NextStep{Tool: "screenshots_sync", Args: args}), out), nil
+}
+
+// holdNote explains deletes held because a kept screenshot is still
+// processing and points at screenshots_list to watch it reach COMPLETE.
+func (p *planned) holdNote(res *tool.Result, out planOut) *tool.Result {
+	if out.Summary.Waiting == 0 {
+		return res
+	}
+	return res.Warn(fmt.Sprintf("%d old screenshot(s) wait (sets[].waiting): a kept screenshot is still processing at Apple, so nothing is deleted yet; "+
+		"once screenshots_list shows it COMPLETE, plan again", out.Summary.Waiting)).
+		Then(tool.NextStep{Tool: "screenshots_list", Args: map[string]any{"app": p.t.App.ID, "platform": string(p.t.Platform), "version": p.t.Version.String}})
 }
 
 // computePlan reads the local directory and the remote sets and diffs them.
@@ -329,7 +346,7 @@ func fingerprintSets(sets []remoteSet) []remoteSet {
 	for i, s := range sets {
 		out[i] = remoteSet{ID: s.ID, Display: s.Display, Shots: make([]remoteShot, len(s.Shots))}
 		for j, sh := range s.Shots {
-			out[i].Shots[j] = remoteShot{ID: sh.ID, Checksum: sh.Checksum, Order: sh.Order}
+			out[i].Shots[j] = remoteShot{ID: sh.ID, Checksum: sh.Checksum, Order: sh.Order, State: sh.State}
 		}
 	}
 	return out
@@ -573,12 +590,20 @@ func diffSet(locale, locID string, d applemeta.DisplayType, local []localFile, r
 	}
 	sp.remoteCount = len(remote)
 	used := map[string]bool{}
+	// processing is set when a local file matches a remote screenshot that
+	// is not COMPLETE yet: deleting the set's other screenshots must wait.
+	processing := false
 	var localOrder []slot
 	var labels []string
 	for _, f := range local {
-		i := slices.IndexFunc(remote, func(r remoteShot) bool { return !used[r.ID] && r.Checksum != "" && r.Checksum == f.Checksum })
+		// A FAILED remote never stands in for a local file: it is uploaded
+		// again (and the FAILED one deleted in replace mode).
+		i := slices.IndexFunc(remote, func(r remoteShot) bool {
+			return !used[r.ID] && r.Checksum != "" && r.Checksum == f.Checksum && r.State != upload.StateFailed
+		})
 		if i >= 0 {
 			used[remote[i].ID] = true
+			processing = processing || remote[i].State != upload.StateComplete
 			sp.Skips = append(sp.Skips, skipItem{File: f.Rel, ID: remote[i].ID})
 			localOrder = append(localOrder, slot{id: remote[i].ID, upload: -1})
 		} else {
@@ -593,8 +618,12 @@ func diffSet(locale, locID string, d applemeta.DisplayType, local []localFile, r
 	var naturalLabels []string
 	for _, r := range remote {
 		if mode == modeReplace && !used[r.ID] {
-			sp.Deletes = append(sp.Deletes, deleteItem{ID: r.ID, FileName: r.FileName, Checksum: r.Checksum})
-			continue
+			d := deleteItem{ID: r.ID, FileName: r.FileName, Checksum: r.Checksum}
+			if !processing || r.State == upload.StateFailed {
+				sp.Deletes = append(sp.Deletes, d)
+				continue
+			}
+			sp.Waiting = append(sp.Waiting, d)
 		}
 		natural = append(natural, slot{id: r.ID, upload: -1})
 		naturalLabels = append(naturalLabels, remoteLabel(r, local, used))
@@ -603,12 +632,20 @@ func diffSet(locale, locID string, d applemeta.DisplayType, local []localFile, r
 		natural = append(natural, slot{upload: i})
 		naturalLabels = append(naturalLabels, f.Rel)
 	}
-	if mode == modeReplace {
+	if mode == modeReplace && len(sp.Waiting) == 0 {
 		sp.order, sp.Order = localOrder, labels
 	} else {
+		// Held deletes keep the old screenshots, so the reorder waits too.
 		sp.order, sp.Order = natural, naturalLabels
 	}
 	sp.Reorder = !slices.Equal(sp.order, natural)
+	if len(sp.Waiting) > 0 && len(sp.order) > maxScreenshotsPerSet {
+		return nil, &problem{
+			File: locale + "/" + string(d), Kind: problemStillProcessing,
+			Message: fmt.Sprintf("set is full and a kept screenshot is still processing, so the %d old one(s) cannot be deleted yet; "+
+				"plan again once screenshots_list shows it COMPLETE", len(sp.Waiting)),
+		}
+	}
 	if len(sp.order) > maxScreenshotsPerSet {
 		return nil, &problem{
 			File: locale + "/" + string(d), Kind: problemTooMany,
@@ -647,6 +684,7 @@ func (p *planned) out() planOut {
 		o.Summary.Uploads += len(s.Uploads)
 		o.Summary.Skips += len(s.Skips)
 		o.Summary.Deletes += len(s.Deletes)
+		o.Summary.Waiting += len(s.Waiting)
 		o.Sets = append(o.Sets, s)
 	}
 	switch {

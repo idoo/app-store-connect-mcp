@@ -67,8 +67,16 @@ func (s *session) hiddenResult(name string, args json.RawMessage) *tool.Result {
 	on := s.on[m.Toolset]
 	s.mu.Unlock()
 	switch {
+	case s.deps.Stateless && (!on || writeLocked):
+		// Stateless HTTP fixes toolsets and write mode: no toolsets call can
+		// help, only a restart with other flags.
+		code := errToolsetDisabled.Code
+		if on {
+			code = tool.ErrWritesDisabled.Code
+		}
+		return tool.Fail(&tool.Error{Code: code, Message: name + ": " + errStatelessFixed.Message, Hint: errStatelessFixed.Hint})
 	case !on:
-		r := tool.Fail(errToolsetDisabled).Then(tool.NextStep{Tool: toolsetsName, Args: map[string]any{"action": "enable", "toolsets": []string{string(m.Toolset)}}})
+		r := tool.Fail(errToolsetDisabled).Then(unlockToolset(m.Toolset))
 		if writeLocked {
 			r.Then(unlockWrites)
 		}

@@ -43,3 +43,46 @@ func TestDecodeArgsDropsNulls(t *testing.T) {
 		t.Fatalf("required null err = %v", err)
 	}
 }
+
+type openArgs struct {
+	Age     map[string]any `json:"age,omitempty"`
+	Ratings []int          `json:"ratings,omitempty"`
+	Names   []string       `json:"names,omitempty"`
+}
+
+// A null inside a free-form map is data and reaches the handler (RB-1); a
+// scalar sent for an array argument becomes a one-element array (L2-3).
+func TestDecodeArgsOpenMapNullAndScalarArray(t *testing.T) {
+	s, err := jsonschema.For[openArgs](nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, err := s.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := decodeArgs(json.RawMessage(`{"age":{"kidsAgeBand":null,"gambling":false},"ratings":1,"names":"a"}`), s, rs)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	age := args["age"].(map[string]any)
+	if v, ok := age["kidsAgeBand"]; !ok || v != nil {
+		t.Fatalf("age = %v, want kidsAgeBand:null kept", age)
+	}
+	if r, ok := args["ratings"].([]any); !ok || len(r) != 1 || r[0] != float64(1) {
+		t.Fatalf("ratings = %#v", args["ratings"])
+	}
+	if n, ok := args["names"].([]any); !ok || len(n) != 1 || n[0] != "a" {
+		t.Fatalf("names = %#v", args["names"])
+	}
+	args, err = decodeArgs(json.RawMessage(`{"ratings":"2"}`), s, rs)
+	if err != nil {
+		t.Fatalf("stringified scalar: %v", err)
+	}
+	if r := args["ratings"].([]any); len(r) != 1 || r[0] != float64(2) {
+		t.Fatalf("ratings = %#v", r)
+	}
+	if _, err := decodeArgs(json.RawMessage(`{"ratings":1.5}`), s, rs); err == nil {
+		t.Fatal("fractional rating accepted")
+	}
+}

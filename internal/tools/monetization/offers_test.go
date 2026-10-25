@@ -27,6 +27,19 @@ func offerKit(t *testing.T) *tooltest.Kit {
 	return k
 }
 
+// offerPricesDoc is the prices of an existing promo/win-back offer:
+// territory→price point pairs ("USA:ppUSA").
+func offerPricesDoc(priceType string, pairs ...string) string {
+	var rows, inc []string
+	for i, p := range pairs {
+		terr, pp, _ := strings.Cut(p, ":")
+		rows = append(rows, fmt.Sprintf(`{"type":%q,"id":"op%d","relationships":{"territory":{"data":{"type":"territories","id":%q}},`+
+			`"subscriptionPricePoint":{"data":{"type":"subscriptionPricePoints","id":%q}}}}`, priceType, i, terr, pp))
+		inc = append(inc, fmt.Sprintf(`{"type":"subscriptionPricePoints","id":%q,"attributes":{"customerPrice":"%d.99"}}`, pp, i))
+	}
+	return jsonapiDoc("["+strings.Join(rows, ",")+"]", inc...)
+}
+
 // offerMutationBodies returns "METHOD path" plus decoded body of each mutation.
 func offerMutationBodies(t *testing.T, k *tooltest.Kit) []map[string]any {
 	t.Helper()
@@ -126,6 +139,8 @@ func TestOffersCreatePromoRepeatIsAlready(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/promotionalOffers", http.StatusOK, jsonapiDoc(
 		`[{"type":"subscriptionPromotionalOffers","id":"po1","attributes":{"name":"Winter","offerCode":"winter","offerMode":"PAY_UP_FRONT","duration":"THREE_MONTHS","numberOfPeriods":1},
 		   "relationships":{"prices":{"data":[{"type":"subscriptionPromotionalOfferPrices","id":"p1"}]}}}]`))
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptionPromotionalOffers/{id}/prices", http.StatusOK,
+		offerPricesDoc("subscriptionPromotionalOfferPrices", "USA:ppUSA"))
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
 		"kind":"promotional","name":"Winter","identifier":"winter","mode":"PAY_UP_FRONT","duration":"THREE_MONTHS",
 		"prices":[{"territory":"USA","price_point_id":"ppUSA"}]}`))
@@ -138,12 +153,35 @@ func TestOffersCreatePromoRepeatIsAlready(t *testing.T) {
 	}
 }
 
+// RB-2: a promo or win-back offer with equal terms but other territory
+// prices is a clash naming the price differences, never "already".
+func TestOffersCreatePromoOtherPricesFails(t *testing.T) {
+	k := offerKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/promotionalOffers", http.StatusOK, jsonapiDoc(
+		`[{"type":"subscriptionPromotionalOffers","id":"po1","attributes":{"name":"Winter","offerCode":"winter","offerMode":"PAY_UP_FRONT","duration":"THREE_MONTHS","numberOfPeriods":1}}]`))
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptionPromotionalOffers/{id}/prices", http.StatusOK,
+		offerPricesDoc("subscriptionPromotionalOfferPrices", "USA:ppUSAold", "DEU:ppDEU"))
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
+		"kind":"promotional","name":"Winter","identifier":"winter","mode":"PAY_UP_FRONT","duration":"THREE_MONTHS",
+		"prices":[{"territory":"USA","price_point_id":"ppUSA"},{"territory":"GBR","price_point_id":"ppGBR"}]}`), "invalid_arguments")
+	for _, want := range []string{"po1", "USA price is 0.99, requested price point ppUSA", "no price in GBR", "also priced in DEU"} {
+		if !strings.Contains(body.Message, want) {
+			t.Errorf("message lacks %q: %s", want, body.Message)
+		}
+	}
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("clash must not write: %+v", k.ASC.Mutations())
+	}
+}
+
 // A promotional offer clashing by identifier with different terms is an
 // error naming the existing offer, never "already".
 func TestOffersCreatePromoClashWithOtherTermsFails(t *testing.T) {
 	k := offerKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/promotionalOffers", http.StatusOK, jsonapiDoc(
 		`[{"type":"subscriptionPromotionalOffers","id":"po1","attributes":{"name":"Winter","offerCode":"winter","offerMode":"FREE_TRIAL","duration":"ONE_WEEK","numberOfPeriods":1}}]`))
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptionPromotionalOffers/{id}/prices", http.StatusOK,
+		offerPricesDoc("subscriptionPromotionalOfferPrices", "USA:ppUSA"))
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, `{"product_id":"`+offerTestProduct+`",
 		"kind":"promotional","name":"Summer","identifier":"winter","mode":"PAY_UP_FRONT","duration":"ONE_YEAR",
 		"prices":[{"territory":"USA","price_point_id":"ppUSA"}]}`), "invalid_arguments")
@@ -161,6 +199,7 @@ func TestOffersCreateWinBackClashWithOtherTermsFails(t *testing.T) {
 		`[{"type":"winBackOffers","id":"wb1","attributes":{"referenceName":"Back","offerId":"back","offerMode":"FREE_TRIAL","duration":"ONE_WEEK",
 		  "periodCount":1,"priority":"NORMAL","startDate":"2026-11-01","customerEligibilityPaidSubscriptionDurationInMonths":6,
 		  "customerEligibilityTimeSinceLastSubscribedInMonths":{"minimum":1,"maximum":12}}}]`))
+	k.ASC.Handle(http.MethodGet, "/v1/winBackOffers/{id}/prices", http.StatusOK, offerPricesDoc("winBackOfferPrices", "USA:ppUSA"))
 	args := `{"product_id":"` + offerTestProduct + `","kind":"win_back","name":"Back","identifier":"back","mode":"FREE_TRIAL","duration":"ONE_WEEK",
 		"start_date":"2026-11-01","paid_months":6,"lapsed_min_months":%d,"lapsed_max_months":12,"prices":[{"territory":"USA","price_point_id":"ppUSA"}]}`
 	same := tooltest.Decode[map[string]any](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "offers_create"), k.Env, fmt.Sprintf(args, 1))))

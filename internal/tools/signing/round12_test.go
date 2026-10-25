@@ -53,21 +53,20 @@ func TestRevokePreviewPagesTruncatedCertificates(t *testing.T) {
 	}
 }
 
-// A confirmed re-run after a DELETE that applied finds the object gone:
-// already, not not_found. A preview of a missing id stays not_found.
-func TestRevokeConfirmedRerunGoneIsAlready(t *testing.T) {
+// A missing id is not_found with the "may already be revoked" hint, both on
+// preview and with confirm:true (RB2-2: a first-call confirm with a typo id
+// must not report a successful revoke).
+func TestRevokeGoneIsNotFoundEvenConfirmed(t *testing.T) {
 	for _, kind := range []string{"certificate", "profile"} {
 		k := newKit(t)
 		k.ASC.Handle(http.MethodGet, "/v1/"+kind+"s/{id}", http.StatusNotFound,
 			`{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found"}]}`)
 		tl := mustTool(t, "signing_revoke")
-		res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"kind":"`+kind+`","id":"Z1","confirm":true}`))
-		if o := tooltest.Decode[map[string]any](t, res); o["already"] != true {
-			t.Fatalf("%s: out = %s", kind, tooltest.JSON(t, o))
-		}
-		fail := tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"kind":"`+kind+`","id":"Z1"}`), "not_found")
-		if j := tooltest.JSON(t, fail); !strings.Contains(j, "earlier attempt") {
-			t.Fatalf("%s: no hint in %s", kind, j)
+		for _, args := range []string{`{"kind":"` + kind + `","id":"Z1","confirm":true}`, `{"kind":"` + kind + `","id":"Z1"}`} {
+			fail := tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, args), "not_found")
+			if j := tooltest.JSON(t, fail); !strings.Contains(j, "earlier attempt") || strings.Contains(j, `"already":true`) {
+				t.Fatalf("%s %s: %s", kind, args, j)
+			}
 		}
 		if n := len(k.ASC.Mutations()); n != 0 {
 			t.Fatalf("%s: mutations = %d", kind, n)

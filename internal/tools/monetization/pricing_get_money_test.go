@@ -79,3 +79,49 @@ func TestPrcMoney(t *testing.T) {
 		}
 	}
 }
+
+// L2-1: products mode shows each territory's next scheduled price and its
+// start date, and points at pricing_get product_id for the full schedule.
+func TestPricingGetProductsShowsNextScheduledPrice(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, jsonapiDoc(
+		`[{"type":"subscriptionGroups","id":"g1","relationships":{"subscriptions":{"data":[{"type":"subscriptions","id":"sub1"}]}}}]`,
+		`{"type":"subscriptions","id":"sub1","attributes":{"productId":"ivan.Sift.fika.annual"}}`))
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptions/{id}/prices", http.StatusOK, jsonapiDoc(
+		`[`+prcRow("subscriptionPrices", "sp-usa", "subscriptionPricePoint", "subscriptionPricePoints", "pUSA", "USA", "2025-01-01", false)+`,`+
+			prcRow("subscriptionPrices", "sp-usa2", "subscriptionPricePoint", "subscriptionPricePoints", "pUSA2", "USA", "2099-02-01", false)+`,`+
+			prcRow("subscriptionPrices", "sp-usa3", "subscriptionPricePoint", "subscriptionPricePoints", "pUSA3", "USA", "2099-01-01", false)+`,`+
+			prcRow("subscriptionPrices", "sp-swe", "subscriptionPricePoint", "subscriptionPricePoints", "pSWE", "SWE", "2025-01-01", false)+`]`,
+		subPt("pUSA", "USA", "24.99", "17", "21"), subPt("pUSA2", "USA", "34.99", "24", "29"),
+		subPt("pUSA3", "USA", "29.99", "21", "25"), subPt("pSWE", "SWE", "299.0", "190", "230"),
+		prcTerr("USA", "USD"), prcTerr("SWE", "SEK")))
+
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_get"), k.Env,
+		`{"kind":"subscription","products":["ivan.Sift.fika.annual"],"territories":["USA","SWE"]}`))
+	out := tooltest.Decode[pricingGetProductsOut](t, res)
+	p := out.Products[0]
+	if p.Scheduled != 2 || len(p.Prices) != 2 {
+		t.Fatalf("product = %+v", p)
+	}
+	byTerr := map[string]prcProductRow{}
+	for _, r := range p.Prices {
+		byTerr[r.Territory] = r
+	}
+	usa, swe := byTerr["USA"], byTerr["SWE"]
+	if usa.Price != "24.99" || usa.NextPrice == nil || *usa.NextPrice != (prcNextPrice{Price: "29.99", StartDate: "2099-01-01"}) {
+		t.Errorf("USA = %+v next %+v", usa, usa.NextPrice)
+	}
+	if swe.NextPrice != nil {
+		t.Errorf("SWE has no scheduled change, got %+v", swe.NextPrice)
+	}
+	if len(res.Next) != 1 || res.Next[0].Tool != "pricing_get" || res.Next[0].Args["product_id"] != "sub1" {
+		t.Errorf("next = %+v", res.Next)
+	}
+
+	// Base-territory summary carries next_price too.
+	out = tooltest.Decode[pricingGetProductsOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "pricing_get"), k.Env,
+		`{"kind":"subscription","products":["sub1"]}`)))
+	if b := out.Products[0]; b.Territory != "USA" || b.NextPrice == nil || b.NextPrice.Price != "29.99" {
+		t.Errorf("base = %+v next %+v", b, b.NextPrice)
+	}
+}

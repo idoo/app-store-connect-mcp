@@ -10,6 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -55,6 +56,28 @@ func (s *session) complete(ctx context.Context, req *mcp.CompleteRequest) (*mcp.
 			}
 			prefix = "" // search ranks by keyword, not prefix
 		}
+	case "from_locale", "to_locales", "locale":
+		// to_locales is a comma-separated list: complete its last segment
+		// and return whole values, skipping codes already listed.
+		head, last := "", p.Argument.Value
+		if i := strings.LastIndex(last, ","); i >= 0 {
+			head, last = last[:i+1], last[i+1:]
+		}
+		chosen := map[string]bool{}
+		for _, c := range strings.Split(head, ",") {
+			chosen[strings.ToLower(strings.TrimSpace(c))] = true
+		}
+		lead := head
+		if head != "" && strings.HasPrefix(last, " ") {
+			lead += " "
+		}
+		prefix = strings.ToLower(strings.TrimSpace(last))
+		for _, l := range applemeta.Locales() {
+			if !chosen[strings.ToLower(l)] && strings.HasPrefix(strings.ToLower(l), prefix) {
+				candidates = append(candidates, lead+l)
+			}
+		}
+		prefix = ""
 	}
 	vals := make([]string, 0, min(len(candidates), completionMax))
 	total := 0

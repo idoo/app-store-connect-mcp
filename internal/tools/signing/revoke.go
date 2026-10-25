@@ -79,16 +79,12 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 		return nil, tool.InvalidArgs("kind must be certificate or profile")
 	}
 	if tool.IsNotFound(err) {
+		// Not "already": a 404 can as well be a typo or the wrong kind, and
+		// nothing here proves an earlier attempt touched it.
 		gone := map[string]string{"certificate": "revoked", "profile": "deleted"}[in.Kind]
-		if in.Confirm {
-			// A confirmed re-run after an outcome_unknown DELETE that applied.
-			next := tool.NextStep{Tool: "signing_profiles_list", Args: map[string]any{"state": "INVALID"}}
-			return tool.Already(revokeOut{Revoked: revokeTarget{Kind: in.Kind, ID: in.ID}}).
-				Warn(fmt.Sprintf("%s %s no longer exists; an earlier attempt already %s it", in.Kind, in.ID, gone)).Then(next), nil
-		}
 		var nf *tool.ErrNotFound
 		if errors.As(err, &nf) && nf.Hint == "" {
-			nf.Hint = "it may already be " + gone + " by an earlier attempt"
+			nf.Hint = "it may already be " + gone + " by an earlier attempt; check the id and kind"
 		}
 	}
 	if err != nil {

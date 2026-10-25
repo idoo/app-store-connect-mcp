@@ -17,17 +17,32 @@ table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:4px 6px;b
 
 const LABEL={version:"Version",build:"Build",export_compliance:"Export compliance",whats_new:"What's New",listing:"Listing",screenshots:"Screenshots",age_rating:"Age rating",review_contact:"App Review contact",content_rights:"Content rights",accessibility_labels:"Accessibility labels",pricing_availability:"Pricing & availability",in_app_products:"In-app products",app_privacy:"App Privacy",submission:"Submission"};
 const ORDER={block:0,warn:1,manual:2,info:3,ok:4};
-function render(root,d,inp){const v=d.version||{},app=d.app||{};
+/* Tools whose schemas take version / platform (schemas reject unknown args;
+ TestReleaseViewArgLists keeps these in step with docs/tools.json). */
+const VER=["appinfo_update","builds_list","builds_upload","metadata_apply","metadata_plan","metadata_pull","previews_upload","release_health_report","release_phased","release_prepare","release_publish","release_status","release_submit","screenshots_list","screenshots_plan","screenshots_sync"];
+const PLAT=["apps_list","builds_expire","builds_wait","library_apply","library_plan","release_cancel","release_review_status","signing_bundle_id_create","signing_bundle_ids_list","testflight_distribute","testflight_feedback_list"].concat(VER);
+/* fixArgs: the app, platform and version the user asked about (when the tool takes them), under the step's own args. */
+function fixArgs(tool,inp,app,v,extra){const a={app:inp.app||(app.id)},pl=inp.platform||v.platform;if(pl&&PLAT.includes(tool))a.platform=pl;
+ const ver=inp.version;if(ver&&ver!=="live"&&ver!=="editable"&&VER.includes(tool))a.version=ver;return Object.assign(a,extra||{})}
+function render(root,d,inp,w){const v=d.version||{},app=d.app||{};
  add(root,add(el("h1"),ut(app.name),el("span",null," · "+str(v.platform||inp.platform)+" "+(v.exists===false?"(no editable version)":str(v.string)))));
+ if(d.platform_inferred)add(root,el("p","muted","Platform inferred: no platform was given, so "+str(v.platform)+" was checked. Pass platform to check another."));
  const s=d.summary||{};add(root,el("p","muted",["block","warn","manual","info","ok"].map(k=>(s[k]||0)+" "+k).join(" · ")+(s.phase?" · phase: "+str(s.phase):"")));
+ const op=arr(d.other_platforms);if(op.length){add(root,el("h2",null,"Other platforms"));
+  for(const o of op){const st=str(o.state||o.version_state),rej=/REJECT/.test(st+str(o.version_state)),c=el("div","card"),row=el("div","row");
+   add(row,badge(rej?"block":"info"),el("strong","grow",str(o.platform)+" "+str(o.version)+" · "+st+(o.version_state&&o.version_state!==o.state?" ("+str(o.version_state)+")":"")));add(c,row);
+   if(rej)add(c,el("div","txt block","Rejected: open release_status for this platform for the details."));
+   const a={app:inp.app||(app.id),platform:str(o.platform)};if(o.version)a.version=str(o.version);add(c,action({tool:"release_status",args:a},"Check "+str(o.platform)));add(root,c)}}
  const f=d.in_flight;if(f){const c=el("div","card");add(c,add(el("div","row"),badge("info"),el("strong","grow","In flight: "+str(f.string)+" "+str(f.app_version_state))));
   for(const o of arr(f.options))add(c,action(o,"Cancel submission ("+o.tool+")"));add(root,c)}
  for(const x of arr(d.checks).slice().sort((a,b)=>(ORDER[a.status]??5)-(ORDER[b.status]??5))){const card=el("div","card"),row=el("div","row");
   add(row,badge(str(x.status)),el("strong","grow",LABEL[x.id]||str(x.id)));add(card,row);
   if(x.detail)add(card,el("div","txt",str(x.detail)));for(const it of arr(x.items))add(card,el("div","muted","• "+str(it)));
-  const fx=x.fix_via;if(fx){if(fx.tool){const a={app:inp.app||(app.id)};if(inp.platform)a.platform=inp.platform;add(card,action({tool:fx.tool,args:Object.assign(a,fx.args||{}),locked:fx.locked},"Fix via "+fx.tool))}
+  for(const u of arr(x.untrusted))add(card,ut(u,"txt"));
+  const fx=x.fix_via;if(fx){if(fx.tool)add(card,action({tool:fx.tool,args:fixArgs(fx.tool,inp,app,v,fx.args),locked:fx.locked,unlock:fx.unlock,hint:fx.hint},"Fix via "+fx.tool));
    if(fx.manual)add(card,el("div","muted","Fix in App Store Connect: "+str(fx.manual)))}
   add(root,card)}
+ const nx=arr((w||{}).next);if(nx.length){add(root,el("h2",null,"Next steps"));for(const n of nx)if(n&&n.tool)add(root,action({tool:n.tool,args:n.args,locked:n.locked,unlock:n.unlock,hint:n.hint},n.tool+(n.args&&n.args.platform?" "+str(n.args.platform):"")))}
  if(d.app_store_connect)add(root,el("p","muted","App Store Connect: "+str(d.app_store_connect)))}
 
 
@@ -56,16 +71,24 @@ const GATED=["appinfo_update","metadata_apply","release_cancel","release_phased"
 /* Writes: the first click calls the tool without confirm/plan_id. Only a
  result carrying preview or plan_id arms a second "Confirm" click (sending the
  plan_id, or confirm:true for flag-confirmed tools); any other result means the
- tool already ran, so the button shows "Done". The server gates stay authoritative. */
-function writeButton(label,tool,args,out){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ tool already ran, so the button shows "Done". The server gates stay authoritative.
+ Locked steps ({locked, unlock}): the click first runs unlock (a toolsets call;
+ the server asks the user to approve), then the step. A locked step without
+ unlock (stateless_fixed) is disabled with its hint. A call that fails
+ writes_disabled/toolset_disabled offers the unlock from the error's next steps. */
+const LOCKED={writes_disabled:"writes are off: the first click asks to turn them on",toolset_disabled:"toolset is off: the first click enables it",stateless_fixed:"unavailable on this server: restart it with the needed flags"};
+function unlockOf(r){const d=data(r)||{};if(!r||!r.isError||!LOCKED[d.error])return null;return arr(wrap(r).next).find(s=>s&&s.tool==="toolsets")||null}
+function writeButton(label,tool,args,out,unlock,off){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ const relabel=()=>{b.textContent=(unlock?"Unlock & ":"")+label+(now?" (runs now)":"")};relabel();if(off){b.disabled=true;return b}
  b.onclick=async()=>{if(done)return;b.disabled=true;try{
-  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError)return;const d=data(r)||{};
+  if(unlock){const u=await rpc("tools/call",{name:unlock.tool,arguments:unlock.args||{}});show(out,u);if(u&&u.isError||(data(u)||{}).writes===false)return;unlock=null;relabel()}
+  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError){const u=unlockOf(r);if(u){unlock=u;relabel()}return}const d=data(r)||{};
    if(d.plan_id||d.preview){plan=d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm: "+label;b.className="armed"}else{done=true;b.textContent="Done: "+label}}
   else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";show(out,r);if(r&&r.isError)b.textContent=label;else{done=true;b.textContent="Done: "+label}}
  }catch(e){out.replaceChildren(el("pre","block",str(e&&e.message||e/*trusted*/)))}finally{b.disabled=done;resize()}};return b}
-/* action renders a {tool,args,locked,reason} suggestion as a button. */
-function action(a,label){const box=el("div"),out=el("div"),row=el("div","row");add(row,writeButton(label||a.tool,a.tool,a.args,out));
- if(a.locked)add(row,el("span","muted",a.locked==="writes_disabled"?"writes are off: the host will be asked to enable them first":str(a.locked)));
+/* action renders a {tool,args,locked,unlock,hint,reason} suggestion as a button. */
+function action(a,label){const box=el("div"),out=el("div"),row=el("div","row"),off=!!a.locked&&!a.unlock;add(row,writeButton(label||a.tool,a.tool,a.args,out,a.unlock||null,off));
+ if(a.locked)add(row,el("span","muted",LOCKED[a.locked]||str(a.locked)));if(a.hint)add(row,el("span","muted",str(a.hint)));
  if(a.reason)add(row,el("span","muted",str(a.reason)));return add(box,row,out)}
 function resize(){note("ui/notifications/size-changed",{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight})}
 function draw(){const root=document.getElementById("app");root.replaceChildren();if(!S.result){add(root,el("p","muted","Waiting for tool result…"));return resize()}

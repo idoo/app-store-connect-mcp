@@ -756,3 +756,57 @@ func TestIndexKeepsConcurrentEntries(t *testing.T) {
 		t.Fatalf("index = %v", index)
 	}
 }
+
+// L2-4: a folder that names a display or group the pixels don't fit is a
+// display_mismatch problem, never a silent placement in whatever group the
+// size fits; a correctly sized file in that folder lands in its group.
+func TestDisplayFolderMismatch(t *testing.T) {
+	for _, dir := range []string{"APP_IPHONE_DUO", "IPHONE_DUO_PROFILE", "iphone_duo", "APP_IPHONE_65"} {
+		t.Run(dir, func(t *testing.T) {
+			k, _ := newKit(t, "PREPARE_FOR_SUBMISSION")
+			write(t, k, "lib/en-US/"+dir+"/01-a.png", pngImage(1320, 2868, 'd'))
+			p := plan(t, k, `{"app":"app1","platform":"IOS","dir":"lib"}`)
+			if p.Status != "invalid" || len(p.Create) != 0 || p.PlanID != "" || !hasProblem(p, "display_mismatch") {
+				t.Fatalf("plan = %+v", p)
+			}
+			i := slices.IndexFunc(p.Problems, func(pr problem) bool { return pr.Kind == "display_mismatch" })
+			for _, want := range []string{dir, "1320x2868", bigGroup} {
+				if !strings.Contains(p.Problems[i].Message, want) {
+					t.Errorf("problem %q lacks %q", p.Problems[i].Message, want)
+				}
+			}
+		})
+	}
+	k, _ := newKit(t, "PREPARE_FOR_SUBMISSION")
+	write(t, k, "lib/en-US/APP_IPHONE_DUO/01-a.png", pngImage(1398, 2034, 'd'))
+	write(t, k, "lib/en-US/APP_IPHONE_67/01-b.png", pngImage(1320, 2868, 'e'))
+	p := plan(t, k, `{"app":"app1","platform":"IOS","dir":"lib"}`)
+	if len(p.Problems) != 0 || len(p.Create) != 2 {
+		t.Fatalf("plan = %+v", p)
+	}
+	for _, c := range p.Create {
+		want := map[string]string{"en-US/APP_IPHONE_DUO/01-a.png": "IPHONE_DUO_PROFILE", "en-US/APP_IPHONE_67/01-b.png": bigGroup}[c.File]
+		if c.Group != want {
+			t.Errorf("%s → %s, want %s", c.File, c.Group, want)
+		}
+	}
+}
+
+// RB2-6: concurrent rememberAsset calls in one process keep every entry.
+func TestRememberAssetSerialized(t *testing.T) {
+	k, _ := newKit(t, "PREPARE_FOR_SUBMISSION")
+	key := stateKey(k.Env, "app1")
+	const n = 32
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Go(func() { rememberAsset(k.Env, key, fmt.Sprintf("md5-%d", i), fmt.Sprintf("asset-%d", i)) })
+	}
+	wg.Wait()
+	var index map[string]string
+	if _, err := k.Env.State.Load(stateKind, key, &index); err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != n {
+		t.Fatalf("index has %d entries, want %d", len(index), n)
+	}
+}
