@@ -30,8 +30,9 @@ const (
 type TokenSource interface {
 	// Token returns a valid JWT, refreshing it when needed.
 	Token(ctx context.Context) (string, error)
-	// Invalidate drops the cached JWT; the next Token call signs a new one.
-	Invalidate()
+	// Invalidate drops the cached JWT if it is still tok; the next Token call
+	// then signs a new one.
+	Invalidate(tok string)
 }
 
 // SpecHints is the slice of the spec index the client uses to enrich errors.

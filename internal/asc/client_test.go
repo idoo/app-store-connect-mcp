@@ -35,7 +35,7 @@ func (f *fakeTokens) Token(context.Context) (string, error) {
 	return testJWT, nil
 }
 
-func (f *fakeTokens) Invalidate() { f.invalidated.Add(1) }
+func (f *fakeTokens) Invalidate(string) { f.invalidated.Add(1) }
 
 // sleepClock records sleeps without waiting.
 type sleepClock struct {
@@ -93,6 +93,8 @@ func newHarness(t *testing.T, h http.HandlerFunc, mutate func(*Options)) *harnes
 	hs := &harness{tokens: &fakeTokens{}, clock: &sleepClock{now: time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)}}
 	hs.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hs.hits.Add(1)
+		// Match the fake clock so httptest's real-time Date doesn't read as skew.
+		w.Header().Set("Date", hs.clock.Now().UTC().Format(http.TimeFormat))
 		h(w, r)
 	}))
 	t.Cleanup(hs.srv.Close)
@@ -558,5 +560,152 @@ func TestNewValidatesBaseURL(t *testing.T) {
 	c, err := New(Options{Tokens: &fakeTokens{}})
 	if err != nil || c.base.String() != DefaultBaseURL || c.retry.max != DefaultMaxRetries || cap(c.sem) != DefaultMaxConcurrent {
 		t.Fatalf("defaults: %+v, %v", c, err)
+	}
+}
+
+// TestMutationTransportErrorIsOutcomeUnknown: a POST whose connection drops
+// or times out after Apple read it may have been applied, so it must surface
+// outcome_unknown after exactly one request and never be replayed.
+func TestMutationTransportErrorIsOutcomeUnknown(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+		timeout time.Duration
+	}{
+		{name: "connection dropped", handler: func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.ReadAll(r.Body)
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_ = conn.Close()
+		}},
+		{name: "client timeout", timeout: 50 * time.Millisecond, handler: func(_ http.ResponseWriter, r *http.Request) {
+			_, _ = io.ReadAll(r.Body)
+			select {
+			case <-r.Context().Done():
+			case <-time.After(2 * time.Second):
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hs := newHarness(t, tt.handler, nil)
+			ctx := writeCtx(t)
+			if tt.timeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tt.timeout)
+				defer cancel()
+			}
+			body := map[string]any{"data": map[string]any{"type": "inAppPurchases"}}
+			_, err := hs.c.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/inAppPurchases", Body: body, Write: true})
+			if !errors.Is(err, tool.ErrOutcomeUnknown) {
+				t.Fatalf("err = %v, want outcome_unknown", err)
+			}
+			if got := hs.hits.Load(); got != 1 {
+				t.Fatalf("requests = %d, want 1 (no replay)", got)
+			}
+			if strings.Contains(err.Error(), "eyJ") {
+				t.Fatalf("error leaks a token: %v", err)
+			}
+		})
+	}
+}
+
+// TestPost429ReplaysOnceWithSameBody: Apple rejects a 429 without applying
+// it, so the POST is replayed once with the identical body.
+func TestPost429ReplaysOnceWithSameBody(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(b))
+		n := len(bodies)
+		mu.Unlock()
+		if n == 1 {
+			writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", "slow down", "")
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"data":{"type":"inAppPurchases","id":"1"}}`)
+	}, nil)
+	body := map[string]any{"data": map[string]any{"type": "inAppPurchases", "attributes": map[string]any{"productId": "pro"}}}
+	if _, err := hs.c.Do(writeCtx(t), tool.Request{Method: http.MethodPost, Path: "/v1/inAppPurchases", Body: body, Write: true}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 2 || bodies[0] != bodies[1] || bodies[0] == "" {
+		t.Fatalf("bodies = %q, want two identical non-empty requests", bodies)
+	}
+}
+
+func (c *sleepClock) advance(d time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(d)
+	c.mu.Unlock()
+}
+
+func TestObserveRateLimitKeepsLowestRecent(t *testing.T) {
+	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {}, nil)
+	steps := []struct {
+		advance   time.Duration
+		rem, want int
+	}{
+		{0, 3416, 3416},
+		{time.Second, 3597, 3416}, // late, stale reading from a concurrent request
+		{time.Second, 3409, 3409}, // lower always wins
+		{30 * time.Second, 3500, 3409},
+		{time.Minute, 3550, 3550}, // older than a minute: the hour window may have refilled
+	}
+	for i, s := range steps {
+		hs.clock.advance(s.advance)
+		h := http.Header{}
+		h.Set(RateLimitHeader, fmt.Sprintf("user-hour-lim:3600;user-hour-rem:%d", s.rem))
+		hs.c.observe(h)
+		if got := hs.c.RateLimit().Remaining; got != s.want {
+			t.Fatalf("step %d: remaining = %d, want %d", i, got, s.want)
+		}
+	}
+}
+
+func TestExhaustedQuotaFailsFast(t *testing.T) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(RateLimitHeader, "user-hour-lim:3600;user-hour-rem:0")
+		_, _ = io.WriteString(w, `{"data":[]}`)
+	}, nil)
+	ctx := context.Background()
+	if _, err := hs.c.Get(ctx, "/v1/apps", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hs.c.Get(ctx, "/v1/apps", nil); !errors.Is(err, tool.ErrRateLimited) {
+		t.Fatalf("err = %v, want rate_limited", err)
+	}
+	if got := hs.hits.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1 (second call must not reach Apple)", got)
+	}
+	hs.clock.advance(rateFresh)
+	if _, err := hs.c.Get(ctx, "/v1/apps", nil); err != nil {
+		t.Fatalf("after %s: %v", rateFresh, err)
+	}
+}
+
+func TestUnauthorizedWithClockSkewSkipsRefresh(t *testing.T) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Date", time.Date(2026, 10, 25, 11, 55, 0, 0, time.UTC).Format(http.TimeFormat))
+		writeAPIError(w, http.StatusUnauthorized, "NOT_AUTHORIZED", "bad token", "")
+	}, nil)
+	_, err := hs.c.Get(context.Background(), "/v1/apps", nil)
+	var ae *tool.APIError
+	if !errors.As(err, &ae) || ae.Status != 401 || !strings.Contains(err.Error(), "clock") {
+		t.Fatalf("err = %v, want 401 blaming the clock", err)
+	}
+	if hs.hits.Load() != 1 || hs.tokens.invalidated.Load() != 0 {
+		t.Fatalf("requests = %d, invalidated = %d; want 1, 0", hs.hits.Load(), hs.tokens.invalidated.Load())
+	}
+	if b := tool.BodyFor(err); len(b.Next) != 1 || b.Next[0].Tool != "doctor" {
+		t.Fatalf("body = %+v, want doctor next step", b)
 	}
 }

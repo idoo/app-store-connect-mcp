@@ -24,12 +24,14 @@ import (
 // PlanCapacity is the number of pending plans kept per session (LRU).
 const PlanCapacity = 32
 
-// FakePlanner is an in-memory [tool.Planner] with the resolved semantics: random
-// plan ids, plans bound to tool, canonical args and fingerprint, consumed on
-// use, at most PlanCapacity pending (oldest evicted), and an empty
-// fingerprint refused (fail closed).
+// FakePlanner is an in-memory [tool.Planner] with the production semantics
+// (checked by [PlannerConformance]): random plan ids bound to tool, canonical
+// args and fingerprint; plans expire after [tool.PlanTTL]; any Verify of a
+// known id consumes it, even a failing one; at most PlanCapacity pending
+// (oldest evicted); an empty fingerprint is refused (fail closed).
 type FakePlanner struct {
 	mu    sync.Mutex
+	now   func() time.Time
 	order []string
 	plans map[string]plan
 	// Proposed records every preview proposed, in order.
@@ -38,10 +40,17 @@ type FakePlanner struct {
 
 type plan struct {
 	tool, args, fingerprint string
+	expires                 time.Time
 }
 
-// NewFakePlanner returns an empty FakePlanner.
-func NewFakePlanner() *FakePlanner { return &FakePlanner{plans: map[string]plan{}} }
+// NewFakePlanner returns an empty FakePlanner reading time from now (nil
+// means time.Now); [New] passes the Kit's FakeClock.
+func NewFakePlanner(now func() time.Time) *FakePlanner {
+	if now == nil {
+		now = time.Now
+	}
+	return &FakePlanner{now: now, plans: map[string]plan{}}
+}
 
 // Propose implements tool.Planner.
 func (p *FakePlanner) Propose(_ context.Context, toolName string, args any, fingerprint string, preview tool.PlanPreview) (string, error) {
@@ -55,7 +64,7 @@ func (p *FakePlanner) Propose(_ context.Context, toolName string, args any, fing
 	id := "plan_" + rand.Text()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.plans[id] = plan{tool: toolName, args: string(canon), fingerprint: fingerprint}
+	p.plans[id] = plan{tool: toolName, args: string(canon), fingerprint: fingerprint, expires: p.now().Add(tool.PlanTTL)}
 	p.order = append(p.order, id)
 	for len(p.order) > PlanCapacity {
 		delete(p.plans, p.order[0])
@@ -65,7 +74,7 @@ func (p *FakePlanner) Propose(_ context.Context, toolName string, args any, fing
 	return id, nil
 }
 
-// Verify implements tool.Planner.
+// Verify implements tool.Planner. Any lookup of a known id consumes it.
 func (p *FakePlanner) Verify(_ context.Context, planID, toolName string, args any, fingerprint string) error {
 	canon, err := tool.CanonicalArgs(args)
 	if err != nil {
@@ -74,18 +83,21 @@ func (p *FakePlanner) Verify(_ context.Context, planID, toolName string, args an
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	pl, ok := p.plans[planID]
-	switch {
-	case !ok:
+	if !ok {
 		return fmt.Errorf("%w: unknown plan %q", tool.ErrStalePlan, planID)
+	}
+	delete(p.plans, planID)
+	p.order = slices.DeleteFunc(p.order, func(s string) bool { return s == planID })
+	switch {
+	case !p.now().Before(pl.expires):
+		return fmt.Errorf("%w: plan expired", tool.ErrStalePlan)
 	case pl.tool != toolName:
 		return fmt.Errorf("%w: plan %q belongs to %s", tool.ErrStalePlan, planID, pl.tool)
 	case pl.args != string(canon):
 		return fmt.Errorf("%w: arguments differ from the planned call", tool.ErrStalePlan)
-	case pl.fingerprint != fingerprint:
+	case fingerprint == "" || pl.fingerprint != fingerprint:
 		return fmt.Errorf("%w: remote state changed since the plan was made", tool.ErrStalePlan)
 	}
-	delete(p.plans, planID)
-	p.order = slices.DeleteFunc(p.order, func(s string) bool { return s == planID })
 	return nil
 }
 

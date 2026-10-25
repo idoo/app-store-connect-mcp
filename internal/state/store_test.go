@@ -1,10 +1,112 @@
 package state
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 )
+
+// TestCursorsSurviveConcurrentProcesses uses one Store per goroutine (as
+// separate hamn processes would, with no shared mutex) and checks no
+// cursor update is lost.
+func TestCursorsSurviveConcurrentProcesses(t *testing.T) {
+	dir := t.TempDir()
+	const procs, keys = 8, 10
+	var wg sync.WaitGroup
+	for p := range procs {
+		s, err := New(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wg.Go(func() {
+			for k := range keys {
+				if err := s.SetCursor("prof", fmt.Sprintf("app%d", p), fmt.Sprintf("k%d", k), "v"); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p := range procs {
+		for k := range keys {
+			if got, err := s.Cursor("prof", fmt.Sprintf("app%d", p), fmt.Sprintf("k%d", k)); err != nil || got != "v" {
+				t.Fatalf("app%d/k%d = %q, %v: update lost", p, k, got, err)
+			}
+		}
+	}
+}
+
+func TestCursorReadsLegacyFile(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{` + fmt.Sprintf("%q", cursorKey("p", "app", "reviews")) + `:"old"}`
+	if err := os.WriteFile(filepath.Join(dir, legacyCursorsDB), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Cursor("p", "app", "reviews"); err != nil || got != "old" {
+		t.Fatalf("legacy cursor = %q, %v", got, err)
+	}
+	if err := s.SetCursor("p", "app", "reviews", "new"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Cursor("p", "app", "reviews"); got != "new" {
+		t.Fatalf("cursor = %q, want new (record wins over legacy file)", got)
+	}
+}
+
+// TestStoreFilesAre0600AndAtomic checks record and kind-dir modes and that a
+// failed write leaves the previous record intact.
+func TestStoreFilesAre0600AndAtomic(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions as a non-root user")
+	}
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	type rec struct{ V string }
+	if err := s.Save("uploads", "k", rec{"old"}); err != nil {
+		t.Fatal(err)
+	}
+	kindDir := filepath.Join(s.Dir(), "uploads")
+	for p, want := range map[string]os.FileMode{kindDir: dirMode, filepath.Join(kindDir, "k.json"): fileMode} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != want {
+			t.Errorf("%s mode = %v, want %v", p, fi.Mode().Perm(), want)
+		}
+	}
+	if err := os.Chmod(kindDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(kindDir, dirMode) })
+	if err := s.Save("uploads", "k", rec{"new"}); err == nil {
+		t.Fatal("save into a read-only dir succeeded")
+	}
+	var got rec
+	if ok, err := s.Load("uploads", "k", &got); !ok || err != nil || got.V != "old" {
+		t.Fatalf("after failed save: %v %v %+v, want old record intact", ok, err, got)
+	}
+	entries, err := os.ReadDir(kindDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("leftover temp files: %v", entries)
+	}
+}
 
 func TestStoreRoundTripAndPerms(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "hamn")
@@ -39,7 +141,7 @@ func TestStoreRoundTripAndPerms(t *testing.T) {
 		t.Fatalf("missing load = %v %v", ok, err)
 	}
 
-	for _, p := range []string{filepath.Join(dir, cursorsDB), filepath.Join(dir, "uploads", "abc123.json")} {
+	for _, p := range []string{filepath.Join(dir, cursorKind, cursorFile("p", "app", "reviews")+".json"), filepath.Join(dir, "uploads", "abc123.json")} {
 		fi, err := os.Stat(p)
 		if err != nil {
 			t.Fatal(err)

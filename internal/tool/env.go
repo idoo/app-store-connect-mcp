@@ -33,6 +33,10 @@ type ProfileInfo struct {
 	AllowNoElicit bool `json:"allow_no_elicit,omitempty"`
 }
 
+// PlanTTL is how long a proposed plan stays valid. Planner implementations
+// must expire plans at exactly this age (see tooltest.PlannerConformance).
+const PlanTTL = 15 * time.Minute
+
 // Planner stores two-step plans (in memory, per session).
 type Planner interface {
 	// Propose records a plan for tool+args at the given state fingerprint and
@@ -93,8 +97,9 @@ type Fetcher interface {
 	Fetch(ctx context.Context, method, rawURL string, header http.Header, body io.Reader, maxBytes int64) (*FetchResponse, error)
 }
 
-// Files gives tools confined filesystem access: MCP roots when provided,
-// else the git root of the cwd, else the cwd. Symlink escapes are refused.
+// Files gives tools confined filesystem access: an explicit --root/HAMN_ROOT,
+// else the MCP client's roots, else the git root of the cwd. A fallback root
+// of / or the home directory is refused. Symlink escapes are refused.
 // All methods accept paths relative to the root or absolute paths inside it.
 type Files interface {
 	// Resolve returns the confined absolute path or an error.
@@ -158,6 +163,10 @@ type Env struct {
 	// (the ASC client's read-only guard). The server calls it when toolsets
 	// enable_writes succeeds; nil is a no-op.
 	SetWrites func(bool)
+	// Roots lists the MCP client's roots (file:// URIs). nil means the client
+	// declared no roots capability. [Tool.Call] passes it to a [RootedFiles]
+	// Files, which asks the client only when a tool first touches a file.
+	Roots func(ctx context.Context) ([]string, error)
 	// Progress reports progress to the client.
 	Progress func(done, total float64, msg string)
 	// Elicit asks the human a yes/no question. It returns false when the human

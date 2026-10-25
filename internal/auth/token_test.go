@@ -83,15 +83,46 @@ func TestTokenSourceRefreshMargin(t *testing.T) {
 func TestTokenSourceInvalidate(t *testing.T) {
 	ts, _ := newTestSource(t)
 	ctx := context.Background()
-	if _, err := ts.Token(ctx); err != nil {
+	first, err := ts.Token(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	ts.Invalidate()
+	ts.Invalidate(first)
 	if _, err := ts.Token(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if got := ts.signCount(); got != 2 {
 		t.Fatalf("signs after Invalidate = %d, want 2", got)
+	}
+}
+
+// TestTokenSourceConcurrent401SingleRefresh models 8 requests that all got a
+// 401 with the same stale token: they must cause one re-sign, and a late
+// Invalidate of the stale token must not discard the fresh one.
+func TestTokenSourceConcurrent401SingleRefresh(t *testing.T) {
+	ts, _ := newTestSource(t)
+	ctx := context.Background()
+	stale, err := ts.Token(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 8
+	tokens := make([]string, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Go(func() {
+			ts.Invalidate(stale)
+			tokens[i], _ = ts.Token(ctx)
+		})
+	}
+	wg.Wait()
+	for i, tok := range tokens {
+		if tok == "" || tok == stale || tok != tokens[0] {
+			t.Fatalf("caller %d got %q, want one shared fresh token", i, tok)
+		}
+	}
+	if got := ts.signCount(); got != 2 {
+		t.Fatalf("signs = %d, want 2 (initial + one refresh)", got)
 	}
 }
 

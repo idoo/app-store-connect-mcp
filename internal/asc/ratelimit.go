@@ -1,6 +1,7 @@
 package asc
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,20 @@ import (
 // RateLimitHeader is Apple's quota header, e.g.
 // "user-hour-lim:3600;user-hour-rem:3597".
 const RateLimitHeader = "X-Rate-Limit"
+
+// rateFresh is how long a quota reading outranks higher ones: the hourly
+// window can legitimately refill, so after this a higher reading is accepted.
+const rateFresh = time.Minute
+
+// maxAuthSkew is the clock skew beyond which a 401 is blamed on the local
+// clock and not retried with a fresh token.
+const maxAuthSkew = time.Minute
+
+// rateObs is one quota reading and when it was observed.
+type rateObs struct {
+	rl tool.RateLimit
+	at time.Time
+}
 
 // parseRateLimit parses an X-Rate-Limit header value. It reports false when
 // neither the limit nor the remaining count is present.
@@ -41,10 +56,21 @@ func parseRateLimit(v string) (tool.RateLimit, bool) {
 	return rl, true
 }
 
-// observe records the rate limit and clock skew carried by h.
+// observe records the rate limit and clock skew carried by h. Responses of
+// concurrent requests arrive out of order, so a reading only replaces the
+// current one when it is lower or the current one is older than [rateFresh].
 func (c *Client) observe(h http.Header) {
 	if rl, ok := parseRateLimit(h.Get(RateLimitHeader)); ok {
-		c.rate.Store(&rl)
+		obs := &rateObs{rl: rl, at: c.clock.Now()}
+		for {
+			cur := c.rate.Load()
+			if cur != nil && rl.Remaining > cur.rl.Remaining && obs.at.Sub(cur.at) < rateFresh {
+				break
+			}
+			if c.rate.CompareAndSwap(cur, obs) {
+				break
+			}
+		}
 	}
 	if d := h.Get("Date"); d != "" {
 		if t, err := http.ParseTime(d); err == nil {
@@ -54,12 +80,22 @@ func (c *Client) observe(h http.Header) {
 	}
 }
 
-// RateLimit implements [tool.ASC]: the quota of the latest response.
+// RateLimit implements [tool.ASC]: the lowest recent quota reading.
 func (c *Client) RateLimit() tool.RateLimit {
-	if rl := c.rate.Load(); rl != nil {
-		return *rl
+	if obs := c.rate.Load(); obs != nil {
+		return obs.rl
 	}
 	return tool.RateLimit{}
+}
+
+// quotaExhausted fails fast with tool.ErrRateLimited when Apple reported no
+// calls left within the last [rateFresh], instead of spending retries on 429s.
+func (c *Client) quotaExhausted(label string) error {
+	obs := c.rate.Load()
+	if obs == nil || obs.rl.Remaining > 0 || c.clock.Now().Sub(obs.at) >= rateFresh {
+		return nil
+	}
+	return fmt.Errorf("asc: %s: hourly quota of %d calls used up: %w", label, obs.rl.Limit, tool.ErrRateLimited)
 }
 
 // ClockSkew implements [tool.ASC]: local time minus Apple's Date header of

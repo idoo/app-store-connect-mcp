@@ -36,7 +36,7 @@ type Client struct {
 	clock       tool.Clock
 	userAgent   string
 
-	rate      atomic.Pointer[tool.RateLimit]
+	rate      atomic.Pointer[rateObs]
 	skew      atomic.Int64
 	skewKnown atomic.Bool
 }
@@ -121,6 +121,7 @@ type rawResponse struct {
 	status int
 	header http.Header
 	body   []byte
+	token  string // bearer JWT the request carried
 }
 
 // Do implements [tool.ASC]. Non-GET requests need Request.Write, a write
@@ -284,6 +285,9 @@ func (c *Client) resolve(path string, query url.Values) (*url.URL, error) {
 func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byte, ctype, accept string) (*rawResponse, error) {
 	label := method + " " + u.Path
 	refreshed := false
+	if err := c.quotaExhausted(label); err != nil {
+		return nil, err
+	}
 	consistency := 0
 	for attempt := 0; ; {
 		raw, err := c.exchange(ctx, method, u, body, ctype, accept)
@@ -314,8 +318,12 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 			return raw, nil
 		}
 		if status == http.StatusUnauthorized && !refreshed {
+			if skew, ok := c.ClockSkew(); ok && (skew > maxAuthSkew || skew < -maxAuthSkew) {
+				return nil, fmt.Errorf("asc: %s: local clock is %s off Apple's, so a fresh token would fail too: %w",
+					label, skew.Round(time.Second), c.apiError(status, raw.body, method, u.Path))
+			}
 			refreshed = true
-			c.tokens.Invalidate()
+			c.tokens.Invalidate(raw.token)
 			continue
 		}
 		if status == http.StatusNotFound && method == http.MethodGet &&
@@ -395,7 +403,7 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 	if len(b) > MaxBodyBytes {
 		return nil, fmt.Errorf("response body exceeds %d bytes: %w", MaxBodyBytes, tool.ErrInvalidArgs)
 	}
-	return &rawResponse{status: resp.StatusCode, header: resp.Header, body: b}, nil
+	return &rawResponse{status: resp.StatusCode, header: resp.Header, body: b, token: tok}, nil
 }
 
 // unknownIf wraps err with tool.ErrOutcomeUnknown for methods that are not
