@@ -3,6 +3,7 @@ package xcodecloud
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,8 @@ func lookup(t *testing.T, name string) tool.Tool {
 	return tl
 }
 
+// wantLog compares the requests as a multiset: workflow lists and action
+// details are read in parallel.
 func wantLog(t *testing.T, k *tooltest.Kit, want ...string) {
 	t.Helper()
 	reqs := k.ASC.Requests()
@@ -36,6 +39,9 @@ func wantLog(t *testing.T, k *tooltest.Kit, want ...string) {
 	for i, r := range reqs {
 		got[i] = r.Method + " " + r.Path
 	}
+	want = slices.Clone(want)
+	slices.Sort(got)
+	slices.Sort(want)
 	if g, w := strings.Join(got, "\n"), strings.Join(want, "\n"); g != w {
 		t.Fatalf("requests:\n%s\nwant:\n%s", g, w)
 	}
@@ -212,7 +218,53 @@ func TestBuildStatusLatestTimesOut(t *testing.T) {
 		t.Fatalf("out = %v", out)
 	}
 	tooltest.MustFail(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env, `{"wait_seconds":301,"run":"x"}`), tool.ErrInvalidArgs.Code)
-	tooltest.MustFail(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env, `{}`), tool.ErrInvalidArgs.Code)
+}
+
+// TestBuildStatusAppOnlyPicksSingleWorkflow: with only app (or nothing), the
+// app's only workflow is used instead of an invalid-arguments dead end.
+func TestBuildStatusAppOnlyPicksSingleWorkflow(t *testing.T) {
+	k := kit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/ciProducts", http.StatusOK, prodDoc)
+	k.ASC.Handle(http.MethodGet, "/v1/ciProducts/{id}/workflows", http.StatusOK,
+		`{"data":[{"type":"ciWorkflows","id":"`+wfID+`","attributes":{"name":"Release","isEnabled":true}}]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/ciWorkflows/{id}/buildRuns", http.StatusOK,
+		`{"data":[{"type":"ciBuildRuns","id":"`+runID+`","attributes":{"number":42,"executionProgress":"RUNNING"}}]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/ciBuildRuns/{id}", http.StatusOK, runDoc("RUNNING", "null"))
+	k.ASC.Handle(http.MethodGet, "/v1/ciBuildRuns/{id}/actions", http.StatusOK, `{"data":[]}`)
+	res := tooltest.MustOK(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env, `{"app":"Hjul"}`))
+	wantLog(t, k, "GET /v1/ciProducts", "GET /v1/ciProducts/PR1/workflows", "GET /v1/ciWorkflows/"+wfID+"/buildRuns",
+		"GET /v1/ciBuildRuns/"+runID, "GET /v1/ciBuildRuns/"+runID+"/actions")
+	if out := tooltest.Decode[buildStatusOut](t, res); out.Run.ID != runID {
+		t.Fatalf("run = %+v", out.Run)
+	}
+}
+
+// TestBuildStatusAmbiguousListsAppNames: several workflows (or the same name
+// in several apps) are labelled with the app name, not the product UUID.
+func TestBuildStatusAmbiguousListsAppNames(t *testing.T) {
+	k := kit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/ciProducts", http.StatusOK, `{"data":[
+	 {"type":"ciProducts","id":"PR1","attributes":{"name":"Hjul","productType":"APP"}},
+	 {"type":"ciProducts","id":"PR2","attributes":{"name":"Sikt","productType":"APP"}}]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/ciProducts/{id}/workflows", http.StatusOK,
+		`{"data":[{"type":"ciWorkflows","id":"`+wfID+`","attributes":{"name":"Release (Manual)","isEnabled":true}}]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/ciProducts/{id}/workflows", http.StatusOK,
+		`{"data":[{"type":"ciWorkflows","id":"99999999-2222-3333-4444-555555555555","attributes":{"name":"Release (Manual)","isEnabled":true}}]}`)
+	for _, args := range []string{`{"workflow":"release (manual)"}`, `{}`} {
+		res := tooltest.MustFail(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env, args), "ambiguous")
+		j := tooltest.JSON(t, res)
+		for _, want := range []string{"Release (Manual) (Hjul)", "Release (Manual) (Sikt)"} {
+			if !strings.Contains(j, want) {
+				t.Fatalf("%s: missing %q in %s", args, want, j)
+			}
+		}
+		if strings.Contains(j, "product PR") || len(res.Next) != 2 || res.Next[0].Tool != "xcc_build_status" {
+			t.Fatalf("%s: candidates/next = %s", args, j)
+		}
+	}
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatal("reads only")
+	}
 }
 
 func TestBuildStatusNoWaitSingleRead(t *testing.T) {

@@ -34,16 +34,14 @@ func workflowsList(ctx context.Context, env *tool.Env, in workflowsListIn) (*too
 		return nil, err
 	}
 	out := workflowsListOut{AppID: appID, Products: []productOut{}}
-	for i, p := range products {
-		if i == maxProducts {
-			break
-		}
-		ws, err := listWorkflows(ctx, env, p.ID)
-		if err != nil {
-			return nil, err
-		}
+	shown := products[:min(len(products), maxProducts)]
+	lists, err := productWorkflows(ctx, env, shown)
+	if err != nil {
+		return nil, err
+	}
+	for i, p := range shown {
 		out.Products = append(out.Products, productOut{
-			ID: p.ID, Name: p.Str("name"), Type: p.Str("productType"), AppID: p.RelID("app"), Workflows: ws,
+			ID: p.ID, Name: p.Str("name"), Type: p.Str("productType"), AppID: p.RelID("app"), Workflows: lists[i],
 		})
 	}
 	res := tool.OK(out)

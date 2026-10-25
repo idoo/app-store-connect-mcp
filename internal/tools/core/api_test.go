@@ -13,11 +13,17 @@ func TestAPISearchRanking(t *testing.T) {
 	k := kit(t)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_search"), k.Env, `{"query":"list apps","limit":5}`))
 	out := tooltest.Decode[struct {
-		Operations []tool.SearchHit `json:"operations"`
+		Operations []map[string]any `json:"operations"`
 	}](t, res)
-	if len(out.Operations) == 0 || out.Operations[0].ID != "apps_getCollection" {
-		t.Fatalf("top hit = %+v, want apps_getCollection", out.Operations)
+	if len(out.Operations) == 0 || out.Operations[0]["operation_id"] != "apps_getCollection" {
+		t.Fatalf("top hit = %+v, want operation_id apps_getCollection", out.Operations)
 	}
+	if _, ok := out.Operations[0]["id"]; ok {
+		t.Errorf("search hit still carries id: %v", out.Operations[0])
+	}
+	describe := tooltest.Call(t, mustTool(t, "asc_api_describe"), k.Env,
+		`{"operation_id":"`+out.Operations[0]["operation_id"].(string)+`"}`)
+	tooltest.MustOK(t, describe)
 	if len(out.Operations) > 5 {
 		t.Errorf("limit ignored: %d hits", len(out.Operations))
 	}
@@ -32,7 +38,7 @@ func TestAPISearchReadOnlyHidesWrites(t *testing.T) {
 	tl := mustTool(t, "asc_api_search")
 	methods := func(args string) []string {
 		out := tooltest.Decode[struct {
-			Operations []tool.SearchHit `json:"operations"`
+			Operations []struct{ Method string } `json:"operations"`
 		}](t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, args)))
 		var ms []string
 		for _, h := range out.Operations {
@@ -161,6 +167,49 @@ func TestAPIRequestSensitiveNeedsConfirm(t *testing.T) {
 				t.Errorf("out = %v mutations = %d asked = %d", out, len(k.ASC.Mutations()), len(*asked))
 			}
 		})
+	}
+}
+
+// TestAPIRequestAlwaysNeedsHuman locks RedTeam#5: every mutation, sensitive
+// or not, is refused after confirm:true until a human approves; the
+// "sensitive" classification only changes preview text.
+func TestAPIRequestAlwaysNeedsHuman(t *testing.T) {
+	tests := []struct{ name, args, method, pattern string }{
+		{"delete", `{"method":"DELETE","path":"/v1/betaTesters/t1"}`, "DELETE", "/v1/betaTesters/{id}"},
+		{"expire build", `{"method":"PATCH","path":"/v1/builds/b1","body":{"data":{"type":"builds","id":"b1","attributes":{"expired":true}}}}`, "PATCH", "/v1/builds/{id}"},
+		{"plain patch", `{"method":"PATCH","path":"/v1/appStoreVersionLocalizations/L1","body":{"data":{"type":"appStoreVersionLocalizations","id":"L1","attributes":{"whatsNew":"Fixes"}}}}`, "PATCH", "/v1/appStoreVersionLocalizations/{id}"},
+		{"untracked public attr", `{"method":"PATCH","path":"/v1/apps/7","body":{"data":{"type":"apps","id":"7","attributes":{"contentRightsDeclaration":"USES_THIRD_PARTY_CONTENT"}}}}`, "PATCH", "/v1/apps/{id}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k := kit(t)
+			k.ASC.Handle(tt.method, tt.pattern, 204, "")
+			confirmed := strings.Replace(tt.args, "{", `{"confirm":true,`, 1)
+			tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "asc_api_request"), k.Env, confirmed), "human_approval_required")
+			if n := len(k.ASC.Mutations()); n != 0 {
+				t.Fatalf("%d mutations without a human", n)
+			}
+		})
+	}
+}
+
+func TestAPIPathRejectsEscapesAndDotSegments(t *testing.T) {
+	k := kit(t)
+	k.Elicit(true)
+	for _, p := range []string{
+		"/v1/betaTesters/%2e%2e%2fusers%2fX",
+		"/v1/betaTesters/%2E%2E",
+		"/v1/apps/7%2Fbuilds",
+		"/v1/apps/./7",
+		"/v1/apps/../users",
+	} {
+		get := tooltest.Call(t, mustTool(t, "asc_api_get"), k.Env, `{"path":"`+p+`"}`)
+		tooltest.MustFail(t, get, "invalid_arguments")
+		del := tooltest.Call(t, mustTool(t, "asc_api_request"), k.Env, `{"method":"DELETE","confirm":true,"path":"`+p+`"}`)
+		tooltest.MustFail(t, del, "invalid_arguments")
+	}
+	if n := len(k.ASC.Requests()); n != 0 {
+		t.Fatalf("%d requests reached Apple", n)
 	}
 }
 
