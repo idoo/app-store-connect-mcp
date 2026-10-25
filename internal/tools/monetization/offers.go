@@ -3,6 +3,7 @@ package monetization
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -392,6 +393,7 @@ type offersCreateOut struct {
 	IDs          []string     `json:"ids,omitempty"`
 	Territories  int          `json:"territories"`
 	Skipped      []string     `json:"skipped_territories,omitempty"`
+	Ended        []string     `json:"ended_territories,omitempty"`
 	Prices       []offerPrice `json:"prices,omitempty"`
 }
 
@@ -470,6 +472,15 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 // offerConfirm is the human gate of offers_create: offers change what
 // customers pay. The preview lists the offer terms and every territory price.
 func offerConfirm(ctx context.Context, env *tool.Env, in offersCreateIn, sub offerSub, attrs map[string]any, prices []offerPrice) (context.Context, *tool.Result) {
+	return tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
+		Summary:  fmt.Sprintf("create a %s offer on subscription %s in %d territories", in.Kind, in.ProductID, len(prices)),
+		Affected: []string{"subscription " + in.ProductID + " (" + sub.ID + ")"},
+		Intended: map[string]any{"terms": attrs, "prices": offerPriceLabels(prices)},
+	})
+}
+
+// offerPriceLabels maps territory → customer price for previews.
+func offerPriceLabels(prices []offerPrice) map[string]string {
 	terr := make(map[string]string, len(prices))
 	for _, p := range prices {
 		v := p.CustomerPrice
@@ -481,10 +492,26 @@ func offerConfirm(ctx context.Context, env *tool.Env, in offersCreateIn, sub off
 		}
 		terr[p.Territory] = v
 	}
+	return terr
+}
+
+// offerConfirmIntros is offerConfirm for intro offers, also listing the
+// existing offers that get an end date to make room.
+func offerConfirmIntros(ctx context.Context, env *tool.Env, in offersCreateIn, sub offerSub, attrs map[string]any, prices []offerPrice, replace map[string]tool.Resource) (context.Context, *tool.Result) {
+	if len(replace) == 0 {
+		return offerConfirm(ctx, env, in, sub, attrs, prices)
+	}
+	ended := make(map[string]string, len(replace))
+	for t, r := range replace {
+		ended[t] = offerIntroDesc(r) + " (id " + r.ID + ")"
+	}
+	ts := slices.Sorted(maps.Keys(replace))
 	return tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
-		Summary:  fmt.Sprintf("create a %s offer on subscription %s in %d territories", in.Kind, in.ProductID, len(prices)),
-		Affected: []string{"subscription " + in.ProductID + " (" + sub.ID + ")"},
-		Intended: map[string]any{"terms": attrs, "prices": terr},
+		Summary: fmt.Sprintf("create a %s offer on subscription %s in %d territories; end the current intro offer on %s in %d of them: %s",
+			in.Kind, in.ProductID, len(prices), in.StartDate, len(replace), prcList(ts)),
+		Affected:     []string{"subscription " + in.ProductID + " (" + sub.ID + ")"},
+		Intended:     map[string]any{"terms": attrs, "prices": offerPriceLabels(prices), "end_on_" + in.StartDate: ended},
+		Irreversible: []string{"new customers in those territories stop getting the current intro offer on " + in.StartDate + " and get the new terms instead"},
 	})
 }
 
@@ -608,8 +635,73 @@ func offerFirstErr(errs ...error) error {
 	return nil
 }
 
-// offerCreateIntros creates one introductory offer per territory, skipping
-// territories that already have one.
+// offerIntroMatch is how an existing intro offer relates to the requested one
+// in one territory.
+type offerIntroMatch int
+
+const (
+	introNone     offerIntroMatch = iota // no overlapping offer: create
+	introSame                            // identical terms, overlapping window: already
+	introReplace                         // different terms, ends at start_date then create
+	introConflict                        // different terms, cannot be ended before start_date
+)
+
+// offerIntroWindowsOverlap reports whether [s1,e1] and [s2,e2] overlap; ""
+// start means open in the past, "" end open in the future.
+func offerIntroWindowsOverlap(s1, e1, s2, e2 string) bool {
+	return (e2 == "" || s1 == "" || s1 <= e2) && (e1 == "" || s2 == "" || s2 <= e1)
+}
+
+// offerIntroClassify compares the existing intro offers of one territory
+// with the requested terms. start is the requested start_date ("" = now,
+// today is used for the overlap test). It returns the overlapping offer.
+func offerIntroClassify(existing []tool.Resource, attrs map[string]any, pricePoint, start, end, today string) (offerIntroMatch, tool.Resource) {
+	from := start
+	if from == "" {
+		from = today
+	}
+	periods, _ := attrs["numberOfPeriods"].(int)
+	best, hit := introNone, tool.Resource{}
+	for _, r := range existing {
+		if !offerIntroWindowsOverlap(r.Str("startDate"), r.Str("endDate"), from, end) {
+			continue
+		}
+		n, _ := r.Int("numberOfPeriods")
+		pp := r.RelID("subscriptionPricePoint")
+		same := r.Str("offerMode") == attrs["offerMode"] && r.Str("duration") == attrs["duration"] && n == periods &&
+			(pp == "" || pricePoint == "" || pp == pricePoint)
+		switch {
+		case same:
+			return introSame, r
+		case start != "" && r.Str("startDate") < start:
+			// Ending the old offer on start_date makes room for the new one.
+			if best == introNone {
+				best, hit = introReplace, r
+			}
+		default:
+			best, hit = introConflict, r
+		}
+	}
+	return best, hit
+}
+
+// offerIntroDesc is the terms of an existing intro offer for previews.
+func offerIntroDesc(r tool.Resource) string {
+	n, _ := r.Int("numberOfPeriods")
+	s := fmt.Sprintf("%s %s ×%d", r.Str("offerMode"), r.Str("duration"), n)
+	if d := r.Str("startDate"); d != "" {
+		s += " from " + d
+	}
+	if d := r.Str("endDate"); d != "" {
+		s += " until " + d
+	}
+	return s
+}
+
+// offerCreateIntros creates one introductory offer per territory. A
+// territory whose overlapping offer has identical terms is skipped; one
+// with different terms is ended on start_date and replaced (part of the
+// confirmed preview), or refused when it can't be ended before start_date.
 func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, attrs map[string]any, out offersCreateOut) (*tool.Result, error) {
 	prices, err := offerResolvePrices(ctx, env, out.Subscription.ID, in.Mode, in.Prices, in.Equalize)
 	if err != nil {
@@ -619,17 +711,33 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 	if err != nil {
 		return nil, err
 	}
-	has := map[string]bool{}
+	byTerr := map[string][]tool.Resource{}
 	for _, r := range existing {
-		has[r.RelID("territory")] = true
+		t := r.RelID("territory")
+		byTerr[t] = append(byTerr[t], r)
 	}
+	today := prcToday(env)
 	todo := make([]offerPrice, 0, len(prices))
+	replace := map[string]tool.Resource{}
+	var conflicts []string
 	for _, p := range prices {
-		if has[p.Territory] {
+		m, r := offerIntroClassify(byTerr[p.Territory], attrs, p.PricePoint, in.StartDate, in.EndDate, today)
+		switch m {
+		case introSame:
 			out.Skipped = append(out.Skipped, p.Territory)
 			continue
+		case introConflict:
+			conflicts = append(conflicts, fmt.Sprintf("%s (%s, id %s)", p.Territory, offerIntroDesc(r), r.ID))
+			continue
+		case introReplace:
+			replace[p.Territory] = r
 		}
 		todo = append(todo, p)
+	}
+	if len(conflicts) > 0 {
+		return nil, tool.WithNext(tool.InvalidArgs("these territories already have an intro offer with different terms in that window: %s. "+
+			"Pass a start_date after the existing offer starts to end it then and schedule the new one", strings.Join(conflicts, "; ")),
+			tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
 	}
 	out.Territories = len(prices)
 	if len(todo) == 0 {
@@ -642,14 +750,22 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		}
 		return tool.Already(out), nil
 	}
-	if rl := env.ASC.RateLimit(); rl.Known && rl.Remaining < len(todo)+tool.RateLimitWarnBelow {
-		return nil, fmt.Errorf("%w: %d intro offers need %d requests, %d remain this hour", tool.ErrRateLimited, len(todo), len(todo), rl.Remaining)
+	if n := len(todo) + len(replace); env.ASC.RateLimit().Known && env.ASC.RateLimit().Remaining < n+tool.RateLimitWarnBelow {
+		return nil, fmt.Errorf("%w: %d intro offers need %d requests, %d remain this hour", tool.ErrRateLimited, len(todo), n, env.ASC.RateLimit().Remaining)
 	}
-	wctx, gres := offerConfirm(ctx, env, in, out.Subscription, attrs, todo)
+	wctx, gres := offerConfirmIntros(ctx, env, in, out.Subscription, attrs, todo, replace)
 	if gres != nil {
 		return gres, nil
 	}
 	for _, p := range todo {
+		if old, ok := replace[p.Territory]; ok {
+			if err := patch(wctx, env, "/v1/subscriptionIntroductoryOffers/"+url.PathEscape(old.ID), "subscriptionIntroductoryOffers", old.ID,
+				map[string]any{"endDate": in.StartDate}); err != nil {
+				return nil, tool.WithNext(fmt.Errorf("created %d of %d intro offers, then ending the old %s offer failed: %w", out.Created, len(todo), p.Territory, err),
+					tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
+			}
+			out.Ended = append(out.Ended, p.Territory)
+		}
 		rels := map[string]any{
 			"subscription": offerOne("subscriptions", out.Subscription.ID),
 			"territory":    offerOne("territories", p.Territory),
@@ -660,7 +776,7 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		r, err := offerPostDoc(wctx, env, "/v1/subscriptionIntroductoryOffers", "subscriptionIntroductoryOffers",
 			offerDoc("subscriptionIntroductoryOffers", attrs, rels, nil))
 		if err != nil {
-			if isConflict(err) {
+			if _, replaced := replace[p.Territory]; isConflict(err) && !replaced {
 				out.Skipped = append(out.Skipped, p.Territory)
 				continue
 			}

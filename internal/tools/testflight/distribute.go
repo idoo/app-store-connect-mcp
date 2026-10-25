@@ -194,7 +194,7 @@ type reviewDetailOut struct {
 
 type betaReviewOut struct {
 	State   string `json:"state,omitempty"`
-	Outcome string `json:"outcome"` // submitted|already|skipped|error
+	Outcome string `json:"outcome"` // submitted|already|rejected|skipped|error
 	Note    string `json:"note,omitempty"`
 }
 
@@ -373,7 +373,10 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 	for _, w := range d.warnings {
 		res.Warn(w)
 	}
-	if d.out.Errors > 0 {
+	if r := d.out.BetaReview; r != nil && r.Outcome == outcomeRejected {
+		res.Warn("Beta App Review rejected this build; calling again will not resubmit it. See beta_review.note").
+			Then(tool.NextStep{Tool: "builds_list", Args: map[string]any{"app": app.ID}})
+	} else if d.out.Errors > 0 {
 		res.Warn(fmt.Sprintf("%d step(s) failed; see error fields. Calling again retries only what is missing", d.out.Errors))
 	}
 	return res, nil
@@ -634,7 +637,12 @@ func (d *distribution) submitForReview(ctx context.Context) {
 	}
 	switch out.State {
 	case "REJECTED", "BETA_REJECTED":
-		out.Note = "Beta App Review rejected this build; fix the issue and upload a new build"
+		// Not "already": external testers never get a rejected build.
+		out.Outcome = outcomeRejected
+		out.Note = "Beta App Review rejected this build, so external testers will not get it. Read the reason in " +
+			"App Store Connect (TestFlight → the build), fix it (beta_review updates the review contact and notes), " +
+			"upload a new build, wait for it with builds_wait and distribute that build"
+		d.out.Errors++
 	case "WAITING_FOR_REVIEW", "IN_REVIEW", "WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW":
 		out.Note = "external testers get the build once Beta App Review approves it"
 	}

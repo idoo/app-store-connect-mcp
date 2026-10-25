@@ -22,6 +22,7 @@ const (
 	outcomeCreated   = "created"
 	outcomeUpdated   = "updated"
 	outcomeUnchanged = "unchanged"
+	outcomeRejected  = "rejected"
 )
 
 // platformEnum lists the App Store Connect platforms accepted by `platform`.

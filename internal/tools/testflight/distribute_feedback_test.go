@@ -206,6 +206,30 @@ func TestDistributeRepeatIsAlready(t *testing.T) {
 	}
 }
 
+// A rejected beta review is not "already": the build never reaches external
+// testers, so the result counts an error and points at the next step.
+func TestDistributeRejectedReviewIsFailure(t *testing.T) {
+	k := buildKit(t, buildFixture{
+		processing: "VALID", encryption: "false", groups: []string{"g-ext"},
+		whatToTest: [][3]string{{"l-en", "en-US", "New maps"}}, reviewState: "REJECTED", external: "BETA_REJECTED",
+	})
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "testflight_distribute"), k.Env,
+		`{"groups":["g-ext"],"what_to_test":{"en":"New maps"},"uses_non_exempt_encryption":false}`))
+	d := tooltest.Decode[struct {
+		Already bool `json:"already"`
+		distributeOut
+	}](t, res)
+	if d.Already || d.Errors != 1 || d.BetaReview.Outcome != outcomeRejected || d.BetaReview.State != "REJECTED" ||
+		!strings.Contains(d.BetaReview.Note, "upload a new build") || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("result = %s, mutations %v", tooltest.JSON(t, res.Data), paths(k.ASC.Mutations()))
+	}
+	if len(res.Next) != 1 || res.Next[0].Tool != "builds_list" || !slices.ContainsFunc(res.Meta.Warnings, func(w string) bool {
+		return strings.Contains(w, "rejected")
+	}) {
+		t.Errorf("next = %+v warnings = %v", res.Next, res.Meta.Warnings)
+	}
+}
+
 func TestDistributeLocaleGuard(t *testing.T) {
 	k := buildKit(t, buildFixture{processing: "VALID", encryption: "false"})
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "testflight_distribute"), k.Env,
