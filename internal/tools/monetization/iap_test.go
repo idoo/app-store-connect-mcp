@@ -71,10 +71,11 @@ func TestIAPUpsertCreatesFullSequence(t *testing.T) {
 	k.ASC.Handle(http.MethodPatch, "/v1/inAppPurchaseAppStoreReviewScreenshots/{id}", http.StatusOK,
 		`{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"shotN","attributes":{"assetDeliveryState":{"state":"COMPLETE"}}}}`)
 
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{
 		"product_id":"`+iapTestProduct+`","type":"CONSUMABLE","reference_name":"Coins 100","family_sharable":false,
 		"localizations":{"en":{"name":"100 coins","description":"A bag of coins"},"Swedish":{"name":"100 mynt"}},
-		"review_screenshot":"review.png"}`))
+		"review_screenshot":"review.png","confirm":true}`))
 
 	equalLines(t, requestLog(k.ASC.Requests()), []string{
 		"GET /v1/apps/app1/inAppPurchasesV2",
@@ -131,7 +132,7 @@ func TestIAPUpsertExistingPatchesOnlyDiff(t *testing.T) {
 
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{
 		"product_id":"`+iapTestProduct+`","type":"CONSUMABLE","reference_name":"New name","review_note":"note",
-		"localizations":{"en-US":{"name":"100 coins","description":"A bag of coins"},"de-DE":{"name":"100 Münzen"}}}`))
+		"localizations":{"en-US":{"name":"100 coins","description":"A bag of coins"},"de-DE":{"name":"100 Münzen"}},"confirm":true}`))
 
 	equalLines(t, requestLog(k.ASC.Mutations()), []string{
 		"PATCH /v2/inAppPurchases/iap1",
@@ -178,8 +179,9 @@ func TestIAPUpsertConflictReadsBack(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, jsonapiDoc(`[]`))
 	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, iapProductDoc("iapR", "Coins", "", false))
 	k.ASC.Handle(http.MethodPost, "/v2/inAppPurchases", http.StatusConflict, conflictBody)
+	k.Elicit(true)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env,
-		`{"product_id":"`+iapTestProduct+`","type":"CONSUMABLE","reference_name":"Coins"}`))
+		`{"product_id":"`+iapTestProduct+`","type":"CONSUMABLE","reference_name":"Coins","confirm":true}`))
 	equalLines(t, requestLog(k.ASC.Requests()), []string{
 		"GET /v1/apps/app1/inAppPurchasesV2",
 		"POST /v2/inAppPurchases",
