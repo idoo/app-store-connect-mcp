@@ -185,8 +185,10 @@ func TestUsersRemoveByIDFallsBackToInvitation(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/userInvitations/I1", http.StatusOK,
 		`{"data":{"type":"userInvitations","id":"I1","attributes":{"email":"new@example.com","roles":["MARKETING"]}}}`)
 	k.ASC.Handle(http.MethodDelete, "/v1/userInvitations/I1", http.StatusNoContent, ``)
+	tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "users_remove"), k.Env, `{"user":"I1"}`))
 	tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "users_remove"), k.Env, `{"user":"I1","confirm":true}`))
-	wantLog(t, k, "GET /v1/users/I1", "GET /v1/userInvitations/I1", "DELETE /v1/userInvitations/I1")
+	wantLog(t, k, "GET /v1/users/I1", "GET /v1/userInvitations/I1",
+		"GET /v1/users/I1", "GET /v1/userInvitations/I1", "DELETE /v1/userInvitations/I1")
 }
 
 func TestUsersRemoveRefusals(t *testing.T) {

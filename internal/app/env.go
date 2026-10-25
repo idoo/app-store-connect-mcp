@@ -128,16 +128,6 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 	return c, nil
 }
 
-// WritesLocked reports whether the project pin in cwd forbids writes
-// (allow_writes = false), which also forbids enabling them at runtime.
-func WritesLocked(cwd, home string) (bool, error) {
-	pin, err := config.FindPin(cwd, home)
-	if err != nil {
-		return false, fmt.Errorf("app: pin: %w", err)
-	}
-	return pin != nil && pin.AllowWrites != nil && !*pin.AllowWrites, nil
-}
-
 // NewEnv builds the base tool environment for resolved. Without a configured
 // profile the env has no ASC client or resolver; tools then fail with
 // tool.ErrUnavailable and doctor explains the setup. Key-loading failures for a

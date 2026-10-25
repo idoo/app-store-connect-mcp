@@ -203,6 +203,7 @@ func TestReleasePhasedCompleteNeedsHuman(t *testing.T) {
 	k := writableKit(t)
 	versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "ACTIVE", 4)
 	k.ASC.Handle("PATCH", "/v1/appStoreVersionPhasedReleases/{id}", 200, doc(t, jres{Type: "appStoreVersionPhasedReleases", ID: "pr1", Attrs: map[string]any{"phasedReleaseState": "PAUSED"}}))
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"pause"}`))
 	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"pause","confirm":true}`))
 	if n := len(k.ASC.Mutations()); n != 1 {
 		t.Fatalf("pause without elicitation: %d mutations", n)

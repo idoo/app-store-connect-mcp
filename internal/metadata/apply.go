@@ -40,6 +40,8 @@ type ItemResult struct {
 	ID      string   `json:"id,omitempty"`
 	Outcome Outcome  `json:"outcome"`
 	Error   string   `json:"error,omitempty"`
+	// Err is the typed error behind Error, for callers that classify it.
+	Err error `json:"-"`
 }
 
 // levelAPI holds the per-level resource names.
@@ -89,7 +91,8 @@ func Apply(ctx context.Context, client tool.ASC, plan *Plan, ids Targets, progre
 	if perr != nil {
 		for i, c := range plan.Changes {
 			if results[i].Outcome == "" {
-				results[i] = ItemResult{Locale: c.Locale, Level: c.Level, Op: c.Op, ID: c.ID, Outcome: OutcomeError, Error: "not sent: " + perr.Error()}
+				err := fmt.Errorf("not sent: %w", perr)
+				results[i] = ItemResult{Locale: c.Locale, Level: c.Level, Op: c.Op, ID: c.ID, Outcome: OutcomeError, Error: err.Error(), Err: err}
 			}
 		}
 	}
@@ -131,7 +134,7 @@ func applyOne(ctx context.Context, client tool.ASC, c Change, ids Targets) ItemR
 		err = fmt.Errorf("%w: unknown op %q", tool.ErrInternal, c.Op)
 	}
 	if err != nil {
-		r.Outcome, r.Error = OutcomeError, err.Error()
+		r.Outcome, r.Error, r.Err = OutcomeError, err.Error(), err
 	}
 	return r
 }

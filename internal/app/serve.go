@@ -55,19 +55,10 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	if _, none := env.ASC.(noCredentialsASC); none {
 		logger.Warn(ErrNoProfile.Error())
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("app: cwd: %w", err)
-	}
-	home, _ := os.UserHomeDir()
-	locked, err := WritesLocked(cwd, home)
-	if err != nil {
-		return err
-	}
 	deps := mcpserver.Deps{
 		Env:            *env,
 		Profile:        env.Profile,
-		WritesLocked:   locked,
+		WritesLocked:   r.WritesLocked,
 		Toolsets:       r.Toolsets,
 		Discovery:      r.Discovery,
 		Version:        opts.Version,

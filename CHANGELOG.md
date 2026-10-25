@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-26
+
+- Calling a hidden tool now returns how to unlock it (writes or toolset) instead of "unknown tool".
+- A `.hamn.toml` outside `trusted_pins` can no longer pick the account when writes are on, and the account it picks can't be switched to writes at runtime.
+- `confirm:true` is refused unless a preview of the same arguments came first, or a human approved in the client.
+- `release_prepare` keeps each failed locale's error code and hint for What's New.
+- `doctor` says when `ASC_KEY_PATH` is set but `ASC_PRIVATE_KEY_PATH` is not.
+- INSTALL says where to find the vendor number.
+
 ## [0.1.2] - 2026-10-25
 
 First public release.
@@ -15,5 +24,6 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/hamn/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/idoo/hamn/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/idoo/hamn/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/idoo/hamn/releases/tag/v0.1.2

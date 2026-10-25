@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -300,5 +302,19 @@ func TestSessionLimitsFromEnv(t *testing.T) {
 	t.Setenv(EnvHTTPSessionTimeout, "soon")
 	if _, _, err := sessionLimits(HTTPOptions{}); err == nil {
 		t.Fatal("bad duration accepted")
+	}
+}
+
+// TestSessionASCCoversMutators pins the tool.ASC method set: sessionASC
+// guards only Do, so a new method that can mutate must be overridden there.
+func TestSessionASCCoversMutators(t *testing.T) {
+	typ := reflect.TypeFor[tool.ASC]()
+	var got []string
+	for i := range typ.NumMethod() {
+		got = append(got, typ.Method(i).Name)
+	}
+	slices.Sort(got)
+	if want := []string{"ClockSkew", "Do", "Download", "Get", "List", "RateLimit"}; !slices.Equal(got, want) {
+		t.Fatalf("tool.ASC changed: if the new method can mutate, override it in sessionASC (methods %v, want %v)", got, want)
 	}
 }

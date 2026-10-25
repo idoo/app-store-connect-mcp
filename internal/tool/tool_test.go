@@ -72,6 +72,7 @@ func TestSchemaInference(t *testing.T) {
 func TestCoercionAndValidation(t *testing.T) {
 	k := newKit(t)
 	tl := tool.New(exampleMeta, exampleHandler)
+	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","filter":{"state":"A","tags":["x"]}}`))
 	res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","filter":"{\"state\":\"A\",\"tags\":\"[\\\"x\\\"]\"}","confirm":true}`))
 	got := tooltest.Decode[exampleIn](t, res)
 	if got.Filter.State != "A" || !slices.Equal(got.Filter.Tags, []string{"x"}) {
@@ -120,6 +121,68 @@ func TestApprovedByAgentAndNone(t *testing.T) {
 	if res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`)); res.Meta.ApprovedBy != tool.ApprovedAgent {
 		t.Errorf("confirmed approved_by = %q", res.Meta.ApprovedBy)
 	}
+}
+
+func TestConfirmFlagNeedsPreview(t *testing.T) {
+	tl := tool.New(exampleMeta, exampleHandler)
+	const preview, confirm = `{"app":"1","limit":5}`, `{"app":"1","limit":5,"confirm":true}`
+
+	t.Run("a_confirm_first_refused", func(t *testing.T) {
+		k := newKit(t)
+		tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, confirm), "preview_required")
+		if n := len(k.ASC.Mutations()); n != 0 {
+			t.Fatalf("mutations = %d", n)
+		}
+	})
+	t.Run("b_preview_then_confirm", func(t *testing.T) {
+		k := newKit(t)
+		tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, preview))
+		res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, confirm))
+		if res.Meta.ApprovedBy != tool.ApprovedAgent || len(k.ASC.Mutations()) != 1 {
+			t.Fatalf("approved_by = %q, mutations = %d", res.Meta.ApprovedBy, len(k.ASC.Mutations()))
+		}
+	})
+	t.Run("c_changed_args_refused", func(t *testing.T) {
+		k := newKit(t)
+		tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, preview))
+		tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"app":"1","limit":6,"confirm":true}`), "preview_required")
+		if n := len(k.ASC.Mutations()); n != 0 {
+			t.Fatalf("mutations = %d", n)
+		}
+	})
+	t.Run("d_single_use", func(t *testing.T) {
+		k := newKit(t)
+		tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, preview))
+		tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, confirm))
+		tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, confirm), "preview_required")
+		if n := len(k.ASC.Mutations()); n != 1 {
+			t.Fatalf("mutations = %d", n)
+		}
+	})
+	t.Run("e_human_without_preview", func(t *testing.T) {
+		k := newKit(t)
+		k.Elicit(true)
+		res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, confirm))
+		if res.Meta.ApprovedBy != tool.ApprovedHuman {
+			t.Fatalf("approved_by = %q", res.Meta.ApprovedBy)
+		}
+	})
+	t.Run("f_no_confirm", func(t *testing.T) {
+		k := newKit(t)
+		k.Env.NoConfirm = true
+		tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, confirm))
+		if n := len(k.ASC.Mutations()); n != 1 {
+			t.Fatalf("mutations = %d", n)
+		}
+	})
+	t.Run("no_plan_store_fails_closed", func(t *testing.T) {
+		k := newKit(t)
+		k.Env.Plans = nil
+		if body := tooltest.Decode[map[string]any](t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, preview))); body["status"] != "needs_confirm" {
+			t.Fatalf("preview = %v", body)
+		}
+		tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, confirm), "preview_required")
+	})
 }
 
 func TestApprovalPrompt(t *testing.T) {
@@ -174,6 +237,7 @@ func TestHumanConfirmNeedsElicitation(t *testing.T) {
 	tl := tool.New(m, exampleHandler)
 	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`), "human_approval_required")
 	k.Env.Profile.AllowNoElicit = true
+	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1"}`))
 	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`))
 }
 
@@ -201,6 +265,7 @@ func TestRequireHumanConfirmForcesHuman(t *testing.T) {
 	}
 	k.Env.Elicit = nil
 	k.Env.Profile.AllowNoElicit = true
+	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1"}`))
 	tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"app":"1","confirm":true}`))
 }
 

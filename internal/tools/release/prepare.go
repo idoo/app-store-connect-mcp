@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -479,26 +480,22 @@ func (p *preparer) whatsNew(ctx context.Context) error {
 	}
 	slices.SortFunc(results, func(a, b metadata.ItemResult) int { return strings.Compare(a.Locale, b.Locale) })
 	p.out.WhatsNew = results
-	failed := 0
+	var errs []error
 	for _, r := range results {
-		if r.Outcome == metadata.OutcomeError {
-			failed++
+		if r.Outcome != metadata.OutcomeError {
+			continue
 		}
+		err := r.Err
+		if err == nil {
+			err = errors.New(r.Error)
+		}
+		errs = append(errs, fmt.Errorf("%s: %w", r.Locale, err))
 	}
-	if failed > 0 {
-		return fmt.Errorf("whats_new: %d of %d locales failed: %s", failed, len(results), firstError(results))
+	if len(errs) > 0 {
+		return fmt.Errorf("whats_new: %d of %d locales failed: %w", len(errs), len(results), errors.Join(errs...))
 	}
 	p.step("whats_new", stepDone, fmt.Sprintf("%d locales", len(results)))
 	return nil
-}
-
-func firstError(rs []metadata.ItemResult) string {
-	for _, r := range rs {
-		if r.Error != "" {
-			return r.Locale + ": " + r.Error
-		}
-	}
-	return ""
 }
 
 // priorReleased reports whether the app has a version of platform that

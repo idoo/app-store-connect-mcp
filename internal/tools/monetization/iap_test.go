@@ -130,9 +130,10 @@ func TestIAPUpsertExistingPatchesOnlyDiff(t *testing.T) {
 	k.ASC.Handle(http.MethodPatch, "/v2/inAppPurchaseLocalizations/{id}", http.StatusOK, `{"data":{"type":"inAppPurchaseLocalizations","id":"loc-en"}}`)
 	k.ASC.Handle(http.MethodPost, "/v2/inAppPurchaseLocalizations", http.StatusCreated, `{"data":{"type":"inAppPurchaseLocalizations","id":"loc-de"}}`)
 
-	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{
-		"product_id":"`+iapTestProduct+`","type":"CONSUMABLE","reference_name":"New name","review_note":"note",
-		"localizations":{"en-US":{"name":"100 coins","description":"A bag of coins"},"de-DE":{"name":"100 Münzen"}},"confirm":true}`))
+	const args = `"product_id":"` + iapTestProduct + `","type":"CONSUMABLE","reference_name":"New name","review_note":"note",
+		"localizations":{"en-US":{"name":"100 coins","description":"A bag of coins"},"de-DE":{"name":"100 Münzen"}}`
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{`+args+`}`))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{`+args+`,"confirm":true}`))
 
 	equalLines(t, requestLog(k.ASC.Mutations()), []string{
 		"PATCH /v2/inAppPurchases/iap1",

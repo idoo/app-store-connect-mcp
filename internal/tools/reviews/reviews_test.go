@@ -294,6 +294,7 @@ func TestReplyRequiresHuman(t *testing.T) {
 	t.Run("allow no elicit", func(t *testing.T) {
 		k := replyKit(t)
 		k.Env.Profile.AllowNoElicit = true
+		tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, `{"app":"a1","replies":[{"review_id":"r3","body":"Danke, fixed in 2.1"}]}`))
 		tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, replyArgs))
 		if len(k.ASC.Mutations()) != 1 {
 			t.Fatalf("mutations = %+v", k.ASC.Mutations())

@@ -98,6 +98,9 @@ type Resolved struct {
 	// Config is the loaded config file, for per-call profile switching.
 	Config   *Config
 	Warnings []string
+	// WritesLocked forbids turning writes on at runtime: a pin sets
+	// allow_writes = false, or an untrusted pin chose the profile.
+	WritesLocked bool
 }
 
 // Resolve loads the config file and project pin and applies precedence:
@@ -179,6 +182,38 @@ func (r *Resolved) resolveProfile(f Flags, getenv func(string) string, cfg *Conf
 			r.Warnings = append(r.Warnings, fmt.Sprintf("ignoring profile %q from untrusted pin %s: it allows writes; add the directory to trusted_pins to allow this", pin.Profile, pin.Path))
 		}
 	}
+	if err := r.loadProfile(name, cfg, env, hasEnv, getenv); err != nil {
+		return err
+	}
+	if err := r.resolveWrites(f, getenv, pin); err != nil {
+		return err
+	}
+	if pinSelected && !trusted {
+		if r.Profile.AllowWrites {
+			r.Warnings = append(r.Warnings, fmt.Sprintf("ignoring profile %q from untrusted pin %s: writes are on (%s or --allow-writes); add the directory to trusted_pins to allow this", pin.Profile, pin.Path, EnvAllowWrites))
+			pinSelected = false
+			r.Profile = ResolvedProfile{}
+			if err := r.loadProfile("", cfg, env, hasEnv, getenv); err != nil {
+				return err
+			}
+			if err := r.resolveWrites(f, getenv, pin); err != nil {
+				return err
+			}
+		} else {
+			r.WritesLocked = true
+			r.Warnings = append(r.Warnings, fmt.Sprintf("writes locked: profile %q was chosen by untrusted pin %s", pin.Profile, pin.Path))
+		}
+	}
+	if pinSelected {
+		r.Profile.PinSource = pin.Path
+	}
+	r.applyPin(pin, trusted)
+	return nil
+}
+
+// loadProfile sets r.Profile to the named profile; "" selects the default
+// profile, or the only one.
+func (r *Resolved) loadProfile(name string, cfg *Config, env envCreds, hasEnv bool, getenv func(string) string) error {
 	if name == "" {
 		name = cfg.DefaultProfile
 	}
@@ -212,13 +247,6 @@ func (r *Resolved) resolveProfile(f Flags, getenv func(string) string, cfg *Conf
 		r.setProfile(name, prof, key)
 		p.Problems = append(p.Problems, kindProblems(prof, `key_kind = "individual" in profile `+strconv.Quote(name))...)
 	}
-	if pinSelected {
-		p.PinSource = pin.Path
-	}
-	if err := r.resolveWrites(f, getenv, pin); err != nil {
-		return err
-	}
-	r.applyPin(pin, trusted)
 	return nil
 }
 
@@ -270,6 +298,7 @@ func (r *Resolved) resolveWrites(f Flags, getenv func(string) string, pin *Pin) 
 				r.Warnings = append(r.Warnings, fmt.Sprintf("writes disabled by pin %s", pin.Path))
 			}
 			allow = false
+			r.WritesLocked = true
 			r.Profile.PinSource = pin.Path
 		}
 	}

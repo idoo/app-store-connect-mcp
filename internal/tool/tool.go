@@ -260,6 +260,9 @@ func (t Tool) call(ctx context.Context, env *Env, raw json.RawMessage) *Result {
 	if err != nil {
 		return Fail(fmt.Errorf("%w: %v", ErrInvalidArgs, err))
 	}
+	if c := callFrom(ctx); c != nil {
+		c.args = args
+	}
 	res, err := t.invoke(ctx, env, args)
 	if err != nil {
 		return Fail(err)

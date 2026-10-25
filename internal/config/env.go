@@ -74,6 +74,9 @@ func envCredentials(getenv func(string) string) (c envCreds, ok bool, err error)
 		c.Warnings = append(c.Warnings, inlineVar+" holds the private key inline, so it is stored in your MCP client config; prefer "+EnvKeyPath)
 	default:
 		c.Problems = append(c.Problems, "private key missing: set "+EnvKeyPath+" to your AuthKey_"+keyID+".p8")
+		if strings.TrimSpace(getenv("ASC_KEY_PATH")) != "" {
+			c.Problems = append(c.Problems, `ASC_KEY_PATH is set but hamn reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run hamn auth import`)
+		}
 	}
 	c.Problems = append(c.Problems, kindProblems(c.Profile, EnvKeyKind+"=individual")...)
 	return c, true, nil

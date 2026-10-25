@@ -102,6 +102,30 @@ func (p *Planner) Verify(_ context.Context, planID, toolName string, args any, f
 	return nil
 }
 
+// Claim consumes the newest unexpired [tool.FlagFingerprint] plan for
+// toolName with the same canonical args.
+func (p *Planner) Claim(_ context.Context, toolName string, args any) error {
+	h, err := argsHash(args)
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.prune(p.now())
+	var found string
+	var seq uint64
+	for id, pl := range p.plans {
+		if pl.tool == toolName && pl.args == h && pl.fp == tool.FlagFingerprint && (found == "" || pl.sequence > seq) {
+			found, seq = id, pl.sequence
+		}
+	}
+	if found == "" {
+		return fmt.Errorf("%w: no matching preview for %s", tool.ErrPreviewRequired, toolName)
+	}
+	delete(p.plans, found)
+	return nil
+}
+
 func (p *Planner) prune(now time.Time) {
 	for id, pl := range p.plans {
 		if !now.Before(pl.expires) {

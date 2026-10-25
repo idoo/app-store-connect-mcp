@@ -114,6 +114,7 @@ func newSession(deps Deps) (*session, error) {
 		Capabilities:              &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}},
 		SupportedProtocolVersions: legacyProtocolVersions(),
 	})
+	s.srv.AddReceivingMiddleware(s.hiddenToolMiddleware)
 	s.addResources()
 	s.addPrompts()
 	s.sync()
@@ -293,7 +294,7 @@ func (s *session) enableWrites() {
 var errWritesLocked = &tool.Error{
 	Code:    "writes_locked",
 	Message: "writes are pinned off for this project or profile",
-	Hint:    "remove allow_writes=false from .hamn.toml or the profile, then restart hamn",
+	Hint:    "writes are pinned off for this project or profile; remove allow_writes=false or add the pin's directory to trusted_pins, then restart hamn",
 }
 
 // isElicitUnavailable reports whether err means the client cannot elicit.

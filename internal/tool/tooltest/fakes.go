@@ -101,6 +101,29 @@ func (p *FakePlanner) Verify(_ context.Context, planID, toolName string, args an
 	return nil
 }
 
+// Claim implements tool.Planner: it consumes the newest unexpired
+// [tool.FlagFingerprint] plan for toolName with the same canonical args.
+func (p *FakePlanner) Claim(_ context.Context, toolName string, args any) error {
+	canon, err := tool.CanonicalArgs(args)
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.now()
+	for i := len(p.order) - 1; i >= 0; i-- {
+		id := p.order[i]
+		pl := p.plans[id]
+		if pl.tool != toolName || pl.args != string(canon) || pl.fingerprint != tool.FlagFingerprint || !now.Before(pl.expires) {
+			continue
+		}
+		delete(p.plans, id)
+		p.order = slices.Delete(p.order, i, i+1)
+		return nil
+	}
+	return fmt.Errorf("%w: no matching preview for %s", tool.ErrPreviewRequired, toolName)
+}
+
 // FakeStore is an in-memory [tool.StateStore].
 type FakeStore struct {
 	mu      sync.Mutex

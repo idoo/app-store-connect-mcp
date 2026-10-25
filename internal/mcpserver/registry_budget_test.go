@@ -1,9 +1,14 @@
 package mcpserver_test
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/idoo/hamn/internal/mcpserver"
 	"github.com/idoo/hamn/internal/tool"
@@ -40,7 +45,44 @@ func TestRegistryBudget(t *testing.T) {
 		t.Logf("%s: tools/list = %d bytes (cap %d)", c.name, n, c.limit)
 		if n > c.limit {
 			t.Errorf("%s: tools/list = %d bytes, cap %d (over by %d)", c.name, n, c.limit, n-c.limit)
+			logLargestTools(t, srv, 10)
 		}
+	}
+}
+
+// logLargestTools logs the top listed tools by marshalled size, largest first.
+func logLargestTools(t *testing.T, srv *mcp.Server, top int) {
+	t.Helper()
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ss.Close() }()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "hamn-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cs.Close() }()
+	type sized struct {
+		name  string
+		bytes int
+	}
+	var all []sized
+	for tl, err := range cs.Tools(ctx, nil) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := json.Marshal(tl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, sized{tl.Name, len(b)})
+	}
+	slices.SortFunc(all, func(a, b sized) int { return cmp.Compare(b.bytes, a.bytes) })
+	for _, s := range all[:min(top, len(all))] {
+		t.Logf("  %6d bytes  %s", s.bytes, s.name)
 	}
 }
 
