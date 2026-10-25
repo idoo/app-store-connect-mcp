@@ -14,6 +14,29 @@
       }
     },
     {
+      "method": "POST",
+      "path": "/v1/reviewSubmissionItems",
+      "body": {
+        "data": {
+          "relationships": {
+            "inAppPurchaseVersion": {
+              "data": {
+                "id": "iv1",
+                "type": "inAppPurchaseVersions"
+              }
+            },
+            "reviewSubmission": {
+              "data": {
+                "id": "rs1",
+                "type": "reviewSubmissions"
+              }
+            }
+          },
+          "type": "reviewSubmissionItems"
+        }
+      }
+    },
+    {
       "method": "PATCH",
       "path": "/v1/reviewSubmissions/rs1",
       "body": {
@@ -59,6 +82,12 @@
         "label": "version 1.4",
         "target_id": "v1",
         "action": "kept"
+      },
+      {
+        "kind": "inAppPurchaseVersion",
+        "label": "Pro",
+        "target_id": "iv1",
+        "action": "added"
       }
     ],
     "resolved_items": [
