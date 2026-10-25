@@ -79,25 +79,25 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 		}
 	}
 	if n > 1 {
-		return nil, invalid("pass at most one of branch, tag and pull_request")
+		return nil, tool.InvalidArgs("pass at most one of branch, tag and pull_request")
 	}
 	if in.PullRequest < 0 {
-		return nil, invalid("pull_request must be positive")
+		return nil, tool.InvalidArgs("pull_request must be positive")
 	}
 	if strings.TrimSpace(in.Workflow) == "" {
-		return nil, invalid("workflow is required (name or id)")
+		return nil, tool.InvalidArgs("workflow is required (name or id)")
 	}
 	wf, err := resolveWorkflow(ctx, env, in.App, in.Workflow, "xcc_build_start")
 	if err != nil {
 		return nil, err
 	}
 	if !wf.Enabled {
-		return nil, invalid("workflow %q is disabled; enable it in Xcode or App Store Connect", wf.Name)
+		return nil, tool.InvalidArgs("workflow %q is disabled; enable it in Xcode or App Store Connect", wf.Name)
 	}
 	var src *sourceOut
 	if n == 1 {
 		if wf.Repository == nil {
-			return nil, invalid("workflow %q has no repository to resolve the source in", wf.Name)
+			return nil, tool.InvalidArgs("workflow %q has no repository to resolve the source in", wf.Name)
 		}
 		if src, err = resolveSource(ctx, env, wf.Repository.ID, in); err != nil {
 			return nil, err
@@ -146,7 +146,7 @@ func resolveSource(ctx context.Context, env *tool.Env, repoID string, in buildSt
 				continue
 			}
 			if closed, _ := r.Bool("isClosed"); closed {
-				return nil, invalid("pull request #%d is closed", in.PullRequest)
+				return nil, tool.InvalidArgs("pull request #%d is closed", in.PullRequest)
 			}
 			return &sourceOut{Kind: "PULL_REQUEST", ID: r.ID, Name: fmt.Sprintf("#%d %s", in.PullRequest, r.Str("sourceBranchName"))}, nil
 		}
@@ -246,11 +246,14 @@ const (
 
 func buildStatus(ctx context.Context, env *tool.Env, in buildStatusIn) (*tool.Result, error) {
 	if in.WaitSeconds < 0 || in.WaitSeconds > int(maxWait/time.Second) {
-		return nil, invalid("wait_seconds must be between 1 and 300")
+		return nil, tool.InvalidArgs("wait_seconds must be between 1 and 300")
 	}
 	wait := defaultWait
 	if in.WaitSeconds > 0 {
 		wait = time.Duration(in.WaitSeconds) * time.Second
+	}
+	if !env.HasProgress() {
+		wait = min(wait, tool.NoProgressWaitCap)
 	}
 	runID := strings.TrimSpace(in.Run)
 	if runID == "" {
@@ -319,7 +322,7 @@ func latestRun(ctx context.Context, env *tool.Env, app tool.AppRef, workflow str
 func readRun(ctx context.Context, env *tool.Env, id string) (runOut, error) {
 	resp, err := env.ASC.Get(ctx, "/v1/ciBuildRuns/"+url.PathEscape(id), url.Values{"fields[ciBuildRuns]": {runFields}})
 	notFound := &tool.ErrNotFound{Kind: "build run", Ref: id, Next: []tool.NextStep{{Tool: "xcc_workflows_list"}}}
-	if apiStatus(err) == http.StatusNotFound {
+	if tool.APIStatus(err) == http.StatusNotFound {
 		return runOut{}, notFound
 	}
 	if err != nil {

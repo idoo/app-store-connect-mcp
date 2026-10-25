@@ -100,7 +100,7 @@ func prcKindFor(kind string) (*prcKind, error) {
 	case prcKindSub:
 		return prcSub, nil
 	}
-	return nil, invalidArgs("kind must be app, iap or subscription, got %q", kind)
+	return nil, tool.InvalidArgs("kind must be app, iap or subscription, got %q", kind)
 }
 
 // prcTarget is the resolved product whose prices are read or changed.
@@ -121,7 +121,7 @@ func prcResolve(ctx context.Context, env *tool.Env, ref tool.AppRef, k *prcKind,
 	t := prcTarget{Kind: k.name, AppID: app.ID, AppName: app.Name, ProductID: productID}
 	if k == prcApp {
 		if productID != "" {
-			return t, invalidArgs("product_id applies to kind iap or subscription only")
+			return t, tool.InvalidArgs("product_id applies to kind iap or subscription only")
 		}
 		t.ID = app.ID
 		return t, nil
@@ -255,7 +255,7 @@ func prcRat(s string) (*big.Rat, bool) {
 func prcMatch(points []prcPoint, price, territory string) (best prcPoint, exact bool, err error) {
 	want, ok := prcRat(price)
 	if !ok || want.Sign() < 0 {
-		return best, false, invalidArgs("price %q for %s is not a decimal customer price", price, territory)
+		return best, false, tool.InvalidArgs("price %q for %s is not a decimal customer price", price, territory)
 	}
 	var bestDiff, bestVal *big.Rat
 	for _, p := range points {
@@ -270,7 +270,7 @@ func prcMatch(points []prcPoint, price, territory string) (best prcPoint, exact 
 		}
 	}
 	if bestDiff == nil {
-		return best, false, invalidArgs("no price points in territory %s", territory)
+		return best, false, tool.InvalidArgs("no price points in territory %s", territory)
 	}
 	return best, bestDiff.Sign() == 0, nil
 }
@@ -450,7 +450,7 @@ func prcTerritories(arg string, in []string) ([]string, error) {
 	for _, t := range in {
 		t = strings.ToUpper(strings.TrimSpace(t))
 		if !prcTerritoryRE.MatchString(t) {
-			return nil, invalidArgs("%s: %q is not a 3-letter territory code (e.g. USA, SWE)", arg, t)
+			return nil, tool.InvalidArgs("%s: %q is not a 3-letter territory code (e.g. USA, SWE)", arg, t)
 		}
 		if !slices.Contains(out, t) {
 			out = append(out, t)

@@ -2,7 +2,6 @@ package xcodecloud
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -55,18 +54,6 @@ type productOut struct {
 	Type      string        `json:"type,omitempty"`
 	AppID     string        `json:"app_id,omitempty"`
 	Workflows []workflowOut `json:"workflows"`
-}
-
-func invalid(format string, args ...any) error {
-	return fmt.Errorf("%w: "+format, append([]any{tool.ErrInvalidArgs}, args...)...)
-}
-
-func apiStatus(err error) int {
-	var ae *tool.APIError
-	if errors.As(err, &ae) {
-		return ae.Status
-	}
-	return 0
 }
 
 func indexIncluded(inc []tool.Resource) map[string]tool.Resource {
@@ -231,7 +218,7 @@ func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref, n
 			"fields[scmRepositories]": {repoFields},
 			"include":                 {"repository"},
 		})
-		if apiStatus(err) == http.StatusNotFound {
+		if tool.APIStatus(err) == http.StatusNotFound {
 			return workflowOut{}, &tool.ErrNotFound{Kind: "workflow", Ref: ref, Next: next}
 		}
 		if err != nil {
@@ -248,7 +235,7 @@ func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref, n
 		return workflowOut{}, err
 	}
 	if ref == "" && len(products) > maxProducts {
-		return workflowOut{}, invalid("%d Xcode Cloud products; pass app or the workflow id", len(products))
+		return workflowOut{}, tool.InvalidArgs("%d Xcode Cloud products; pass app or the workflow id", len(products))
 	}
 	lists, err := productWorkflows(ctx, env, products)
 	if err != nil {

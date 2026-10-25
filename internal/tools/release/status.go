@@ -263,7 +263,7 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 				return nil, err
 			}
 		}
-	} else if !isNotFound(err) {
+	} else if !tool.IsNotFound(err) {
 		return nil, err
 	}
 
@@ -373,7 +373,7 @@ func exists(ctx context.Context, env *tool.Env, path string, q url.Values) (bool
 	switch {
 	case err == nil:
 		return true, nil
-	case isNotFound(err):
+	case tool.IsNotFound(err):
 		return false, nil
 	default:
 		return false, fmt.Errorf("get %s: %w", path, err)
@@ -389,7 +389,7 @@ func availabilityID(ctx context.Context, env *tool.Env, appID string) (string, e
 			return r.ID, nil
 		}
 		return "", nil
-	case isNotFound(err):
+	case tool.IsNotFound(err):
 		return "", nil
 	default:
 		return "", fmt.Errorf("get app availability: %w", err)

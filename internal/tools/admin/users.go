@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -73,18 +72,6 @@ type member struct {
 	Expires             string   `json:"expires,omitempty"`
 	// Pending marks an invitation not yet accepted.
 	Pending bool `json:"pending,omitempty"`
-}
-
-func invalid(format string, args ...any) error {
-	return fmt.Errorf("%w: "+format, append([]any{tool.ErrInvalidArgs}, args...)...)
-}
-
-func apiStatus(err error) int {
-	var ae *tool.APIError
-	if errors.As(err, &ae) {
-		return ae.Status
-	}
-	return 0
 }
 
 func strs(v any) []string {
@@ -230,17 +217,17 @@ func invite(ctx context.Context, env *tool.Env, in inviteIn) (*tool.Result, erro
 	at := strings.LastIndex(email, "@")
 	switch {
 	case at < 1 || at == len(email)-1 || strings.ContainsAny(email, " ,;<>"):
-		return nil, invalid("email %q is not an email address", in.Email)
+		return nil, tool.InvalidArgs("email %q is not an email address", in.Email)
 	case strings.TrimSpace(in.FirstName) == "" || strings.TrimSpace(in.LastName) == "":
-		return nil, invalid("first_name and last_name are required")
+		return nil, tool.InvalidArgs("first_name and last_name are required")
 	case len(in.Roles) == 0:
-		return nil, invalid("at least one role is required")
+		return nil, tool.InvalidArgs("at least one role is required")
 	case slices.Contains(in.Roles, "ACCOUNT_HOLDER"):
-		return nil, invalid("ACCOUNT_HOLDER cannot be invited; transfer it in App Store Connect")
+		return nil, tool.InvalidArgs("ACCOUNT_HOLDER cannot be invited; transfer it in App Store Connect")
 	case in.AllApps && len(in.Apps) > 0:
-		return nil, invalid("set either all_apps or apps, not both")
+		return nil, tool.InvalidArgs("set either all_apps or apps, not both")
 	case !in.AllApps && len(in.Apps) == 0:
-		return nil, invalid("set all_apps:true or list apps")
+		return nil, tool.InvalidArgs("set all_apps:true or list apps")
 	}
 	rs := slices.Clone(in.Roles)
 	slices.Sort(rs)
@@ -301,7 +288,7 @@ func invite(ctx context.Context, env *tool.Env, in inviteIn) (*tool.Result, erro
 	}
 	resp, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodPost, Path: "/v1/userInvitations", Write: true, Body: map[string]any{"data": data}})
 	if err != nil {
-		if apiStatus(err) == http.StatusConflict {
+		if tool.APIStatus(err) == http.StatusConflict {
 			if m, rerr := findMember(ctx, env, email); rerr == nil && m != nil {
 				return tool.Already(map[string]any{"invitation": m}), nil
 			}
@@ -343,7 +330,7 @@ func lookup(ctx context.Context, env *tool.Env, ref string) (m member, invitatio
 		if r, ok := res.First(); ok {
 			return toMember(r, nil), false, nil
 		}
-	} else if apiStatus(err) != http.StatusNotFound {
+	} else if tool.APIStatus(err) != http.StatusNotFound {
 		return member{}, false, fmt.Errorf("get user %s: %w", ref, err)
 	}
 	q = url.Values{"fields[userInvitations]": {strings.Join(invitationFields[:7], ",")}}
@@ -352,7 +339,7 @@ func lookup(ctx context.Context, env *tool.Env, ref string) (m member, invitatio
 		if r, ok := res.First(); ok {
 			return toMember(r, nil), true, nil
 		}
-	} else if apiStatus(err) != http.StatusNotFound {
+	} else if tool.APIStatus(err) != http.StatusNotFound {
 		return member{}, false, fmt.Errorf("get invitation %s: %w", ref, err)
 	}
 	return member{}, false, &tool.ErrNotFound{Kind: "user", Ref: ref, Next: []tool.NextStep{{Tool: "users_list"}}}
@@ -364,7 +351,7 @@ func remove(ctx context.Context, env *tool.Env, in removeIn) (*tool.Result, erro
 		return nil, err
 	}
 	if slices.Contains(m.Roles, "ACCOUNT_HOLDER") {
-		return nil, invalid("the Account Holder cannot be removed")
+		return nil, tool.InvalidArgs("the Account Holder cannot be removed")
 	}
 	p := tool.PlanPreview{
 		Summary:      fmt.Sprintf("remove %s (%s) from the team", m.Email, strings.Join(m.Roles, ", ")),
@@ -383,7 +370,7 @@ func remove(ctx context.Context, env *tool.Env, in removeIn) (*tool.Result, erro
 		return res, nil
 	}
 	if _, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodDelete, Path: path, Write: true}); err != nil {
-		if apiStatus(err) == http.StatusNotFound {
+		if tool.APIStatus(err) == http.StatusNotFound {
 			return tool.Already(map[string]any{"removed": m.Email}), nil
 		}
 		return nil, fmt.Errorf("remove %s: %w", m.Email, err)

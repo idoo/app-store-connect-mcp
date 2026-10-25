@@ -115,12 +115,12 @@ func TestSmoke(t *testing.T) {
 	t.Run("release_status", func(t *testing.T) { call(t, "release_status", appArg) })
 	t.Run("reviews_list", func(t *testing.T) {
 		// mark_seen=false keeps the local since-cursor untouched.
-		call(t, "reviews_list", fmt.Sprintf(`{"app":%q,"max_items":5,"mark_seen":false}`, appID))
+		call(t, "reviews_list", fmt.Sprintf(`{"app":%q,"limit":5,"mark_seen":false}`, appID))
 	})
 	t.Run("testflight_groups_list", func(t *testing.T) { call(t, "testflight_groups_list", appArg) })
 	t.Run("asc_api_search", func(t *testing.T) { call(t, "asc_api_search", `{"query":"list apps","limit":3}`) })
 	t.Run("asc_api_get", func(t *testing.T) {
-		call(t, "asc_api_get", `{"path":"/v1/apps","query":{"limit":"1"},"max_items":1}`)
+		call(t, "asc_api_get", `{"path":"/v1/apps","query":{"limit":"1"},"limit":1}`)
 	})
 	t.Run("sales_report", func(t *testing.T) {
 		if r.Profile.VendorNumber == "" {

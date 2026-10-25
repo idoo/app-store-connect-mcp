@@ -24,10 +24,8 @@ package release
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
-	"net/http"
 	"net/url"
 	"slices"
 	"strings"
@@ -239,7 +237,7 @@ func buildMarketingVersion(ctx context.Context, env *tool.Env, buildID string) (
 	case err == nil:
 		r, _ := resp.First()
 		return r.Str("version"), nil
-	case isNotFound(err):
+	case tool.IsNotFound(err):
 		return "", nil
 	default:
 		return "", fmt.Errorf("get build %s version: %w", buildID, err)
@@ -262,16 +260,6 @@ func readyProducts(s *statusSnapshot) []string {
 // concreteVersion reports whether ref is a version string rather than a keyword.
 func concreteVersion(ref tool.VersionRef) bool {
 	return ref != "" && ref != tool.VersionEditable && ref != tool.VersionLive
-}
-
-// isNotFound reports a resolver miss or an HTTP 404.
-func isNotFound(err error) bool {
-	var nf *tool.ErrNotFound
-	if errors.As(err, &nf) {
-		return true
-	}
-	var api *tool.APIError
-	return errors.As(err, &api) && api.Status == http.StatusNotFound
 }
 
 // intendedState applies the prepare changes to a current state.

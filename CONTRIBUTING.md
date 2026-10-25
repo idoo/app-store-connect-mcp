@@ -42,8 +42,9 @@ Tests never write to a real App Store Connect account. Unit, tool and protocol t
 5. Accept names as well as ids through `env.Resolve` where it makes sense (`app`, `version`, `build`, `group`, locales).
 6. Wrap third-party text as untrusted (the client does it for spec free-text attributes; check anything you build by hand).
 7. Never remove things by omission. Removal goes through an explicit `remove` list.
-8. Test through `tooltest` against the spec-checking fake, including the preview and stale-plan paths for mutations.
-9. Run `make generate` to refresh `docs/TOOLS.md` and `docs/tools.json`, and check the context budget test still passes.
+8. Fan out API calls with `tool.Parallel` (bounded, cancels on first error). A tool that waits on Apple must cap the wait at `tool.NoProgressWaitCap` when `env.HasProgress()` is false, and return a resume step.
+9. Test through `tooltest` against the spec-checking fake, including the preview and stale-plan paths for mutations. CI also runs the tests on Windows, so don't assume POSIX paths or file modes in tests.
+10. Run `make generate` to refresh `docs/TOOLS.md` and `docs/tools.json`, and check the context budget test still passes.
 
 ## Compatibility
 

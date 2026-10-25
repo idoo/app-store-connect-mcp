@@ -220,6 +220,24 @@ func TestBuildStatusLatestTimesOut(t *testing.T) {
 	tooltest.MustFail(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env, `{"wait_seconds":301,"run":"x"}`), tool.ErrInvalidArgs.Code)
 }
 
+// Without a progress token the wait clamps to tool.NoProgressWaitCap and
+// still returns still_processing with the resume hint.
+func TestBuildStatusNoProgressTokenCapped(t *testing.T) {
+	k := kit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/ciBuildRuns/{id}", http.StatusOK, runDoc("RUNNING", "null"))
+	k.ASC.Handle(http.MethodGet, "/v1/ciBuildRuns/{id}/actions", http.StatusOK, `{"data":[]}`)
+	start := k.Clock.Now()
+	res := tooltest.MustOK(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env,
+		`{"run":"`+runID+`","wait":true,"wait_seconds":300}`))
+	if d := k.Clock.Now().Sub(start); d != tool.NoProgressWaitCap {
+		t.Fatalf("waited %v, want %v", d, tool.NoProgressWaitCap)
+	}
+	out := tooltest.Decode[map[string]any](t, res)
+	if out["status"] != "still_processing" || !strings.Contains(out["resume_hint"].(string), runID) {
+		t.Fatalf("out = %v", out)
+	}
+}
+
 // TestBuildStatusAppOnlyPicksSingleWorkflow: with only app (or nothing), the
 // app's only workflow is used instead of an invalid-arguments dead end.
 func TestBuildStatusAppOnlyPicksSingleWorkflow(t *testing.T) {

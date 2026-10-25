@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -128,13 +127,6 @@ func testerLinkage(ids []string) map[string]any {
 	return map[string]any{"data": data}
 }
 
-// isConflict reports an App Store Connect 409 (e.g. tester already exists or
-// is already a member). Callers must read the state back before trusting it.
-func isConflict(err error) bool {
-	var api *tool.APIError
-	return errors.As(err, &api) && api.Status == http.StatusConflict
-}
-
 // errText is a short error description for per-item outcomes.
 func errText(err error) string {
 	var api *tool.APIError
@@ -177,9 +169,4 @@ func relationshipTotals(body []byte) (map[string]map[string]int, error) {
 		out[d.ID] = m
 	}
 	return out, nil
-}
-
-// invalidArgs wraps tool.ErrInvalidArgs with a message.
-func invalidArgs(format string, a ...any) error {
-	return fmt.Errorf("%w: %s", tool.ErrInvalidArgs, fmt.Sprintf(format, a...))
 }

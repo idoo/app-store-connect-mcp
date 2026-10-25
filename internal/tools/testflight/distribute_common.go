@@ -5,9 +5,7 @@ package testflight
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -56,7 +54,7 @@ func localeMap[T any](arg string, m map[string]T, check func(T) error) (all *T, 
 	for _, k := range keys {
 		v := m[k]
 		if err := check(v); err != nil {
-			return nil, nil, invalidArgs("%s[%q]: %v", arg, k, err)
+			return nil, nil, tool.InvalidArgs("%s[%q]: %v", arg, k, err)
 		}
 		if strings.TrimSpace(k) == "*" {
 			all = &v
@@ -64,10 +62,10 @@ func localeMap[T any](arg string, m map[string]T, check func(T) error) (all *T, 
 		}
 		loc, err := applemeta.NormalizeLocale(k)
 		if err != nil {
-			return nil, nil, invalidArgs("%s: %q is not an App Store Connect locale (use codes such as en-US or de-DE, or *)", arg, k)
+			return nil, nil, tool.InvalidArgs("%s: %q is not an App Store Connect locale (use codes such as en-US or de-DE, or *)", arg, k)
 		}
 		if _, dup := byLocale[loc]; dup {
-			return nil, nil, invalidArgs("%s: several keys mean %s", arg, loc)
+			return nil, nil, tool.InvalidArgs("%s: several keys mean %s", arg, loc)
 		}
 		byLocale[loc] = v
 	}
@@ -157,12 +155,6 @@ func includedByID(rs []tool.Resource) map[string]tool.Resource {
 		m[r.Type+"/"+r.ID] = r
 	}
 	return m
-}
-
-// isNotFound reports an App Store Connect 404.
-func isNotFound(err error) bool {
-	var api *tool.APIError
-	return errors.As(err, &api) && api.Status == http.StatusNotFound
 }
 
 // truncateUTF8 cuts s to at most n bytes on a rune boundary.

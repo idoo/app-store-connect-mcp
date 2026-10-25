@@ -55,16 +55,16 @@ type testersListIn struct {
 	Email      string        `json:"email,omitempty" jsonschema:"exact tester email"`
 	State      string        `json:"state,omitempty" jsonschema:"filters the fetched page"`
 	InviteType string        `json:"invite_type,omitempty"`
-	MaxItems   int           `json:"max_items,omitempty" jsonschema:"testers to fetch, default 200, max 1000"`
+	Limit      int           `json:"limit,omitempty" jsonschema:"testers to fetch, default 200, max 1000"`
 	Cursor     string        `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
 }
 
 func testersList(ctx context.Context, env *tool.Env, in testersListIn) (*tool.Result, error) {
 	switch {
-	case in.MaxItems < 0 || in.MaxItems > 1000:
-		return nil, invalidArgs("max_items must be between 1 and 1000")
-	case in.MaxItems == 0:
-		in.MaxItems = 200
+	case in.Limit < 0 || in.Limit > 1000:
+		return nil, tool.InvalidArgs("limit must be between 1 and 1000")
+	case in.Limit == 0:
+		in.Limit = 200
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
@@ -100,8 +100,8 @@ func testersList(ctx context.Context, env *tool.Env, in testersListIn) (*tool.Re
 	list, err := env.ASC.List(ctx, "/v1/betaTesters", tool.ListOptions{
 		Query:    q,
 		Fields:   map[string][]string{"betaTesters": append(append([]string{}, testerFields...), "betaGroups")},
-		Limit:    min(in.MaxItems, 200),
-		MaxItems: in.MaxItems,
+		Limit:    min(in.Limit, 200),
+		MaxItems: in.Limit,
 		Cursor:   in.Cursor,
 	})
 	if err != nil {
@@ -150,7 +150,7 @@ type addOutcome struct {
 
 func testersAdd(ctx context.Context, env *tool.Env, in testersAddIn) (*tool.Result, error) {
 	if len(in.Testers) == 0 || len(in.Testers) > maxTesterBatch {
-		return nil, invalidArgs("testers must list 1-%d entries", maxTesterBatch)
+		return nil, tool.InvalidArgs("testers must list 1-%d entries", maxTesterBatch)
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
@@ -293,7 +293,7 @@ func linkTesters(ctx context.Context, env *tool.Env, groupID string, ts []tester
 		}
 		return
 	}
-	if !isConflict(err) {
+	if !tool.IsConflict(err) {
 		failAll(ts, err, set)
 		return
 	}
@@ -327,7 +327,7 @@ func createTester(ctx context.Context, env *tool.Env, groupID string, t testerIn
 		set(t.Email, outcomeAdded, id, "invited")
 		return
 	}
-	if !isConflict(err) {
+	if !tool.IsConflict(err) {
 		failAll([]testerInput{t}, err, set)
 		return
 	}
@@ -408,14 +408,14 @@ type removeTarget struct {
 
 func testersRemove(ctx context.Context, env *tool.Env, in testersRemoveIn) (*tool.Result, error) {
 	if len(in.Testers) == 0 || len(in.Testers) > maxTesterBatch {
-		return nil, invalidArgs("testers must list 1-%d emails or ids", maxTesterBatch)
+		return nil, tool.InvalidArgs("testers must list 1-%d emails or ids", maxTesterBatch)
 	}
 	scope := in.Scope
 	if scope == "" {
 		scope = "group"
 	}
 	if scope == "group" && in.Group == "" {
-		return nil, invalidArgs("group is required for scope group (or pass scope app)")
+		return nil, tool.InvalidArgs("group is required for scope group (or pass scope app)")
 	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {

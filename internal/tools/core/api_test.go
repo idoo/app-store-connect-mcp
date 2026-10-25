@@ -102,10 +102,10 @@ func TestAPIGetCollectionPaginates(t *testing.T) {
 			t.Errorf("first query = %v", q)
 		}
 	})
-	t.Run("max_items cursor", func(t *testing.T) {
+	t.Run("limit cursor", func(t *testing.T) {
 		k := kit(t)
 		k.ASC.Handle("GET", "/v1/apps", 200, page1)
-		res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_get"), k.Env, `{"path":"/v1/apps","query":{"limit":"1"},"max_items":1}`))
+		res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "asc_api_get"), k.Env, `{"path":"/v1/apps","query":{"limit":"1"},"limit":1}`))
 		if out := data(t, res); out["returned"] != float64(1) || out["next_cursor"] == nil || out["total"] != float64(2) {
 			t.Errorf("out = %v", out)
 		}

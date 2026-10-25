@@ -123,14 +123,14 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 	case kindCrashes.name:
 		kinds = []feedbackKind{kindCrashes}
 	default:
-		return nil, invalidArgs("kind must be all, screenshots or crashes")
+		return nil, tool.InvalidArgs("kind must be all, screenshots or crashes")
 	}
 	limit := in.Limit
 	if limit == 0 {
 		limit = feedbackDefaultLimit
 	}
 	if limit < 1 || limit > feedbackMaxLimit {
-		return nil, invalidArgs("limit must be 1-%d", feedbackMaxLimit)
+		return nil, tool.InvalidArgs("limit must be 1-%d", feedbackMaxLimit)
 	}
 	var since time.Time
 	if in.Since != "" && in.Since != sinceLastSeen {
@@ -266,7 +266,7 @@ func parseSince(s string) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
 		return t, nil
 	}
-	return time.Time{}, invalidArgs("since must be last_seen, YYYY-MM-DD or an RFC 3339 time")
+	return time.Time{}, tool.InvalidArgs("since must be last_seen, YYYY-MM-DD or an RFC 3339 time")
 }
 
 // laterThan compares two RFC 3339 timestamps; unparsable values sort last.
@@ -432,7 +432,7 @@ func attachCrashLogs(ctx context.Context, env *tool.Env, out *feedbackListOut) {
 		res, err := env.ASC.Get(ctx, "/v1/betaFeedbackCrashSubmissions/"+it.ID+"/crashLog",
 			url.Values{"fields[betaCrashLogs]": {"logText"}})
 		if err != nil {
-			if isNotFound(err) {
+			if tool.IsNotFound(err) {
 				it.CrashLogNote = "no crash log available"
 			} else {
 				it.CrashLogNote = "not fetched: " + errText(err)

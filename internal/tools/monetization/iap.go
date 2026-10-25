@@ -39,11 +39,11 @@ func init() {
 }
 
 type iapListIn struct {
-	App      tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
-	State    string      `json:"state,omitempty"`
-	Type     string      `json:"type,omitempty"`
-	MaxItems int         `json:"max_items,omitempty" jsonschema:"default 200, max 5000"`
-	Cursor   string      `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
+	App    tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	State  string      `json:"state,omitempty"`
+	Type   string      `json:"type,omitempty"`
+	Limit  int         `json:"limit,omitempty" jsonschema:"default 200, max 5000"`
+	Cursor string      `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
 }
 
 type iapLocOut struct {
@@ -101,7 +101,7 @@ func iapList(ctx context.Context, env *tool.Env, in iapListIn) (*tool.Result, er
 			"inAppPurchaseLocalizations": {"locale", "name", "description"},
 			"inAppPurchaseVersions":      {"version", "state"},
 		},
-		MaxItems: in.MaxItems,
+		MaxItems: in.Limit,
 		Cursor:   in.Cursor,
 	})
 	if err != nil {
@@ -217,7 +217,7 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 	)
 	if !found {
 		if in.Type == "" || in.ReferenceName == "" {
-			return nil, invalidArgs("product %q does not exist; type and reference_name are required to create it", in.ProductID)
+			return nil, tool.InvalidArgs("product %q does not exist; type and reference_name are required to create it", in.ProductID)
 		}
 		g.add(gateHuman, "POST /v2/inAppPurchases "+in.ProductID+" ("+in.Type+")")
 		g.irreversible("product id " + in.ProductID + " is used up for good: it can never be reused, even after deletion")
@@ -229,7 +229,7 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 		}
 	} else {
 		if in.Type != "" && cur.Str("inAppPurchaseType") != "" && in.Type != cur.Str("inAppPurchaseType") {
-			return nil, invalidArgs("product %s is %s; the type of an in-app purchase cannot change", in.ProductID, cur.Str("inAppPurchaseType"))
+			return nil, tool.InvalidArgs("product %s is %s; the type of an in-app purchase cannot change", in.ProductID, cur.Str("inAppPurchaseType"))
 		}
 		if changed, names, err = attrDiff(cur, want); err != nil {
 			return nil, err
@@ -268,7 +268,7 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 		switch {
 		case err == nil:
 			cur, out.Product = created, upsertItem{Kind: "inAppPurchases", ID: created.ID, Action: actionCreated}
-		case isConflict(err):
+		case tool.IsConflict(err):
 			// Read back: the product exists (maybe created by a racing call).
 			// Its fields are left alone: they were not previewed.
 			cur, shot, found, err = iapFind(ctx, env, app.ID, in.ProductID)

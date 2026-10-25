@@ -120,7 +120,7 @@ func prcPlanAvail(ctx context.Context, env *tool.Env, cur prcAvail, in prcAvailI
 	for _, t := range add {
 		for _, r := range remove {
 			if t == r {
-				return nil, invalidArgs("availability: %s is in both add and remove", t)
+				return nil, tool.InvalidArgs("availability: %s is in both add and remove", t)
 			}
 		}
 	}
@@ -133,7 +133,7 @@ func prcPlanAvail(ctx context.Context, env *tool.Env, cur prcAvail, in prcAvailI
 		onlyAdd := len(add) > 0
 		for _, t := range append(append([]string{}, add...), remove...) {
 			if !all[t] {
-				return nil, invalidArgs("availability: unknown territory %s", t)
+				return nil, tool.InvalidArgs("availability: unknown territory %s", t)
 			}
 		}
 		for t := range all {
@@ -164,7 +164,7 @@ func prcPlanAvail(ctx context.Context, env *tool.Env, cur prcAvail, in prcAvailI
 	for t, avail := range want {
 		ta, ok := cur.Territories[t]
 		if !ok {
-			return nil, invalidArgs("availability: territory %s has no availability record for this app", t)
+			return nil, tool.InvalidArgs("availability: territory %s has no availability record for this app", t)
 		}
 		if ta.Available != avail {
 			p.Changes = append(p.Changes, prcAvailChange{Territory: t, ID: ta.ID, Available: avail})

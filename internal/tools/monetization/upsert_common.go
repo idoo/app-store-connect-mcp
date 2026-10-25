@@ -3,7 +3,6 @@ package monetization
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -94,15 +93,10 @@ var (
 	}
 )
 
-// invalidArgs wraps a validation problem as invalid_arguments.
-func invalidArgs(format string, args ...any) error {
-	return fmt.Errorf("%w: "+format, append([]any{tool.ErrInvalidArgs}, args...)...)
-}
-
 // checkProductID validates an App Store product id.
 func checkProductID(id string) error {
 	if !productIDRE.MatchString(id) {
-		return invalidArgs("product_id %q must be 1-100 letters, digits, '.' or '_'", id)
+		return tool.InvalidArgs("product_id %q must be 1-100 letters, digits, '.' or '_'", id)
 	}
 	return nil
 }
@@ -110,7 +104,7 @@ func checkProductID(id string) error {
 // checkLimit applies an applemeta length limit to a named argument.
 func checkLimit(arg string, f applemeta.Field, v string) error {
 	if err := applemeta.Check(f, v); err != nil {
-		return invalidArgs("%s: %v", arg, err)
+		return tool.InvalidArgs("%s: %v", arg, err)
 	}
 	return nil
 }
@@ -122,13 +116,13 @@ func normLocs(arg string, in map[string]locIn) (map[string]map[string]any, error
 	for k, l := range in {
 		loc, err := applemeta.NormalizeLocale(k)
 		if err != nil {
-			return nil, invalidArgs("%s: %v", arg, err)
+			return nil, tool.InvalidArgs("%s: %v", arg, err)
 		}
 		if _, dup := out[loc]; dup {
-			return nil, invalidArgs("%s: locale %s given twice", arg, loc)
+			return nil, tool.InvalidArgs("%s: locale %s given twice", arg, loc)
 		}
 		if strings.TrimSpace(l.Name) == "" {
-			return nil, invalidArgs("%s[%s].name is required", arg, loc)
+			return nil, tool.InvalidArgs("%s[%s].name is required", arg, loc)
 		}
 		if err := checkLimit(arg+"["+loc+"].name", applemeta.FieldIAPDisplayName, l.Name); err != nil {
 			return nil, err
@@ -153,14 +147,14 @@ func checkScreenshot(env *tool.Env, path string) error {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".png", ".jpg", ".jpeg":
 	default:
-		return invalidArgs("review_screenshot %q must be a .png or .jpg file", path)
+		return tool.InvalidArgs("review_screenshot %q must be a .png or .jpg file", path)
 	}
 	fi, err := env.Files.Stat(path)
 	if err != nil {
-		return invalidArgs("review_screenshot: %v", err)
+		return tool.InvalidArgs("review_screenshot: %v", err)
 	}
 	if !fi.Mode().IsRegular() || fi.Size() == 0 {
-		return invalidArgs("review_screenshot %q is not a non-empty file", path)
+		return tool.InvalidArgs("review_screenshot %q is not a non-empty file", path)
 	}
 	return nil
 }
@@ -185,12 +179,6 @@ func resourceBody(typ, id string, attrs map[string]any, rels map[string][2]strin
 	return map[string]any{"data": data}
 }
 
-// isConflict reports a 409 from Apple (the object already exists).
-func isConflict(err error) bool {
-	var ae *tool.APIError
-	return errors.As(err, &ae) && ae.Status == http.StatusConflict
-}
-
 // sameValue reports whether a remote attribute equals the wanted value
 // (compared as JSON so 1 and 1.0 match). Text the client wrapped as
 // [tool.Untrusted] is compared unwrapped.
@@ -205,7 +193,7 @@ func sameValue(remote, want any) bool {
 func attrDiff(r tool.Resource, want map[string]any) (map[string]any, []string, error) {
 	if v, ok := want["familySharable"].(bool); ok && !v {
 		if cur, ok := r.Bool("familySharable"); ok && cur {
-			return nil, nil, invalidArgs("family sharing cannot be turned off once enabled (%s %s)", r.Type, r.ID)
+			return nil, nil, tool.InvalidArgs("family sharing cannot be turned off once enabled (%s %s)", r.Type, r.ID)
 		}
 	}
 	changed := map[string]any{}
@@ -348,7 +336,7 @@ func upsertLocs(ctx context.Context, env *tool.Env, k versionKind, versionID str
 		switch {
 		case err == nil:
 			it.ID, it.Action = r.ID, actionCreated
-		case isConflict(err):
+		case tool.IsConflict(err):
 			it.Action, it.Note = actionAlready, "Apple reports this locale exists; rerun to update it"
 		default:
 			it.Action, it.Error = actionFailed, err.Error()

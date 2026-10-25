@@ -49,7 +49,7 @@ func (r *Resolver) findApp(ctx context.Context, s string) (tool.App, error) {
 			if first, ok := res.First(); ok {
 				return appFromResource(first), nil
 			}
-		case !isNotFound(err):
+		case !tool.IsNotFound(err):
 			return tool.App{}, fmt.Errorf("resolve app %q: %w", s, err)
 		}
 		// A numeric SKU is matched against the list below.

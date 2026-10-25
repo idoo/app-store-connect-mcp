@@ -5,8 +5,6 @@
 package resolve
 
 import (
-	"errors"
-	"net/http"
 	"sync"
 	"time"
 
@@ -65,12 +63,6 @@ func New(asc tool.ASC, opts Options) *Resolver {
 // fresh reports whether a cache entry stamped at is still valid.
 func (r *Resolver) fresh(at time.Time) bool {
 	return !at.IsZero() && r.clock.Now().Sub(at) < cacheTTL
-}
-
-// isNotFound reports whether err is an App Store Connect 404.
-func isNotFound(err error) bool {
-	var api *tool.APIError
-	return errors.As(err, &api) && api.Status == http.StatusNotFound
 }
 
 // next builds a one-element NextStep list.

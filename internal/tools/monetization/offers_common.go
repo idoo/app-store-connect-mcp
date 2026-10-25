@@ -107,7 +107,7 @@ func offerDate(arg, v string) error {
 		return nil
 	}
 	if _, err := time.Parse(time.DateOnly, v); err != nil {
-		return invalidArgs("%s must be YYYY-MM-DD, got %q", arg, v)
+		return tool.InvalidArgs("%s must be YYYY-MM-DD, got %q", arg, v)
 	}
 	return nil
 }
@@ -168,20 +168,20 @@ func offerPostDoc(ctx context.Context, env *tool.Env, path, typ string, doc map[
 func offerResolvePrices(ctx context.Context, env *tool.Env, subID, mode string, in []offerPriceIn, equalize bool) ([]offerPrice, error) {
 	free := mode == offerModeFreeTrial
 	if len(in) == 0 {
-		return nil, invalidArgs("prices is required: [{territory, price}] (free trial: [{territory}]); equalize:true expands one entry to all territories")
+		return nil, tool.InvalidArgs("prices is required: [{territory, price}] (free trial: [{territory}]); equalize:true expands one entry to all territories")
 	}
 	if equalize && len(in) != 1 {
-		return nil, invalidArgs("equalize needs exactly one prices entry (the base territory), got %d", len(in))
+		return nil, tool.InvalidArgs("equalize needs exactly one prices entry (the base territory), got %d", len(in))
 	}
 	seen := map[string]bool{}
 	out := make([]offerPrice, 0, len(in))
 	for i, p := range in {
 		terr := strings.ToUpper(strings.TrimSpace(p.Territory))
 		if terr == "" {
-			return nil, invalidArgs("prices[%d].territory is required", i)
+			return nil, tool.InvalidArgs("prices[%d].territory is required", i)
 		}
 		if seen[terr] {
-			return nil, invalidArgs("prices lists territory %s twice", terr)
+			return nil, tool.InvalidArgs("prices lists territory %s twice", terr)
 		}
 		seen[terr] = true
 		r := offerPrice{Territory: terr, PricePoint: p.PricePointID}
@@ -194,7 +194,7 @@ func offerResolvePrices(ctx context.Context, env *tool.Env, subID, mode string, 
 			}
 			r = pp
 		case !free:
-			return nil, invalidArgs("prices[%d] (%s) needs price or price_point_id for a %s offer", i, terr, mode)
+			return nil, tool.InvalidArgs("prices[%d] (%s) needs price or price_point_id for a %s offer", i, terr, mode)
 		}
 		out = append(out, r)
 	}
@@ -227,7 +227,7 @@ func offerResolvePrices(ctx context.Context, env *tool.Env, subID, mode string, 
 func offerFindPricePoint(ctx context.Context, env *tool.Env, subID, territory, price string) (offerPrice, error) {
 	want, ok := new(big.Rat).SetString(strings.TrimSpace(price))
 	if !ok {
-		return offerPrice{}, invalidArgs("price %q for %s is not a decimal number", price, territory)
+		return offerPrice{}, tool.InvalidArgs("price %q for %s is not a decimal number", price, territory)
 	}
 	res, err := env.ASC.List(ctx, "/v1/subscriptions/"+url.PathEscape(subID)+"/pricePoints", tool.ListOptions{
 		Query:    url.Values{"filter[territory]": {territory}},
@@ -257,7 +257,7 @@ func offerFindPricePoint(ctx context.Context, env *tool.Env, subID, territory, p
 			}
 		}
 	}
-	return offerPrice{}, invalidArgs("no %s price point equals %s (nearest: %q below, %q above)", territory, price, below, above)
+	return offerPrice{}, tool.InvalidArgs("no %s price point equals %s (nearest: %q below, %q above)", territory, price, below, above)
 }
 
 // offerEqualizations returns Apple's equalized price points of base in every
@@ -289,7 +289,7 @@ func offerAvailableTerritories(ctx context.Context, env *tool.Env, subID string)
 	}
 	av, ok := resp.First()
 	if !ok {
-		return nil, invalidArgs("subscription %s has no availability; set it with pricing_apply first", subID)
+		return nil, tool.InvalidArgs("subscription %s has no availability; set it with pricing_apply first", subID)
 	}
 	res, err := env.ASC.List(ctx, "/v1/subscriptionAvailabilities/"+url.PathEscape(av.ID)+"/availableTerritories", tool.ListOptions{
 		Fields: map[string][]string{"territories": {"currency"}}, MaxItems: 500,

@@ -162,7 +162,7 @@ func TestListFanOutOverAllApps(t *testing.T) {
 			`{"type":"apps","id":"a2","attributes":{"name":"Beta","bundleId":"se.beta"}}]}`)
 	k.ASC.Handle("GET", "/v1/apps/a1/customerReviews", 200, page("", nil, review("r4", 5, d20, "USA", ""), review("r2", 3, d16, "USA", "")))
 	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews", 200, page("", nil, review("b3", 2, d18, "SWE", ""), review("b1", 1, d14, "SWE", "")))
-	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"max_items":3}`))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"limit":3}`))
 	o := tooltest.Decode[listOut](t, res)
 	if got := strings.Join(ids(o), ","); got != "a1/r4,a1/r2,a2/b3" {
 		t.Fatalf("reviews = %s", got)

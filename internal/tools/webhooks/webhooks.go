@@ -78,18 +78,6 @@ type delivery struct {
 	Error      tool.Untrusted `json:"error,omitempty"`
 }
 
-func invalid(format string, args ...any) error {
-	return fmt.Errorf("%w: "+format, append([]any{tool.ErrInvalidArgs}, args...)...)
-}
-
-func apiStatus(err error) int {
-	var ae *tool.APIError
-	if errors.As(err, &ae) {
-		return ae.Status
-	}
-	return 0
-}
-
 // host returns the host of raw, or "" when unparsable.
 func host(raw string) string {
 	u, err := url.Parse(raw)
@@ -104,11 +92,11 @@ func checkURL(raw string) error {
 	u, err := url.Parse(raw)
 	switch {
 	case err != nil:
-		return invalid("url: %v", err)
+		return tool.InvalidArgs("url: %v", err)
 	case u.Scheme != "https" || u.Host == "":
-		return invalid("url must be an absolute https:// URL")
+		return tool.InvalidArgs("url must be an absolute https:// URL")
 	case u.User != nil:
-		return invalid("url must not contain credentials")
+		return tool.InvalidArgs("url must not contain credentials")
 	}
 	return nil
 }
@@ -283,11 +271,11 @@ func upsert(ctx context.Context, env *tool.Env, in upsertIn) (*tool.Result, erro
 func create(ctx context.Context, env *tool.Env, app tool.App, in upsertIn, events []string) (*tool.Result, error) {
 	switch {
 	case in.Name == "":
-		return nil, invalid("name is required to create a webhook")
+		return nil, tool.InvalidArgs("name is required to create a webhook")
 	case in.URL == "":
-		return nil, invalid("url is required to create a webhook")
+		return nil, tool.InvalidArgs("url is required to create a webhook")
 	case len(events) == 0:
-		return nil, invalid("event_types is required to create a webhook")
+		return nil, tool.InvalidArgs("event_types is required to create a webhook")
 	}
 	enabled := true
 	if in.Enabled != nil {
@@ -444,7 +432,7 @@ func deleteWebhook(ctx context.Context, env *tool.Env, in deleteIn) (*tool.Resul
 		return res, nil
 	}
 	if _, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodDelete, Path: "/v1/webhooks/" + h.ID, Write: true}); err != nil {
-		if apiStatus(err) == http.StatusNotFound {
+		if tool.APIStatus(err) == http.StatusNotFound {
 			return tool.Already(map[string]any{"deleted": h.ID}), nil
 		}
 		return nil, fmt.Errorf("delete webhook %s: %w", h.ID, err)
