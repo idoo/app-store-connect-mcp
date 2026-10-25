@@ -5,21 +5,24 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
-	"sync"
 
 	"github.com/idoo/hamn/internal/tool"
 )
 
-// prcGetMaxProducts caps the products of one pricing_get call.
-const prcGetMaxProducts = 10
+// prcGetMaxProducts caps the products of one pricing_get call, and
+// prcGetMaxTerritories the territories per product in products mode.
+const (
+	prcGetMaxProducts    = 10
+	prcGetMaxTerritories = 10
+)
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "pricing_get", Toolset: tool.Monetization, Class: tool.Read, Idempotent: true,
 		Title: "Get current prices",
 		Description: "Current prices of an app, IAP or subscription: base territory, prices in effect per territory " +
-			"(requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids or " +
-			"product ids) returns each one's base price and territory count.",
+			"(requested or top 20, with total count), scheduled changes, app availability. products (≤10 ids) " +
+			"returns each one's base price, or its price per requested territory (≤10).",
 		Enums: map[string][]any{"kind": prcKinds},
 	}, pricingGet))
 }
@@ -61,15 +64,24 @@ type pricingGetOut struct {
 
 // prcProductPrice is the compact per-product summary of products mode.
 type prcProductPrice struct {
-	ID             string `json:"id,omitempty"`
-	ProductID      string `json:"product_id,omitempty"`
-	Ref            string `json:"ref,omitempty"`
-	Territory      string `json:"territory,omitempty"`
-	Currency       string `json:"currency,omitempty"`
-	Price          string `json:"customer_price,omitempty"`
-	TerritoryCount int    `json:"territory_count"`
-	Scheduled      int    `json:"scheduled_changes,omitempty"`
-	Error          string `json:"error,omitempty"`
+	ID             string          `json:"id,omitempty"`
+	ProductID      string          `json:"product_id,omitempty"`
+	Ref            string          `json:"ref,omitempty"`
+	Territory      string          `json:"territory,omitempty"`
+	Currency       string          `json:"currency,omitempty"`
+	Price          string          `json:"customer_price,omitempty"`
+	Prices         []prcProductRow `json:"prices,omitempty"`
+	Missing        []string        `json:"no_price_in,omitempty"`
+	TerritoryCount int             `json:"territory_count"`
+	Scheduled      int             `json:"scheduled_changes,omitempty"`
+	Error          string          `json:"error,omitempty"`
+}
+
+// prcProductRow is one requested territory's price in products mode.
+type prcProductRow struct {
+	Territory string `json:"territory"`
+	Currency  string `json:"currency,omitempty"`
+	Price     string `json:"customer_price"`
 }
 
 type pricingGetProductsOut struct {
@@ -141,6 +153,9 @@ func pricingGetProducts(ctx context.Context, env *tool.Env, in pricingGetIn, k *
 	if len(in.Products) > prcGetMaxProducts {
 		return nil, invalidArgs("products: at most %d per call, got %d", prcGetMaxProducts, len(in.Products))
 	}
+	if len(terrs) > prcGetMaxTerritories {
+		return nil, invalidArgs("with products, territories takes at most %d codes, got %d; use product_id for more", prcGetMaxTerritories, len(terrs))
+	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
 		return nil, err
@@ -151,8 +166,7 @@ func pricingGetProducts(ctx context.Context, env *tool.Env, in pricingGetIn, k *
 	}
 	today := prcToday(env)
 	out := pricingGetProductsOut{Kind: k.name, AppID: app.ID, AsOf: today, Products: make([]prcProductPrice, len(in.Products))}
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 4)
+	var todo []*prcProductPrice
 	for i, ref := range in.Products {
 		p, ok := prcGetMatch(catalog, ref)
 		if !ok {
@@ -160,22 +174,22 @@ func pricingGetProducts(ctx context.Context, env *tool.Env, in pricingGetIn, k *
 			continue
 		}
 		out.Products[i] = prcProductPrice{ID: p.ID, ProductID: p.ProductID}
-		wg.Add(1)
-		go func(row *prcProductPrice) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			prcGetSummarize(ctx, env, k, terrs, today, row)
-		}(&out.Products[i])
+		todo = append(todo, &out.Products[i])
 	}
-	wg.Wait()
+	if err := tool.Parallel(ctx, 4, todo, func(ctx context.Context, _ int, row *prcProductPrice) error {
+		prcGetSummarize(ctx, env, k, terrs, today, row)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	if len(terrs) == 0 {
-		out.Note = "territory is the base territory (subscriptions: USA or the top storefront); pass product_id for per-territory prices"
+		out.Note = "territory is the base territory (subscriptions: USA or the top storefront); pass territories or product_id for other prices"
 	}
 	return tool.OK(out), nil
 }
 
-// prcGetSummarize fills row with the base-territory price and counts.
+// prcGetSummarize fills row with the base-territory price, or the price in
+// each requested territory, and counts.
 func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []string, today string, row *prcProductPrice) {
 	_, base, rows, err := prcGetRows(ctx, env, k, row.ID, terrs)
 	if err != nil {
@@ -188,6 +202,18 @@ func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []str
 		if r.StartDate > today {
 			row.Scheduled++
 		}
+	}
+	if len(terrs) > 0 {
+		row.Prices = []prcProductRow{}
+		for _, t := range terrs {
+			p, ok := eff[t]
+			if !ok {
+				row.Missing = append(row.Missing, t)
+				continue
+			}
+			row.Prices = append(row.Prices, prcProductRow{Territory: t, Currency: p.Currency, Price: p.CustomerPrice})
+		}
+		return
 	}
 	p, ok := eff[base]
 	if !ok {

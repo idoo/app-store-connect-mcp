@@ -159,6 +159,9 @@ func TestReleasePhasedTransitions(t *testing.T) {
 			k.ASC.Handle("PATCH", "/v1/appStoreVersionPhasedReleases/{id}", 200, doc(t, jres{Type: "appStoreVersionPhasedReleases", ID: "pr1", Attrs: map[string]any{"phasedReleaseState": c.to, "currentDayNumber": 4, "totalPauseDuration": 0}}))
 			args := `{"app":"Hjul","action":"` + c.action + `"`
 			preview(t, k, "release_phased", args+`}`)
+			if c.action == "complete" {
+				k.Elicit(true)
+			}
 			out := tooltest.Decode[phasedOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, args+`,"confirm":true}`)))
 			if out.Before == nil || out.Before.State != c.from || out.Before.CurrentDay != 4 || out.After == nil || out.After.State != c.to {
 				t.Errorf("out = %+v before %+v after %+v", out, out.Before, out.After)
@@ -172,6 +175,37 @@ func TestReleasePhasedTransitions(t *testing.T) {
 				t.Errorf("mutations = %+v", mutationLog(k))
 			}
 		})
+	}
+}
+
+// complete pushes the version to 100% of users: it needs a human, while pause
+// and resume (reversible) proceed on the agent's confirm:true alone.
+func TestReleasePhasedCompleteNeedsHuman(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		elicit func(k *tooltest.Kit)
+		code   string
+	}{
+		{"no elicitation", func(*tooltest.Kit) {}, tool.ErrHumanRequired.Code},
+		{"declined", func(k *tooltest.Kit) { k.Elicit(false) }, tool.ErrDeclined.Code},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			k := writableKit(t)
+			versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "ACTIVE", 4)
+			k.ASC.Handle("PATCH", "/v1/appStoreVersionPhasedReleases/{id}", 200, doc(t, jres{Type: "appStoreVersionPhasedReleases", ID: "pr1", Attrs: map[string]any{"phasedReleaseState": "COMPLETE"}}))
+			c.elicit(k)
+			tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"complete","confirm":true}`), c.code)
+			if n := len(k.ASC.Mutations()); n != 0 {
+				t.Fatalf("%d mutations: %+v", n, mutationLog(k))
+			}
+		})
+	}
+	k := writableKit(t)
+	versionsFixture(t, k, "READY_FOR_DISTRIBUTION", "ACTIVE", 4)
+	k.ASC.Handle("PATCH", "/v1/appStoreVersionPhasedReleases/{id}", 200, doc(t, jres{Type: "appStoreVersionPhasedReleases", ID: "pr1", Attrs: map[string]any{"phasedReleaseState": "PAUSED"}}))
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "release_phased"), k.Env, `{"action":"pause","confirm":true}`))
+	if n := len(k.ASC.Mutations()); n != 1 {
+		t.Fatalf("pause without elicitation: %d mutations", n)
 	}
 }
 
@@ -315,10 +349,30 @@ func TestBuildsWaitTimeoutCapped(t *testing.T) {
 	k := writableKit(t)
 	clock := tooltest.NewFakeClock()
 	k.Env.Clock = clock
+	recordProgress(k) // a progress token lifts the 50 s clamp
 	buildFixture(t, k, "PROCESSING")
 	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "builds_wait"), k.Env, `{"timeout_seconds":5000}`))
 	if clock.Slept != waitMax {
 		t.Errorf("slept %v, want %v", clock.Slept, waitMax)
+	}
+}
+
+// Clients that send no progress token cancel long requests at ~60 s, so the
+// wait clamps to 50 s and returns still_processing with the resume step.
+func TestBuildsWaitNoProgressTokenCapped(t *testing.T) {
+	k := writableKit(t)
+	clock := tooltest.NewFakeClock()
+	k.Env.Clock = clock
+	buildFixture(t, k, "PROCESSING")
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "builds_wait"), k.Env, `{"timeout_seconds":300}`))
+	if got := tooltest.Decode[map[string]any](t, res); got["status"] != "still_processing" {
+		t.Fatalf("out = %+v", got)
+	}
+	if clock.Slept != tool.NoProgressWaitCap {
+		t.Errorf("slept %v, want %v", clock.Slept, tool.NoProgressWaitCap)
+	}
+	if len(res.Next) != 1 || res.Next[0].Tool != "builds_wait" {
+		t.Errorf("next = %+v", res.Next)
 	}
 }
 

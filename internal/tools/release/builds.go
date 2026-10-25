@@ -23,7 +23,7 @@ type buildsWaitIn struct {
 	App            tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform       tool.Platform `json:"platform,omitempty"`
 	Build          tool.BuildRef `json:"build,omitempty" jsonschema:"latest (default), build number or build id"`
-	TimeoutSeconds int           `json:"timeout_seconds,omitempty" jsonschema:"how long to wait (default 45, max 300)"`
+	TimeoutSeconds int           `json:"timeout_seconds,omitempty" jsonschema:"how long to wait (default 45, max 300; 50 when the client sends no progress token)"`
 }
 
 func init() {
@@ -37,8 +37,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "builds_wait", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "Wait for build processing",
-		Description: "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. At the timeout returns " +
-			"still_processing; call again with the same args to keep waiting.",
+		Description: "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. Waits at most 50 s " +
+			"unless the client sends a progress token. At the timeout returns still_processing; call again with the same args.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, buildsWait))
 }
@@ -189,6 +189,9 @@ func buildsWait(ctx context.Context, env *tool.Env, in buildsWaitIn) (*tool.Resu
 	timeout := waitDefault
 	if in.TimeoutSeconds > 0 {
 		timeout = min(time.Duration(in.TimeoutSeconds)*time.Second, waitMax)
+	}
+	if !env.HasProgress() {
+		timeout = min(timeout, tool.NoProgressWaitCap)
 	}
 	out := buildsWaitOut{App: app, Platform: platform, BuildID: build.ID, Number: build.Number}
 	start := env.Clock.Now()

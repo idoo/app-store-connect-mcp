@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -49,8 +50,9 @@ type pricingPlanIn struct {
 	Overrides            map[string]string `json:"overrides,omitempty" jsonschema:"territory → customer price, set manually instead of equalized"`
 	StartDate            string            `json:"start_date,omitempty" jsonschema:"YYYY-MM-DD; default today"`
 	PlanType             string            `json:"plan_type,omitempty" jsonschema:"subscriptions only"`
-	PreserveCurrentPrice bool              `json:"preserve_current_price,omitempty" jsonschema:"subscriptions: keep existing subscribers on their price"`
+	PreserveCurrentPrice *bool             `json:"preserve_current_price,omitempty" jsonschema:"subscriptions: existing subscribers keep their price on increases; default true"`
 	Territories          []string          `json:"territories,omitempty" jsonschema:"subscriptions: limit the change to these territories"`
+	ResetManualPrices    bool              `json:"reset_manual_prices,omitempty" jsonschema:"app/IAP: drop manual prices not in overrides so they follow equalization"`
 	Availability         *prcAvailIn       `json:"availability,omitempty" jsonschema:"app availability change (kind app only)"`
 }
 
@@ -68,6 +70,30 @@ type prcChange struct {
 	Proceeds  string `json:"proceeds,omitempty"`
 	PointID   string `json:"price_point_id"`
 	Source    string `json:"source"`
+	Direction string `json:"direction"`
+}
+
+// Directions of a prcChange.
+const (
+	prcIncrease = "increase"
+	prcDecrease = "decrease"
+	prcNew      = "new"
+	prcSame     = "same"
+)
+
+// prcDirection classifies old→new customer prices of one territory.
+func prcDirection(old, nw string) string {
+	o, ok1 := prcRat(old)
+	n, ok2 := prcRat(nw)
+	switch {
+	case old == "" || !ok1 || !ok2:
+		return prcNew
+	case n.Cmp(o) > 0:
+		return prcIncrease
+	case n.Cmp(o) < 0:
+		return prcDecrease
+	}
+	return prcSame
 }
 
 // prcManual is one inline manual price of an app/IAP schedule POST.
@@ -95,7 +121,11 @@ type prcPlan struct {
 	BasePrice    *prcPoint     `json:"base_price,omitempty"`
 	Exact        bool          `json:"exact_match,omitempty"`
 	Changes      []prcChange   `json:"changes"`
+	Increases    int           `json:"increases,omitempty"`
+	Decreases    int           `json:"decreases,omitempty"`
+	OldBase      string        `json:"old_base_territory,omitempty"`
 	Kept         []string      `json:"kept_manual,omitempty"`
+	Filtered     []string      `json:"territories,omitempty"`
 	Manual       []prcManual   `json:"schedule,omitempty"`
 	Avail        *prcAvailPlan `json:"availability,omitempty"`
 	CallPlan     []prcCall     `json:"call_plan"`
@@ -124,8 +154,11 @@ func prcValidate(env *tool.Env, k *prcKind, in *pricingPlanIn) error {
 			return invalidArgs("start_date %s is in the past", in.StartDate)
 		}
 	}
-	if k != prcSub && (in.PlanType != "" || in.PreserveCurrentPrice || len(in.Territories) > 0) {
+	if k != prcSub && (in.PlanType != "" || in.PreserveCurrentPrice != nil || len(in.Territories) > 0) {
 		return invalidArgs("plan_type, preserve_current_price and territories apply to kind subscription only")
+	}
+	if k == prcSub && in.ResetManualPrices {
+		return invalidArgs("reset_manual_prices applies to kind app or iap only")
 	}
 	if k != prcApp && in.Availability != nil {
 		return invalidArgs("availability applies to kind app only")
@@ -287,16 +320,25 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 		want[terr] = target{op, "override"}
 	}
 	if k != prcSub {
+		if oldBase != "" && oldBase != p.Base {
+			p.OldBase = oldBase
+		}
 		// A schedule POST replaces every manual price: carry over current
-		// manual prices the caller did not change.
+		// manual prices the caller did not change, except the old base
+		// (it follows equalization from the new base) and all of them with
+		// reset_manual_prices.
 		for terr, c := range cur {
-			if _, over := in.Overrides[terr]; c.Manual && terr != p.Base && !over {
+			if _, over := in.Overrides[terr]; c.Manual && terr != p.Base && terr != p.OldBase && !over && !in.ResetManualPrices {
 				want[terr] = target{c.prcPoint, "kept"}
 				p.Kept = append(p.Kept, terr)
 			}
 		}
 		sort.Strings(p.Kept)
+		if _, ok := want[p.OldBase]; p.OldBase != "" && !ok {
+			p.warnings = append(p.warnings, fmt.Sprintf("Apple returned no equalized price for the old base %s; its manual price is dropped and Apple sets it", p.OldBase))
+		}
 	} else if len(in.Territories) > 0 {
+		p.Filtered = in.Territories
 		for terr := range want {
 			if _, over := in.Overrides[terr]; !over && !slices.Contains(in.Territories, terr) {
 				delete(want, terr)
@@ -324,9 +366,16 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 		if cc == "" {
 			cc = c.Currency
 		}
+		d := prcDirection(c.CustomerPrice, w.CustomerPrice)
+		switch d {
+		case prcIncrease:
+			p.Increases++
+		case prcDecrease:
+			p.Decreases++
+		}
 		p.Changes = append(p.Changes, prcChange{
 			Territory: terr, Currency: cc, Old: c.CustomerPrice, New: w.CustomerPrice,
-			Proceeds: w.Proceeds, PointID: w.ID, Source: w.source,
+			Proceeds: w.Proceeds, PointID: w.ID, Source: w.source, Direction: d,
 		})
 	}
 	p.state["current"] = curIDs
@@ -335,17 +384,19 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 		if p.priceCalls > 0 {
 			p.CallPlan = append(p.CallPlan, prcCall{Method: "POST", Path: k.createPath, Count: p.priceCalls})
 			p.irreversible = append(p.irreversible, "subscription price rows cannot be edited once created")
-			if !in.PreserveCurrentPrice {
-				p.irreversible = append(p.irreversible, "existing subscribers move to the new price (Apple notifies them of increases)")
-			}
+			p.irreversible = append(p.irreversible, prcSubscriberImpact(p.Increases, p.Decreases, in.preserve())...)
 		}
-	} else if len(p.Changes) > 0 || p.Base != oldBase {
+	} else if len(p.Changes) > 0 || p.OldBase != "" {
 		for _, terr := range order {
-			w := want[terr]
+			w, c := want[terr], cur[terr]
 			if w.source == "equalized" {
+				// A manual price that now follows equalization keeps
+				// applying until the start date.
+				if in.StartDate != "" && c.Manual && c.ID != "" {
+					p.Manual = append(p.Manual, prcManual{Territory: terr, PointID: c.ID, EndDate: in.StartDate})
+				}
 				continue
 			}
-			c := cur[terr]
 			if in.StartDate != "" && w.source != "kept" && c.Manual && c.ID != "" && c.ID != w.ID {
 				p.Manual = append(p.Manual, prcManual{Territory: terr, PointID: c.ID, EndDate: in.StartDate})
 			}
@@ -363,6 +414,28 @@ func (p *prcPlan) planPrices(ctx context.Context, env *tool.Env, in pricingPlanI
 	return nil
 }
 
+// preserve is preserve_current_price with its default (true).
+func (in pricingPlanIn) preserve() bool {
+	return in.PreserveCurrentPrice == nil || *in.PreserveCurrentPrice
+}
+
+// prcSubscriberImpact states what a subscription price change does to
+// existing subscribers.
+func prcSubscriberImpact(increases, decreases int, preserve bool) []string {
+	var out []string
+	switch {
+	case increases > 0 && preserve:
+		out = append(out, fmt.Sprintf("%d territories increase: existing subscribers keep their current price, only new subscribers pay more", increases))
+	case increases > 0:
+		out = append(out, fmt.Sprintf("%d territories increase for existing subscribers too: Apple emails them, and where consent is required, "+
+			"subscribers who don't agree lapse at renewal", increases))
+	}
+	if decreases > 0 {
+		out = append(out, fmt.Sprintf("%d territories decrease: existing subscribers move to the lower price", decreases))
+	}
+	return out
+}
+
 // preview is the confirmation preview of the plan.
 func (p *prcPlan) preview() tool.PlanPreview {
 	sum := fmt.Sprintf("change %s %s", p.T.Kind, p.T.ID)
@@ -372,7 +445,29 @@ func (p *prcPlan) preview() tool.PlanPreview {
 	intended := map[string]any{"calls": p.Calls}
 	affected := []string{}
 	if p.BasePrice != nil {
-		sum += fmt.Sprintf(": %s %s %s in %s, %d territories change", "price", p.BasePrice.CustomerPrice, p.BasePrice.Currency, p.Base, len(p.Changes))
+		baseChanged := slices.ContainsFunc(p.Changes, func(c prcChange) bool { return c.Territory == p.Base })
+		inFilter := len(p.Filtered) == 0 || slices.Contains(p.Filtered, p.Base) || baseChanged
+		if inFilter {
+			sum += fmt.Sprintf(": price %s %s in %s, %d territories change", p.BasePrice.CustomerPrice, p.BasePrice.Currency, p.Base, len(p.Changes))
+		} else {
+			sum += fmt.Sprintf(": %d territories change to Apple's equivalents of %s %s; %s itself is not changed",
+				len(p.Changes), p.BasePrice.CustomerPrice, p.BasePrice.Currency, p.Base)
+		}
+		if !baseChanged && inFilter {
+			sum += fmt.Sprintf(" (%s already at that price)", p.Base)
+		}
+		if len(p.Filtered) > 0 {
+			sum += "; only " + prcList(p.Filtered)
+		}
+		if p.Increases > 0 {
+			sum += fmt.Sprintf("; %d increases", p.Increases)
+		}
+		if p.OldBase != "" {
+			sum += fmt.Sprintf("; base moves from %s, which now follows equalization", p.OldBase)
+		}
+		if len(p.Kept) > 0 {
+			sum += fmt.Sprintf("; %d territories keep manual prices: %s", len(p.Kept), prcList(p.Kept))
+		}
 		ch := p.Changes
 		if len(ch) > 20 {
 			ch = ch[:20]
@@ -387,6 +482,14 @@ func (p *prcPlan) preview() tool.PlanPreview {
 		intended["availability"] = p.Avail
 	}
 	return tool.PlanPreview{Summary: sum, Intended: intended, Affected: affected, Irreversible: p.irreversible}
+}
+
+// prcList joins territory codes, listing at most 20.
+func prcList(ts []string) string {
+	if len(ts) <= 20 {
+		return strings.Join(ts, ", ")
+	}
+	return strings.Join(ts[:20], ", ") + fmt.Sprintf(" and %d more", len(ts)-20)
 }
 
 // prcRateCheck refuses plans that would leave less than the reserve.
@@ -605,7 +708,7 @@ func prcPostSchedule(ctx context.Context, env *tool.Env, p *prcPlan) error {
 
 // prcPostSubPrice creates one subscription price in one territory.
 func prcPostSubPrice(ctx context.Context, env *tool.Env, p *prcPlan, in pricingPlanIn, c prcChange) error {
-	attrs := map[string]any{"preserveCurrentPrice": in.PreserveCurrentPrice}
+	attrs := map[string]any{"preserveCurrentPrice": in.preserve()}
 	if in.StartDate != "" {
 		attrs["startDate"] = in.StartDate
 	}
