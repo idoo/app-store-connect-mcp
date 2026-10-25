@@ -1,16 +1,16 @@
 name: Bug report
-description: Something in hamn does not work as documented
+description: Hamn doesn't do what the docs say
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Never paste API keys, .p8 contents, JWTs or signed URLs. `hamn doctor` output is safe to share (it is redacted).
-        Security issues: use private vulnerability reporting (Security tab), not this form.
+        Don't paste API keys, .p8 contents, JWTs or signed URLs. `hamn doctor` output is redacted and safe.
+        Security holes go through private vulnerability reporting (Security tab), not here.
   - type: input
     id: version
     attributes:
-      label: hamn version
+      label: Hamn version
       description: Output of `hamn version`
     validations:
       required: true

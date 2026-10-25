@@ -5,64 +5,35 @@ description: Use when the user asks to upload, replace, reorder or check App Sto
 
 # Screenshots with Hamn
 
-Goal: sync a local screenshot folder (fastlane snapshot output or hand-made
-frames) to the editable App Store version, previewing every upload, delete and
-reorder first. Requires the `hamn` MCP server (`hamn` binary on PATH, key set
-up by the human). The tools live in the optional `screenshots` toolset.
+Sync a local screenshot folder to the editable version. Every upload, delete and reorder gets previewed first.
 
-## Refs you can pass
-- `app`: name ("Hjul"), bundle id, SKU or id; omit when the project pins one.
-- `version`: `"editable"` (default).
-- `dir`: a folder inside the project, laid out `<locale>/*.png` (fastlane;
-  display type inferred from pixel size) or `<locale>/<display>/*.png`.
-- `locales`: limit to some locales, e.g. `["en-US", "de-DE"]`.
+Refs: `app` is a name, bundle id, SKU or id (omit it if pinned). `version` is `"editable"` (default). `dir` is a folder inside the project, laid out as `<locale>/*.png` (fastlane; the display type comes from the pixel size) or `<locale>/<display>/*.png`. `locales` limits the sync, e.g. `["en-US", "de-DE"]`.
 
-## Tool chain
-1. If `screenshots_list` is not available, call `toolsets` with
-   `action: "enable"` and `toolsets: ["screenshots"]`.
-2. Optional: produce images first (for example `fastlane snapshot`), and check
-   the folder layout matches the refs above.
-3. `screenshots_list` with `app` and `version` to see current sets per locale
-   and display type (`thumbnails: true` attaches up to 4 small images).
-4. `screenshots_plan` with `app`, `version`, `dir` and `mode`:
-   - `mode: "add"` only uploads missing screenshots;
-   - `mode: "replace"` (default) makes each touched set exactly the local
-     files, deleting extra remote screenshots.
-   It validates size, format and alpha, skips files whose checksum already
-   matches, and returns a `plan_id` with uploads, deletes, reorders and
-   problems.
-5. Fix every problem (wrong pixel size, alpha channel, ambiguous size needing a
-   `<display>` subfolder) and plan again until it is clean.
-6. Show the plan. Deletes are the risky part: list them explicitly and ask.
-7. `screenshots_sync` with the same `app`, `version`, `dir`, `mode` and
-   `locales` plus `plan_id` set to the plan's `plan_id`. Long syncs report progress;
-   pass `wait_seconds` to wait for Apple's processing.
-8. `screenshots_list` again to confirm every asset is COMPLETE, then
-   `release_status` to see the screenshot check pass.
+## Steps
 
-## App previews
-- `previews_upload` with `app`, `locale`, `file` (a video inside the project)
-  and optional `preview_frame_time_code`. Same checksum already present is a
-  no-op; max 3 previews per set.
+1. If `screenshots_list` is missing (discovery mode, or someone turned it off), call `toolsets` with `action: "enable"` and `toolsets: ["screenshots"]`.
+2. Optional: make the images first (`fastlane snapshot`) and check the folder layout.
+3. `screenshots_list` with `app` and `version` shows current sets per locale and display. `thumbnails: true` attaches up to 4 small images.
+4. `screenshots_plan` with `app`, `version`, `dir`, `mode`. `mode: "replace"` (default) makes each touched set exactly the local files and deletes the extras. `mode: "add"` only uploads what's missing. It checks size, format and alpha, skips matching checksums, and returns a `plan_id` with uploads, deletes, reorders and problems.
+5. Fix every problem (wrong size, alpha channel, a size that needs a `<display>` subfolder) and plan again until it's clean.
+6. Show the plan. Deletes are the risky part: list them and ask.
+7. `screenshots_sync` with the same `app`, `version`, `dir`, `mode`, `locales` plus `plan_id`. `wait_seconds` waits for Apple's processing.
+8. `screenshots_list` to check every asset is COMPLETE, then `release_status` to see the screenshot check pass.
 
-## Decision points
-- `stale_plan`: remote sets changed since planning; plan again and re-show.
-- `missing_localization`: the version has no listing for that locale yet; add
-  it with `metadata_plan` / `metadata_apply` first (see `hamn-metadata-translate`).
-- `no_editable_version`: create the version first (`release_status` with
-  `desired`, then `release_prepare`).
-- `already` items are unchanged; that is success.
+App previews: `previews_upload` with `app`, `locale`, `file` (a video inside the project) and optional `preview_frame_time_code`. Same checksum already there does nothing. Max 3 per set.
 
-## Safety rules
-- Files are read only from inside the project root; never point `dir` at
-  system or home folders.
-- Never ask the user to paste an API key, .p8 contents or JWT into chat; keys
-  are configured by the human with `hamn auth add`.
-- Never use `asc_api_request` to delete or upload what `screenshots_sync`
-  refused.
+## Rules
 
-## Failure handling
-- `writes_disabled`: call `toolsets` with `action: "enable_writes"`; the user
-  approves in their client. `writes_locked`: tell the user; do not bypass.
+- `stale_plan`: remote sets changed. Plan again and show it again.
+- `missing_localization`: the version has no listing for that locale yet. Add one with `metadata_plan` / `metadata_apply` first (see `hamn-metadata-translate`).
+- `no_editable_version`: create the version first (`release_status` with `desired`, then `release_prepare`).
+- `already` means unchanged. That's success.
+- Files are read only from inside the project root. Don't point `dir` at system or home folders.
+- Never ask for an API key, .p8 or JWT in chat. Keys come from `hamn auth add`.
+- Don't upload or delete through `asc_api_request` what `screenshots_sync` refused.
+
+## When it fails
+
+- `writes_disabled`: `toolsets` with `action: "enable_writes"`; the user approves. `writes_locked`: tell the user; don't bypass it.
 - `upload_failed`: show Apple's per-file errors, fix the file, plan again.
-- `outcome_unknown`: run `screenshots_list` before retrying anything.
+- `outcome_unknown`: `screenshots_list` before retrying anything.
