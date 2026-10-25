@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -95,18 +94,13 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 		return nil, err
 	}
 	groups := make([]appReviews, len(apps))
-	sem := make(chan struct{}, fanOut)
-	var wg sync.WaitGroup
-	for i, app := range apps {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			groups[i] = listApp(ctx, env, app, query, in.Since, since, limit)
-		}()
+	// Per-app failures are kept in the group; only cancellation aborts.
+	if err := tool.Parallel(ctx, fanOut, apps, func(ctx context.Context, i int, app appRef) error {
+		groups[i] = listApp(ctx, env, app, query, in.Since, since, limit)
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	wg.Wait()
 	if len(groups) == 1 && groups[0].Error != nil {
 		return tool.Fail(groups[0].errCause), nil
 	}

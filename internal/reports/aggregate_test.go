@@ -108,6 +108,7 @@ func TestDefaultCategory(t *testing.T) {
 	tests := map[string]Category{
 		"1F": CategoryDownload, "7": CategoryUpdate, "3F": CategoryRedownload, "ia1": CategoryIAP,
 		"IAY": CategorySubscription, " IAC ": CategorySubscription, "ZZ": CategoryOther, "": CategoryOther,
+		"IA3": CategoryRestore, "ia3-m": CategoryRestore,
 	}
 	for in, want := range tests {
 		if got := DefaultCategory(in); got != want {
@@ -144,11 +145,8 @@ func TestAggregateSalesTotals(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep := AggregateSales(rows, []Dim{DimCountry}, 2, nil)
-	want := map[Category]int64{
-		CategoryDownload: 17, CategoryUpdate: 30, CategoryRedownload: 4, CategoryIAP: 5, CategorySubscription: 7,
-	}
-	if diff := cmp.Diff(want, rep.Totals.Units); diff != "" {
-		t.Fatalf("units (-want +got):\n%s", diff)
+	if got, want := tooljson(t, rep.Totals.Units), `{"download":17,"iap":5,"redownload":4,"subscription":7,"update":30}`; got != want {
+		t.Fatalf("units = %s, want %s", got, want)
 	}
 	// 3×0.70 + 7×2.79 − 1×2.79 = 18.84 USD; 2×0.69 EUR; 1×420 JPY.
 	if got := rep.Totals.Proceeds.String(); got != "EUR 1.38, JPY 420, USD 18.84" {
@@ -158,7 +156,7 @@ func TestAggregateSalesTotals(t *testing.T) {
 		t.Fatalf("topN groups = %+v omitted=%d", rep.Groups, rep.Omitted)
 	}
 	custom := AggregateSales(rows, nil, 0, func(string) Category { return CategoryOther })
-	if custom.Totals.Units[CategoryOther] != 63 {
+	if custom.Totals.Units.Get(CategoryOther).Cmp(big.NewRat(63, 1)) != 0 {
 		t.Fatalf("injected categorizer ignored: %v", custom.Totals.Units)
 	}
 }
@@ -168,13 +166,35 @@ func TestSalesRowsMissingColumn(t *testing.T) {
 	if _, err := SalesRows(tab); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("err = %v, want ErrCorrupt", err)
 	}
-	bad := &Table{
+}
+
+// Apple types Units as DECIMAL(18,2): fractional and negative values are
+// valid and must be summed exactly, never rejected.
+func TestSalesRowsDecimalUnits(t *testing.T) {
+	tab := &Table{
 		Columns: []string{"Product Type Identifier", "Units", "Developer Proceeds", "Currency of Proceeds"},
-		Rows:    [][]string{{"1F", "1.5", "0", "USD"}},
+		Rows:    [][]string{{"1F", "1.5", "0", "USD"}, {"IA1", "-0.50", "2.00", "USD"}, {"IA1", "2", "2.00", "USD"}, {"IA3", "1", "0", "USD"}},
 	}
-	if _, err := SalesRows(bad); !errors.Is(err, ErrCorrupt) {
-		t.Fatalf("fractional units err = %v, want ErrCorrupt", err)
+	rows, err := SalesRows(tab)
+	if err != nil {
+		t.Fatalf("decimal units rejected: %v", err)
 	}
+	rep := AggregateSales(rows, nil, 0, nil)
+	if got, want := tooljson(t, rep.Totals.Units), `{"download":1.5,"iap":1.5,"restore":1}`; got != want {
+		t.Fatalf("units = %s, want %s", got, want)
+	}
+	if got := rep.Totals.Proceeds.String(); got != "USD 3.00" {
+		t.Fatalf("proceeds = %q", got)
+	}
+}
+
+func tooljson(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func TestEventSummaryGolden(t *testing.T) {
@@ -236,34 +256,14 @@ func TestFinanceSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	noFX := FinanceSummary(plain)
-	if noFX.TotalUSD != nil || noFX.TotalUSDSource != "" {
-		t.Fatalf("TotalUSD guessed without rates: %+v", noFX)
+	sum := FinanceSummary(plain)
+	if got := sum.Proceeds.String(); got != "EUR 1.38, JPY 420, USD 27.21" || sum.Units != 15 {
+		t.Fatalf("proceeds = %q units = %d", got, sum.Units)
 	}
-	if diff := cmp.Diff([]string{"EUR", "JPY"}, noFX.MissingRates); diff != "" {
-		t.Fatalf("missing rates: %s", diff)
+	// Apple's finance reports have no exchange-rate column: no USD conversion.
+	b, err := json.Marshal(sum)
+	if err != nil || strings.Contains(string(b), "usd") || strings.Contains(string(b), "rate") {
+		t.Fatalf("finance summary converts currencies: %s %v", b, err)
 	}
-	if got := noFX.Proceeds.String(); got != "EUR 1.38, JPY 420, USD 27.21" || noFX.Units != 15 {
-		t.Fatalf("proceeds = %q units = %d", got, noFX.Units)
-	}
-	golden(t, "finance_no_fx", noFX)
-
-	fxRows, err := FinanceRows(openFixture(t, "finance_fx.tsv"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	fx := FinanceSummary(fxRows)
-	// 1.38×1.10 + 420×0.0067 + 27.90 = 1.518 + 2.814 + 27.90 = 32.232
-	if fx.TotalUSD == nil || *fx.TotalUSD != "32.23" || fx.TotalUSDSource != FXSource {
-		t.Fatalf("fx summary = %+v", fx)
-	}
-	golden(t, "finance_fx", fx)
-
-	usdOnly := FinanceSummary(fxRows[2:])
-	if usdOnly.TotalUSD == nil || *usdOnly.TotalUSD != "27.90" || usdOnly.TotalUSDSource != USDOnlySource {
-		t.Fatalf("usd-only summary = %+v", usdOnly)
-	}
-	if empty := FinanceSummary(nil); empty.TotalUSD != nil {
-		t.Fatalf("empty report has TotalUSD %v", *empty.TotalUSD)
-	}
+	golden(t, "finance_summary", sum)
 }

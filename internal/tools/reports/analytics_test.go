@@ -116,7 +116,7 @@ func TestAnalyticsReportNotSetUp(t *testing.T) {
 	if len(r.Next) != 1 || r.Next[0].Tool != "analytics_setup" || r.Next[0].Args["app"] != analyticsAppID {
 		t.Errorf("next = %+v", r.Next)
 	}
-	if !strings.Contains(body.Hint, "--allow-writes") {
+	if !strings.Contains(body.Hint, tool.EnableWritesHint) || strings.Contains(body.Hint, "--allow-writes") {
 		t.Errorf("hint = %q", body.Hint)
 	}
 }

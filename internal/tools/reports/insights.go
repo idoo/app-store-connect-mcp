@@ -69,9 +69,11 @@ type insightsOut struct {
 type salesInsight struct {
 	section
 	ComparedDays int                         `json:"compared_days,omitempty"`
+	CurrentDays  int                         `json:"current_days,omitempty"`
+	PreviousDays int                         `json:"previous_days,omitempty"`
 	PendingDays  []string                    `json:"pending_days,omitempty"`
-	Units        map[reports.Category]int64  `json:"units,omitempty"`
-	PrevUnits    map[reports.Category]int64  `json:"previous_units,omitempty"`
+	Units        reports.Units               `json:"units,omitempty"`
+	PrevUnits    reports.Units               `json:"previous_units,omitempty"`
 	UnitsChange  map[reports.Category]string `json:"units_change,omitempty"`
 	Proceeds     []proceedsChange            `json:"proceeds,omitempty"`
 }
@@ -174,8 +176,9 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 // reasonOf turns a section error into a short reason.
 func reasonOf(err error) string { return tool.BodyFor(err).Message }
 
-// salesSection compares SALES units and proceeds over the published days of
-// the current window with the same number of days of the previous window.
+// salesSection compares SALES units and proceeds over equally long windows:
+// the first N published days of the current window against the first N days
+// of the previous one, so a 31-day month never "grows" against a 28-day one.
 func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, pFrom, pTo, today time.Time) salesInsight {
 	if env.Profile.KeyKind == tool.KeyIndividual {
 		return salesInsight{section: unavailable("sales reports need a Team API key; Individual keys cannot read them")}
@@ -193,7 +196,6 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 	}
 	cur := dayList(from, to)
 	prev := dayList(pFrom, pTo)
-	prev = prev[:min(len(prev), len(cur))]
 	if len(cur) == 0 {
 		return salesInsight{section: unavailable("no day of this period is published yet (Apple publishes daily reports the next day, Pacific)")}
 	}
@@ -214,8 +216,13 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 	if n == 0 {
 		return salesInsight{section: unavailable("no day of this period is published yet"), PendingDays: out.PendingDays}
 	}
-	prevT = prevT[:min(len(prevT), n)]
+	out.CurrentDays, out.PreviousDays = n, len(prevT)
+	n = min(n, len(prevT))
+	prevT = prevT[:n]
 	out.ComparedDays = n
+	if n < out.CurrentDays {
+		out.Reason = fmt.Sprintf("compared the first %d days of each window (current %d days, previous %d)", n, out.CurrentDays, out.PreviousDays)
+	}
 	curAgg, err := salesTotals(curT[:n], app, &out.PendingDays)
 	if err != nil {
 		return salesInsight{section: unavailable(reasonOf(err))}
@@ -228,7 +235,7 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 	out.Units, out.PrevUnits = curAgg.Units, prevAgg.Units
 	out.UnitsChange = map[reports.Category]string{}
 	for _, c := range unionKeys(curAgg.Units, prevAgg.Units) {
-		if ch := pctChange(big.NewRat(curAgg.Units[c], 1), big.NewRat(prevAgg.Units[c], 1)); ch != "" {
+		if ch := pctChange(curAgg.Units.Get(c), prevAgg.Units.Get(c)); ch != "" {
 			out.UnitsChange[c] = ch
 		}
 	}
@@ -247,7 +254,11 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 		}
 	}
 	if len(prevPending) > 0 {
-		out.Reason = fmt.Sprintf("previous period has %d unpublished day(s); its totals may be low", len(prevPending))
+		note := fmt.Sprintf("previous period has %d unpublished day(s); its totals may be low", len(prevPending))
+		if out.Reason != "" {
+			note = out.Reason + "; " + note
+		}
+		out.Reason = note
 	}
 	return out
 }
@@ -274,7 +285,7 @@ func salesTotals(days []dayTable, app *tool.App, pending *[]string) (reports.Sal
 	return reports.AggregateSales(rows, nil, 0, reports.DefaultCategory).Totals, nil
 }
 
-func unionKeys(a, b map[reports.Category]int64) []reports.Category {
+func unionKeys(a, b reports.Units) []reports.Category {
 	var out []reports.Category
 	for k := range a {
 		out = append(out, k)

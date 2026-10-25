@@ -67,7 +67,7 @@ type SalesRow struct {
 	Title             string
 	Version           string
 	ProductTypeID     string
-	Units             int64
+	Units             *big.Rat // DECIMAL(18,2); negative for refunds
 	DeveloperProceeds *big.Rat // per unit, in ProceedsCurrency
 	BeginDate         string
 	EndDate           string
@@ -84,7 +84,7 @@ type SalesRow struct {
 
 // TotalProceeds returns Units × DeveloperProceeds.
 func (r SalesRow) TotalProceeds() *big.Rat {
-	return new(big.Rat).Mul(new(big.Rat).SetInt64(r.Units), r.DeveloperProceeds)
+	return new(big.Rat).Mul(r.Units, r.DeveloperProceeds)
 }
 
 var salesSpecs = []colSpec{
@@ -116,7 +116,7 @@ func SalesRows(t *Table) ([]SalesRow, error) {
 	}
 	out := make([]SalesRow, 0, len(t.Rows))
 	for i, row := range t.Rows {
-		units, err := m.count(row, "units", i+1)
+		units, err := m.amount(row, "units", i+1)
 		if err != nil {
 			return nil, err
 		}
@@ -239,6 +239,7 @@ type SubscriptionEventRow struct {
 	EventDate          string
 	Event              string
 	AppName            string
+	AppAppleID         string // empty when the report has no App Apple ID column
 	SubscriptionName   string
 	SubscriptionID     string
 	Country            string
@@ -252,6 +253,7 @@ func SubscriptionEventRows(t *Table) ([]SubscriptionEventRow, error) {
 		{"date", []string{"Event Date"}, false},
 		{"event", []string{"Event"}, true},
 		{"app", []string{"App Name"}, false},
+		{"appid", []string{"App Apple ID"}, false},
 		{"name", []string{"Subscription Name"}, false},
 		{"id", []string{"Subscription Apple ID"}, false},
 		{"country", []string{"Country"}, false},
@@ -268,7 +270,7 @@ func SubscriptionEventRows(t *Table) ([]SubscriptionEventRow, error) {
 			return nil, err
 		}
 		out = append(out, SubscriptionEventRow{
-			EventDate: m.str(row, "date"), Event: m.str(row, "event"), AppName: m.str(row, "app"),
+			EventDate: m.str(row, "date"), Event: m.str(row, "event"), AppName: m.str(row, "app"), AppAppleID: m.str(row, "appid"),
 			SubscriptionName: m.str(row, "name"), SubscriptionID: m.str(row, "id"),
 			Country: m.str(row, "country"), CancellationReason: m.str(row, "reason"), Quantity: q,
 		})
@@ -280,6 +282,7 @@ func SubscriptionEventRows(t *Table) ([]SubscriptionEventRow, error) {
 type SubscriberRow struct {
 	EventDate         string
 	AppName           string
+	AppAppleID        string // empty when the report has no App Apple ID column
 	SubscriptionName  string
 	SubscriptionID    string
 	OfferType         string
@@ -298,6 +301,7 @@ func SubscriberRows(t *Table) ([]SubscriberRow, error) {
 	m, err := mapCols(t, "subscriber", []colSpec{
 		{"date", []string{"Event Date"}, false},
 		{"app", []string{"App Name"}, false},
+		{"appid", []string{"App Apple ID"}, false},
 		{"name", []string{"Subscription Name"}, false},
 		{"id", []string{"Subscription Apple ID"}, false},
 		{"offer", []string{"Subscription Offer Type"}, false},
@@ -316,8 +320,9 @@ func SubscriberRows(t *Table) ([]SubscriberRow, error) {
 	out := make([]SubscriberRow, 0, len(t.Rows))
 	for i, row := range t.Rows {
 		r := SubscriberRow{
-			EventDate: m.str(row, "date"), AppName: m.str(row, "app"), SubscriptionName: m.str(row, "name"),
-			SubscriptionID: m.str(row, "id"), OfferType: m.str(row, "offer"), Country: m.str(row, "country"),
+			EventDate: m.str(row, "date"), AppName: m.str(row, "app"), AppAppleID: m.str(row, "appid"),
+			SubscriptionName: m.str(row, "name"),
+			SubscriptionID:   m.str(row, "id"), OfferType: m.str(row, "offer"), Country: m.str(row, "country"),
 			CustomerCurrency: m.str(row, "ccur"), ProceedsCurrency: m.str(row, "pcur"),
 			SubscriberID: m.str(row, "subscriber"), Refund: strings.EqualFold(m.str(row, "refund"), "yes"),
 		}
@@ -351,9 +356,6 @@ type FinanceRow struct {
 	SalesOrReturn        string
 	CustomerPrice        *big.Rat
 	CustomerCurrency     string
-	// ExchangeRate converts PartnerShareCurrency to USD (USD = amount × rate);
-	// nil when the file has no rate for this row.
-	ExchangeRate *big.Rat
 }
 
 // FinanceRows maps a FINANCIAL or FINANCE_DETAIL table to typed rows.
@@ -373,7 +375,6 @@ func FinanceRows(t *Table) ([]FinanceRow, error) {
 		{"sor", []string{"Sales or Return", "Sale or Return"}, false},
 		{"price", []string{"Customer Price"}, false},
 		{"ccur", []string{"Customer Currency"}, false},
-		{"fx", []string{"Exchange Rate", "FX Rate"}, false},
 	})
 	if err != nil {
 		return nil, err
@@ -397,11 +398,6 @@ func FinanceRows(t *Table) ([]FinanceRow, error) {
 		}
 		if r.CustomerPrice, err = m.amount(row, "price", i+1); err != nil {
 			return nil, err
-		}
-		if s := m.str(row, "fx"); s != "" {
-			if r.ExchangeRate, err = m.amount(row, "fx", i+1); err != nil {
-				return nil, err
-			}
 		}
 		out = append(out, r)
 	}

@@ -2,7 +2,6 @@ package reviews
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -40,7 +39,7 @@ type replyOutcome struct {
 	Status     string `json:"status"` // replied | replaced | failed
 	ResponseID string `json:"response_id,omitempty"`
 	State      string `json:"state,omitempty"`
-	Deleted    string `json:"deleted_response_id,omitempty"`
+	Replaced   string `json:"replaced_response_id,omitempty"`
 	Error      any    `json:"error,omitempty"`
 }
 
@@ -120,7 +119,7 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 	irreversible := []string{"replies are public on the App Store immediately after Apple processes them"}
 	if replacing > 0 {
 		summary += fmt.Sprintf(" (%d replace existing responses)", replacing)
-		irreversible = append(irreversible, "replaced responses are deleted first and cannot be restored")
+		irreversible = append(irreversible, "a replaced response's old text cannot be restored (Apple swaps it in one request; nothing is deleted first)")
 	}
 	wctx, gate := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
 		Summary: summary, Intended: previews, Affected: affected, Irreversible: irreversible, Untrusted: untrusted,
@@ -162,20 +161,12 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 	return res, nil
 }
 
-// postReply replaces (DELETE then POST) or creates the response of one review.
+// postReply creates the response of one review. Apple's POST
+// customerReviewResponses creates or replaces the developer response in one
+// request, so an edit never deletes first and can't leave the review without
+// a reply when the POST fails.
 func postReply(ctx context.Context, env *tool.Env, rv reviewOut, body string) replyOutcome {
 	out := replyOutcome{ReviewID: rv.ID, Status: "replied"}
-	if rv.Response != nil {
-		_, err := env.ASC.Do(ctx, tool.Request{
-			Method: http.MethodDelete, Path: "/v1/customerReviewResponses/" + rv.Response.ID, Write: true,
-		})
-		var apiErr *tool.APIError
-		if err != nil && (!errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound) {
-			out.Status, out.Error = "failed", tool.BodyFor(fmt.Errorf("delete existing response %s: %w", rv.Response.ID, err))
-			return out
-		}
-		out.Status, out.Deleted = "replaced", rv.Response.ID
-	}
 	resp, err := env.ASC.Do(ctx, tool.Request{
 		Method: http.MethodPost, Path: "/v1/customerReviewResponses", Write: true,
 		Body: map[string]any{"data": map[string]any{
@@ -188,11 +179,14 @@ func postReply(ctx context.Context, env *tool.Env, rv reviewOut, body string) re
 	})
 	if err != nil {
 		msg := "post reply"
-		if out.Deleted != "" {
-			msg = "existing response was deleted but the new reply was not posted"
+		if rv.Response != nil {
+			msg = "replace reply (the existing response " + rv.Response.ID + " is unchanged unless Apple applied it; check reviews_list)"
 		}
 		out.Status, out.Error = "failed", tool.BodyFor(fmt.Errorf("%s: %w", msg, err))
 		return out
+	}
+	if rv.Response != nil {
+		out.Status, out.Replaced = "replaced", rv.Response.ID
 	}
 	if r, ok := resp.First(); ok {
 		out.ResponseID, out.State = r.ID, r.Str("state")

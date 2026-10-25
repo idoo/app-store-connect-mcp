@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/idoo/hamn/internal/reports"
 	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
@@ -91,7 +92,7 @@ func TestSalesReportThisWeek(t *testing.T) {
 		t.Errorf("proceeds = %s", s)
 	}
 	if _, ok := got["proceeds_estimate_usd"]; ok {
-		t.Error("USD estimate without with_usd_estimate")
+		t.Error("USD estimate present")
 	}
 	groups := got["groups"].([]any)
 	if len(groups) != 2 || tooltest.JSON(t, groups[0]) != `{"key":{"app":"com.other.app"},"proceeds":{"USD":"0.00"},"units":{"download":100}}` ||
@@ -113,11 +114,10 @@ func TestSalesReportThisWeek(t *testing.T) {
 	}
 }
 
-func TestSalesReportAppFilterAndUSDEstimate(t *testing.T) {
+func TestSalesReportAppFilter(t *testing.T) {
 	k := thisWeekKit(t)
-	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-09", "finance_detail_fx.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env,
-		`{"period":"this_week","app":"Example Notes","with_usd_estimate":true}`))
+		`{"period":"this_week","app":"Example Notes"}`))
 	got := tooltest.Decode[map[string]any](t, res)
 	if s := tooltest.JSON(t, got["units"]); s != `{"download":20,"iap":8,"redownload":4,"subscription":7,"update":30}` {
 		t.Errorf("units = %s (other app must be filtered out, IAPs kept via parent SKU)", s)
@@ -125,26 +125,44 @@ func TestSalesReportAppFilterAndUSDEstimate(t *testing.T) {
 	if id := got["app"].(map[string]any)["id"]; id != "1000000001" {
 		t.Errorf("app = %v", id)
 	}
-	// 19.54 USD + 3.88 EUR × 1.10 + 420 JPY × 0.0067 = 26.622
-	if s := tooltest.JSON(t, got["proceeds_estimate_usd"]); s != `{"amount":"26.62","fx_source":"Apple exchange rates, finance detail report","fx_source_month":"2026-09","label":"estimate"}` {
-		t.Errorf("proceeds_estimate_usd = %s", s)
+	if n := len(k.ASC.RequestsTo(http.MethodGet, "/v1/financeReports")); n != 0 {
+		t.Errorf("sales_report fetched %d finance reports", n)
 	}
-	fin := k.ASC.RequestsTo(http.MethodGet, "/v1/financeReports")
-	if len(fin) != 1 || fin[0].Query.Get("filter[reportType]") != "FINANCE_DETAIL" || fin[0].Query.Get("filter[regionCode]") != "Z1" {
-		t.Errorf("finance requests = %+v", fin)
-	}
+	// The USD estimate (built on an exchange-rate column Apple's reports do
+	// not have) is gone; the argument is rejected, not silently ignored.
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env,
+		`{"period":"this_week","with_usd_estimate":true}`), "invalid_arguments")
 }
 
-func TestSalesReportUSDEstimateMissingRate(t *testing.T) {
-	k := thisWeekKit(t)
-	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-09", "financial_no_fx.tsv")
-	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"this_week","with_usd_estimate":true}`))
-	got := tooltest.Decode[map[string]any](t, res)
-	if _, ok := got["proceeds_estimate_usd"]; ok {
-		t.Error("estimate must not be guessed without rates")
+// Subscription event and subscriber rows match the app by App Apple ID, so a
+// renamed app keeps its rows; the name is only a fallback without that column.
+func TestSubscriptionRowsMatchByAppAppleID(t *testing.T) {
+	app := &tool.App{ID: "1000000001", Name: "Example Notes"}
+	cases := []struct {
+		id, name string
+		want     bool
+	}{
+		{"1000000001", "Old Name Before Rename", true},
+		{"2000000001", "Example Notes", false},
+		{"", "example notes", true},
+		{"", "Other App", false},
 	}
-	if w := strings.Join(res.Meta.Warnings, ";"); !strings.Contains(w, "EUR, JPY") {
-		t.Errorf("warnings = %q", w)
+	for _, c := range cases {
+		if got := subscriptionRowMatches(c.id, c.name, app); got != c.want {
+			t.Errorf("match(%q, %q) = %v, want %v", c.id, c.name, got, c.want)
+		}
+	}
+	tab, err := reports.Decode(strings.NewReader("Event Date\tEvent\tApp Name\tApp Apple ID\tQuantity\n"+
+		"2026-10-19\tRefund\tOld Name\t1000000001\t2\n2026-10-19\tRefund\tExample Notes\t2000000001\t5\n"), reports.Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out salesOut
+	if err := subscriptionEvents(&out, []dayTable{{Date: "2026-10-19", Table: tab}}, app); err != nil {
+		t.Fatal(err)
+	}
+	if out.Rows != 1 || out.Events.Refunds != 2 {
+		t.Errorf("rows = %d events = %+v", out.Rows, out.Events)
 	}
 }
 
@@ -154,6 +172,10 @@ func TestSalesReportVendorMissing(t *testing.T) {
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_missing")
 	if !strings.Contains(body.Hint, "hamn auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
 		t.Errorf("body = %+v", body)
+	}
+	// Env-configured users get the command that works for them.
+	if h := tool.BodyFor(vendorNumberMissing("env")).Hint; !strings.Contains(h, "hamn auth set env vendor_number=<number>") {
+		t.Errorf("env hint = %q", h)
 	}
 	if n := len(k.ASC.Requests()); n != 0 {
 		t.Errorf("requests = %d", n)
@@ -200,17 +222,24 @@ func TestSalesReportNon404IsError(t *testing.T) {
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "api_error")
 }
 
-func TestFinanceReportWithFX(t *testing.T) {
+func TestFinanceReportPerCurrencyOnly(t *testing.T) {
 	k := reportsKit(t)
-	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-09", "finance_detail_fx.tsv")
+	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-09", "finance_detail.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"report_type":"FINANCE_DETAIL"}`))
 	got := tooltest.Decode[map[string]any](t, res)
-	// 1.38 × 1.10 + 420 × 0.0067 + 27.90 = 32.232
-	if got["status"] != "available" || got["total_usd"] != "32.23" || got["region"] != "Z1" || got["month"] != "2026-09" {
+	if got["status"] != "available" || got["region"] != "Z1" || got["month"] != "2026-09" || got["units"] != 13.0 {
 		t.Errorf("got = %s", tooltest.JSON(t, got))
 	}
-	if s := tooltest.JSON(t, got["fx_rates_to_usd"]); s != `{"EUR":"1.100000","JPY":"0.006700","USD":"1.000000"}` {
-		t.Errorf("fx = %s", s)
+	for _, k := range []string{"total_usd", "fx_rates_to_usd", "missing_rates", "total_usd_source"} {
+		if _, ok := got[k]; ok {
+			t.Errorf("%s present: Apple's finance reports have no exchange rates", k)
+		}
+	}
+	if note, _ := got["note"].(string); !strings.Contains(note, "Payments page") {
+		t.Errorf("note = %q", note)
+	}
+	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"420","currency":"JPY"},{"amount":"27.90","currency":"USD"},{"amount":"1.38","currency":"EUR"}]` {
+		t.Errorf("proceeds = %s", s)
 	}
 	r := k.ASC.Requests()[0].Query
 	if r.Get("filter[reportType]") != "FINANCE_DETAIL" || r.Get("filter[vendorNumber]") != "12345678" {
@@ -218,22 +247,38 @@ func TestFinanceReportWithFX(t *testing.T) {
 	}
 }
 
-func TestFinanceReportWithoutFX(t *testing.T) {
+func TestFinanceReportExplicitMonth(t *testing.T) {
 	k := reportsKit(t)
-	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial_no_fx.tsv")
+	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`))
 	got := tooltest.Decode[map[string]any](t, res)
-	if _, ok := got["total_usd"]; ok {
-		t.Errorf("total_usd guessed: %v", got["total_usd"])
-	}
-	if s := tooltest.JSON(t, got["missing_rates"]); s != `["EUR","JPY"]` {
-		t.Errorf("missing_rates = %s", s)
-	}
 	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"420","currency":"JPY"},{"amount":"27.21","currency":"USD"},{"amount":"1.38","currency":"EUR"}]` {
 		t.Errorf("proceeds = %s", s)
 	}
 	if got["region"] != "ZZ" || got["report_type"] != "FINANCIAL" {
 		t.Errorf("defaults = %s", tooltest.JSON(t, got))
+	}
+	if n := len(k.ASC.Requests()); n != 1 {
+		t.Errorf("requests = %d, an explicit month is fetched once", n)
+	}
+}
+
+// Without a month, the newest closed month is tried first and, when Apple
+// has not published it yet, the month before: at most two calls.
+func TestFinanceReportDefaultMonthFallsBack(t *testing.T) {
+	k := reportsKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/financeReports?filter[reportDate]=2026-09", http.StatusNotFound, notFound)
+	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial.tsv")
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, ``))
+	got := tooltest.Decode[map[string]any](t, res)
+	if got["status"] != "available" || got["month"] != "2026-08" {
+		t.Errorf("got = %s", tooltest.JSON(t, got))
+	}
+	if w := strings.Join(res.Meta.Warnings, ";"); !strings.Contains(w, "2026-09 is not published yet") {
+		t.Errorf("warnings = %q", w)
+	}
+	if n := len(k.ASC.Requests()); n != 2 {
+		t.Errorf("requests = %d, want 2", n)
 	}
 }
 
@@ -242,10 +287,13 @@ func TestFinanceReportPending(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/financeReports", http.StatusNotFound, notFound)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, ``))
 	got := tooltest.Decode[map[string]any](t, res)
-	if got["status"] != "pending" || got["explanation"] == "" {
+	if got["status"] != "pending" || got["month"] != "2026-08" || !strings.Contains(got["explanation"].(string), "2026-09 or 2026-08") {
 		t.Errorf("got = %s", tooltest.JSON(t, got))
 	}
-	if len(res.Next) != 1 || res.Next[0].Args["month"] != "2026-08" {
+	if len(res.Next) != 1 || res.Next[0].Args["month"] != "2026-07" {
 		t.Errorf("next = %+v", res.Next)
+	}
+	if n := len(k.ASC.Requests()); n != 2 {
+		t.Errorf("requests = %d, want 2", n)
 	}
 }
