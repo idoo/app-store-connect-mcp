@@ -26,13 +26,24 @@ import (
 
 const testIssuer = "57246542-96fe-1a63-e053-0824d011072a"
 
+// setHome points every per-OS home and config location at home: HOME and
+// XDG_CONFIG_HOME on unix; USERPROFILE (os.UserHomeDir) and AppData /
+// LocalAppData (config and state dirs) on Windows.
+func setHome(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("APPDATA", filepath.Join(home, ".config"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, ".local", "state"))
+}
+
 // sandbox isolates HOME, the config dir and ASC_* variables; it returns HOME
 // and the config path.
 func sandbox(t *testing.T) (string, string) {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	setHome(t, home)
 	for _, k := range []string{
 		config.EnvKeyID, config.EnvIssuerID, config.EnvKeyKind, config.EnvKeyPath, config.EnvKey, config.EnvVendorNumber,
 		config.FastlaneKeyID, config.FastlaneIssuerID, config.FastlaneKeyPath, config.FastlaneKey,

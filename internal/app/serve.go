@@ -49,6 +49,9 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	if err != nil {
 		return err
 	}
+	if pf, ok := env.Files.(*ProjectFiles); ok {
+		defer func() { _ = pf.Close() }()
+	}
 	if _, none := env.ASC.(noCredentialsASC); none {
 		logger.Warn(ErrNoProfile.Error())
 	}

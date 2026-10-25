@@ -12,7 +12,27 @@ import (
 	"github.com/idoo/hamn/internal/tool"
 )
 
-func fileURI(p string) string { return (&url.URL{Scheme: "file", Path: filepath.ToSlash(p)}).String() }
+// fileURI returns the file:// URI for p: file:///C:/x on Windows (the drive
+// is part of the path, not the host), file:///x elsewhere.
+func fileURI(p string) string {
+	s := filepath.ToSlash(p)
+	if !strings.HasPrefix(s, "/") {
+		s = "/" + s
+	}
+	return (&url.URL{Scheme: "file", Path: s}).String()
+}
+
+// newProjectFiles is NewProjectFiles that closes its roots at cleanup, before
+// the temp dirs go (Windows cannot delete a directory with an open handle).
+func newProjectFiles(t *testing.T, explicit, cwd, home string) *ProjectFiles {
+	t.Helper()
+	pf, err := NewProjectFiles(explicit, cwd, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pf.Close() })
+	return pf
+}
 
 func mkdir(t *testing.T, parts ...string) string {
 	t.Helper()
@@ -36,11 +56,8 @@ func TestProjectFilesRefusesHomeAndDiskRoot(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			pf, err := NewProjectFiles("", tc.cwd, home)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = pf.ReadFile("x.txt")
+			pf := newProjectFiles(t, "", tc.cwd, home)
+			_, err := pf.ReadFile("x.txt")
 			if got := errors.Is(err, tool.ErrUnavailable); got != tc.refused {
 				t.Fatalf("ReadFile err = %v, refused = %v, want %v", err, got, tc.refused)
 			}
@@ -63,10 +80,7 @@ func TestProjectFilesExplicitRootWins(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An explicit --root is honoured even when it is home, and beats client roots.
-	pf, err := NewProjectFiles(home, string(filepath.Separator), home)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pf := newProjectFiles(t, home, string(filepath.Separator), home)
 	f, err := pf.ForRoots([]string{fileURI(mkdir(t, t.TempDir(), "client"))})
 	if err != nil {
 		t.Fatal(err)
@@ -90,10 +104,7 @@ func TestProjectFilesClientRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 	// cwd is home (refused by default), but the client names a project root.
-	pf, err := NewProjectFiles("", home, home)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pf := newProjectFiles(t, "", home, home)
 	f, err := pf.ForRoots([]string{"https://example.com/x", fileURI(filepath.Join(base, "missing")), fileURI(proj)})
 	if err != nil {
 		t.Fatalf("ForRoots: %v", err)
