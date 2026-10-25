@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. hamn is small on purpose, so a short issue before a big PR saves us both time.
+Thanks for helping. Hamn is small on purpose, so open a short issue before a big PR.
 
 ## Setup
 

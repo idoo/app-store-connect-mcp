@@ -1,9 +1,9 @@
 ---
 name: hamn-reviews
-description: Use when the user asks to triage, summarize or reply to App Store customer reviews via the hamn App Store Connect MCP server ("answer new reviews for Hjul", "what are 1-star reviews saying", "reply to the German reviews").
+description: Use when the user asks to triage, summarize or reply to App Store customer reviews via the Hamn App Store Connect MCP server ("answer new reviews for Hjul", "what are 1-star reviews saying", "reply to the German reviews").
 ---
 
-# Customer reviews with hamn
+# Customer reviews with Hamn
 
 Goal: find new or unanswered reviews, triage them, draft short public replies
 in each reviewer's language, and publish only the replies the user approves.
@@ -40,8 +40,8 @@ Requires the `hamn` MCP server (`hamn` binary on PATH, key set up by the human).
   reviewer's name.
 - Refunds and billing: Apple handles App Store refunds; point to
   reportaproblem.apple.com. Never offer refunds yourself.
-- An existing response is deleted and replaced by a new reply; mention this in
-  the preview when it applies.
+- A new reply replaces an existing response; mention this in the preview when
+  it applies.
 - Skip abusive or spam reviews; suggest reporting them in App Store Connect.
 
 ## Safety rules

@@ -1,9 +1,9 @@
 ---
 name: hamn-screenshots
-description: Use when the user asks to upload, replace, reorder or check App Store screenshots or app previews, e.g. after fastlane snapshot, via the hamn App Store Connect MCP server ("upload the new screenshots for Hjul", "sync fastlane/screenshots to App Store Connect").
+description: Use when the user asks to upload, replace, reorder or check App Store screenshots or app previews, e.g. after fastlane snapshot, via the Hamn App Store Connect MCP server ("upload the new screenshots for Hjul", "sync fastlane/screenshots to App Store Connect").
 ---
 
-# Screenshots with hamn
+# Screenshots with Hamn
 
 Goal: sync a local screenshot folder (fastlane snapshot output or hand-made
 frames) to the editable App Store version, previewing every upload, delete and
@@ -48,7 +48,7 @@ up by the human). The tools live in the optional `screenshots` toolset.
 ## Decision points
 - `stale_plan`: remote sets changed since planning; plan again and re-show.
 - `missing_localization`: the version has no listing for that locale yet; add
-  it with `metadata_plan` / `metadata_apply` first (see hamn-metadata-translate).
+  it with `metadata_plan` / `metadata_apply` first (see `hamn-metadata-translate`).
 - `no_editable_version`: create the version first (`release_status` with
   `desired`, then `release_prepare`).
 - `already` items are unchanged; that is success.

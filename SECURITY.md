@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-hamn is young. Security fixes go into the latest release only; please upgrade before reporting.
+Hamn is young. Security fixes go into the latest release only, so please upgrade before reporting.
 
 | Version | Supported |
 |---|---|
@@ -26,15 +26,15 @@ I'm one person, so expect an acknowledgement within a few days and a fix or a pl
 
 ## Out of scope
 
-- A model following injected instructions *and* a human approving the result. hamn reduces this risk; it can't remove it. See [docs/SAFETY.md](docs/SAFETY.md).
+- A model following injected instructions *and* a human approving the result. Hamn reduces this risk but can't remove it. See [docs/SAFETY.md](docs/SAFETY.md).
 - Configurations that turn safety off on purpose: auto-approving every tool, `allow_no_elicit`, `--no-confirm` with `HAMN_CI=1`.
 - Other processes running as your user reading your keychain or key files.
 - Apple's API behavior and permissions.
 
-## How hamn handles keys
+## How Hamn handles keys
 
 - Keys are read from a file path, an environment variable or the OS keychain. The config file stores paths or keychain references, never key material.
 - Only the `hamn auth` CLI can add or change credentials. No MCP tool accepts, returns or edits them.
 - JWTs are signed locally, cached in memory per profile for at most 19 minutes and only sent to `api.appstoreconnect.apple.com`.
 - JWTs, PEM blocks, `Authorization` headers and signed URL queries are redacted from results, errors and logs.
-- hamn has no telemetry. It talks to `api.appstoreconnect.apple.com` (with the JWT), to the presigned upload and report URLs Apple returns (without auth, under the URL policy in [docs/SAFETY.md](docs/SAFETY.md)), and to the public iTunes Search API for `store_lookup`. `hamn auth add`/`import` make one `GET /v1/apps?limit=1` to check the key before saving, and `hamn config install claude-code` runs your local `claude` CLI.
+- Hamn has no telemetry. It talks to `api.appstoreconnect.apple.com` (with the JWT), to the presigned upload and report URLs Apple returns (without auth, under the URL policy in [docs/SAFETY.md](docs/SAFETY.md)), and to the public iTunes Search API for `store_lookup`. `hamn auth add`/`import` make one `GET /v1/apps?limit=1` to check the key before saving, and `hamn config install claude-code` runs your local `claude` CLI.

@@ -1,6 +1,6 @@
 # Architecture
 
-hamn is one Go binary with no runtime dependencies. It uses the official MCP Go SDK, the standard library for HTTP, JWTs and money, and a pinned index of Apple's OpenAPI spec. Every tool is declared once in a registry, and the server, the docs and the tests all read from that registry.
+Hamn is one Go binary with no runtime dependencies. It uses the official MCP Go SDK, the standard library for HTTP, JWTs and money, and a pinned index of Apple's OpenAPI spec. Every tool is declared once in a registry, and the server, the docs and the tests all read from it.
 
 ## Package map
 
