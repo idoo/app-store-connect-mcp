@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# Release pipeline: see .github/workflows/release.yml. Local dry run:
-#   goreleaser release --snapshot --clean --skip=publish,sign
+# Local dry run:
+#   goreleaser release --snapshot --clean --skip=publish,sign,docker
 version: 2
 
 project_name: hamn
@@ -55,6 +55,18 @@ sboms:
     documents:
       - "${artifact}.spdx.json"
 
+# Keyless cosign (GitHub OIDC) over checksums.txt; the bundle covers every
+# archive through its sha256. Verify:
+#   cosign verify-blob --bundle checksums.txt.sigstore.json \
+#     --certificate-identity-regexp '^https://github.com/idoo/hamn/.github/workflows/release.yml@refs/tags/v' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
+
 # HTTP-mode image (`hamn serve --http`), distroless static, multi-arch.
 dockers_v2:
   - id: hamn
@@ -108,10 +120,16 @@ release:
     owner: idoo
     name: hamn
   prerelease: auto
-  mode: replace
+  # Immutable releases: goreleaser only creates a draft; release.yml adds the
+  # .mcpb, tools.json and attestations, then publishes it as the last step.
+  draft: true
+  replace_existing_draft: false
+  mode: keep-existing
   footer: |
     **Install:** `brew install idoo/tap/hamn`, `curl -fsSL https://raw.githubusercontent.com/idoo/hamn/main/install.sh | sh`,
     `go install github.com/idoo/hamn/cmd/hamn@{{ .Tag }}`, `docker pull ghcr.io/idoo/hamn:{{ .Version }}`,
     or `hamn-{{ .Version }}.mcpb` for Claude Desktop.
 
-    **Verify:** `gh attestation verify hamn_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/hamn`
+    **Verify:** `gh attestation verify hamn_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/hamn`, or
+    `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity-regexp '^https://github.com/idoo/hamn/.github/workflows/release.yml@refs/tags/v' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
+    The .mcpb is listed in `hamn-{{ .Version }}.mcpb.sha256`.

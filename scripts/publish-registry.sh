@@ -8,7 +8,10 @@ set -eu
 [ $# -eq 2 ] || { echo "usage: $0 <version> <mcpb-sha256>" >&2; exit 2; }
 version=${1#v}
 sha=$2
-publisher_version=${PUBLISHER_VERSION:-1.8.4}
+# Pinned publisher; bump both lines together (sha256 of
+# mcp-publisher_linux_amd64.tar.gz from the registry release's checksums file).
+publisher_version=1.8.4
+publisher_sha256=5dc2fd415369c73551259f31cd33e2aacc9e0d1021e7f08fef1492d93b781628
 
 desc_len=$(jq -r '.description | length' server.json)
 [ "$desc_len" -le 100 ] || { echo "publish-registry: server.json description is $desc_len chars (max 100)" >&2; exit 1; }
@@ -26,7 +29,10 @@ jq --arg v "$version" --arg sha "$sha" '
 mv server.release.json server.json
 
 tmp=$(mktemp -d)
-curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v${publisher_version}/mcp-publisher_linux_amd64.tar.gz" |
-	tar -xz -C "$tmp" mcp-publisher
+trap 'rm -rf "$tmp"' EXIT INT TERM
+curl -fsSL -o "$tmp/publisher.tar.gz" \
+	"https://github.com/modelcontextprotocol/registry/releases/download/v${publisher_version}/mcp-publisher_linux_amd64.tar.gz"
+echo "$publisher_sha256  $tmp/publisher.tar.gz" | sha256sum -c - >&2
+tar -xzf "$tmp/publisher.tar.gz" -C "$tmp" mcp-publisher
 "$tmp/mcp-publisher" login github-oidc
 "$tmp/mcp-publisher" publish
