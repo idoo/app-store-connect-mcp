@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -144,7 +145,8 @@ func TestInstallJSONBacksUp(t *testing.T) {
 	if doc.MCPServers["other"].Command != "x" || doc.MCPServers["hamn"].Command != fakeBin || doc.MCPServers["hamn"].Env["HAMN_PROFILE"] != "work" {
 		t.Errorf("merged = %s", b)
 	}
-	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+	// Windows reports 0666 for any writable file; POSIX modes only.
+	if fi, _ := os.Stat(path); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, want 0600 kept", fi.Mode().Perm())
 	}
 }

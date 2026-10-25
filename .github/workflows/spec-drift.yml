@@ -52,14 +52,17 @@ jobs:
           path: spec-zip/spec.zip
           retention-days: 7
 
+  # Runs Apple's spec through the generator and the test suite with a
+  # read-only token; only the resulting files move on to open-pr.
   regenerate:
     needs: detect
     if: needs.detect.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      actions: write
+      contents: read
+    outputs:
+      gen: ${{ steps.gen.outcome }}
+      test: ${{ steps.test.outcome || 'skipped' }}
     env:
       SPEC_SHA: ${{ needs.detect.outputs.sha }}
     steps:
@@ -74,8 +77,6 @@ jobs:
         with:
           name: spec-zip
           path: spec-zip
-      - name: Snapshot old operations
-        run: gunzip -c internal/spec/index.json.gz | jq -r '.ops[] | "\(.m) \(.p) \(.id)"' | sort > /tmp/ops-old.txt
       - name: Regenerate index
         id: gen
         run: |
@@ -94,6 +95,43 @@ jobs:
         if: steps.gen.outcome == 'success'
         run: go test ./... 2>&1 | tee /tmp/test.log
         continue-on-error: true
+      - name: Collect output
+        if: always()
+        run: |
+          mkdir -p drift-out
+          cp -r internal/spec docs drift-out/
+          cp /tmp/gen.log drift-out/gen.log 2>/dev/null || echo "generator did not run" > drift-out/gen.log
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: drift-out
+          path: drift-out
+          retention-days: 7
+
+  # Holds the write token but runs no repository code: it commits the files
+  # regenerate produced and opens the PR.
+  open-pr:
+    needs: [detect, regenerate]
+    if: always() && needs.detect.outputs.changed == 'true' && needs.regenerate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      # `gh workflow run ci.yml`: PRs opened with GITHUB_TOKEN do not
+      # trigger pull_request runs, so CI is dispatched on the branch.
+      actions: write
+    env:
+      SPEC_SHA: ${{ needs.detect.outputs.sha }}
+      GEN: ${{ needs.regenerate.outputs.gen }}
+      TEST: ${{ needs.regenerate.outputs.test }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: drift-out
+          path: /tmp/drift-out
       - name: Open PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,14 +140,18 @@ jobs:
           if gh pr list --head "$branch" --state open --json number --jq '.[0].number' | grep -q .; then
             echo "PR for $branch already open"; exit 0
           fi
+          gunzip -c internal/spec/index.json.gz | jq -r '.ops[] | "\(.m) \(.p) \(.id)"' | sort > /tmp/ops-old.txt
+          rm -rf internal/spec docs
+          cp -r /tmp/drift-out/spec internal/spec
+          cp -r /tmp/drift-out/docs docs
           gunzip -c internal/spec/index.json.gz | jq -r '.ops[] | "\(.m) \(.p) \(.id)"' | sort > /tmp/ops-new.txt || true
-          added=$(comm -13 <(sort /tmp/ops-old.txt) <(sort /tmp/ops-new.txt) || true)
-          removed=$(comm -23 <(sort /tmp/ops-old.txt) <(sort /tmp/ops-new.txt) || true)
+          added=$(comm -13 /tmp/ops-old.txt /tmp/ops-new.txt || true)
+          removed=$(comm -23 /tmp/ops-old.txt /tmp/ops-new.txt || true)
           {
             echo "Apple's App Store Connect OpenAPI spec changed (zip sha256 \`$SPEC_SHA\`)."
             echo
-            echo "- generator: **${{ steps.gen.outcome }}**"
-            echo "- tests: **${{ steps.test.outcome || 'skipped' }}**"
+            echo "- generator: **${GEN}**"
+            echo "- tests: **${TEST}**"
             echo
             echo "Classify any new non-GET operation in \`internal/spec/ops_class.json\` before merging."
             echo
@@ -120,7 +162,7 @@ jobs:
             echo; echo '```'; printf '%s\n' "$removed"; echo '```'; echo "</details>"
             echo
             echo "<details><summary>Generator log</summary>"
-            echo; echo '```'; tail -n 80 /tmp/gen.log; echo '```'; echo "</details>"
+            echo; echo '```'; tail -n 80 /tmp/drift-out/gen.log; echo '```'; echo "</details>"
           } > /tmp/body.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -132,10 +174,9 @@ jobs:
           gh pr create --base main --head "$branch" \
             --title "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" \
             --body-file /tmp/body.md
-          # PRs created with GITHUB_TOKEN do not trigger pull_request runs.
           gh workflow run ci.yml --ref "$branch"
       - name: Fail when regeneration or tests failed
-        if: steps.gen.outcome != 'success' || steps.test.outcome == 'failure'
+        if: env.GEN != 'success' || env.TEST == 'failure'
         run: |
-          echo "::error::spec drift needs attention: generator=${{ steps.gen.outcome }} tests=${{ steps.test.outcome }}"
+          echo "::error::spec drift needs attention: generator=${GEN} tests=${TEST}"
           exit 1

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -45,6 +46,9 @@ func TestFilesConfinement(t *testing.T) {
 		"outdir/newfile.txt",
 		"/etc/passwd",
 	} {
+		if p == "/etc/passwd" && runtime.GOOS == "windows" {
+			continue // drive-less, so not absolute on Windows: it resolves inside the root.
+		}
 		if _, err := f.Resolve(p); !errors.Is(err, ErrOutsideRoot) {
 			t.Errorf("Resolve(%q) err = %v, want ErrOutsideRoot", p, err)
 		}
@@ -87,7 +91,7 @@ func TestFilesWriteReadWalk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != 0o644 {
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o644 { // Windows reports 0666.
 		t.Errorf("perm = %v, want 0644", fi.Mode().Perm())
 	}
 	fh, err := f.Open("meta/en-US/name.txt")
