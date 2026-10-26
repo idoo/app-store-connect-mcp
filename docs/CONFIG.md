@@ -31,6 +31,7 @@ app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp
 | `--no-confirm` | Skip previews, only with `ASC_MCP_CI=1`. Human-approval tools still ask |
 | `--http ADDR` | Streamable HTTP instead of stdio |
 | `--allow-remote`, `--tls-cert`, `--tls-key` | Non-loopback HTTP, TLS required |
+| `--allow-origin ORIGIN` | Extra allowed browser `Origin` (exact `scheme://host[:port]`, repeatable), only with `--allow-remote` |
 | `--http-session-timeout`, `--http-max-sessions` | Defaults `30m` and `64` |
 | `--root DIR` | Where file tools may read and write |
 
@@ -45,8 +46,10 @@ app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp
 | `ASC_MCP_PROFILE`, `ASC_MCP_ALLOW_WRITES`, `ASC_MCP_TOOLSETS`, `ASC_MCP_DISCOVERY`, `ASC_MCP_ROOT` | Same as the flags |
 | `ASC_MCP_MAX_RESPONSE_BYTES` | Result cap, default `60000` (4096 to 10 MiB) |
 | `ASC_MCP_MAX_RETRIES` | Default `3` (0 to 10) |
-| `ASC_MCP_CI` | Required for `--no-confirm` |
+| `ASC_MCP_CI` | Required for `--no-confirm` and `ASC_MCP_ALLOW_NO_ELICIT` |
+| `ASC_MCP_ALLOW_NO_ELICIT` | Agent approves human gates; honoured only with `ASC_MCP_CI=1` (see [CI](#ci-github-actions)) |
 | `ASC_MCP_HTTP_TOKEN`, `ASC_MCP_HTTP_SESSION_TIMEOUT`, `ASC_MCP_HTTP_MAX_SESSIONS` | HTTP mode |
+| `ASC_MCP_HTTP_ALLOWED_ORIGINS` | Comma-separated `--allow-origin` values, only with `--allow-remote` |
 | `ASC_MCP_BASE_URL` | Loopback-only API override, for tests |
 
 fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `ASC_MCP_VERSION` and `ASC_MCP_INSTALL_DIR`.
@@ -118,3 +121,26 @@ File tools work inside one root: `--root`, `ASC_MCP_ROOT`, the client's first `f
 app-store-connect-mcp advertises MCP protocol versions up to `2025-11-25`, because newer ones forbid asking the user mid-call and that's how approvals work.
 
 Review and feedback cursors and upload resume files live in `~/.local/state/app-store-connect-mcp` (or `$XDG_STATE_HOME`, `%LocalAppData%` on Windows). Plans live in memory only.
+
+If the state directory can't be written, the server still starts: `mark_seen`, upload resume and digest and rank history fail with an "unavailable" error, everything else works, and `doctor` prints a `state dir … not writable` line.
+
+## CI (GitHub Actions)
+
+Runners are ephemeral, so use the `env` profile:
+
+```yaml
+env:
+  ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+  ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+  ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+  ASC_VENDOR_NUMBER: ${{ secrets.ASC_VENDOR_NUMBER }}
+  ASC_MCP_CI: "1"
+  ASC_MCP_ALLOW_NO_ELICIT: "1"   # only if the agent may approve human gates itself
+steps:
+  - run: app-store-connect-mcp doctor --json
+```
+
+- An empty `ASC_PRIVATE_KEY` counts as unset, usually because the secret isn't available to the job (forks, environments). `doctor` fails its profile line with "set but empty (missing CI secret?)".
+- `ASC_MCP_ALLOW_NO_ELICIT=1` lets human-approval tools run without an approval form, for any profile, but only together with `ASC_MCP_CI=1`. Otherwise it is ignored and `doctor` says so. Results still say `approved_by: "agent"`, and `doctor` prints `human gates: agent-approved (CI)`. A pin can't turn it on.
+- `--no-confirm` likewise needs `ASC_MCP_CI=1`.
+- `doctor --json` prints the same object as the `doctor` tool. The exit status is the same as in text mode: non-zero when a check fails.

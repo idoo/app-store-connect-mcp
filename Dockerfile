@@ -2,11 +2,12 @@
 #
 # stdio (default):  docker run -i --rm -e ASC_KEY_ID -e ASC_ISSUER_ID \
 #                     -e ASC_PRIVATE_KEY app-store-connect-mcp
-# Streamable HTTP:  docker run --rm -p 127.0.0.1:8765:8765 -e ASC_MCP_HTTP_TOKEN \
+# Streamable HTTP (TLS is required with --allow-remote; mount cert and key):
+#                   docker run --rm -p 8765:8765 -e ASC_MCP_HTTP_TOKEN \
 #                     -e ASC_KEY_ID -e ASC_ISSUER_ID -e ASC_PRIVATE_KEY \
-#                     app-store-connect-mcp serve --http 0.0.0.0:8765 --allow-remote
-# Publish the port on loopback only and put a TLS proxy in front of anything
-# reachable from another host; the bearer token is required either way.
+#                     -v "$PWD/tls:/tls:ro" app-store-connect-mcp serve --http 0.0.0.0:8765 \
+#                     --allow-remote --tls-cert /tls/cert.pem --tls-key /tls/key.pem
+# The bearer token is required either way; see docs/INSTALL.md.
 FROM golang:1.26.10@sha256:672c944cfd07599b5f1bb179869270cdc94c6254e41db4d431259693cb286b82 AS build
 WORKDIR /src
 COPY go.mod go.sum ./

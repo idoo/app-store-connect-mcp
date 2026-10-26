@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -155,7 +156,7 @@ func TestResolveProfileDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := tool.ProfileInfo{Name: "rw", KeyKind: tool.KeyIndividual, DefaultApp: "com.rw", AllowWrites: true, AllowNoElicit: true}
-	if got := r.Profile.Info(); got != want {
+	if got := r.Profile.Info(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Info() = %+v, want %+v", got, want)
 	}
 	if r.Profile.Key != (KeyRef{Source: KeyFromFile, Path: "/k/rw.p8", KeyID: "RW1"}) || len(r.Profile.Problems) != 0 {
@@ -335,5 +336,64 @@ func TestResolveLegacyConfigWarning(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestResolveAllowNoElicitNeedsCI(t *testing.T) {
+	creds := map[string]string{EnvKeyID: "ENV1", EnvIssuerID: "iss", EnvKeyPath: "/k/env.p8"}
+	for _, tt := range []struct {
+		name        string
+		env         map[string]string
+		want        bool
+		wantProblem bool
+	}{
+		{"ci unset, env unset", nil, false, false},
+		{"ci unset, env set", map[string]string{EnvAllowNoElicit: "1"}, false, true},
+		{"ci set, env unset", map[string]string{EnvCI: "1"}, false, false},
+		{"ci set, env set", map[string]string{EnvCI: "1", EnvAllowNoElicit: "1"}, true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			r, err := Resolve(Options{Getenv: envMap(merge(creds, tt.env)), ConfigPath: filepath.Join(home, "none.toml"), Cwd: home, Home: home})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.Profile.AllowNoElicit != tt.want || r.Profile.Info().AllowNoElicit != tt.want {
+				t.Errorf("AllowNoElicit = %v, want %v", r.Profile.AllowNoElicit, tt.want)
+			}
+			got := slices.ContainsFunc(r.Profile.Problems, func(p string) bool { return strings.Contains(p, EnvAllowNoElicit+" ignored") })
+			if got != tt.wantProblem {
+				t.Errorf("ignored problem = %v, want %v (%q)", got, tt.wantProblem, r.Profile.Problems)
+			}
+		})
+	}
+}
+
+func TestResolveEmptyInlineKey(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"empty", map[string]string{EnvKey: ""}, true},
+		{"blank", map[string]string{EnvKey: "  \n"}, true},
+		{"unset", nil, false},
+		{"empty but path set", map[string]string{EnvKey: "", EnvKeyPath: "/k/env.p8"}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			env := merge(map[string]string{EnvKeyID: "ENV1", EnvIssuerID: "iss"}, tt.env)
+			lookup := func(k string) (string, bool) { v, ok := env[k]; return v, ok }
+			r, err := Resolve(Options{Getenv: envMap(env), LookupEnv: lookup, ConfigPath: filepath.Join(home, "none.toml"), Cwd: home, Home: home})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := slices.Contains(r.Profile.Problems, ProblemEmptyKey); got != tt.want {
+				t.Errorf("empty-key problem = %v, want %v (%q)", got, tt.want, r.Profile.Problems)
+			}
+			if r.Profile.Key.Source == KeyFromEnv {
+				t.Errorf("empty %s used as key source", EnvKey)
+			}
+		})
 	}
 }

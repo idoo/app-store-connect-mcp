@@ -96,3 +96,11 @@ func (c *callFiles) WalkDir(root string, fn fs.WalkDirFunc) error {
 	}
 	return f.WalkDir(root, fn)
 }
+
+func (c *callFiles) Rename(oldPath, newPath string) error {
+	f, err := c.get()
+	if err != nil {
+		return err
+	}
+	return f.Rename(oldPath, newPath)
+}

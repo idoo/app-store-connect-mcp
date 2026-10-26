@@ -236,3 +236,23 @@ func (f *Files) WalkDir(root string, fn fs.WalkDirFunc) error {
 	}
 	return nil
 }
+
+// Rename moves a confined file to another confined path, creating the
+// destination's parent directories. Both sides are confined by the root.
+func (f *Files) Rename(oldPath, newPath string) error {
+	from, err := f.rel(oldPath)
+	if err != nil {
+		return err
+	}
+	to, err := f.rel(newPath)
+	if err != nil {
+		return err
+	}
+	if err := f.r.MkdirAll(filepath.Dir(to), 0o750); err != nil {
+		return fmt.Errorf("files: %w", err)
+	}
+	if err := f.r.Rename(from, to); err != nil {
+		return fmt.Errorf("files: rename %q: %w", oldPath, err)
+	}
+	return nil
+}

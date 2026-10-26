@@ -19,7 +19,7 @@ type publishIn struct {
 type phasedIn struct {
 	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform tool.Platform   `json:"platform,omitempty"`
-	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"default: newest version with a phased release"`
+	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"default: newest phased"`
 	Action   string          `json:"action"`
 	tool.ConfirmFlag
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/idoo/app-store-connect-mcp/internal/config"
 	"github.com/idoo/app-store-connect-mcp/internal/mcpserver"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // ServeOptions configures [Serve].
@@ -38,9 +39,6 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	for _, w := range r.Warnings {
 		logger.Warn(w)
 	}
-	for _, p := range r.Profile.Problems {
-		logger.Warn(p)
-	}
 	root := opts.Root
 	if root == "" {
 		root = os.Getenv("ASC_MCP_ROOT")
@@ -48,6 +46,10 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	env, err := newEnv(ctx, r, opts.Version, root)
 	if err != nil {
 		return err
+	}
+	// After newEnv, which may add a state-dir problem.
+	for _, p := range r.Profile.Problems {
+		logger.Warn(p)
 	}
 	if pf, ok := env.Files.(*ProjectFiles); ok {
 		defer func() { _ = pf.Close() }()
@@ -66,12 +68,14 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 		MaxResultBytes: r.MaxResponseBytes,
 	}
 	if opts.HTTPAddr == "" {
+		deps.Env.Transport = tool.TransportStdio
 		srv, err := mcpserver.Build(ctx, deps)
 		if err != nil {
 			return fmt.Errorf("app: build server: %w", err)
 		}
 		return mcpserver.RunStdio(ctx, srv)
 	}
+	deps.Env.Transport = tool.TransportHTTP
 	// Validate once up front so misconfiguration fails before listening.
 	if _, err := mcpserver.Build(ctx, deps); err != nil {
 		return fmt.Errorf("app: build server: %w", err)

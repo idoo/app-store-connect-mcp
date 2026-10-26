@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -46,6 +47,7 @@ func (s *session) env(ctx context.Context, req *mcp.CallToolRequest) *tool.Env {
 	e := s.deps.Env
 	e.Profile = s.profile()
 	e.Plans = s.plans
+	e.Artifacts = s.artifacts
 	e.Toolsets = s
 	e.Version = s.deps.Version
 	e.Progress = nil
@@ -144,6 +146,7 @@ func canElicit(ss *mcp.ServerSession) bool {
 // Result.Text), images follow, and everything is capped and redacted.
 func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 	s.markLocked(r)
+	full := r.Data
 	data, trunc, err := asc.CapResult(r.Data, s.deps.MaxResultBytes)
 	if err != nil {
 		r = tool.Fail(fmt.Errorf("%w: render result: %v", tool.ErrInternal, err))
@@ -151,6 +154,15 @@ func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 	}
 	if trunc != nil {
 		r.Meta.Truncated = trunc
+		if b, err := json.Marshal(full); err == nil && s.artifacts != nil {
+			if l, err := s.artifacts.Put(context.Background(), "full-result.json", "application/json", b); err == nil {
+				r.WithLink(l)
+			}
+		}
+	}
+	if next, omitted := capNext(r.Next, nextCapBytes); omitted {
+		r.Next = next
+		r.Meta.Warnings = append(r.Meta.Warnings, "large next[].args values were omitted; resend the same values you passed")
 	}
 	obj := map[string]any{"_meta": map[string]any{"app-store-connect-mcp": r.Meta}}
 	if data != nil {
@@ -177,6 +189,14 @@ func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 		StructuredContent: json.RawMessage(b),
 		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
 	}
+	for _, l := range r.Links {
+		rl := &mcp.ResourceLink{URI: l.URI, Name: l.Name, Title: l.Title, MIMEType: l.MIMEType}
+		if l.Size > 0 {
+			size := l.Size
+			rl.Size = &size
+		}
+		out.Content = append(out.Content, rl)
+	}
 	untrusted := 0
 	for _, img := range r.Images {
 		if img.Untrusted {
@@ -194,4 +214,48 @@ func (s *session) render(r *tool.Result) *mcp.CallToolResult {
 		out.Content = append(out.Content, &mcp.ImageContent{MIMEType: img.MIMEType, Data: img.Data})
 	}
 	return out
+}
+
+// Next-step caps: when next[] marshals over nextCapBytes, every single arg
+// value over nextArgCapBytes is replaced by nextOmitted.
+const (
+	nextCapBytes    = 4096
+	nextArgCapBytes = 1024
+)
+
+// nextOmitted replaces an oversized next[].args value.
+var nextOmitted = map[string]string{"_omitted": "resend the same value you passed"}
+
+// capNext bounds the size of follow-up suggestions, which the byte cap does
+// not cover: when next marshals over limit, each args value whose JSON is
+// over nextArgCapBytes is replaced by nextOmitted. It returns next unchanged
+// (and false) when nothing was omitted; the input is never mutated.
+func capNext(next []tool.NextStep, limit int) ([]tool.NextStep, bool) {
+	if len(next) == 0 {
+		return next, false
+	}
+	if b, err := json.Marshal(next); err == nil && len(b) <= limit {
+		return next, false
+	}
+	out := make([]tool.NextStep, len(next))
+	omitted := false
+	for i, n := range next {
+		out[i] = n
+		cloned := false
+		for k, v := range n.Args {
+			b, err := json.Marshal(v)
+			if err == nil && len(b) <= nextArgCapBytes {
+				continue
+			}
+			if !cloned {
+				out[i].Args, cloned = maps.Clone(n.Args), true
+			}
+			out[i].Args[k] = nextOmitted
+			omitted = true
+		}
+	}
+	if !omitted {
+		return next, false
+	}
+	return out, true
 }

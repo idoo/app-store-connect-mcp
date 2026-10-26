@@ -146,13 +146,9 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*too
 	if err != nil {
 		return nil, fmt.Errorf("app: spec: %w", err)
 	}
-	dir, err := state.DefaultDir()
-	if err != nil {
-		return nil, fmt.Errorf("app: state dir: %w", err)
-	}
-	store, err := state.New(dir)
-	if err != nil {
-		return nil, fmt.Errorf("app: state: %w", err)
+	store, _, problem := OpenState()
+	if problem != "" {
+		r.Profile.Problems = append(r.Profile.Problems, problem)
 	}
 	home, _ := os.UserHomeDir()
 	files, err := NewProjectFiles(root, cwd, home)
@@ -161,13 +157,17 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*too
 	}
 	env := &tool.Env{
 		Spec:      idx,
-		State:     store,
 		Fetch:     asc.NewFetcher(asc.FetchOptions{UserAgent: "app-store-connect-mcp/" + version}),
 		Files:     files,
 		Clock:     tool.SystemClock{},
 		Profile:   r.Profile.Info(),
 		Version:   version,
 		NoConfirm: r.NoConfirm && r.CI,
+	}
+	// A nil *state.Store must stay a nil interface so tool.Env installs its
+	// unavailable stand-in: cursor and resume use fail, everything else works.
+	if store != nil {
+		env.State = store
 	}
 	client, err := NewClient(ctx, r, version, idx)
 	switch {
@@ -182,4 +182,42 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*too
 		env.Resolve = resolve.New(client, resolve.Options{DefaultApp: r.Profile.DefaultApp, Clock: env.Clock})
 	}
 	return env, nil
+}
+
+// OpenState opens the state store in its default directory and checks that
+// the directory is writable. When it isn't, the store is nil and problem
+// explains which features are unavailable; the server still starts.
+func OpenState() (store *state.Store, dir, problem string) {
+	dir, err := state.DefaultDir()
+	if err != nil {
+		return nil, "", fmt.Sprintf("state dir: %v (mark_seen, upload resume, digest and rank history unavailable)", err)
+	}
+	if store, err = state.New(dir); err == nil {
+		err = probeWritable(dir)
+	}
+	if err != nil {
+		return nil, dir, StateDirProblem(dir)
+	}
+	return store, dir, ""
+}
+
+// StateDirProblem is the doctor and log line for an unwritable state dir.
+func StateDirProblem(dir string) string {
+	return "state dir " + dir + ": not writable (mark_seen, upload resume, digest and rank history unavailable)"
+}
+
+// probeWritable creates and removes a temporary file in dir.
+func probeWritable(dir string) error {
+	f, err := os.CreateTemp(dir, ".probe-*")
+	if err != nil {
+		return fmt.Errorf("app: state dir %s: %w", dir, err)
+	}
+	name := f.Name()
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("app: state dir %s: %w", dir, err)
+	}
+	if err := os.Remove(name); err != nil {
+		return fmt.Errorf("app: state dir %s: %w", dir, err)
+	}
+	return nil
 }

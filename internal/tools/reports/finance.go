@@ -13,9 +13,9 @@ import (
 )
 
 type financeIn struct {
-	Month      string `json:"month,omitempty" jsonschema:"Apple fiscal month YYYY-MM; default: newest published of the last two closed months"`
+	Month      string `json:"month,omitempty" jsonschema:"fiscal YYYY-MM; default newest closed"`
 	ReportType string `json:"report_type,omitempty" jsonschema:"default FINANCIAL"`
-	Region     string `json:"region,omitempty" jsonschema:"default ZZ (FINANCIAL) or Z1 (FINANCE_DETAIL)"`
+	Region     string `json:"region,omitempty" jsonschema:"default ZZ, or Z1 for detail"`
 	TopN       int    `json:"top_n,omitempty" jsonschema:"products kept, default 10, max 100"`
 }
 

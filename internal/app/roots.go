@@ -228,3 +228,12 @@ func (pf *ProjectFiles) WalkDir(root string, fn fs.WalkDirFunc) error {
 	}
 	return f.WalkDir(root, fn)
 }
+
+// Rename implements tool.Files over the default root.
+func (pf *ProjectFiles) Rename(oldPath, newPath string) error {
+	f, err := pf.base()
+	if err != nil {
+		return err
+	}
+	return f.Rename(oldPath, newPath)
+}

@@ -80,6 +80,12 @@ func doctor(ctx context.Context, env *tool.Env, _ doctorIn) (*tool.Result, error
 	add(specCheck(out.SpecVersion))
 	add(writesCheck(p.AllowWrites))
 	add(vendorCheck(p))
+	for _, msg := range p.Problems {
+		add(check{Name: "config", Status: statusWarn, Detail: msg})
+	}
+	if p.AllowNoElicit {
+		add(check{Name: "human_gates", Status: statusWarn, Detail: "human approval is off: the agent approves public, irreversible and money actions (allow_no_elicit)"})
+	}
 	root, files := filesCheck(env.Files)
 	out.FileRoot = root
 	add(files)
@@ -219,9 +225,13 @@ func vendorCheck(p tool.ProfileInfo) check {
 	if p.VendorNumber != "" {
 		return check{Name: "vendor_number", Status: statusOK, Detail: "vendor number set"}
 	}
+	fix := "set ASC_VENDOR_NUMBER or vendor_number in the profile (App Store Connect > Payments and Financial Reports)"
+	if p.Name == "env" {
+		fix = "set ASC_VENDOR_NUMBER (App Store Connect > Payments and Financial Reports)"
+	}
 	return check{
 		Name: "vendor_number", Status: statusWarn, Detail: "no vendor number: sales_report and finance_report cannot run",
-		Fix: "set ASC_VENDOR_NUMBER or vendor_number in the profile (App Store Connect > Payments and Financial Reports)",
+		Fix: fix,
 	}
 }
 

@@ -24,16 +24,16 @@ const (
 )
 
 type salesIn struct {
-	Period     string      `json:"period,omitempty" jsonschema:"preset in Pacific time; default yesterday"`
-	From       string      `json:"from,omitempty" jsonschema:"first day YYYY-MM-DD (with to)"`
-	To         string      `json:"to,omitempty" jsonschema:"last day YYYY-MM-DD, inclusive"`
-	Frequency  string      `json:"frequency,omitempty" jsonschema:"single report of this frequency (with report_date)"`
-	ReportDate string      `json:"report_date,omitempty" jsonschema:"DAILY YYYY-MM-DD, WEEKLY its Sunday, MONTHLY YYYY-MM, YEARLY YYYY"`
+	Period     string      `json:"period,omitempty" jsonschema:"Pacific time; default yesterday"`
+	From       string      `json:"from,omitempty" jsonschema:"YYYY-MM-DD (with to)"`
+	To         string      `json:"to,omitempty" jsonschema:"YYYY-MM-DD, inclusive"`
+	Frequency  string      `json:"frequency,omitempty" jsonschema:"with report_date"`
+	ReportDate string      `json:"report_date,omitempty" jsonschema:"YYYY-MM-DD (WEEKLY: Sunday), MONTHLY YYYY-MM, YEARLY YYYY"`
 	ReportType string      `json:"report_type,omitempty" jsonschema:"default SALES"`
-	SubType    string      `json:"report_subtype,omitempty" jsonschema:"default: first subtype valid for report_type"`
-	GroupBy    []string    `json:"group_by,omitempty" jsonschema:"SALES grouping dimensions"`
-	TopN       int         `json:"top_n,omitempty" jsonschema:"groups kept, default 10, max 100"`
-	App        tool.AppRef `json:"app,omitempty" jsonschema:"only this app's rows; default: all apps"`
+	SubType    string      `json:"report_subtype,omitempty" jsonschema:"default: first valid"`
+	GroupBy    []string    `json:"group_by,omitempty"`
+	TopN       int         `json:"top_n,omitempty" jsonschema:"default 10, max 100"`
+	App        tool.AppRef `json:"app,omitempty" jsonschema:"default: all apps"`
 }
 
 func init() {

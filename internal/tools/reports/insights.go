@@ -20,8 +20,8 @@ const (
 )
 
 type insightsIn struct {
-	App    tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default: pinned, else sales of all apps"`
-	Period string      `json:"period,omitempty" jsonschema:"preset in Pacific time; default last_7_days"`
+	App    tool.AppRef `json:"app,omitempty" jsonschema:"default: pinned, else all apps"`
+	Period string      `json:"period,omitempty" jsonschema:"Pacific; default last_7_days"`
 }
 
 func init() {

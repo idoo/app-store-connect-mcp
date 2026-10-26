@@ -22,8 +22,8 @@ type buildsListIn struct {
 type buildsWaitIn struct {
 	App            tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform       tool.Platform `json:"platform,omitempty"`
-	Build          tool.BuildRef `json:"build,omitempty" jsonschema:"latest (default), build number or build id"`
-	TimeoutSeconds int           `json:"timeout_seconds,omitempty" jsonschema:"how long to wait (default 45, max 300; 50 when the client sends no progress token)"`
+	Build          tool.BuildRef `json:"build,omitempty" jsonschema:"latest (default), number or id"`
+	TimeoutSeconds int           `json:"timeout_seconds,omitempty" jsonschema:"default 45, max 300 (50 without progress token)"`
 }
 
 func init() {

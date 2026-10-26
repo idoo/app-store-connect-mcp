@@ -475,7 +475,7 @@ func TestResourcesAndPrompts(t *testing.T) {
 		}
 		templates = append(templates, r.URITemplate)
 	}
-	if !slices.Equal(templates, []string{"app-store-connect-mcp://spec/operations/{operationId}"}) {
+	if !slices.Equal(templates, []string{artifactPrefix + "{id}", "app-store-connect-mcp://spec/operations/{operationId}"}) {
 		t.Fatalf("templates = %v", templates)
 	}
 	rr, err := h.cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "app-store-connect-mcp://docs/rejections"})

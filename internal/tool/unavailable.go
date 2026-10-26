@@ -15,14 +15,15 @@ import (
 func unavail(what string) error { return fmt.Errorf("%s: %w", what, ErrUnavailable) }
 
 type (
-	noASC      struct{}
-	noSpec     struct{}
-	noResolver struct{}
-	noPlanner  struct{}
-	noStore    struct{}
-	noToolsets struct{}
-	noFetcher  struct{}
-	noFiles    struct{}
+	noASC       struct{}
+	noSpec      struct{}
+	noResolver  struct{}
+	noPlanner   struct{}
+	noStore     struct{}
+	noToolsets  struct{}
+	noFetcher   struct{}
+	noFiles     struct{}
+	noArtifacts struct{}
 )
 
 func (noASC) Do(context.Context, Request) (*Response, error) {
@@ -99,3 +100,8 @@ func (noFiles) WriteFile(string, []byte, fs.FileMode) error { return unavail("fi
 func (noFiles) Open(string) (*os.File, error)               { return nil, unavail("file access") }
 func (noFiles) Stat(string) (fs.FileInfo, error)            { return nil, unavail("file access") }
 func (noFiles) WalkDir(string, fs.WalkDirFunc) error        { return unavail("file access") }
+func (noFiles) Rename(string, string) error                 { return unavail("file access") }
+
+func (noArtifacts) Put(context.Context, string, string, []byte) (Link, error) {
+	return Link{}, unavail("artifact store")
+}

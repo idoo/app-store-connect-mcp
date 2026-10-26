@@ -90,7 +90,21 @@ var (
 	ErrHumanRequired = &Error{
 		Code:    "human_approval_required",
 		Message: "this action needs explicit human approval, but the client cannot ask",
-		Hint:    "use a client with elicitation support, or set allow_no_elicit=true in the profile",
+		Hint:    "use a client that supports elicitation; in CI set ASC_MCP_CI=1 and ASC_MCP_ALLOW_NO_ELICIT=1, or allow_no_elicit=true in the profile",
+	}
+	ErrAlreadyGone = &Error{
+		Code:    "already_gone",
+		Message: "the object no longer exists; a retried delete was already applied",
+	}
+	ErrResponseTooLarge = &Error{
+		Code:    "response_too_large",
+		Message: "the App Store Connect response is too large",
+		Hint:    "narrow the request with fields[], filter[] or a smaller limit",
+	}
+	ErrUpstreamInvalid = &Error{
+		Code:    "upstream_invalid",
+		Message: "App Store Connect returned a response that is not valid JSON:API",
+		Hint:    "a proxy or Apple outage may be in the way; check https://developer.apple.com/system-status/ and retry later",
 	}
 )
 
@@ -180,6 +194,9 @@ func BodyFor(err error) ErrorBody {
 	}
 	var te *Error
 	if errors.As(err, &te) {
+		if errors.Is(err, ErrOutcomeUnknown) {
+			te = ErrOutcomeUnknown // "may have been applied" dominates any inner cause
+		}
 		b.Error = te.Code
 		if b.Hint == "" {
 			b.Hint = te.Hint

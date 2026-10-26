@@ -15,7 +15,7 @@
       "additionalProperties": false,
       "properties": {
         "access_type": {
-          "description": "default ONGOING, else ONE_TIME_SNAPSHOT",
+          "description": "default ONGOING",
           "enum": [
             "ONGOING",
             "ONE_TIME_SNAPSHOT"
@@ -27,7 +27,6 @@
           "type": "string"
         },
         "category": {
-          "description": "only reports of this category",
           "enum": [
             "APP_USAGE",
             "APP_STORE_ENGAGEMENT",
@@ -38,14 +37,14 @@
           "type": "string"
         },
         "dimensions": {
-          "description": "columns to group by (see result columns)",
+          "description": "columns to group by",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "from": {
-          "description": "first processing date YYYY-MM-DD",
+          "description": "YYYY-MM-DD",
           "type": "string"
         },
         "granularity": {
@@ -58,30 +57,30 @@
           "type": "string"
         },
         "max_segments": {
-          "description": "newest segments to download; default 3, max 10",
+          "description": "newest; default 3, max 10",
           "type": "integer"
         },
         "metrics": {
-          "description": "columns to sum; default all numeric",
+          "description": "columns to sum; default numeric",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "raw_rows": {
-          "description": "also return up to this many raw rows (max 500)",
+          "description": "max 500",
           "type": "integer"
         },
         "report": {
-          "description": "report id or name (unique substring); omit to list",
+          "description": "id or name; omit to list",
           "type": "string"
         },
         "to": {
-          "description": "last processing date YYYY-MM-DD",
+          "description": "YYYY-MM-DD",
           "type": "string"
         },
         "top_n": {
-          "description": "groups kept, default 20, max 200",
+          "description": "default 20, max 200",
           "type": "integer"
         }
       },
@@ -112,7 +111,7 @@
           "type": "string"
         },
         "one_time_snapshot": {
-          "description": "also request a ONE_TIME_SNAPSHOT (history)",
+          "description": "also ONE_TIME_SNAPSHOT (history)",
           "type": "boolean"
         }
       },
@@ -279,11 +278,11 @@
           "type": "string"
         },
         "query": {
-          "description": "fuzzy name, bundle id, SKU or id; empty lists all",
+          "description": "fuzzy; empty lists all",
           "type": "string"
         },
         "state": {
-          "description": "only apps with an in-flight version in this state",
+          "description": "in-flight version state",
           "type": "string"
         }
       },
@@ -313,11 +312,11 @@
           "type": "string"
         },
         "operation_id": {
-          "description": "from asc_api_search, e.g. apps_getCollection",
+          "description": "e.g. apps_getCollection",
           "type": "string"
         },
         "path": {
-          "description": "concrete or template path, e.g. /v1/apps/123",
+          "description": "e.g. /v1/apps/123 or /v1/apps/{id}",
           "type": "string"
         }
       },
@@ -343,40 +342,39 @@
       "additionalProperties": false,
       "properties": {
         "cursor": {
-          "description": "next_cursor from a previous call (same path)",
+          "description": "next_cursor (same path)",
           "type": "string"
         },
         "fields": {
           "additionalProperties": {
             "type": "string"
           },
-          "description": "sparse fieldsets: type → comma-separated fields",
+          "description": "type → comma-separated fields",
           "type": "object"
         },
         "include": {
-          "description": "relationships to include",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "limit": {
-          "description": "items across pages (default 200, max 5000)",
+          "description": "default 200, max 5000",
           "type": "integer"
         },
         "path": {
-          "description": "concrete path, e.g. /v1/apps/123/builds",
+          "description": "e.g. /v1/apps/123/builds",
           "type": "string"
         },
         "query": {
           "additionalProperties": {
             "type": "string"
           },
-          "description": "query params, e.g. {\"sort\":\"-createdDate\"}",
+          "description": "e.g. {\"sort\":\"-createdDate\"}",
           "type": "object"
         },
         "unsafe_unlisted": {
-          "description": "allow a path missing from the pinned spec",
+          "description": "allow a path not in the spec",
           "type": "boolean"
         }
       },
@@ -415,22 +413,21 @@
           "type": "boolean"
         },
         "method": {
-          "description": "POST, PATCH or DELETE (reads: asc_api_get)",
+          "description": "reads: asc_api_get",
           "type": "string"
         },
         "path": {
-          "description": "concrete path, e.g. /v1/appStoreVersions/123",
+          "description": "e.g. /v1/appStoreVersions/123",
           "type": "string"
         },
         "query": {
           "additionalProperties": {
             "type": "string"
           },
-          "description": "query params",
           "type": "object"
         },
         "unsafe_unlisted": {
-          "description": "allow an op missing from the pinned spec; always confirms",
+          "description": "op not in the spec; always confirms",
           "type": "boolean"
         }
       },
@@ -468,7 +465,7 @@
           "type": "integer"
         },
         "query": {
-          "description": "keywords, resource type, tag or operation id",
+          "description": "keywords, type, tag or operation id",
           "type": "string"
         }
       },
@@ -664,7 +661,7 @@
           "type": "string"
         },
         "build": {
-          "description": "latest (default), build number or build id",
+          "description": "latest (default), number or id",
           "type": "string"
         },
         "platform": {
@@ -677,7 +674,7 @@
           "type": "string"
         },
         "timeout_seconds": {
-          "description": "how long to wait (default 45, max 300; 50 when the client sends no progress token)",
+          "description": "default 45, max 300 (50 without progress token)",
           "type": "integer"
         }
       },
@@ -723,11 +720,11 @@
       "additionalProperties": false,
       "properties": {
         "month": {
-          "description": "Apple fiscal month YYYY-MM; default: newest published of the last two closed months",
+          "description": "fiscal YYYY-MM; default newest closed",
           "type": "string"
         },
         "region": {
-          "description": "default ZZ (FINANCIAL) or Z1 (FINANCE_DETAIL)",
+          "description": "default ZZ, or Z1 for detail",
           "type": "string"
         },
         "report_type": {
@@ -928,11 +925,11 @@
       "additionalProperties": false,
       "properties": {
         "app": {
-          "description": "name, bundle id, SKU or id; default: pinned, else sales of all apps",
+          "description": "default: pinned, else all apps",
           "type": "string"
         },
         "period": {
-          "description": "preset in Pacific time; default last_7_days",
+          "description": "Pacific; default last_7_days",
           "enum": [
             "yesterday",
             "this_week",
@@ -1781,7 +1778,7 @@
           "type": "boolean"
         },
         "items": {
-          "description": "draft only: item ids to remove; default: all",
+          "description": "draft only; default all",
           "items": {
             "type": "string"
           },
@@ -1847,7 +1844,7 @@
           "type": "string"
         },
         "version": {
-          "description": "default: newest version with a phased release",
+          "description": "default: newest phased",
           "type": "string"
         }
       },
@@ -1881,15 +1878,15 @@
           "type": "string"
         },
         "build": {
-          "description": "latest, latest-valid, build number or id",
+          "description": "latest, latest-valid, number or id",
           "type": "string"
         },
         "earliest_release_date": {
-          "description": "RFC 3339, for SCHEDULED",
+          "description": "RFC 3339 (SCHEDULED)",
           "type": "string"
         },
         "phased": {
-          "description": "7-day phased release",
+          "description": "7-day phased",
           "type": "boolean"
         },
         "plan_id": {
@@ -1914,18 +1911,18 @@
           "type": "string"
         },
         "uses_non_exempt_encryption": {
-          "description": "export compliance answer",
+          "description": "export compliance",
           "type": "boolean"
         },
         "version": {
-          "description": "version to prepare or create, e.g. 1.4; default: editable",
+          "description": "e.g. 1.4; default: editable",
           "type": "string"
         },
         "whats_new": {
           "additionalProperties": {
             "type": "string"
           },
-          "description": "What's New per locale; * = all existing",
+          "description": "per locale; * = all existing",
           "type": "object"
         }
       },
@@ -2039,18 +2036,18 @@
         },
         "desired": {
           "additionalProperties": false,
-          "description": "intended release; yields plan_ids for release_prepare/release_submit",
+          "description": "yields plan_ids for release_prepare/release_submit",
           "properties": {
             "build": {
-              "description": "latest, latest-valid, build number or id",
+              "description": "latest, latest-valid, number or id",
               "type": "string"
             },
             "earliest_release_date": {
-              "description": "RFC 3339, for SCHEDULED",
+              "description": "RFC 3339 (SCHEDULED)",
               "type": "string"
             },
             "phased": {
-              "description": "7-day phased release",
+              "description": "7-day phased",
               "type": "boolean"
             },
             "release_type": {
@@ -2066,14 +2063,14 @@
               "type": "boolean"
             },
             "uses_non_exempt_encryption": {
-              "description": "export compliance answer",
+              "description": "export compliance",
               "type": "boolean"
             },
             "whats_new": {
               "additionalProperties": {
                 "type": "string"
               },
-              "description": "What's New per locale; * = all existing",
+              "description": "per locale; * = all existing",
               "type": "object"
             }
           },
@@ -2089,7 +2086,7 @@
           "type": "string"
         },
         "version": {
-          "description": "editable (default), live or a version string",
+          "description": "editable (default), live or a version",
           "type": "string"
         }
       },
@@ -2120,18 +2117,18 @@
           "type": "string"
         },
         "attach_first_time_products": {
-          "description": "attach every ready IAP/subscription (default true)",
+          "description": "default true",
           "type": "boolean"
         },
         "include_iaps": {
-          "description": "IAPs to submit with it: product id, name or id",
+          "description": "product id, name or id",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "include_subscriptions": {
-          "description": "subscriptions to submit with it: product id, name or id",
+          "description": "product id, name or id",
           "items": {
             "type": "string"
           },
@@ -2296,11 +2293,11 @@
       "additionalProperties": false,
       "properties": {
         "app": {
-          "description": "only this app's rows; default: all apps",
+          "description": "default: all apps",
           "type": "string"
         },
         "frequency": {
-          "description": "single report of this frequency (with report_date)",
+          "description": "with report_date",
           "enum": [
             "DAILY",
             "WEEKLY",
@@ -2310,11 +2307,10 @@
           "type": "string"
         },
         "from": {
-          "description": "first day YYYY-MM-DD (with to)",
+          "description": "YYYY-MM-DD (with to)",
           "type": "string"
         },
         "group_by": {
-          "description": "SALES grouping dimensions",
           "items": {
             "enum": [
               "app",
@@ -2329,7 +2325,7 @@
           "type": "array"
         },
         "period": {
-          "description": "preset in Pacific time; default yesterday",
+          "description": "Pacific time; default yesterday",
           "enum": [
             "yesterday",
             "this_week",
@@ -2341,11 +2337,11 @@
           "type": "string"
         },
         "report_date": {
-          "description": "DAILY YYYY-MM-DD, WEEKLY its Sunday, MONTHLY YYYY-MM, YEARLY YYYY",
+          "description": "YYYY-MM-DD (WEEKLY: Sunday), MONTHLY YYYY-MM, YEARLY YYYY",
           "type": "string"
         },
         "report_subtype": {
-          "description": "default: first subtype valid for report_type",
+          "description": "default: first valid",
           "enum": [
             "SUMMARY",
             "DETAILED",
@@ -2372,11 +2368,11 @@
           "type": "string"
         },
         "to": {
-          "description": "last day YYYY-MM-DD, inclusive",
+          "description": "YYYY-MM-DD, inclusive",
           "type": "string"
         },
         "top_n": {
-          "description": "groups kept, default 10, max 100",
+          "description": "default 10, max 100",
           "type": "integer"
         }
       },
@@ -3766,7 +3762,8 @@
               "xcodecloud",
               "webhooks",
               "admin",
-              "store"
+              "store",
+              "insights"
             ],
             "type": "string"
           },
