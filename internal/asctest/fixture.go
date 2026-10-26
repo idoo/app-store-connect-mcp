@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
 )
 
 var (

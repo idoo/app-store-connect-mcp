@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // PlannerConformance checks that a [tool.Planner] has the contract every

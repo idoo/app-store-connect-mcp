@@ -9,7 +9,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 func TestSanitizeGolden(t *testing.T) {

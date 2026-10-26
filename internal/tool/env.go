@@ -26,7 +26,7 @@ type ProfileInfo struct {
 	// DefaultApp is an app id or bundle id from the profile or project pin.
 	DefaultApp  string `json:"default_app,omitempty"`
 	AllowWrites bool   `json:"allow_writes"`
-	// PinSource is the path of the .hamn.toml pin that selected the profile, if any.
+	// PinSource is the path of the .asc-mcp.toml pin that selected the profile, if any.
 	PinSource string `json:"pin_source,omitempty"`
 	// AllowNoElicit lets RequireHuman tools proceed on an agent confirmation
 	// when the client cannot elicit (config opt-in).
@@ -102,7 +102,7 @@ type Fetcher interface {
 	Fetch(ctx context.Context, method, rawURL string, header http.Header, body io.Reader, maxBytes int64) (*FetchResponse, error)
 }
 
-// Files gives tools confined filesystem access: an explicit --root/HAMN_ROOT,
+// Files gives tools confined filesystem access: an explicit --root/ASC_MCP_ROOT,
 // else the MCP client's roots, else the git root of the cwd. A fallback root
 // of / or the home directory is refused. Symlink escapes are refused.
 // All methods accept paths relative to the root or absolute paths inside it.
@@ -159,9 +159,9 @@ type Env struct {
 	Files    Files
 	Clock    Clock
 	Profile  ProfileInfo
-	// Version is the hamn build version.
+	// Version is the asc-mcp build version.
 	Version string
-	// NoConfirm skips the preview step (CI only: --no-confirm with HAMN_CI=1).
+	// NoConfirm skips the preview step (CI only: --no-confirm with ASC_MCP_CI=1).
 	// RequireHuman tools still require approval.
 	NoConfirm bool
 	// SetWrites flips the session's write capability below the tool layer

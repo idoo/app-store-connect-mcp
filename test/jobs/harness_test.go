@@ -11,12 +11,12 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/mcpserver"
-	"github.com/idoo/hamn/internal/resolve"
-	"github.com/idoo/hamn/internal/spec"
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
-	_ "github.com/idoo/hamn/internal/tools/all" // real registry
+	"github.com/idoo/app-store-connect-mcp/internal/mcpserver"
+	"github.com/idoo/app-store-connect-mcp/internal/resolve"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/all" // real registry
 )
 
 // hjul is the app every job resolves by name.

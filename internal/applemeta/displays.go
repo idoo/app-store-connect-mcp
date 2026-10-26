@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // DisplayType is an App Store Connect ScreenshotDisplayType enum value.

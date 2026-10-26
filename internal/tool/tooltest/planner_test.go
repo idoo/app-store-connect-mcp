@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/mcpserver"
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/mcpserver"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 func TestPlannerConformanceFake(t *testing.T) {

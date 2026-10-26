@@ -52,7 +52,7 @@ var allFreq = []Frequency{Daily, Weekly, Monthly, Yearly}
 
 // salesReports pins version, subtypes and frequencies per report type. The
 // enums come from the spec; the pairing is not in the spec and follows
-// Apple's "Download Sales and Trends Reports" documentation. hamn always
+// Apple's "Download Sales and Trends Reports" documentation. asc-mcp always
 // sends an explicit version, because omitting it returns older column sets.
 var salesReports = []ReportSpec{
 	{ReportSales, "1_0", []string{"SUMMARY"}, allFreq},

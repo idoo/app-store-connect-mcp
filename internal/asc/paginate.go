@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Pagination bounds for [Paginate].

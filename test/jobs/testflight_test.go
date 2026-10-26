@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Job 2: "push the latest build to my external testers" in at most 2 calls

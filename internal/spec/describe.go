@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Placeholders used in synthesized bodies (the spec carries no examples).

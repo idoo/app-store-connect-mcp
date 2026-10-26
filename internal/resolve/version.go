@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // VersionNext is the VersionRef for the patch bump of the live version. When

@@ -28,7 +28,7 @@ func TestExpandHome(t *testing.T) {
 
 func TestResolveExpandsTildeKeyPaths(t *testing.T) {
 	home := t.TempDir()
-	cfgPath := filepath.Join(home, ".config", "hamn", "config.toml")
+	cfgPath := filepath.Join(home, ".config", "asc-mcp", "config.toml")
 	writeFile(t, cfgPath, "[profiles.a]\nkey_id = \"K1\"\nissuer_id = \"I\"\nkey_path = \"~/keys/AuthKey_K1.p8\"\n", 0o600)
 	want := filepath.Join(home, "keys", "AuthKey_K1.p8")
 
@@ -52,7 +52,7 @@ func TestResolveExpandsTildeKeyPaths(t *testing.T) {
 
 func TestEnvProfileUsesConfigEnvSettings(t *testing.T) {
 	home := t.TempDir()
-	cfgPath := filepath.Join(home, "hamn", "config.toml")
+	cfgPath := filepath.Join(home, "asc-mcp", "config.toml")
 	writeFile(t, cfgPath, "[env]\nvendor_number = \"8800\"\ndefault_app = \"com.x\"\n", 0o600)
 	base := map[string]string{EnvKeyID: "K1", EnvIssuerID: "I", EnvKeyPath: "/k.p8"}
 
@@ -89,7 +89,7 @@ func TestLoadRefusesWritableDir(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix permissions")
 	}
-	dir := filepath.Join(t.TempDir(), "hamn")
+	dir := filepath.Join(t.TempDir(), "asc-mcp")
 	path := filepath.Join(dir, "config.toml")
 	writeFile(t, path, "", 0o600)
 	if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // the test needs a world-writable dir.

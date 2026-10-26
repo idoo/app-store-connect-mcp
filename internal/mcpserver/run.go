@@ -32,7 +32,7 @@ func ListBytes(ctx context.Context, srv *mcp.Server) (int, error) {
 		return 0, fmt.Errorf("mcpserver: connect: %w", err)
 	}
 	defer func() { _ = ss.Close() }()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "hamn-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "asc-mcp-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
 	if err != nil {
 		return 0, fmt.Errorf("mcpserver: client connect: %w", err)
 	}

@@ -21,10 +21,10 @@ jq --arg v "$version" --arg sha "$sha" '
   | .packages |= map(
       if .registryType == "mcpb" then
         .version = $v
-        | .identifier = "https://github.com/idoo/hamn/releases/download/v\($v)/hamn-\($v).mcpb"
+        | .identifier = "https://github.com/idoo/app-store-connect-mcp/releases/download/v\($v)/asc-mcp-\($v).mcpb"
         | .fileSha256 = $sha
       elif .registryType == "oci" then
-        .identifier = "ghcr.io/idoo/hamn:\($v)"
+        .identifier = "ghcr.io/idoo/app-store-connect-mcp:\($v)"
       else . end)' server.json >server.release.json
 mv server.release.json server.json
 

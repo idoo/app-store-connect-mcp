@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // maxGroupHint caps the group names listed in a not-found hint.

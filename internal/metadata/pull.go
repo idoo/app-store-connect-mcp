@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // maxLocalizations bounds one pull; App Store Connect supports about 40

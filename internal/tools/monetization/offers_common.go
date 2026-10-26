@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Offer kinds as reported by offers_list and accepted by offers_create.

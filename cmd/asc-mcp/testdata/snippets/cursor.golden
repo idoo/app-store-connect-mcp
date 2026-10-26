@@ -1,0 +1,9 @@
+// ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "asc-mcp": {
+      "args": [],
+      "command": "/ABS/PATH/asc-mcp"
+    }
+  }
+}

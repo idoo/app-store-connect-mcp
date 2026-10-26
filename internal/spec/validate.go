@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // maxEnumInProblem bounds how many allowed values a problem message lists.

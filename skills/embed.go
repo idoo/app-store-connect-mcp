@@ -1,5 +1,5 @@
-// Package skills embeds hamn's Agent Skills (skills/<name>/SKILL.md) so
-// `hamn skills install` can copy them into an agent's user skills directory.
+// Package skills embeds asc-mcp's Agent Skills (skills/<name>/SKILL.md) so
+// `asc-mcp skills install` can copy them into an agent's user skills directory.
 package skills
 
 import (

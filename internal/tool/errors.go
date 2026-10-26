@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Error is a typed hamn error with a stable machine-readable code. The
+// Error is a typed asc-mcp error with a stable machine-readable code. The
 // package-level Err* values are sentinels: wrap them with fmt.Errorf("...: %w")
 // and test with errors.Is.
 type Error struct {
@@ -19,7 +19,7 @@ type Error struct {
 // Error implements error.
 func (e *Error) Error() string { return e.Message }
 
-// EnableWritesHint is the one way hamn tells agents to turn writes on: the
+// EnableWritesHint is the one way asc-mcp tells agents to turn writes on: the
 // toolsets tool asks the human in the client and, when the client cannot
 // ask, returns the restart steps for that client.
 const EnableWritesHint = `call toolsets {"action":"enable_writes"} so the user can approve writes for this session (if the client cannot show the approval, it returns the restart steps)`
@@ -54,7 +54,7 @@ var (
 	ErrOutcomeUnknown = &Error{
 		Code:    "outcome_unknown",
 		Message: "the request may or may not have been applied",
-		Hint:    "read the object back before retrying; hamn never replays mutations",
+		Hint:    "read the object back before retrying; asc-mcp never replays mutations",
 	}
 	ErrDeclined = &Error{
 		Code:    "declined",
@@ -72,7 +72,7 @@ var (
 	ErrInternal = &Error{
 		Code:    "internal_error",
 		Message: "internal error",
-		Hint:    "this is a hamn bug; please report it",
+		Hint:    "this is a asc-mcp bug; please report it",
 	}
 	ErrUnavailable = &Error{
 		Code:    "unavailable",

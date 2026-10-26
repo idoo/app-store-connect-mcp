@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Client defaults.
@@ -23,7 +23,7 @@ const (
 	// MaxBodyBytes caps any response body read by the client.
 	MaxBodyBytes = 64 << 20
 	// DefaultUserAgent is sent when Options.UserAgent is empty.
-	DefaultUserAgent = "hamn"
+	DefaultUserAgent = "asc-mcp"
 )
 
 // TokenSource mints bearer JWTs. *auth.TokenSource satisfies it.
@@ -70,7 +70,7 @@ type Options struct {
 	FreeText func(resourceType string) []string
 	// Clock defaults to the system clock.
 	Clock tool.Clock
-	// UserAgent defaults to [DefaultUserAgent]; use "hamn/<version>".
+	// UserAgent defaults to [DefaultUserAgent]; use "asc-mcp/<version>".
 	UserAgent string
 	// Jitter returns a value in [0,1) scaling the backoff jitter; defaults
 	// to math/rand/v2.

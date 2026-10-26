@@ -18,7 +18,7 @@ type KeySource string
 const (
 	// KeyFromFile reads a .p8 file at KeyRef.Path.
 	KeyFromFile KeySource = "file"
-	// KeyFromKeychain reads the OS keychain (service "hamn", account = key id); internal/auth owns it.
+	// KeyFromKeychain reads the OS keychain (service "asc-mcp", account = key id); internal/auth owns it.
 	KeyFromKeychain KeySource = "keychain"
 	// KeyFromEnv reads PEM or base64 PEM from the environment variable KeyRef.EnvVar.
 	KeyFromEnv KeySource = "env"

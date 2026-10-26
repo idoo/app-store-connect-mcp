@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type buildsListIn struct {

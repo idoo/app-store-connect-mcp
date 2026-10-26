@@ -31,7 +31,7 @@ jobs:
       contents: write # draft release + assets
       id-token: write # cosign keyless, attestations
       attestations: write
-      packages: write # ghcr.io/idoo/hamn + image attestation
+      packages: write # ghcr.io/idoo/app-store-connect-mcp + image attestation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,8 +83,8 @@ jobs:
         id: image
         run: |
           version="${GITHUB_REF_NAME#v}"
-          digest=$(docker buildx imagetools inspect "ghcr.io/idoo/hamn:${version}" --format '{{json .Manifest}}' | jq -r .digest)
-          case $digest in sha256:*) ;; *) echo "no digest for ghcr.io/idoo/hamn:${version}" >&2; exit 1 ;; esac
+          digest=$(docker buildx imagetools inspect "ghcr.io/idoo/app-store-connect-mcp:${version}" --format '{{json .Manifest}}' | jq -r .digest)
+          case $digest in sha256:*) ;; *) echo "no digest for ghcr.io/idoo/app-store-connect-mcp:${version}" >&2; exit 1 ;; esac
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -97,7 +97,7 @@ jobs:
             docs/tools.json
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-name: ghcr.io/idoo/hamn
+          subject-name: ghcr.io/idoo/app-store-connect-mcp
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
 
@@ -128,8 +128,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --dir "$RUNNER_TEMP"
-          scripts/brew-formula.sh "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/checksums.txt" > "$RUNNER_TEMP/hamn.rb"
-      - name: Push Formula/hamn.rb to idoo/homebrew-tap
+          scripts/brew-formula.sh "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/checksums.txt" > "$RUNNER_TEMP/asc-mcp.rb"
+      - name: Push Formula/asc-mcp.rb to idoo/homebrew-tap
         env:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         run: |
@@ -142,15 +142,15 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts"
           git clone --depth 1 git@github.com:idoo/homebrew-tap.git "$RUNNER_TEMP/tap"
           mkdir -p "$RUNNER_TEMP/tap/Formula"
-          cp "$RUNNER_TEMP/hamn.rb" "$RUNNER_TEMP/tap/Formula/hamn.rb"
+          cp "$RUNNER_TEMP/asc-mcp.rb" "$RUNNER_TEMP/tap/Formula/asc-mcp.rb"
           cd "$RUNNER_TEMP/tap"
-          git add Formula/hamn.rb
+          git add Formula/asc-mcp.rb
           if git diff --cached --quiet; then
             echo "formula already up to date"
             exit 0
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -m "hamn ${GITHUB_REF_NAME#v}"
+            commit -m "asc-mcp ${GITHUB_REF_NAME#v}"
           git push origin HEAD
 
   registry:

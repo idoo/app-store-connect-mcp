@@ -11,26 +11,26 @@ import (
 	"os"
 	"time"
 
-	"github.com/idoo/hamn/internal/asc"
-	"github.com/idoo/hamn/internal/auth"
-	"github.com/idoo/hamn/internal/config"
-	"github.com/idoo/hamn/internal/resolve"
-	"github.com/idoo/hamn/internal/spec"
-	"github.com/idoo/hamn/internal/state"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/asc"
+	"github.com/idoo/app-store-connect-mcp/internal/auth"
+	"github.com/idoo/app-store-connect-mcp/internal/config"
+	"github.com/idoo/app-store-connect-mcp/internal/resolve"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/state"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // ErrNoProfile means no credentials profile is configured.
-var ErrNoProfile = errors.New("no App Store Connect profile configured (run `hamn auth add` or set ASC_KEY_ID)")
+var ErrNoProfile = errors.New("no App Store Connect profile configured (run `asc-mcp auth add` or set ASC_KEY_ID)")
 
 // errNoCredentials is what every App Store Connect call returns when no
-// credentials are configured. GUI clients hide hamn's stderr, so the tool
+// credentials are configured. GUI clients hide asc-mcp's stderr, so the tool
 // error itself carries the setup steps.
 var errNoCredentials = &tool.Error{
 	Code:    "no_credentials",
-	Message: "no App Store Connect API key is configured for hamn",
-	Hint: "in a terminal run `hamn auth add` (or `hamn auth import` to copy ASC_* env vars into a profile), then restart this client; " +
-		"or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH in this client's hamn server env. " +
+	Message: "no App Store Connect API key is configured for asc-mcp",
+	Hint: "in a terminal run `asc-mcp auth add` (or `asc-mcp auth import` to copy ASC_* env vars into a profile), then restart this client; " +
+		"or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH in this client's asc-mcp server env. " +
 		"GUI clients (Claude Desktop, Cursor, Windsurf) do not see your shell environment",
 }
 
@@ -108,7 +108,7 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 		MaxRetries:  r.MaxRetries,
 		AllowWrites: p.AllowWrites,
 		Clock:       tool.SystemClock{},
-		UserAgent:   "hamn/" + version,
+		UserAgent:   "asc-mcp/" + version,
 	}
 	if idx != nil {
 		opts.Spec = idx
@@ -132,9 +132,9 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 // profile the env has no ASC client or resolver; tools then fail with
 // tool.ErrUnavailable and doctor explains the setup. Key-loading failures for a
 // configured profile are returned as errors. The file root comes from
-// HAMN_ROOT when set (see [ProjectFiles]).
+// ASC_MCP_ROOT when set (see [ProjectFiles]).
 func NewEnv(ctx context.Context, r *config.Resolved, version string) (*tool.Env, error) {
-	return newEnv(ctx, r, version, os.Getenv("HAMN_ROOT"))
+	return newEnv(ctx, r, version, os.Getenv("ASC_MCP_ROOT"))
 }
 
 func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*tool.Env, error) {
@@ -162,7 +162,7 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root string) (*too
 	env := &tool.Env{
 		Spec:      idx,
 		State:     store,
-		Fetch:     asc.NewFetcher(asc.FetchOptions{UserAgent: "hamn/" + version}),
+		Fetch:     asc.NewFetcher(asc.FetchOptions{UserAgent: "asc-mcp/" + version}),
 		Files:     files,
 		Clock:     tool.SystemClock{},
 		Profile:   r.Profile.Info(),

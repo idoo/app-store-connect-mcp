@@ -23,16 +23,16 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // EnvHTTPToken is the environment variable holding the HTTP bearer token.
-const EnvHTTPToken = "HAMN_HTTP_TOKEN" //nolint:gosec // variable name, not a credential.
+const EnvHTTPToken = "ASC_MCP_HTTP_TOKEN" //nolint:gosec // variable name, not a credential.
 
 // Session limits for HTTP mode, overridable by HTTPOptions or env.
 const (
-	EnvHTTPSessionTimeout = "HAMN_HTTP_SESSION_TIMEOUT"
-	EnvHTTPMaxSessions    = "HAMN_HTTP_MAX_SESSIONS"
+	EnvHTTPSessionTimeout = "ASC_MCP_HTTP_SESSION_TIMEOUT"
+	EnvHTTPMaxSessions    = "ASC_MCP_HTTP_MAX_SESSIONS"
 	// DefaultSessionTimeout closes idle sessions; it outlives PlanTTL so a
 	// pending plan never loses its session first.
 	DefaultSessionTimeout = 30 * time.Minute
@@ -67,11 +67,11 @@ type HTTPOptions struct {
 	// StderrIsTTY overrides terminal detection of os.Stderr (tests).
 	StderrIsTTY *bool
 	// SessionTimeout closes sessions idle this long; 0 reads
-	// HAMN_HTTP_SESSION_TIMEOUT (a Go duration), else DefaultSessionTimeout.
+	// ASC_MCP_HTTP_SESSION_TIMEOUT (a Go duration), else DefaultSessionTimeout.
 	// Negative never expires sessions.
 	SessionTimeout time.Duration
 	// MaxSessions caps open sessions (new ones get 503); 0 reads
-	// HAMN_HTTP_MAX_SESSIONS, else DefaultMaxSessions. Negative is unlimited.
+	// ASC_MCP_HTTP_MAX_SESSIONS, else DefaultMaxSessions. Negative is unlimited.
 	MaxSessions int
 }
 
@@ -168,7 +168,7 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		sum := sha256.Sum256([]byte(got))
 		if !ok || subtle.ConstantTimeCompare(sum[:], want[:]) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="hamn"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="asc-mcp"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -295,7 +295,7 @@ func SessionFactory(deps Deps) func(*http.Request) *mcp.Server {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	probe := mcp.NewServer(&mcp.Implementation{Name: "hamn", Version: deps.Version}, &mcp.ServerOptions{
+	probe := mcp.NewServer(&mcp.Implementation{Name: "asc-mcp", Version: deps.Version}, &mcp.ServerOptions{
 		Logger:                    logger,
 		SupportedProtocolVersions: legacyProtocolVersions(),
 	})
@@ -377,7 +377,7 @@ func generateToken(opts HTTPOptions) (string, error) {
 	if w == nil {
 		w = os.Stderr
 	}
-	if _, err := fmt.Fprintf(w, "hamn: HTTP bearer token (set %s to reuse): %s\n", EnvHTTPToken, tok); err != nil {
+	if _, err := fmt.Fprintf(w, "asc-mcp: HTTP bearer token (set %s to reuse): %s\n", EnvHTTPToken, tok); err != nil {
 		return "", fmt.Errorf("mcpserver: http: print token: %w", err)
 	}
 	return tok, nil

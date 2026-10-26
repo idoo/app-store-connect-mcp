@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/idoo/hamn/internal/applemeta"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // videoInfo is what the MP4/QuickTime container says about a video.

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 const emptyApps = `{"data":[],"links":{"self":"https://api.appstoreconnect.apple.com/v1/apps"}}`

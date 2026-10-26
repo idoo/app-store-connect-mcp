@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // DefaultMaxResponseBytes is the default result byte cap
-// (HAMN_MAX_RESPONSE_BYTES).
+// (ASC_MCP_MAX_RESPONSE_BYTES).
 const DefaultMaxResponseBytes = 60 << 10
 
 // CapResult bounds the compact JSON encoding of v to maxBytes (≤ 0 disables

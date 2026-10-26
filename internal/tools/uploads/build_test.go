@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
-	"github.com/idoo/hamn/internal/upload"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/upload"
 )
 
 const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>

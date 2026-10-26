@@ -11,11 +11,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // ProjectFiles is the session's [tool.Files]. Its root is, in order: the
-// explicit root (--root or HAMN_ROOT), the MCP client's first file:// root,
+// explicit root (--root or ASC_MCP_ROOT), the MCP client's first file:// root,
 // or the git root of the cwd. A root picked automatically that is the
 // filesystem root or the home directory is refused, because desktop clients
 // start servers there and the whole disk would be readable.
@@ -31,7 +31,7 @@ type ProjectFiles struct {
 
 var _ tool.RootedFiles = (*ProjectFiles)(nil)
 
-// NewProjectFiles builds the session files. explicit is --root/HAMN_ROOT
+// NewProjectFiles builds the session files. explicit is --root/ASC_MCP_ROOT
 // ("" for none) and must be an existing directory. Without it the default root
 // is the git root of cwd; an unsafe default is not an error here, file tools
 // report it when used.
@@ -52,7 +52,7 @@ func NewProjectFiles(explicit, cwd, home string) (*ProjectFiles, error) {
 // open confines to dir unless it is / or the home directory.
 func (pf *ProjectFiles) open(dir string) (*Files, error) {
 	if unsafeRoot(dir, pf.home) {
-		return nil, fmt.Errorf("%w: file access is off because the project folder resolved to %s (the disk root, a top-level folder, or your home folder or one containing it); start hamn with --root <project folder> or set HAMN_ROOT",
+		return nil, fmt.Errorf("%w: file access is off because the project folder resolved to %s (the disk root, a top-level folder, or your home folder or one containing it); start asc-mcp with --root <project folder> or set ASC_MCP_ROOT",
 			tool.ErrUnavailable, dir)
 	}
 	f, err := NewFiles(dir)

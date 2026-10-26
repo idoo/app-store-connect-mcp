@@ -10,9 +10,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/mcpserver"
-	"github.com/idoo/hamn/internal/tool"
-	_ "github.com/idoo/hamn/internal/tools/all" // real registry
+	"github.com/idoo/app-store-connect-mcp/internal/mcpserver"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/all" // real registry
 )
 
 // TestRegistryBudget measures the real tools/list payload for the shipped
@@ -60,7 +60,7 @@ func logLargestTools(t *testing.T, srv *mcp.Server, top int) {
 		t.Fatal(err)
 	}
 	defer func() { _ = ss.Close() }()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "hamn-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "asc-mcp-budget", Version: "0"}, nil).Connect(ctx, ct, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

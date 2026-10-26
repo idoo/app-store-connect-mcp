@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/applemeta"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 func box(typ string, payload ...[]byte) []byte {

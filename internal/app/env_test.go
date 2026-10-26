@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/asctest"
-	"github.com/idoo/hamn/internal/config"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/asctest"
+	"github.com/idoo/app-store-connect-mcp/internal/config"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // testResolved returns a resolved config whose key is a fresh P-256 file and
@@ -39,7 +39,7 @@ func testResolved(t *testing.T, srv *asctest.Server, kind tool.KeyKind) *config.
 	}
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 	t.Setenv("LOCALAPPDATA", filepath.Join(dir, "state"))
-	t.Setenv("HAMN_ROOT", "")
+	t.Setenv("ASC_MCP_ROOT", "")
 	proj := mkdir(t, dir, "proj", ".git")
 	t.Chdir(filepath.Dir(proj))
 	r := &config.Resolved{Profile: config.ResolvedProfile{
@@ -180,7 +180,7 @@ func TestNewClientKeyKindIssuer(t *testing.T) {
 
 // TestNewEnvNoCredentialsErrorExplainsSetup: with no key configured every
 // App Store Connect call (and app resolution) fails with the setup steps in
-// the tool error itself, since GUI clients never show hamn's stderr.
+// the tool error itself, since GUI clients never show asc-mcp's stderr.
 func TestNewEnvNoCredentialsErrorExplainsSetup(t *testing.T) {
 	r := testResolved(t, nil, tool.KeyTeam)
 	r.Profile = config.ResolvedProfile{}
@@ -192,7 +192,7 @@ func TestNewEnvNoCredentialsErrorExplainsSetup(t *testing.T) {
 		if jerr != nil {
 			t.Fatal(jerr)
 		}
-		for _, want := range []string{"no_credentials", "hamn auth add", "ASC_KEY_ID", "ASC_PRIVATE_KEY_PATH"} {
+		for _, want := range []string{"no_credentials", "asc-mcp auth add", "ASC_KEY_ID", "ASC_PRIVATE_KEY_PATH"} {
 			if !strings.Contains(string(b), want) {
 				t.Errorf("error body %s lacks %q", b, want)
 			}

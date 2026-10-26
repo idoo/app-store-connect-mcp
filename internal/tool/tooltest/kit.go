@@ -15,8 +15,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/spec"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/spec"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Kit bundles a ready [tool.Env] with handles to its fakes.

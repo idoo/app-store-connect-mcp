@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "hamn": {
-      "command": "hamn",
+    "asc-mcp": {
+      "command": "asc-mcp",
       "args": []
     }
   }

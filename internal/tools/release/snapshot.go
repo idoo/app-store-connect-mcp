@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // releaseSnapshot is the remote state a release plan is fingerprinted over,

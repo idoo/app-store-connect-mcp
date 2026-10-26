@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // gateLevel is how much approval a planned upsert needs; the strongest

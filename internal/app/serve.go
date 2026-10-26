@@ -6,15 +6,15 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/idoo/hamn/internal/config"
-	"github.com/idoo/hamn/internal/mcpserver"
+	"github.com/idoo/app-store-connect-mcp/internal/config"
+	"github.com/idoo/app-store-connect-mcp/internal/mcpserver"
 )
 
 // ServeOptions configures [Serve].
 type ServeOptions struct {
 	// Resolved is the effective configuration.
 	Resolved *config.Resolved
-	// Version is the hamn build version.
+	// Version is the asc-mcp build version.
 	Version string
 	// HTTPAddr serves Streamable HTTP when set; empty serves stdio.
 	HTTPAddr string
@@ -23,7 +23,7 @@ type ServeOptions struct {
 	// Logger receives server logs on stderr; nil uses a stderr text logger.
 	Logger *slog.Logger
 	// Root confines file tools to this directory (--root); empty falls back
-	// to HAMN_ROOT, then the client's MCP roots, then the git root of the cwd.
+	// to ASC_MCP_ROOT, then the client's MCP roots, then the git root of the cwd.
 	Root string
 }
 
@@ -43,7 +43,7 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	}
 	root := opts.Root
 	if root == "" {
-		root = os.Getenv("HAMN_ROOT")
+		root = os.Getenv("ASC_MCP_ROOT")
 	}
 	env, err := newEnv(ctx, r, opts.Version, root)
 	if err != nil {

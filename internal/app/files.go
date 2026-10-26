@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // ErrOutsideRoot is returned for paths that resolve outside the confined root,
@@ -38,7 +38,7 @@ func NewFiles(root string) (*Files, error) {
 	if err != nil {
 		return nil, fmt.Errorf("files: root %q: %w", root, err)
 	}
-	fi, err := os.Stat(resolved) //nolint:gosec // root is chosen by the user (--root/HAMN_ROOT, client roots or cwd); confinement starts here
+	fi, err := os.Stat(resolved) //nolint:gosec // root is chosen by the user (--root/ASC_MCP_ROOT, client roots or cwd); confinement starts here
 	if err != nil {
 		return nil, fmt.Errorf("files: root %q: %w", root, err)
 	}

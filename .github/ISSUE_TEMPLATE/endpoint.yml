@@ -1,5 +1,5 @@
 name: Missing or wrong API endpoint
-description: An App Store Connect operation hamn does not know, or the spec index gets wrong
+description: An App Store Connect operation asc-mcp does not know, or the spec index gets wrong
 labels: [spec]
 body:
   - type: input
@@ -25,4 +25,4 @@ body:
     id: spec
     attributes:
       label: Spec version
-      description: Shown by `hamn doctor`
+      description: Shown by `asc-mcp doctor`

@@ -14,7 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type stubIn struct {
@@ -301,7 +301,7 @@ func TestEnableWrites(t *testing.T) {
 		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "cursor", nil)
 		res, body := h.call(t, "toolsets", args)
 		instr, _ := dataOf(body)["instructions"].(string)
-		if res.IsError || !strings.Contains(instr, "~/.cursor/mcp.json") || !strings.Contains(instr, "HAMN_ALLOW_WRITES") {
+		if res.IsError || !strings.Contains(instr, "~/.cursor/mcp.json") || !strings.Contains(instr, "ASC_MCP_ALLOW_WRITES") {
 			t.Fatalf("fallback = %v", body)
 		}
 	})
@@ -319,7 +319,7 @@ func TestEnableWrites(t *testing.T) {
 		h := connectOpts(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "cursor", opts, "2025-11-25")
 		res, body := h.call(t, "toolsets", args)
 		instr, _ := dataOf(body)["instructions"].(string)
-		if res.IsError || !strings.Contains(instr, "HAMN_ALLOW_WRITES") {
+		if res.IsError || !strings.Contains(instr, "ASC_MCP_ALLOW_WRITES") {
 			t.Fatalf("url-only result = %v", body)
 		}
 		if got := h.names(t); slices.Contains(got, "release_submit") {
@@ -465,7 +465,7 @@ func TestResourcesAndPrompts(t *testing.T) {
 		uris = append(uris, r.URI)
 	}
 	slices.Sort(uris)
-	if want := []string{"hamn://apps", "hamn://docs/limits", "hamn://docs/rejections"}; !slices.Equal(uris, want) {
+	if want := []string{"asc-mcp://apps", "asc-mcp://docs/limits", "asc-mcp://docs/rejections"}; !slices.Equal(uris, want) {
 		t.Fatalf("resources = %v", uris)
 	}
 	var templates []string
@@ -475,10 +475,10 @@ func TestResourcesAndPrompts(t *testing.T) {
 		}
 		templates = append(templates, r.URITemplate)
 	}
-	if !slices.Equal(templates, []string{"hamn://spec/operations/{operationId}"}) {
+	if !slices.Equal(templates, []string{"asc-mcp://spec/operations/{operationId}"}) {
 		t.Fatalf("templates = %v", templates)
 	}
-	rr, err := h.cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "hamn://docs/rejections"})
+	rr, err := h.cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "asc-mcp://docs/rejections"})
 	if err != nil || !strings.Contains(rr.Contents[0].Text, "5.1.1") {
 		t.Fatalf("read rejections: %v", err)
 	}

@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Check statuses, ordered by severity.
@@ -110,7 +110,7 @@ func keyKindCheck(k tool.KeyKind) check {
 	}
 	return check{
 		Name: "key_kind", Status: statusFail, Detail: "no API key configured",
-		Fix: "run `hamn auth add` or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH",
+		Fix: "run `asc-mcp auth add` or set ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY_PATH",
 	}
 }
 
@@ -126,7 +126,7 @@ func reachabilityChecks(ctx context.Context, env *tool.Env) []check {
 	case errors.As(err, &ae) && ae.Status == http.StatusUnauthorized:
 		jwt = check{
 			Name: "jwt", Status: statusFail, Detail: "Apple rejected the token (401)",
-			Fix: "check key_id, issuer_id (omit it only for Individual keys), the .p8 file and the system clock; `hamn auth test` re-signs",
+			Fix: "check key_id, issuer_id (omit it only for Individual keys), the .p8 file and the system clock; `asc-mcp auth test` re-signs",
 		}
 		api.Detail = "Apple answered 401"
 	case errors.As(err, &ae) && ae.Status == http.StatusForbidden:
@@ -148,7 +148,7 @@ func reachabilityChecks(ctx context.Context, env *tool.Env) []check {
 		jwt = check{Name: "jwt", Status: statusWarn, Detail: "not verified: the request did not reach Apple"}
 		api = check{
 			Name: "apple_api", Status: statusFail, Detail: "App Store Connect unreachable: " + err.Error(),
-			Fix: "check network, proxy and the key file; `hamn auth test` shows key errors",
+			Fix: "check network, proxy and the key file; `asc-mcp auth test` shows key errors",
 		}
 	}
 	return []check{jwt, api}
@@ -209,7 +209,7 @@ func filesCheck(f tool.Files) (string, check) {
 	if err != nil {
 		return "", check{
 			Name: "files", Status: statusWarn, Detail: "file access refused: " + err.Error(),
-			Fix: "start hamn with --root <project dir> (or set HAMN_ROOT), or open the project folder in a client that sends MCP roots",
+			Fix: "start asc-mcp with --root <project dir> (or set ASC_MCP_ROOT), or open the project folder in a client that sends MCP roots",
 		}
 	}
 	return root, check{Name: "files", Status: statusOK, Detail: "file tools are confined to " + root}

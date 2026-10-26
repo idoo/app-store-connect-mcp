@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // buildFields is the sparse fieldset requested for builds.

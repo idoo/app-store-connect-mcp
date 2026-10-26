@@ -12,9 +12,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/idoo/hamn/internal/applemeta"
-	"github.com/idoo/hamn/internal/metadata"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/metadata"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // platformEnum lists the App Store Connect platforms accepted by `platform`.

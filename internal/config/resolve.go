@@ -7,19 +7,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Mode environment variables.
 const (
-	EnvProfile          = "HAMN_PROFILE"
-	EnvAllowWrites      = "HAMN_ALLOW_WRITES"
-	EnvToolsets         = "HAMN_TOOLSETS"
-	EnvDiscovery        = "HAMN_DISCOVERY"
-	EnvMaxResponseBytes = "HAMN_MAX_RESPONSE_BYTES"
-	EnvMaxRetries       = "HAMN_MAX_RETRIES"
-	EnvBaseURL          = "HAMN_BASE_URL"
-	EnvCI               = "HAMN_CI"
+	EnvProfile          = "ASC_MCP_PROFILE"
+	EnvAllowWrites      = "ASC_MCP_ALLOW_WRITES"
+	EnvToolsets         = "ASC_MCP_TOOLSETS"
+	EnvDiscovery        = "ASC_MCP_DISCOVERY"
+	EnvMaxResponseBytes = "ASC_MCP_MAX_RESPONSE_BYTES"
+	EnvMaxRetries       = "ASC_MCP_MAX_RETRIES"
+	EnvBaseURL          = "ASC_MCP_BASE_URL"
+	EnvCI               = "ASC_MCP_CI"
 )
 
 // Defaults and bounds for limits.
@@ -37,7 +37,7 @@ type Flags struct {
 	AllowWrites *bool
 	Toolsets    *string
 	Discovery   *bool
-	// NoConfirm skips confirmations; honored only when HAMN_CI is true.
+	// NoConfirm skips confirmations; honored only when ASC_MCP_CI is true.
 	NoConfirm bool
 }
 
@@ -64,7 +64,7 @@ type ResolvedProfile struct {
 	DefaultApp    string
 	AllowWrites   bool
 	AllowNoElicit bool
-	// PinSource is the .hamn.toml path when a pin was applied.
+	// PinSource is the .asc-mcp.toml path when a pin was applied.
 	PinSource string
 	// Problems are user-fixable issues doctor reports; the server still starts.
 	Problems []string
@@ -224,7 +224,7 @@ func (r *Resolved) loadProfile(name string, cfg *Config, env envCreds, hasEnv bo
 	p := &r.Profile
 	switch name {
 	case "":
-		p.Problems = append(p.Problems, "no credentials: set "+EnvKeyID+", "+EnvIssuerID+" and "+EnvKeyPath+", or run `hamn auth import`")
+		p.Problems = append(p.Problems, "no credentials: set "+EnvKeyID+", "+EnvIssuerID+" and "+EnvKeyPath+", or run `asc-mcp auth import`")
 	case EnvProfileName:
 		if !hasEnv {
 			return fmt.Errorf("profile %q selected but %s is not set", EnvProfileName, EnvKeyID)

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
 
 func versionsFake(t *testing.T) *tooltest.FakeASC {

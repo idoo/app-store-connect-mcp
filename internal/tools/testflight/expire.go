@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // maxExpireBuilds caps the builds one builds_expire call handles.

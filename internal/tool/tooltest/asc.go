@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/idoo/hamn/internal/ascrules"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/ascrules"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // Fixture is one canned response.

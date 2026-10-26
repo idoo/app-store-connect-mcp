@@ -41,7 +41,7 @@ linters:
             - "**/internal/tools/**"
           deny:
             # "$" makes the match exact, so internal/ascrules stays allowed.
-            - pkg: github.com/idoo/hamn/internal/asc$
+            - pkg: github.com/idoo/app-store-connect-mcp/internal/asc$
               desc: tool packages use tool.Env.ASC and internal/ascrules, never the client directly
     forbidigo:
       forbid:

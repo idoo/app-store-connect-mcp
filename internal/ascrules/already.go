@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // AlreadyRule recognizes the App Store Connect error that one create

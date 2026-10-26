@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // prcGetMaxProducts caps the products of one pricing_get call, and

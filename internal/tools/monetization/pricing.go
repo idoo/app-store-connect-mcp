@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // prcRateReserve is the hourly quota pricing_apply always leaves untouched.

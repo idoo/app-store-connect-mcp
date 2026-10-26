@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/upload"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/upload"
 )
 
 // Wait bounds for Apple's processing after the upload is committed.

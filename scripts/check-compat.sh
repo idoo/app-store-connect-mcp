@@ -26,7 +26,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 if [ -z "$old" ]; then
-	repo=${GITHUB_REPOSITORY:-idoo/hamn}
+	repo=${GITHUB_REPOSITORY:-idoo/app-store-connect-mcp}
 	if ! tag=$(gh release view --repo "$repo" --json tagName --jq .tagName 2>/dev/null) || [ -z "$tag" ]; then
 		echo "check-compat: no release of $repo yet; skipping" >&2
 		exit 0

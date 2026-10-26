@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // toolsetsName is the name of the session-built toolsets tool.
@@ -68,7 +68,7 @@ func (s *session) markLocked(r *tool.Result) {
 	}
 }
 
-// writesHint is the one way hamn tells an agent to turn writes on.
+// writesHint is the one way asc-mcp tells an agent to turn writes on.
 const writesHint = `call toolsets with action "enable_writes"; it asks the user to approve writes for this session`
 
 // unifyWritesHint rewrites a writes_disabled error, whatever tool raised it,

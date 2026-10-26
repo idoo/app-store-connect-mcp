@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type toolsetsIn struct {
@@ -162,25 +162,25 @@ func clientName(ctx context.Context) string {
 	return ""
 }
 
-// writesInstructions returns copy-paste steps to restart hamn with writes on
+// writesInstructions returns copy-paste steps to restart asc-mcp with writes on
 // for the detected MCP client.
 func writesInstructions(client string) string {
-	const tail = " Then restart the client. Alternatively set allow_writes = true in the profile in ~/.config/hamn/config.toml."
+	const tail = " Then restart the client. Alternatively set allow_writes = true in the profile in ~/.config/asc-mcp/config.toml."
 	c := strings.ToLower(client)
 	switch {
 	case strings.Contains(c, "claude-code") || strings.Contains(c, "claude code"):
-		return "Ask the user to run: claude mcp remove hamn -s user && claude mcp add hamn -s user -e HAMN_ALLOW_WRITES=1 <existing -e ASC_* flags> -- hamn." + tail
+		return "Ask the user to run: claude mcp remove asc-mcp -s user && claude mcp add asc-mcp -s user -e ASC_MCP_ALLOW_WRITES=1 <existing -e ASC_* flags> -- asc-mcp." + tail
 	case strings.Contains(c, "claude"):
-		return `Ask the user to add "HAMN_ALLOW_WRITES": "1" to mcpServers.hamn.env in claude_desktop_config.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.asc-mcp.env in claude_desktop_config.json.` + tail
 	case strings.Contains(c, "cursor"):
-		return `Ask the user to add "HAMN_ALLOW_WRITES": "1" to mcpServers.hamn.env in ~/.cursor/mcp.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.asc-mcp.env in ~/.cursor/mcp.json.` + tail
 	case strings.Contains(c, "codex"):
-		return `Ask the user to add HAMN_ALLOW_WRITES = "1" to env of [mcp_servers.hamn] in ~/.codex/config.toml.` + tail
+		return `Ask the user to add ASC_MCP_ALLOW_WRITES = "1" to env of [mcp_servers.asc-mcp] in ~/.codex/config.toml.` + tail
 	case strings.Contains(c, "visual studio code") || strings.Contains(c, "vscode"):
-		return `Ask the user to add "HAMN_ALLOW_WRITES": "1" to servers.hamn.env in .vscode/mcp.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to servers.asc-mcp.env in .vscode/mcp.json.` + tail
 	case strings.Contains(c, "windsurf"):
-		return `Ask the user to add "HAMN_ALLOW_WRITES": "1" to mcpServers.hamn.env in ~/.codeium/windsurf/mcp_config.json.` + tail
+		return `Ask the user to add "ASC_MCP_ALLOW_WRITES": "1" to mcpServers.asc-mcp.env in ~/.codeium/windsurf/mcp_config.json.` + tail
 	default:
-		return "Ask the user to set the environment variable HAMN_ALLOW_WRITES=1 in this client's hamn server config (or start hamn with --allow-writes)." + tail
+		return "Ask the user to set the environment variable ASC_MCP_ALLOW_WRITES=1 in this client's asc-mcp server config (or start asc-mcp with --allow-writes)." + tail
 	}
 }

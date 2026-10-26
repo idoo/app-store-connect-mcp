@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 func TestParseToolsets(t *testing.T) {

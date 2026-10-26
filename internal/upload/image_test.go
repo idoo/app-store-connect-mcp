@@ -7,8 +7,8 @@ import (
 	"hash/crc32"
 	"testing"
 
-	"github.com/idoo/hamn/internal/applemeta"
-	"github.com/idoo/hamn/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 // pngChunk encodes one PNG chunk with its CRC.

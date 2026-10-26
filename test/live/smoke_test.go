@@ -1,12 +1,12 @@
 //go:build live
 
 // Package live is a read-only smoke test against the real App Store Connect
-// API. It uses the credentials hamn would use (ASC_* env, HAMN_PROFILE or the
+// API. It uses the credentials asc-mcp would use (ASC_* env, ASC_MCP_PROFILE or the
 // config file), forces read-only mode and refuses every non-GET request at
 // the HTTP transport, so a bug can at worst fail the test, never touch Apple.
 //
 //	make smoke
-//	HAMN_SMOKE_APP=1234567890 make smoke   # pick the app (default: first)
+//	ASC_MCP_SMOKE_APP=1234567890 make smoke   # pick the app (default: first)
 package live
 
 import (
@@ -17,11 +17,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/hamn/internal/app"
-	"github.com/idoo/hamn/internal/config"
-	"github.com/idoo/hamn/internal/tool"
-	"github.com/idoo/hamn/internal/tool/tooltest"
-	_ "github.com/idoo/hamn/internal/tools/all"
+	"github.com/idoo/app-store-connect-mcp/internal/app"
+	"github.com/idoo/app-store-connect-mcp/internal/config"
+	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/all"
 )
 
 // getOnly refuses and records every request that is not a GET.
@@ -90,7 +90,7 @@ func TestSmoke(t *testing.T) {
 
 	t.Run("doctor", func(t *testing.T) { call(t, "doctor", "") })
 
-	appID := os.Getenv("HAMN_SMOKE_APP")
+	appID := os.Getenv("ASC_MCP_SMOKE_APP")
 	t.Run("apps_list", func(t *testing.T) {
 		res := call(t, "apps_list", `{"limit":5}`)
 		out := tooltest.Decode[struct {
