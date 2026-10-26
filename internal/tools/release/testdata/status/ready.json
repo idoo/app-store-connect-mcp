@@ -3,7 +3,9 @@
     "app": {
       "id": "100",
       "bundle_id": "se.jvcr.hjul",
-      "name": "Hjul",
+      "name": {
+        "untrusted": "Hjul"
+      },
       "platforms": [
         "IOS"
       ]

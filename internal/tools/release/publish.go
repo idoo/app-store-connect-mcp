@@ -46,7 +46,7 @@ func init() {
 var distributedStates = []string{"PROCESSING_FOR_DISTRIBUTION", "READY_FOR_DISTRIBUTION"}
 
 type publishOut struct {
-	App      tool.App      `json:"app"`
+	App      appOut        `json:"app"`
 	Platform tool.Platform `json:"platform"`
 	Version  versionView   `json:"version"`
 	Phased   *phasedView   `json:"phased_release,omitempty"`
@@ -65,7 +65,7 @@ func releasePublish(ctx context.Context, env *tool.Env, in publishIn) (*tool.Res
 	if err != nil {
 		return nil, err
 	}
-	out := publishOut{App: app, Platform: platform, Version: viewVersion(d.Version)}
+	out := publishOut{App: newAppOut(app), Platform: platform, Version: viewVersion(d.Version)}
 	if p := phasedOf(d); p != nil {
 		out.Phased = viewPhased(*p)
 	}
@@ -119,7 +119,7 @@ var phasedTransitions = map[string]phasedTransition{
 }
 
 type phasedOut struct {
-	App      tool.App      `json:"app"`
+	App      appOut        `json:"app"`
 	Platform tool.Platform `json:"platform"`
 	Version  versionView   `json:"version"`
 	Action   string        `json:"action"`
@@ -146,7 +146,7 @@ func releasePhased(ctx context.Context, env *tool.Env, in phasedIn) (*tool.Resul
 	if err != nil {
 		return nil, err
 	}
-	out := phasedOut{App: app, Platform: platform, Version: viewVersion(d.Version), Action: in.Action}
+	out := phasedOut{App: newAppOut(app), Platform: platform, Version: viewVersion(d.Version), Action: in.Action}
 	ph := phasedOf(d)
 	if ph != nil {
 		out.Before = viewPhased(*ph)

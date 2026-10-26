@@ -22,6 +22,9 @@ var platformOrder = []tool.Platform{tool.IOS, tool.MacOS, tool.TVOS, tool.Vision
 // case-insensitive). An empty ref uses Options.DefaultApp, then the account's
 // only app. The result's Platforms come from the app's App Store versions.
 func (r *Resolver) App(ctx context.Context, ref tool.AppRef) (tool.App, error) {
+	if ref.IsAll() {
+		return tool.App{}, tool.ErrAllAppsUnsupported()
+	}
 	s := strings.TrimSpace(string(ref))
 	if s == "" {
 		s = strings.TrimSpace(r.defaultApp)

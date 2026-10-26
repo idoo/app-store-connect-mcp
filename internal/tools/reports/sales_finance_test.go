@@ -87,8 +87,12 @@ func TestSalesReportThisWeek(t *testing.T) {
 	if s := tooltest.JSON(t, got["units"]); s != `{"download":120,"iap":8,"redownload":4,"subscription":7,"update":30}` {
 		t.Errorf("units = %s", s)
 	}
-	// Exact per-currency sums, largest first, never summed across currencies.
-	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"420","currency":"JPY"},{"amount":"19.54","currency":"USD"},{"amount":"3.88","currency":"EUR"}]` {
+	// MA3: the refund row (units −1) is reported next to the net units.
+	if s := tooltest.JSON(t, got["refunds"]); s != `{"subscription":1}` {
+		t.Errorf("refunds = %s", s)
+	}
+	// Exact per-currency sums, sorted by currency code, never summed across currencies.
+	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"3.88","currency":"EUR"},{"amount":"420","currency":"JPY"},{"amount":"19.54","currency":"USD"}]` {
 		t.Errorf("proceeds = %s", s)
 	}
 	if _, ok := got["proceeds_estimate_usd"]; ok {
@@ -238,7 +242,7 @@ func TestFinanceReportPerCurrencyOnly(t *testing.T) {
 	if note, _ := got["note"].(string); !strings.Contains(note, "Payments page") {
 		t.Errorf("note = %q", note)
 	}
-	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"420","currency":"JPY"},{"amount":"27.90","currency":"USD"},{"amount":"1.38","currency":"EUR"}]` {
+	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"1.38","currency":"EUR"},{"amount":"420","currency":"JPY"},{"amount":"27.90","currency":"USD"}]` {
 		t.Errorf("proceeds = %s", s)
 	}
 	r := k.ASC.Requests()[0].Query
@@ -252,7 +256,7 @@ func TestFinanceReportExplicitMonth(t *testing.T) {
 	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial.tsv")
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`))
 	got := tooltest.Decode[map[string]any](t, res)
-	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"420","currency":"JPY"},{"amount":"27.21","currency":"USD"},{"amount":"1.38","currency":"EUR"}]` {
+	if s := tooltest.JSON(t, got["proceeds"]); s != `[{"amount":"1.38","currency":"EUR"},{"amount":"420","currency":"JPY"},{"amount":"27.21","currency":"USD"}]` {
 		t.Errorf("proceeds = %s", s)
 	}
 	if got["region"] != "ZZ" || got["report_type"] != "FINANCIAL" {

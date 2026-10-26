@@ -46,6 +46,13 @@ type fixture struct {
 	age map[string]any
 	// cpp routes the custom product page GETs (nil: no pages).
 	cpp func(k *tooltest.Kit)
+	// library routes the Asset Library placement GETs (nil: none placed).
+	library func(k *tooltest.Kit)
+	// placed are the localization ids (loc0…) reported as having library
+	// placements by the discovery read (default: loc0 when library is set).
+	placed []string
+	// attachments are App Review attachment file names.
+	attachments []string
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -227,6 +234,31 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		}
 		return tooltest.Fixture{Status: 200, Body: []byte(doc(t, sets, shots...))}
 	})
+	if f.library != nil {
+		f.library(k)
+		if f.placed == nil {
+			f.placed = []string{"loc0"}
+		}
+	} else {
+		k.ASC.Handle("GET", "/v1/appStoreVersionLocalizations/{id}/placements", 200, `{"data":[]}`)
+	}
+	k.ASC.HandleFunc("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations?include=placements", func(tool.Request) tooltest.Fixture {
+		var locs []jres
+		for i, loc := range f.locales {
+			id := fmt.Sprintf("loc%d", i)
+			ps := []string{}
+			if slices.Contains(f.placed, id) {
+				ps = append(ps, "appAssetLibraryPlacements:p-"+id)
+			}
+			locs = append(locs, jres{Type: "appStoreVersionLocalizations", ID: id, Attrs: map[string]any{"locale": loc}, Rels: map[string]any{"placements": ps}})
+		}
+		return tooltest.Fixture{Status: 200, Body: []byte(doc(t, locs))}
+	})
+	atts := []jres{}
+	for i, n := range f.attachments {
+		atts = append(atts, jres{Type: "appStoreReviewAttachments", ID: fmt.Sprintf("att%d", i), Attrs: map[string]any{"fileName": n}})
+	}
+	k.ASC.Handle("GET", "/v1/appStoreReviewDetails/{id}/appStoreReviewAttachments", 200, doc(t, atts))
 	if f.noPrice {
 		k.ASC.Handle("GET", "/v1/apps/{id}/appPriceSchedule", 404, notFound)
 	} else {
@@ -381,8 +413,21 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 		t.Errorf("15-locale fixture not ready: %+v", out.Checks)
 	}
 	reqs := k.ASC.Requests()
-	if len(reqs) > 27 { // 26 + the custom product page list
-		t.Fatalf("%d requests for 15 locales, want ≤ 27", len(reqs))
+	if len(reqs) > 29 { // 26 + the custom product page list + placed-localization discovery + review attachments
+		t.Fatalf("%d requests for 15 locales, want ≤ 29", len(reqs))
+	}
+	if got := k.ASC.RequestsTo("GET", "/v1/appStoreVersionLocalizations/{id}/placements"); len(got) != 0 {
+		t.Errorf("placements read without placed localizations: %d", len(got))
+	}
+
+	// 2 of 15 localizations have library placements: one read each.
+	k2 := setup(t, fixture{locales: locs, placed: []string{"loc0", "loc7"}})
+	call(t, k2, `{"app":"Hjul","version":"1.4"}`)
+	if n := len(k2.ASC.Requests()); n > 31 { // 27 + discovery + 2 placed + review attachments
+		t.Fatalf("%d requests with 2 placed localizations, want ≤ 31", n)
+	}
+	if got := k2.ASC.RequestsTo("GET", "/v1/appStoreVersionLocalizations/{id}/placements"); len(got) != 2 {
+		t.Errorf("placements reads = %d, want 2", len(got))
 	}
 	for _, r := range reqs {
 		if r.Method != http.MethodGet {

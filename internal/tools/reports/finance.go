@@ -134,7 +134,7 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 	out.Status = "available"
 	out.Rows = len(rows)
 	out.Units = sum.Units
-	out.Proceeds = sortedAmounts(sum.Proceeds)
+	out.Proceeds = currencyAmounts(sum.Proceeds)
 	out.Note = financeFXNote
 	out.Products, out.Omitted = financeProducts(rows, topN)
 	// Rows behind omitted products are only reachable through the artifact.

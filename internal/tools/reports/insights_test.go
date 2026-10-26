@@ -70,9 +70,9 @@ func TestInsightsSummaryWithSales(t *testing.T) {
 	if s := tooltest.JSON(t, sales["units_change"]); s != `{"download":"+466.7%","iap":"+66.7%"}` {
 		t.Errorf("units_change = %s", s)
 	}
-	if s := tooltest.JSON(t, sales["proceeds"]); s != `[{"amount":"2520","currency":"JPY","previous":"0"},`+
-		`{"amount":"113.04","change":"+2591.4%","currency":"USD","previous":"4.20"},`+
-		`{"amount":"8.28","change":"-44.8%","currency":"EUR","previous":"15.00"}]` {
+	if s := tooltest.JSON(t, sales["proceeds"]); s != `[{"amount":"8.28","change":"-44.8%","currency":"EUR","previous":"15.00"},`+
+		`{"amount":"2520","currency":"JPY","previous":"0"},`+
+		`{"amount":"113.04","change":"+2591.4%","currency":"USD","previous":"4.20"}]` {
 		t.Errorf("proceeds = %s", s)
 	}
 	if n := len(k.ASC.RequestsTo(http.MethodGet, "/v1/salesReports")); n != 14 {

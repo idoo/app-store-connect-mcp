@@ -108,14 +108,18 @@ func pngImage(t *testing.T, w, h int, alpha bool, seed uint8) []byte {
 
 // fake is a stateful App Store Connect fake for screenshot sets.
 type fake struct {
-	t        *testing.T
-	k        *tooltest.Kit
-	mu       sync.Mutex
-	locs     map[string]string // locale -> localization id
-	sets     map[string][]*fakeSet
-	shots    map[string]*fakeShot
-	previews map[string][]*fakePreviewSet
-	next     int
+	t    *testing.T
+	k    *tooltest.Kit
+	mu   sync.Mutex
+	locs map[string]string // locale -> localization id
+	// library maps a localization id to its placements response; status
+	// libraryStatus (when set) answers every placements read.
+	library       map[string][]byte
+	libraryStatus int
+	sets          map[string][]*fakeSet
+	shots         map[string]*fakeShot
+	previews      map[string][]*fakePreviewSet
+	next          int
 }
 
 type fakeSet struct {
@@ -204,6 +208,17 @@ func body(req tool.Request) map[string]any {
 func (f *fake) routes() {
 	t, k := f.t, f.k
 	k.ASC.Handle("GET", "/v1/apps/{id}", 200, `{"data":{"type":"apps","id":"app1","attributes":{"primaryLocale":"en-US"}}}`)
+	k.ASC.HandleFunc("GET", "/v1/appStoreVersionLocalizations/{id}/placements", func(req tool.Request) tooltest.Fixture {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.libraryStatus != 0 {
+			return tooltest.Fixture{Status: f.libraryStatus, Body: []byte(`{"errors":[{"status":"403","code":"FORBIDDEN_ERROR","title":"forbidden","detail":"no"}]}`)}
+		}
+		if b, ok := f.library[strings.Split(req.Path, "/")[3]]; ok {
+			return tooltest.Fixture{Status: 200, Body: b}
+		}
+		return tooltest.Fixture{Status: 200, Body: []byte(`{"data":[]}`)}
+	})
 	k.ASC.HandleFunc("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", func(req tool.Request) tooltest.Fixture {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -227,6 +242,13 @@ func (f *fake) routes() {
 					inc = append(inc, jres{Type: "appPreviewSets", ID: s.id, Attrs: map[string]any{"previewType": s.previewType}})
 				}
 				r.Rels["appPreviewSets"] = ids
+			}
+			if strings.Contains(include, "placements") {
+				ids := []string{}
+				if _, ok := f.library[id]; ok || f.libraryStatus != 0 {
+					ids = append(ids, "appAssetLibraryPlacements:p-"+id)
+				}
+				r.Rels["placements"] = ids
 			}
 			data = append(data, r)
 		}

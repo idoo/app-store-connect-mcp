@@ -202,11 +202,15 @@ func (c *Client) List(ctx context.Context, path string, opts tool.ListOptions) (
 		if len(opts.Include) > 0 {
 			q.Set("include", strings.Join(opts.Include, ","))
 		}
-		limit := opts.Limit
-		if limit <= 0 {
-			limit = DefaultMaxItems
+		switch limit := opts.Limit; {
+		case limit < 0:
+			// The operation takes no limit parameter (Apple 400s on it).
+			q.Del("limit")
+		case limit == 0:
+			q.Set("limit", strconv.Itoa(DefaultMaxItems))
+		default:
+			q.Set("limit", strconv.Itoa(limit))
 		}
-		q.Set("limit", strconv.Itoa(limit))
 		u.RawQuery = q.Encode()
 		first = u.String()
 	}
@@ -428,6 +432,7 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 		return nil, fmt.Errorf("%w: wait for a request slot: %w", errNotSent, ctx.Err())
 	}
 	defer func() { <-c.sem }()
+	tool.CountAppleRequest(ctx)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("transport: %w", err)

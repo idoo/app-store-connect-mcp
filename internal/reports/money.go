@@ -9,25 +9,33 @@ import (
 )
 
 // ParseAmount parses a decimal string exactly ("1,234.56", "-0.70", "(3.10)",
-// ""). An empty string is zero. Exponents and fractions are rejected.
+// ""). An empty string is zero. Commas are accepted only as thousands
+// separators of the integer part ("1,234.50", "1,234,567"); ambiguous commas
+// ("1,23", "1,234" which may be a decimal comma) are rejected, as are
+// exponents and fractions.
 func ParseAmount(s string) (*big.Rat, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return new(big.Rat), nil
 	}
+	raw := s
 	neg := false
 	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
 		neg, s = true, strings.TrimSpace(s[1:len(s)-1])
 	}
-	if strings.Contains(s, ".") {
-		s = strings.ReplaceAll(s, ",", "")
+	if strings.Contains(s, ",") {
+		ungrouped, ok := ungroupThousands(s)
+		if !ok {
+			return nil, fmt.Errorf("reports: invalid amount %q: %w", raw, ErrCorrupt)
+		}
+		s = ungrouped
 	}
 	if s == "" || strings.ContainsAny(s, "eE/,_ ") {
-		return nil, fmt.Errorf("reports: invalid amount %q: %w", s, ErrCorrupt)
+		return nil, fmt.Errorf("reports: invalid amount %q: %w", raw, ErrCorrupt)
 	}
 	r, ok := new(big.Rat).SetString(s)
 	if !ok {
-		return nil, fmt.Errorf("reports: invalid amount %q: %w", s, ErrCorrupt)
+		return nil, fmt.Errorf("reports: invalid amount %q: %w", raw, ErrCorrupt)
 	}
 	if neg {
 		r.Neg(r)
@@ -35,10 +43,41 @@ func ParseAmount(s string) (*big.Rat, error) {
 	return r, nil
 }
 
+// ungroupThousands removes thousands separators from s when its integer part
+// is grouped exactly as 1-3 digits followed by groups of 3 ("-1,234,567.8").
+// A single group without a decimal point ("1,234") is rejected: it may be a
+// decimal comma (1.234).
+func ungroupThousands(s string) (string, bool) {
+	sign := ""
+	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") {
+		sign, s = s[:1], s[1:]
+	}
+	intPart, frac, hasFrac := strings.Cut(s, ".")
+	if strings.Contains(frac, ",") {
+		return "", false
+	}
+	groups := strings.Split(intPart, ",")
+	if len(groups) == 2 && !hasFrac {
+		return "", false
+	}
+	for i, g := range groups {
+		if (i == 0 && (len(g) < 1 || len(g) > 3)) || (i > 0 && len(g) != 3) || strings.Trim(g, "0123456789") != "" {
+			return "", false
+		}
+	}
+	out := sign + strings.Join(groups, "")
+	if hasFrac {
+		out += "." + frac
+	}
+	return out, true
+}
+
 // minorUnits lists ISO 4217 currencies whose minor unit is not 2 digits.
+// HUF, IDR and TWD have 2 in ISO 4217 and appear with decimals in Apple's
+// proceeds, so they use the default.
 var minorUnits = map[string]int{
-	"BHD": 3, "CLP": 0, "HUF": 0, "IDR": 0, "ISK": 0, "JOD": 3, "JPY": 0,
-	"KRW": 0, "KWD": 3, "OMR": 3, "TND": 3, "TWD": 0, "UGX": 0, "VND": 0,
+	"BHD": 3, "CLP": 0, "ISK": 0, "JOD": 3, "JPY": 0,
+	"KRW": 0, "KWD": 3, "OMR": 3, "TND": 3, "UGX": 0, "VND": 0,
 }
 
 // Precision returns the number of decimal digits shown for currency.

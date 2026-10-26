@@ -11,6 +11,25 @@ import (
 // pinned/default app of the profile.
 type AppRef string
 
+// AllApps is the reserved [AppRef] for every app of the account. Only the
+// tools in [AllAppsTools] accept it (they check [AppRef.IsAll] before
+// resolving); the shared resolvers refuse it with [ErrAllAppsUnsupported].
+const AllApps AppRef = "all"
+
+// AllAppsTools are the tools that accept app:"all".
+var AllAppsTools = []string{"reviews_list", "digest_summary", "insights_summary"}
+
+// IsAll reports whether ref is the reserved keyword "all".
+func (r AppRef) IsAll() bool {
+	return strings.EqualFold(strings.TrimSpace(string(r)), string(AllApps))
+}
+
+// ErrAllAppsUnsupported is the invalid_args error for app:"all" passed to a
+// tool that works on one app.
+func ErrAllAppsUnsupported() error {
+	return InvalidArgs(`app "all" works only in %s — pass one app`, strings.Join(AllAppsTools, ", "))
+}
+
 // VersionRef names an App Store version: "" or "editable" (the in-flight
 // version), "live", or a version string such as "2.1".
 type VersionRef string

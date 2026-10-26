@@ -57,7 +57,8 @@ type ListOptions struct {
 	Fields map[string][]string
 	// Include lists relationship names to include.
 	Include []string
-	// Limit is the per-page size (default 200, Apple's maximum for most lists).
+	// Limit is the per-page size (default 200, Apple's maximum for most
+	// lists); negative sends no limit, for operations without one.
 	Limit int
 	// MaxItems caps the total number of primary items (default 200, max 5000).
 	MaxItems int

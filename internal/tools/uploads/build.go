@@ -26,11 +26,20 @@ type buildUploadIn struct {
 	Wait        int           `json:"wait_seconds,omitempty" jsonschema:"seconds to wait for Apple's processing (default 45, max 300)"`
 }
 
+// appOut is the resolved app echoed in results; its name is untrusted (PO7).
+type appOut struct {
+	ID        string          `json:"id"`
+	BundleID  string          `json:"bundle_id"`
+	Name      tool.Untrusted  `json:"name"`
+	SKU       string          `json:"sku,omitempty"`
+	Platforms []tool.Platform `json:"platforms,omitempty"`
+}
+
 type buildUploadOut struct {
-	App           tool.App `json:"app"`
-	File          string   `json:"file"`
-	SizeBytes     int64    `json:"size_bytes"`
-	UploadedBytes int64    `json:"uploaded_bytes"`
+	App           appOut `json:"app"`
+	File          string `json:"file"`
+	SizeBytes     int64  `json:"size_bytes"`
+	UploadedBytes int64  `json:"uploaded_bytes"`
 	*upload.BuildResult
 }
 
@@ -101,7 +110,10 @@ func buildsUpload(ctx context.Context, env *tool.Env, in buildUploadIn) (*tool.R
 		return nil, err
 	}
 
-	out := buildUploadOut{App: app, File: in.Path, SizeBytes: st.Size(), UploadedBytes: st.Size(), BuildResult: res}
+	out := buildUploadOut{
+		App:  appOut{ID: app.ID, BundleID: app.BundleID, Name: tool.Untrusted(app.Name), SKU: app.SKU, Platforms: app.Platforms},
+		File: in.Path, SizeBytes: st.Size(), UploadedBytes: st.Size(), BuildResult: res,
+	}
 	if res.StillProcessing {
 		return tool.StillProcessing(out, "the file is uploaded; Apple is still processing it. Wait with builds_wait (the build appears a few minutes after COMPLETE)").
 			Then(tool.NextStep{Tool: "builds_wait", Args: map[string]any{

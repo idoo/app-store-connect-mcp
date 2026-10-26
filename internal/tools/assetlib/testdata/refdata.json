@@ -1,0 +1,127 @@
+{
+ "data": [
+  {
+   "type": "appAssetLibraryRefData",
+   "id": "1",
+   "attributes": {
+    "features": [
+     {
+      "featureId": "APP_STORE_VERSIONS",
+      "placementPolicies": [
+       {
+        "placementType": "IMESSAGE_APP_SCREENSHOT",
+        "groupLimits": [
+         {
+          "groupIds": [
+           "IMESSAGE_IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE",
+           "IMESSAGE_IPHONE_FACE_ID_LARGE_PROFILE",
+           "IMESSAGE_IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+           "IMESSAGE_IPHONE_FACE_ID_MEDIUM_PROFILE",
+           "IMESSAGE_IPHONE_HOME_BUTTON_LARGE_PROFILE",
+           "IMESSAGE_IPHONE_HOME_BUTTON_MEDIUM_PROFILE",
+           "IMESSAGE_IPHONE_HOME_BUTTON_40_PROFILE",
+           "IMESSAGE_IPHONE_HOME_BUTTON_35_PROFILE",
+           "IMESSAGE_IPAD_13_PROFILE",
+           "IMESSAGE_IPAD_129_PROFILE",
+           "IMESSAGE_IPAD_11_PROFILE",
+           "IMESSAGE_IPAD_105_PROFILE",
+           "IMESSAGE_IPAD_97_PROFILE",
+           "IMESSAGE_IPHONE_DUO_PROFILE"
+          ],
+          "maxCount": 10
+         }
+        ]
+       },
+       {
+        "placementType": "APP_SCREENSHOT",
+        "groupLimits": [
+         {
+          "groupIds": [
+           "MAC_PROFILE",
+           "TV_PROFILE",
+           "VISION_PRO_PROFILE",
+           "WATCH_ULTRA_PROFILE",
+           "WATCH_SERIES_10_PROFILE",
+           "WATCH_SERIES_7_PROFILE",
+           "WATCH_SERIES_4_PROFILE",
+           "WATCH_SERIES_3_PROFILE",
+           "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE",
+           "IPHONE_FACE_ID_LARGE_PROFILE",
+           "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+           "IPHONE_FACE_ID_MEDIUM_PROFILE",
+           "IPHONE_HOME_BUTTON_LARGE_PROFILE",
+           "IPHONE_HOME_BUTTON_MEDIUM_PROFILE",
+           "IPHONE_HOME_BUTTON_40_PROFILE",
+           "IPHONE_HOME_BUTTON_35_PROFILE",
+           "IPAD_13_PROFILE",
+           "IPAD_129_PROFILE",
+           "IPAD_11_PROFILE",
+           "IPAD_105_PROFILE",
+           "IPAD_97_PROFILE",
+           "IPHONE_DUO_PROFILE"
+          ],
+          "maxCount": 10
+         }
+        ]
+       },
+       {
+        "placementType": "APP_PREVIEW",
+        "groupLimits": [
+         {
+          "groupIds": [
+           "MAC_PROFILE",
+           "TV_PROFILE",
+           "VISION_PRO_PROFILE",
+           "WATCH_ULTRA_PROFILE",
+           "WATCH_SERIES_10_PROFILE",
+           "WATCH_SERIES_7_PROFILE",
+           "WATCH_SERIES_4_PROFILE",
+           "WATCH_SERIES_3_PROFILE",
+           "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE",
+           "IPHONE_FACE_ID_LARGE_PROFILE",
+           "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+           "IPHONE_FACE_ID_MEDIUM_PROFILE",
+           "IPHONE_HOME_BUTTON_LARGE_PROFILE",
+           "IPHONE_HOME_BUTTON_MEDIUM_PROFILE",
+           "IPHONE_HOME_BUTTON_40_PROFILE",
+           "IPHONE_HOME_BUTTON_35_PROFILE",
+           "IPAD_13_PROFILE",
+           "IPAD_129_PROFILE",
+           "IPAD_11_PROFILE",
+           "IPAD_105_PROFILE",
+           "IPAD_97_PROFILE",
+           "IPHONE_DUO_PROFILE"
+          ],
+          "maxCount": 3
+         }
+        ]
+       },
+       {
+        "placementType": "PRODUCT_PAGE_HEADER_ASSET",
+        "groupLimits": [
+         {
+          "groupIds": [
+           "DEFAULT_PROFILE"
+          ],
+          "maxCount": 1
+         }
+        ]
+       },
+       {
+        "placementType": "APP_STORE_SEARCH_RESULTS_ASSET",
+        "groupLimits": [
+         {
+          "groupIds": [
+           "DEFAULT_PROFILE"
+          ],
+          "maxCount": 1
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

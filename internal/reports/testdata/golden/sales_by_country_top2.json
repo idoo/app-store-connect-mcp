@@ -7,6 +7,9 @@
       "subscription": 7,
       "update": 30
     },
+    "refunds": {
+      "subscription": 1
+    },
     "proceeds": {
       "EUR": "1.38",
       "JPY": "420",
@@ -23,6 +26,9 @@
         "iap": 3,
         "subscription": 6,
         "update": 30
+      },
+      "refunds": {
+        "subscription": 1
       },
       "proceeds": {
         "USD": "18.84"

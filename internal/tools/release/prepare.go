@@ -76,7 +76,7 @@ type prepareVersion struct {
 }
 
 type prepareOut struct {
-	App            tool.App              `json:"app"`
+	App            appOut                `json:"app"`
 	Platform       tool.Platform         `json:"platform"`
 	Version        prepareVersion        `json:"version"`
 	Build          *tool.Build           `json:"build,omitempty"`
@@ -150,7 +150,7 @@ func releasePrepare(ctx context.Context, env *tool.Env, in prepareIn) (*tool.Res
 	}
 
 	p := &preparer{env: env, app: app, platform: platform, snap: snap, d: d, rt: rt, key: key, build: build}
-	p.out = prepareOut{App: app, Platform: platform, Version: prepareVersion{ID: snap.versionID(), String: versionString}, Build: build, Steps: []prepStep{}}
+	p.out = prepareOut{App: newAppOut(app), Platform: platform, Version: prepareVersion{ID: snap.versionID(), String: versionString}, Build: build, Steps: []prepStep{}}
 	if err := p.run(wctx); err != nil {
 		return nil, tool.WithNext(err, statusNext(app, platform, versionString, nil))
 	}

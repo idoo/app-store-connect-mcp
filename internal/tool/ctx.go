@@ -1,6 +1,9 @@
 package tool
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 type ctxKey int
 
@@ -31,6 +34,17 @@ type call struct {
 	// args are the decoded tool arguments; [RequireConfirm] binds previews
 	// and confirms to them.
 	args map[string]any
+	// appleRequests counts HTTP attempts sent to Apple during the call.
+	appleRequests atomic.Int64
+}
+
+// CountAppleRequest records one HTTP attempt (retries and pages included)
+// against the tool call carried by ctx; outside a call it does nothing. The
+// count is reported as _meta.app-store-connect-mcp.requests.apple.
+func CountAppleRequest(ctx context.Context) {
+	if c := callFrom(ctx); c != nil {
+		c.appleRequests.Add(1)
+	}
 }
 
 func withCall(ctx context.Context, c *call) context.Context {

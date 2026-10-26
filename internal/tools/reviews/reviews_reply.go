@@ -18,7 +18,7 @@ const maxReplies = 20
 
 type replyIn struct {
 	tool.ConfirmFlag
-	App     tool.AppRef `json:"app,omitempty" jsonschema:"the reviews' app (named in the result); default: pinned"`
+	App     tool.AppRef `json:"app,omitempty" jsonschema:"the reviews' app; default pinned"`
 	Replies []replyItem `json:"replies" jsonschema:"1-20 replies; an existing response is replaced"`
 }
 
@@ -156,7 +156,7 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 	// mark_seen, which knows what the agent actually read, does.
 	data := map[string]any{"replied": len(outcomes) - failed, "failed": failed, "results": outcomes}
 	if appErr == nil {
-		data["app"] = appRef{ID: app.ID, Name: app.Name, BundleID: app.BundleID}
+		data["app"] = appRef{ID: app.ID, Name: tool.Untrusted(app.Name), BundleID: app.BundleID}
 	}
 	return tool.Batch(data, len(outcomes)-failed, 0, errs), nil
 }

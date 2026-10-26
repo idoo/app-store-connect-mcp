@@ -282,6 +282,9 @@ func (t Tool) Call(ctx context.Context, env *Env, raw json.RawMessage) (res *Res
 				res.Warn(fmt.Sprintf("only %d App Store Connect calls left this hour", rl.Remaining))
 			}
 		}
+		if n := c.appleRequests.Load(); n > 0 {
+			res.Meta.Requests = &Requests{Apple: n}
+		}
 	}()
 	return t.call(withCall(ctx, c), env, raw)
 }

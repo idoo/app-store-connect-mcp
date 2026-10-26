@@ -151,6 +151,15 @@ func releaseKit(t *testing.T) (*tooltest.Kit, *releaseFake) {
 			[]res{{Type: "appScreenshotSets", ID: "set-" + id, Attrs: map[string]any{"screenshotDisplayType": "APP_IPHONE_67"}, Rels: map[string]any{"appScreenshots": []string{"appScreenshots:s-" + id}}}},
 			res{Type: "appScreenshots", ID: "s-" + id, Attrs: map[string]any{"assetDeliveryState": map[string]any{"state": "COMPLETE"}}})}
 	})
+	// Asset Library discovery: no localization has placements; no review attachments.
+	asc.HandleFunc(http.MethodGet, "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", func(tool.Request) tooltest.Fixture {
+		var data []res
+		for _, id := range locIDs {
+			data = append(data, res{Type: "appStoreVersionLocalizations", ID: id, Attrs: map[string]any{"locale": releaseLocales[id]}})
+		}
+		return tooltest.Fixture{Status: http.StatusOK, Body: jsonDoc(t, data)}
+	})
+	asc.Handle(http.MethodGet, "/v1/appStoreReviewDetails/{id}/appStoreReviewAttachments", http.StatusOK, `{"data":[]}`)
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/appPriceSchedule", http.StatusOK, string(jsonDoc(t, res{Type: "appPriceSchedules", ID: hjul.ID, Attrs: map[string]any{}, Rels: map[string]any{"baseTerritory": "territories:USA"}})))
 	asc.Handle(http.MethodGet, "/v1/apps/{id}/appAvailabilityV2", http.StatusOK, string(jsonDoc(t, res{Type: "appAvailabilities", ID: hjul.ID, Attrs: map[string]any{"availableInNewTerritories": true}})))
 	asc.Handle(http.MethodGet, "/v1/reviewSubmissions", http.StatusOK, `{"data":[]}`)

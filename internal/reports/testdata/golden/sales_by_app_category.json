@@ -7,6 +7,9 @@
       "subscription": 7,
       "update": 30
     },
+    "refunds": {
+      "subscription": 1
+    },
     "proceeds": {
       "EUR": "1.38",
       "JPY": "420",
@@ -46,6 +49,9 @@
       },
       "units": {
         "subscription": 7
+      },
+      "refunds": {
+        "subscription": 1
       },
       "proceeds": {
         "JPY": "420",

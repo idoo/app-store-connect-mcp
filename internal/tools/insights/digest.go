@@ -23,15 +23,16 @@ const (
 	digestLimitDefault = 20
 	digestLimitMax     = 100
 	digestAllMax       = 10
-	digestFanOut       = 4
-	digestAllApps      = "all"
-	digestSinceDefault = 7
-	digestSinceMax     = 90
-	digestSrcRev       = "reviews"
-	digestSrcFb        = "feedback"
-	digestSrcState     = "states"
-	digestSrcBuild     = "builds"
-	digestSrcSales     = "sales"
+	// digestNextPerAppMax caps the per-app next steps of app "all".
+	digestNextPerAppMax = 5
+	digestFanOut        = 4
+	digestSinceDefault  = 7
+	digestSinceMax      = 90
+	digestSrcRev        = "reviews"
+	digestSrcFb         = "feedback"
+	digestSrcState      = "states"
+	digestSrcBuild      = "builds"
+	digestSrcSales      = "sales"
 	// Source statuses.
 	digestOK          = "ok"
 	digestError       = "error"
@@ -57,7 +58,8 @@ var digestFeedbackKinds = []struct{ name, resource string }{
 }
 
 type digestIn struct {
-	App            tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; \"all\" = up to 10 apps"`
+	App            tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; \"all\" = 10 apps, in-flight first"`
+	Offset         int         `json:"offset,omitempty" jsonschema:"with app \"all\": skip this many ranked apps"`
 	Sources        []string    `json:"sources,omitempty" jsonschema:"sources to read (default all)"`
 	LimitPerSource int         `json:"limit_per_source,omitempty" jsonschema:"items per source (default 20, max 100)"`
 	MarkSeen       bool        `json:"mark_seen,omitempty" jsonschema:"advance each source to the last item returned"`
@@ -158,7 +160,7 @@ func digestSummary(ctx context.Context, env *tool.Env, in digestIn) (*tool.Resul
 		}
 	}
 	res := &tool.Result{}
-	apps, err := digestTargets(ctx, env, in.App, res)
+	apps, skipped, err := digestTargets(ctx, env, in, res)
 	if err != nil {
 		return nil, err
 	}
@@ -196,34 +198,51 @@ func digestSummary(ctx context.Context, env *tool.Env, in digestIn) (*tool.Resul
 			strings.Join(fresh, ", "), base.Format(time.DateOnly), days))
 	}
 	digestNext(res, outs, in, stateDown)
-	res.Data = map[string]any{"mark_seen": in.MarkSeen && !stateDown, "limit_per_source": limit, "apps": outs}
+	data := map[string]any{"mark_seen": in.MarkSeen && !stateDown, "limit_per_source": limit, "apps": outs}
+	if len(skipped) > 0 {
+		data["skipped_apps"] = skipped
+		res.Then(tool.NextStep{Tool: "digest_summary", Args: map[string]any{"app": string(tool.AllApps), "offset": in.Offset + len(apps)}})
+	}
+	res.Data = data
 	return res, nil
 }
 
-// digestTargets resolves one app, or up to digestAllMax apps for "all".
-func digestTargets(ctx context.Context, env *tool.Env, ref tool.AppRef, res *tool.Result) ([]tool.App, error) {
-	if !strings.EqualFold(string(ref), digestAllApps) {
-		app, err := env.Resolve.App(ctx, ref)
-		if err != nil {
-			return nil, err
+// digestTargets resolves one app, or for "all" the batch of up to
+// digestAllMax apps at in.Offset of the [Portfolio] ranking (in-flight
+// versions first, then latest activity); later apps are returned as skipped.
+func digestTargets(ctx context.Context, env *tool.Env, in digestIn, res *tool.Result) ([]tool.App, []digestAppRef, error) {
+	if !in.App.IsAll() {
+		if in.Offset != 0 {
+			return nil, nil, tool.InvalidArgs(`offset needs app "all"`)
 		}
-		return []tool.App{app}, nil
+		app, err := env.Resolve.App(ctx, in.App)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []tool.App{app}, nil, nil
 	}
-	list, err := env.ASC.List(ctx, "/v1/apps", tool.ListOptions{
-		Fields: map[string][]string{"apps": {"name", "bundleId", "sku"}}, Limit: 200, MaxItems: 200,
-	})
+	ranked, err := Portfolio(ctx, env)
 	if err != nil {
-		return nil, fmt.Errorf("list apps: %w", err)
+		return nil, nil, err
 	}
-	apps := make([]tool.App, 0, min(len(list.Data), digestAllMax))
-	for _, a := range list.Data {
-		apps = append(apps, tool.App{ID: a.ID, Name: a.Str("name"), BundleID: a.Str("bundleId"), SKU: a.Str("sku")}) // trusted: tool.App holds the raw name; digestAppRef wraps it on output
+	if in.Offset < 0 || (in.Offset > 0 && in.Offset >= len(ranked)) {
+		return nil, nil, tool.InvalidArgs("offset %d is not 0-%d", in.Offset, max(len(ranked)-1, 0))
 	}
-	if len(apps) > digestAllMax {
-		res.Warn(fmt.Sprintf("app \"all\" is capped at %d of %d apps; pass app for the others", digestAllMax, len(apps)))
-		apps = apps[:digestAllMax]
+	rest := ranked[in.Offset:]
+	apps := make([]tool.App, 0, min(len(rest), digestAllMax))
+	var skipped []digestAppRef
+	for i, p := range rest {
+		if i < digestAllMax {
+			apps = append(apps, p.App) // trusted: tool.App holds the raw name; digestAppRef wraps it on output
+			continue
+		}
+		skipped = append(skipped, digestAppRef{ID: p.App.ID, Name: tool.Untrusted(p.App.Name)})
 	}
-	return apps, nil
+	if len(skipped) > 0 {
+		res.Warn(fmt.Sprintf("app \"all\" covers %d of %d apps per call (in-flight first); skipped_apps lists the rest, next continues at offset %d",
+			len(apps), len(rest), in.Offset+len(apps)))
+	}
+	return apps, skipped, nil
 }
 
 // digestApp reads every source of one app. A failing source keeps its
@@ -754,44 +773,55 @@ func digestSalesDay(ctx context.Context, env *tool.Env, app tool.App, day string
 // digestNext suggests the detail tools for sources with news and another
 // digest call when a source has more or nothing was marked seen.
 func digestNext(res *tool.Result, outs []digestAppOut, in digestIn, stateDown bool) {
-	var rev, fb, states, more, news bool
-	var gapTools []string
+	var more, news bool
+	// need maps a detail tool to the ids of the apps whose sources call for it.
+	need := map[string][]string{}
+	add := func(tl, id string) {
+		if !slices.Contains(need[tl], id) {
+			need[tl] = append(need[tl], id)
+		}
+	}
 	for _, o := range outs {
 		for name, s := range o.Sources {
 			news = news || s.Returned > 0
 			// A held gap repeats the same items until caught up, so it does
 			// not ask for another mark_seen call.
 			more = more || (s.More && !s.GapKept)
-			if s.Gap > 0 && s.Skipped == 0 && !slices.Contains(gapTools, s.gapTool) {
-				gapTools = append(gapTools, s.gapTool)
+			if s.Gap > 0 && s.Skipped == 0 {
+				add(s.gapTool, o.App.ID)
 			}
 			switch {
 			case name == digestSrcRev && s.Returned > 0:
-				rev = true
+				add("reviews_list", o.App.ID)
 			case name == digestSrcFb && s.Returned > 0:
-				fb = true
+				add("testflight_feedback_list", o.App.ID)
 			case name == digestSrcState && s.Returned > 0:
-				states = true
+				add("release_review_status", o.App.ID)
 			}
 		}
 	}
-	rev = rev || slices.Contains(gapTools, "reviews_list")
-	fb = fb || slices.Contains(gapTools, "testflight_feedback_list")
 	app := map[string]any{}
 	if in.App != "" {
 		app["app"] = string(in.App)
 	}
-	if rev {
-		res.Then(tool.NextStep{Tool: "reviews_list", Args: app})
-	}
-	if fb {
-		res.Then(tool.NextStep{Tool: "testflight_feedback_list", Args: app})
-	}
-	if states {
-		res.Then(tool.NextStep{Tool: "release_review_status", Args: app})
-	}
-	if slices.Contains(gapTools, "builds_list") {
-		res.Then(tool.NextStep{Tool: "builds_list", Args: app})
+	perApp := 0
+	for _, tl := range []string{"reviews_list", "testflight_feedback_list", "release_review_status", "builds_list"} {
+		ids := need[tl]
+		switch {
+		case len(ids) == 0:
+		case !in.App.IsAll() || slices.Contains(tool.AllAppsTools, tl):
+			res.Then(tool.NextStep{Tool: tl, Args: app})
+		default:
+			// Single-app tools get the concrete app ids, at most
+			// digestNextPerAppMax steps in all.
+			for _, id := range ids {
+				if perApp == digestNextPerAppMax {
+					break
+				}
+				perApp++
+				res.Then(tool.NextStep{Tool: tl, Args: map[string]any{"app": id}})
+			}
+		}
 	}
 	if stateDown {
 		return
@@ -800,6 +830,9 @@ func digestNext(res *tool.Result, outs []digestAppOut, in digestIn, stateDown bo
 		args := map[string]any{"mark_seen": true}
 		for k, v := range app {
 			args[k] = v
+		}
+		if in.Offset > 0 {
+			args["offset"] = in.Offset
 		}
 		if in.LimitPerSource > 0 {
 			args["limit_per_source"] = in.LimitPerSource
