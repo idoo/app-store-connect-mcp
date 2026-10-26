@@ -139,11 +139,6 @@ func isAll(refs []string) bool {
 	return len(refs) == 1 && strings.EqualFold(strings.TrimSpace(refs[0]), "all")
 }
 
-// relData is a JSON:API to-one relationship body.
-func relData(typ, id string) map[string]any {
-	return map[string]any{"data": map[string]any{"type": typ, "id": id}}
-}
-
 // relList is a JSON:API to-many relationship body.
 func relList(typ string, ids []string) map[string]any {
 	data := make([]map[string]any, len(ids))

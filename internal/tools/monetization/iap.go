@@ -3,6 +3,7 @@ package monetization
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -106,7 +107,7 @@ func iapList(ctx context.Context, env *tool.Env, in iapListIn) (*tool.Result, er
 	if err != nil {
 		return nil, fmt.Errorf("list in-app purchases: %w", err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	out := iapListOut{App: app, Total: res.Total, Returned: res.Returned, ByState: map[string]int{}, Items: []iapOut{}, NextCursor: res.NextCursor}
 	for _, r := range res.Data {
 		fam, _ := r.Bool("familySharable")
@@ -224,7 +225,7 @@ func iapUpsert(ctx context.Context, env *tool.Env, in iapUpsertIn) (*tool.Result
 			g.irreversible("family sharing cannot be turned off again; family members get it from one purchase")
 		}
 		if len(locs) > 0 {
-			g.add(gateAdditive, "POST /v2/inAppPurchaseLocalizations "+strings.Join(sortedKeys(locs), ","))
+			g.add(gateAdditive, "POST /v2/inAppPurchaseLocalizations "+strings.Join(slices.Sorted(maps.Keys(locs)), ","))
 		}
 	} else {
 		if in.Type != "" && cur.Str("inAppPurchaseType") != "" && in.Type != cur.Str("inAppPurchaseType") {
@@ -349,7 +350,7 @@ func iapFind(ctx context.Context, env *tool.Env, appID, productID string) (produ
 	if err != nil {
 		return product, shot, false, fmt.Errorf("look up in-app purchase %s: %w", productID, err)
 	}
-	inc := indexIncluded(resp.Included)
+	inc := tool.IndexIncluded(resp.Included)
 	for _, r := range resp.Data {
 		if r.Str("productId") == productID {
 			if id := r.RelID("appStoreReviewScreenshot"); id != "" {

@@ -188,12 +188,17 @@ Verify it before first use with either of:
 (download $archive, checksums.txt and checksums.txt.sigstore.json from
 https://github.com/$repo/releases/tag/v$version), or re-run this installer with
 cosign or an authenticated gh installed. Set ASC_MCP_REQUIRE_SIGNATURE=1 to
-refuse unverified installs. Then: $dest config snippet claude-code
+refuse unverified installs. Then: $dest auth import, then $dest config install claude-code
 
 EOF
 	exit 0
 fi
 
 say "installed $dest ($("$dest" version 2>/dev/null || echo "$version"))"
-say "next: create an API key (App Store Connect > Users and Access > Integrations), then add app-store-connect-mcp to Claude Code:"
-"$dest" config snippet claude-code || true
+# Credentials first, and only while no profile is saved.
+case "$("$dest" auth list 2>/dev/null || true)" in
+"" | "no profiles"*)
+	say "next: create an API key (App Store Connect > Users and Access > Integrations), then run: $dest auth import (or: $dest auth add)"
+	;;
+esac
+say "then add app-store-connect-mcp to your client: $dest config install claude-code (or claude-desktop, codex, cursor, vscode, windsurf)"

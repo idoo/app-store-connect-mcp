@@ -67,7 +67,7 @@ func offerSubs(ctx context.Context, env *tool.Env, appID string) ([]offerSub, er
 	if err != nil {
 		return nil, fmt.Errorf("list subscriptions: %w", err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	var out []offerSub
 	for _, g := range res.Data {
 		for _, s := range related(g, "subscriptions", "subscriptions", inc) {

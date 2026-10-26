@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -104,6 +106,9 @@ func doctor(ctx context.Context, rep *report, profile string) {
 	} else {
 		rep.ok("%s", line)
 	}
+	if saved := shadowedProfile(r); saved != "" {
+		rep.warn("ASC_* env overrides saved profile %q (unset %s to use it, or pass --profile %s)", saved, config.EnvKeyID, saved)
+	}
 	if p.Key.Source == config.KeyFromFile {
 		if id, bad := keyIDMismatch(p.KeyID, p.Key.Path); bad {
 			rep.warn("key id %s doesn't match the file name AuthKey_%s.p8; one of them is wrong", p.KeyID, id)
@@ -175,6 +180,22 @@ func doctor(ctx context.Context, rep *report, profile string) {
 	}
 }
 
+// shadowedProfile names the saved profile that ASC_* environment credentials
+// replace: the default profile, else the first by name. It is "" when no env
+// profile is in use or nothing is saved.
+func shadowedProfile(r *config.Resolved) string {
+	if r.Profile.Name != config.EnvProfileName || r.Config == nil {
+		return ""
+	}
+	if r.Config.DefaultProfile != "" {
+		return r.Config.DefaultProfile
+	}
+	if names := slices.Sorted(maps.Keys(r.Config.Profiles)); len(names) > 0 {
+		return names[0]
+	}
+	return ""
+}
+
 // signCheck loads the key and signs a JWT.
 func signCheck(ctx context.Context, rep *report, r *config.Resolved) bool {
 	src, err := app.KeySource(r.Profile.Key, os.Getenv)
@@ -192,7 +213,11 @@ func signCheck(ctx context.Context, rep *report, r *config.Resolved) bool {
 		}
 	}
 	if err != nil {
-		rep.fail("key/JWT: %v", err)
+		if errors.Is(err, fs.ErrNotExist) && !strings.Contains(err.Error(), config.MissingKeyHint) {
+			rep.fail("key/JWT: %v; %s", err, config.MissingKeyHint)
+		} else {
+			rep.fail("key/JWT: %v", err)
+		}
 		return false
 	}
 	rep.ok("key loaded and JWT signed")

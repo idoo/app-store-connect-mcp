@@ -43,6 +43,12 @@ linters:
             # "$" makes the match exact, so internal/ascrules stays allowed.
             - pkg: github.com/idoo/app-store-connect-mcp/internal/asc$
               desc: tool packages use tool.Env.ASC and internal/ascrules, never the client directly
+        netpolicy-leaf:
+          files:
+            - "**/internal/netpolicy/**"
+          deny:
+            - pkg: github.com/idoo/app-store-connect-mcp/
+              desc: internal/netpolicy is a stdlib-only leaf shared by internal/asc and the tool packages
     forbidigo:
       forbid:
         - pattern: ^fmt\.Print.*$

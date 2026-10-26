@@ -3,6 +3,7 @@ package monetization
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -93,7 +94,7 @@ func (g *upsertGate) planAttrs(label, path string, cur tool.Resource, changed ma
 	if on, _ := changed["familySharable"].(bool); on {
 		g.irreversible("family sharing on " + label + " cannot be turned off again; family members get it from one purchase")
 	}
-	g.add(level, "PATCH "+path+" "+strings.Join(sortedKeys(changed), ","))
+	g.add(level, "PATCH "+path+" "+strings.Join(slices.Sorted(maps.Keys(changed)), ","))
 }
 
 // planLocs classifies localization writes: new locales are additive, changed
@@ -103,7 +104,7 @@ func (g *upsertGate) planLocs(k versionKind, existing []tool.Resource, want map[
 	for _, r := range existing {
 		byLocale[r.Str("locale")] = r
 	}
-	for _, loc := range sortedKeys(want) {
+	for _, loc := range slices.Sorted(maps.Keys(want)) {
 		cur, ok := byLocale[loc]
 		if !ok {
 			g.add(gateAdditive, "POST "+k.LocPath+" "+loc)
@@ -138,7 +139,7 @@ func findOpenVersion(ctx context.Context, env *tool.Env, k versionKind, parentID
 	if !ok {
 		return v, nil, false, nil
 	}
-	return v, related(v, "localizations", k.LocType, indexIncluded(resp.Included)), true, nil
+	return v, related(v, "localizations", k.LocType, tool.IndexIncluded(resp.Included)), true, nil
 }
 
 // writeLocs writes localizations on the version found while planning, or
@@ -152,13 +153,4 @@ func writeLocs(ctx context.Context, env *tool.Env, k versionKind, parentID strin
 		}
 	}
 	return out, upsertLocs(ctx, env, k, out.ID, existing, want), nil
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	slices.Sort(out)
-	return out
 }

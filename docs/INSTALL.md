@@ -23,6 +23,8 @@ docker run -i --rm \
   ghcr.io/idoo/app-store-connect-mcp
 ```
 
+On Linux the container runs as uid 65532 and can't read a 0600 key you own. Pass it as `-e ASC_PRIVATE_KEY="$(cat …p8)"` instead of the mount, or add `--user "$(id -u)"`.
+
 For HTTP, the container listens on a non-loopback address, so it needs `--allow-remote`, a bearer token and TLS:
 
 ```sh
@@ -54,4 +56,4 @@ app-store-connect-mcp config install claude-code    # or claude-desktop, cursor,
 
 ## 4. Try it
 
-Call the `doctor` tool, then ask "what's blocking my next release?". app-store-connect-mcp starts read-only, so the worst it can do is know things. See [SAFETY.md](SAFETY.md).
+Call the `doctor` tool, then ask "what's blocking my next release?". app-store-connect-mcp starts read-only, so the worst it can do is know things. See [SAFETY.md](SAFETY.md). Upgrading, uninstalling and common errors: [FAQ.md](FAQ.md).

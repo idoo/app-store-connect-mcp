@@ -324,7 +324,7 @@ func TestStableBinaryPath(t *testing.T) {
 }
 
 func TestCodexTimeouts(t *testing.T) {
-	block := codexBlock(fakeBin, "")
+	block := codexBlock(fakeBin, serverOpts{})
 	for _, want := range []string{"startup_timeout_sec = 20", "tool_timeout_sec = 330"} {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)
@@ -346,7 +346,7 @@ func TestInstallUnchangedIsNoOp(t *testing.T) {
 		t.Run(client, func(t *testing.T) {
 			home := t.TempDir()
 			var out strings.Builder
-			if err := install(client, fakeBin, "", home, &out); err != nil {
+			if err := install(client, fakeBin, serverOpts{}, home, &out); err != nil {
 				t.Fatal(err)
 			}
 			path := clientConfigPath(client, home)
@@ -355,7 +355,7 @@ func TestInstallUnchangedIsNoOp(t *testing.T) {
 				t.Fatal(err)
 			}
 			out.Reset()
-			if err := install(client, fakeBin, "", home, &out); err != nil {
+			if err := install(client, fakeBin, serverOpts{}, home, &out); err != nil {
 				t.Fatal(err)
 			}
 			if !strings.Contains(out.String(), "unchanged") {
@@ -379,7 +379,7 @@ func TestInstallClaudeCodeFallback(t *testing.T) {
 		return &exec.Error{Name: "claude", Err: exec.ErrNotFound}
 	}
 	var out strings.Builder
-	if err := install("claude-code", fakeBin, "", t.TempDir(), &out); err != nil {
+	if err := install("claude-code", fakeBin, serverOpts{}, t.TempDir(), &out); err != nil {
 		t.Fatalf("not found should fall back, got %v", err)
 	}
 	if !strings.Contains(out.String(), "claude mcp add app-store-connect-mcp -s user -- "+fakeBin) {
@@ -392,7 +392,7 @@ func TestInstallClaudeCodeFallback(t *testing.T) {
 		return ctx.Err()
 	}
 	out.Reset()
-	err := install("claude-code", fakeBin, "", t.TempDir(), &out)
+	err := install("claude-code", fakeBin, serverOpts{}, t.TempDir(), &out)
 	if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(out.String(), "claude mcp add") {
 		t.Fatalf("err = %v out = %q", err, out.String())
 	}
@@ -418,7 +418,7 @@ func TestInstallClaudeCodeAlreadyRegistered(t *testing.T) {
 				}
 				return nil
 			}
-			if err := install("claude-code", fakeBin, "", t.TempDir(), io.Discard); err != nil {
+			if err := install("claude-code", fakeBin, serverOpts{}, t.TempDir(), io.Discard); err != nil {
 				t.Fatal(err)
 			}
 			added := slices.ContainsFunc(calls, func(a []string) bool { return a[2] == "add" })

@@ -14,6 +14,7 @@ import (
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/metadata"
+	"github.com/idoo/app-store-connect-mcp/internal/resolve"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -54,15 +55,7 @@ type appInfoOut struct {
 }
 
 // target is a resolved app, platform and version.
-type target struct {
-	App      tool.App
-	Platform tool.Platform
-	Version  tool.Version
-	// FirstVersion is true when the app has never had a live version.
-	FirstVersion bool
-	// FellBack is true when no version was editable and the live one was used.
-	FellBack bool
-}
+type target struct{ resolve.Resolved }
 
 func (t *target) appOut() appOut {
 	return appOut{ID: t.App.ID, Name: t.App.Name, BundleID: t.App.BundleID}
@@ -75,34 +68,11 @@ func (t *target) versionOut() versionOut {
 // resolveTarget resolves app, platform and version. With fallbackLive an
 // unspecified version falls back to the live one when nothing is editable.
 func resolveTarget(ctx context.Context, env *tool.Env, appRef tool.AppRef, platform tool.Platform, ref tool.VersionRef, fallbackLive bool) (*target, error) {
-	app, err := env.Resolve.App(ctx, appRef)
+	r, err := resolve.Target(ctx, env, appRef, platform, ref, resolve.Fallback{Live: fallbackLive, FirstVersion: true})
 	if err != nil {
 		return nil, err
 	}
-	t := &target{App: app, Platform: app.Platform(platform)}
-	v, err := env.Resolve.Version(ctx, app.ID, t.Platform, ref)
-	var nf *tool.ErrNotFound
-	if err != nil && fallbackLive && (ref == "" || ref == tool.VersionEditable) && errors.As(err, &nf) {
-		v, err = env.Resolve.Version(ctx, app.ID, t.Platform, tool.VersionLive)
-		t.FellBack = err == nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if v.ID == "" {
-		return nil, tool.WithNext(&tool.ErrNotFound{Kind: "version", Ref: v.String, Hint: "the version does not exist yet; create it with release_prepare"},
-			tool.NextStep{Tool: "release_prepare", Args: map[string]any{"app": app.ID, "platform": string(t.Platform), "version": v.String}})
-	}
-	t.Version = v
-	if v.State != versionStateLive {
-		if _, err := env.Resolve.Version(ctx, app.ID, t.Platform, tool.VersionLive); err != nil {
-			if !errors.As(err, &nf) {
-				return nil, err
-			}
-			t.FirstVersion = true
-		}
-	}
-	return t, nil
+	return &target{*r}, nil
 }
 
 // appInfoSet is the app's app infos by role; any may be nil.

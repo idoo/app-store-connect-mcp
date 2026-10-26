@@ -857,7 +857,7 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`action`|string|yes|`list`, `enable`, `disable`, `enable_writes`|what to do|
+|`action`|string||`list`, `enable`, `disable`, `enable_writes`|default list|
 |`toolsets`|string[]||`core`, `release`, `testflight`, `metadata`, `reviews`, `reports`, `screenshots`, `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store`, `insights`|toolsets for enable/disable|
 
 ### users_invite

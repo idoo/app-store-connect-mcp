@@ -4,6 +4,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-26
+
+### Added
+
+- `config snippet|install <client> --allow-writes` turns writes on for that one client only. The locked-tool hint now points at it.
+- `docs/FAQ.md`: upgrading, rotating a key, uninstalling, and the errors people actually hit (401, missing `.p8`, env overriding a profile, Docker can't read the key).
+- The README says what MCP is and has a three-step quickstart.
+
+### Changed
+
+- Leaving out the app when you have several now says "which app? you have N apps" with the real count, and mentions `default_app` and the project pin.
+- `insights_summary` without a vendor number tells you the exact `auth set … vendor_number=` command instead of suggesting `sales_report`, which would fail the same way. `auth add`/`auth import` stop calling the vendor number optional.
+- `doctor` warns when `ASC_*` variables in your shell override a saved profile.
+- `auth import` names the variable for each missing piece, and says so plainly when stdin isn't a terminal instead of `read answer: EOF`. A missing `.p8` comes with a fix.
+- `config snippet` and `install.sh` show the credentials step first, and skip it once a profile exists.
+- `toolsets` with no arguments lists the toolsets.
+- `guard --help` shows its thresholds.
+- Internals: one public-address policy for every outbound check (`internal/netpolicy`), one set of JSON:API helpers, one version resolver for metadata and screenshots, no test hooks in package variables, dead code removed, and CI fails on new dead code. The URL check in `release_status` now also refuses addresses that aren't global unicast.
+
+### Fixed
+
+- SAFETY.md's list of human-approved actions was missing `appinfo_update` (publishing accessibility labels) and `testflight_groups_upsert` (turning on a public link).
+- The `.mcpb` listed 6 of the 8 prompts.
+- `make docs` failed after any hand edit under `docs/`.
+
 ## [0.9.0] - 2026-10-26
 
 ### Added
@@ -203,7 +228,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.6.0...v0.7.0

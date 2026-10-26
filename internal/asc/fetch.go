@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/idoo/app-store-connect-mcp/internal/netpolicy"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -29,19 +30,6 @@ const (
 // ErrURLPolicy is returned when a URL, redirect target, dialed address or
 // request header violates the unauthenticated fetch policy.
 var ErrURLPolicy = errors.New("url policy")
-
-// blockedPrefixes are non-public ranges not covered by the netip predicates:
-// "this network", CGNAT, IETF protocol assignments, benchmarking, reserved
-// class E and NAT64 (which can embed any IPv4 address).
-var blockedPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("64:ff9b::/96"),
-	netip.MustParsePrefix("64:ff9b:1::/48"),
-}
 
 // FetchOptions configures [NewFetcher].
 type FetchOptions struct {
@@ -204,26 +192,10 @@ func (f *Fetcher) checkIP(addr netip.Addr) error {
 	if f.allowLoopback && addr.IsLoopback() {
 		return nil
 	}
-	if !publicIP(addr) {
+	if !netpolicy.PublicAddr(addr) {
 		return fmt.Errorf("%w: address %s is not public", ErrURLPolicy, addr)
 	}
 	return nil
-}
-
-// publicIP reports whether addr is a globally routable unicast address.
-func publicIP(addr netip.Addr) bool {
-	addr = addr.Unmap()
-	if !addr.IsValid() || addr.IsLoopback() || addr.IsPrivate() || addr.IsUnspecified() ||
-		addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() || addr.IsInterfaceLocalMulticast() ||
-		addr.IsMulticast() || !addr.IsGlobalUnicast() {
-		return false
-	}
-	for _, p := range blockedPrefixes {
-		if p.Contains(addr) {
-			return false
-		}
-	}
-	return true
 }
 
 // parseHostIP parses a URL host or dial host as an IP, dropping any zone.

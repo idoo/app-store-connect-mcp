@@ -35,7 +35,9 @@ func newTestSource(t *testing.T) (*TokenSource, *fakeClock) {
 		t.Fatal(err)
 	}
 	clk := &fakeClock{now: fixedNow}
-	return NewTokenSource(s, WithClock(clk.Now)), clk
+	ts := NewTokenSource(s)
+	ts.now = clk.Now
+	return ts, clk
 }
 
 func (ts *TokenSource) signCount() int {

@@ -18,7 +18,16 @@ import (
 const guardUsage = `usage: app-store-connect-mcp guard --app APP [--platform IOS] [--version V] [--pause-on-breach] [thresholds]
   evaluates release health and prints JSON; exit 0 healthy, 3 watch, 4 breach, 5 unknown (no diagnostics for the live build or no live version; never pauses), 1 error, 2 usage.
   --pause-on-breach only pauses an ACTIVE phased release on a breach with a pausing reason (diagnostics; never TestFlight or ratings)
-  and needs writes enabled (--allow-writes, ASC_MCP_ALLOW_WRITES=1 or profile allow_writes); it never resumes, completes or starts one.`
+  and needs writes enabled (--allow-writes, ASC_MCP_ALLOW_WRITES=1 or profile allow_writes); it never resumes, completes or starts one.
+thresholds (0 or unset = default):
+  --signature-watch-pct N   crash signature weight growth, percent, for watch (default 25)
+  --signature-breach-pct N  crash signature weight growth, percent, for breach (default 100)
+  --crash-watch N           TestFlight crash reports for watch (default 3)
+  --crash-breach N          TestFlight crash reports for breach (default 10)
+  --rating-drop-watch X     average rating drop for watch (default 0.3)
+  --rating-drop-breach X    average rating drop for breach (default 0.8)
+  --regressions-breach N    perf regressions for breach (default 2)
+  --profile NAME, --allow-writes`
 
 // Guard exit codes.
 const (

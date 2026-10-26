@@ -621,14 +621,6 @@ func (p *planned) changed() bool {
 	return slices.ContainsFunc(p.sets, (*setPlan).changed)
 }
 
-func (p *planned) deletes() int {
-	n := 0
-	for _, s := range p.sets {
-		n += len(s.Deletes)
-	}
-	return n
-}
-
 // fingerprint digests the remote sets the plan depends on.
 func (p *planned) fingerprint() (string, error) {
 	fp, err := tool.Fingerprint(p.remote)

@@ -2,7 +2,6 @@ package asc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -77,7 +76,7 @@ func Paginate(ctx context.Context, firstURL string, base *url.URL, maxItems int,
 			doc = &tool.Document{}
 		}
 		if page == 1 {
-			out.Total = pagingTotal(doc.Meta)
+			out.Total = doc.Total()
 		}
 		for _, r := range doc.Included {
 			k := r.Type + "\x00" + r.ID
@@ -151,19 +150,4 @@ func pageSetLimit(u, limit string) string {
 	}
 	p.RawQuery = q.Encode()
 	return p.String()
-}
-
-// pagingTotal reads meta.paging.total, or 0 when absent.
-func pagingTotal(meta map[string]any) int {
-	paging, _ := meta["paging"].(map[string]any)
-	switch v := paging["total"].(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	case json.Number:
-		n, _ := v.Int64()
-		return int(n)
-	}
-	return 0
 }

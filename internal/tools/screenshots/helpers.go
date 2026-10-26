@@ -2,12 +2,12 @@ package screenshots
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
+	"github.com/idoo/app-store-connect-mcp/internal/resolve"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
@@ -48,11 +48,7 @@ type versionOut struct {
 }
 
 // target is a resolved app, platform and version.
-type target struct {
-	App      tool.App
-	Platform tool.Platform
-	Version  tool.Version
-}
+type target struct{ resolve.Resolved }
 
 func (t *target) appOut() appOut {
 	return appOut{ID: t.App.ID, Name: t.App.Name, BundleID: t.App.BundleID}
@@ -66,32 +62,15 @@ func (t *target) versionOut() versionOut {
 // unspecified version must be the editable one (else no_editable_version);
 // otherwise it falls back to the live version.
 func resolveTarget(ctx context.Context, env *tool.Env, appRef tool.AppRef, platform tool.Platform, ref tool.VersionRef, editableOnly bool) (*target, error) {
-	app, err := env.Resolve.App(ctx, appRef)
+	fb := resolve.Fallback{Live: true}
+	if editableOnly {
+		fb = resolve.Fallback{NoEditable: errNoEditableVersion}
+	}
+	r, err := resolve.Target(ctx, env, appRef, platform, ref, fb)
 	if err != nil {
 		return nil, err
 	}
-	t := &target{App: app, Platform: app.Platform(platform)}
-	if ref == "" {
-		ref = tool.VersionEditable
-	}
-	v, err := env.Resolve.Version(ctx, app.ID, t.Platform, ref)
-	var nf *tool.ErrNotFound
-	if err != nil && ref == tool.VersionEditable && errors.As(err, &nf) {
-		if editableOnly {
-			return nil, tool.WithNext(fmt.Errorf("%s %s: %w", app.Name, t.Platform, errNoEditableVersion),
-				tool.NextStep{Tool: "release_prepare", Args: map[string]any{"app": app.ID, "platform": string(t.Platform)}})
-		}
-		v, err = env.Resolve.Version(ctx, app.ID, t.Platform, tool.VersionLive)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if v.ID == "" {
-		return nil, tool.WithNext(&tool.ErrNotFound{Kind: "version", Ref: v.String, Hint: "the version does not exist yet; create it with release_prepare"},
-			tool.NextStep{Tool: "release_prepare", Args: map[string]any{"app": app.ID, "platform": string(t.Platform), "version": v.String}})
-	}
-	t.Version = v
-	return t, nil
+	return &target{*r}, nil
 }
 
 // localization is one appStoreVersionLocalization.

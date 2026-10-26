@@ -240,15 +240,6 @@ func postResource(ctx context.Context, env *tool.Env, path, typ string, attrs ma
 	return r, nil
 }
 
-// indexIncluded indexes included resources by type and id.
-func indexIncluded(inc []tool.Resource) map[string]tool.Resource {
-	m := make(map[string]tool.Resource, len(inc))
-	for _, r := range inc {
-		m[r.Type+"/"+r.ID] = r
-	}
-	return m
-}
-
 // related returns the included resources of r's to-many relationship.
 func related(r tool.Resource, rel, typ string, inc map[string]tool.Resource) []tool.Resource {
 	var out []tool.Resource
@@ -288,7 +279,7 @@ func openVersion(ctx context.Context, env *tool.Env, k versionKind, parentID str
 		return versionOut{}, nil, fmt.Errorf("read %s of %s: %w", k.Type, parentID, err)
 	}
 	if v, ok := latestVersion(resp.Data); ok {
-		locs := related(v, "localizations", k.LocType, indexIncluded(resp.Included))
+		locs := related(v, "localizations", k.LocType, tool.IndexIncluded(resp.Included))
 		return versionOut{ID: v.ID, State: v.Str("state")}, locs, nil
 	}
 	v, err := postResource(ctx, env, k.CreatePath, k.Type, nil, map[string][2]string{k.ParentRel: {k.ParentType, parentID}})

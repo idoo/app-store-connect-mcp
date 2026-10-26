@@ -14,16 +14,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/idoo/app-store-connect-mcp/internal/spec"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 	"github.com/idoo/app-store-connect-mcp/internal/upload"
-)
-
-var (
-	specOnce sync.Once
-	specIdx  *spec.Index
-	specErr  error
 )
 
 // jres is a JSON:API resource for fixtures. Rels values are "type:id" or a

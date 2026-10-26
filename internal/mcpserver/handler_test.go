@@ -11,13 +11,11 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// R7 AO1: every result carries _meta as_of with UTC seconds and the
-// America/Los_Angeles calendar day.
+// Every result carries _meta as_of with UTC seconds and the
+// America/Los_Angeles calendar day, from the session clock.
 func TestRenderAsOf(t *testing.T) {
-	old := now
-	t.Cleanup(func() { now = old })
-	now = func() time.Time { return time.Date(2026, 10, 27, 3, 30, 15, 999, time.UTC) } // 26th in Cupertino
-	s := &session{deps: Deps{MaxResultBytes: 4096}}
+	at := time.Date(2026, 10, 27, 3, 30, 15, 999, time.UTC) // 26th in Cupertino
+	s := &session{deps: Deps{MaxResultBytes: 4096, Now: func() time.Time { return at }}}
 	for _, r := range []*tool.Result{tool.OK(map[string]any{"x": 1}), tool.Fail(tool.ErrInvalidArgs)} {
 		var body struct {
 			Meta map[string]struct {

@@ -4098,7 +4098,7 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "description": "what to do",
+          "description": "default list",
           "enum": [
             "list",
             "enable",
@@ -4132,9 +4132,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "action"
-      ],
       "type": "object"
     },
     "default_toolset": true,

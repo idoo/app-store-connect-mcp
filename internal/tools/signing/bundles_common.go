@@ -6,6 +6,7 @@ package signing
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -76,15 +77,6 @@ type bundleOut struct {
 	Capabilities []capOut       `json:"capabilities"`
 }
 
-// indexIncluded indexes included resources by type and id.
-func indexIncluded(inc []tool.Resource) map[string]tool.Resource {
-	m := make(map[string]tool.Resource, len(inc))
-	for _, r := range inc {
-		m[r.Type+"/"+r.ID] = r
-	}
-	return m
-}
-
 // parseSettings decodes the settings attribute of a capability (an array of
 // CapabilitySetting) into a map of setting key → option key → enabled.
 func parseSettings(v any) map[string]map[string]bool {
@@ -116,9 +108,9 @@ func parseSettings(v any) map[string]map[string]bool {
 func flattenCap(r tool.Resource) capOut {
 	c := capOut{ID: r.ID, Type: r.Str("capabilityType")}
 	settings := parseSettings(r.Attributes["settings"])
-	for _, key := range sortedKeys(settings) {
+	for _, key := range slices.Sorted(maps.Keys(settings)) {
 		s := settingOut{Key: key}
-		for _, opt := range sortedKeys(settings[key]) {
+		for _, opt := range slices.Sorted(maps.Keys(settings[key])) {
 			if settings[key][opt] {
 				s.Enabled = append(s.Enabled, opt)
 			}
@@ -167,7 +159,7 @@ func findIdentifier(ctx context.Context, env *tool.Env, identifier string) (bund
 	if err != nil {
 		return bundleOut{}, false, fmt.Errorf("find bundle ID %s: %w", identifier, err)
 	}
-	inc := indexIncluded(res.Included)
+	inc := tool.IndexIncluded(res.Included)
 	for _, r := range res.Data {
 		if strings.EqualFold(r.Str("identifier"), identifier) {
 			return flattenBundle(r, inc), true, nil
@@ -209,7 +201,7 @@ func lookupBundle(ctx context.Context, env *tool.Env, ref string) (bundleOut, er
 	if !ok {
 		return bundleOut{}, notFound
 	}
-	return flattenBundle(r, indexIncluded(resp.Included)), nil
+	return flattenBundle(r, tool.IndexIncluded(resp.Included)), nil
 }
 
 // checkEnum validates v against an enum list.
@@ -218,14 +210,4 @@ func checkEnum(arg, v string, enum []any) error {
 		return nil
 	}
 	return tool.InvalidArgs("%s %q is not one of %v", arg, v, enum)
-}
-
-// sortedKeys returns the keys of m in order.
-func sortedKeys[T any](m map[string]T) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
 }
