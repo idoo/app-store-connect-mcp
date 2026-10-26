@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
@@ -135,8 +136,8 @@ func TestIAPUpsertSetsAvailability(t *testing.T) {
 	}
 }
 
-// Replacing an existing subscription availability needs confirm; an
-// identical one writes nothing.
+// Removing territories from a subscription availability stops sales there and
+// needs a human; adding only needs confirm; an identical one writes nothing.
 func TestSubscriptionsUpsertAvailability(t *testing.T) {
 	setup := func() *tooltest.Kit {
 		k := newKit(t)
@@ -165,6 +166,15 @@ func TestSubscriptionsUpsertAvailability(t *testing.T) {
 	if d := tooltest.Decode[map[string]any](t, res); d["status"] != "needs_confirm" || len(k.ASC.Mutations()) != 0 {
 		t.Fatalf("want preview, got %v", d)
 	}
+	if js := tooltest.JSON(t, res); !strings.Contains(js, "stops sales in SWE") {
+		t.Fatalf("preview must name the removed territory: %s", js)
+	}
+	// Removing SWE: confirm:true alone is refused without a human.
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env, args+`,"confirm":true}`), tool.ErrHumanRequired.Code)
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("refused call mutated: %v", requestLog(k.ASC.Mutations()))
+	}
+	k.Elicit(true)
 	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env, args+`,"confirm":true}`))
 	m := k.ASC.Mutations()
 	if len(m) != 1 || m[0].Path != "/v1/subscriptionAvailabilities" || reqRel(t, m[0], "subscription") != "subscriptions/s1" {
@@ -172,6 +182,15 @@ func TestSubscriptionsUpsertAvailability(t *testing.T) {
 	}
 	if a := reqAttrs(t, m[0]); a["availableInNewTerritories"] != true {
 		t.Fatalf("current available_in_new_territories must be kept, got %v", a)
+	}
+
+	// Adding territories only: preview, then confirm:true suffices, no human.
+	k = setup()
+	add := `{"group":"Hjul Plus","product_id":"` + subsTestProduct + `","availability":{"territories":["USA","SWE","DEU"]}`
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env, add+`}`))
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "subscriptions_upsert"), k.Env, add+`,"confirm":true}`))
+	if m := k.ASC.Mutations(); len(m) != 1 || m[0].Path != "/v1/subscriptionAvailabilities" {
+		t.Fatalf("mutations = %v", requestLog(m))
 	}
 }
 

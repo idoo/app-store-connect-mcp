@@ -134,13 +134,22 @@ func TestDevicesRegisterIdempotentByUDID(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/devices", http.StatusCreated,
 		`{"data":{"type":"devices","id":"D2","attributes":{"name":"iPad","udid":"00008120-BBBB","platform":"IOS","status":"ENABLED"}}}`)
 	tl := mustTool(t, "signing_devices_register")
-	res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env,
-		`{"devices":[{"name":"Phone","udid":"00008110-aaaa"},{"name":"iPad","udid":"00008120-BBBB","platform":"IOS"}]}`))
-	wantLog(t, k, "GET /v1/devices", "POST /v1/devices")
+	args := `{"devices":[{"name":"Phone","udid":"00008110-aaaa"},{"name":"iPad","udid":"00008120-BBBB","platform":"IOS"}]`
+	// A new device needs confirm:true; without it only a preview.
+	prev := tooltest.Decode[map[string]any](t, tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, args+`}`)))
+	if prev["status"] != tool.ErrNeedsConfirm.Code || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("preview = %v", prev)
+	}
+	if p := prev["preview"].(map[string]any); p["summary"] != "register 1 new device(s)" || tooltest.JSON(t, p["affected"]) != `["00008120-BBBB"]` {
+		t.Fatalf("preview = %v", p)
+	}
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, args+`,"confirm":true}`))
+	wantLog(t, k, "GET /v1/devices", "GET /v1/devices", "POST /v1/devices")
 	if f := k.ASC.Requests()[0].Query.Get("filter[udid]"); f != "00008110-aaaa,00008120-BBBB" {
 		t.Fatalf("filter = %q", f)
 	}
-	attrs := bodyOf(t, k.ASC.Requests()[1])["data"].(map[string]any)["attributes"].(map[string]any)
+	attrs := bodyOf(t, k.ASC.Requests()[2])["data"].(map[string]any)["attributes"].(map[string]any)
 	if attrs["udid"] != "00008120-BBBB" || attrs["platform"] != "IOS" || attrs["name"] != "iPad" {
 		t.Fatalf("attrs = %v", attrs)
 	}
@@ -170,10 +179,29 @@ func TestDevicesRegisterConflictReadsBack(t *testing.T) {
 		`{"data":[{"type":"devices","id":"D7","attributes":{"name":"Mac","udid":"M-1","platform":"MAC_OS","status":"ENABLED"}}]}`)
 	k.ASC.Handle(http.MethodPost, "/v1/devices", http.StatusConflict,
 		`{"errors":[{"status":"409","code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"invalid","detail":"A device with number 'M-1' already exists on this team."}]}`)
-	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_devices_register"), k.Env, `{"devices":[{"name":"Mac","udid":"M-1","platform":"MAC_OS"}]}`))
+	k.Elicit(true)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_devices_register"), k.Env, `{"devices":[{"name":"Mac","udid":"M-1","platform":"MAC_OS"}],"confirm":true}`))
 	wantLog(t, k, "GET /v1/devices", "POST /v1/devices", "GET /v1/devices")
 	if o := tooltest.Decode[map[string]any](t, res); o["already"] != true {
 		t.Fatalf("out = %v", o)
+	}
+}
+
+// A new device takes a yearly slot: confirm:true without elicitation is
+// refused before any POST; all-known devices are already with no gate.
+func TestDevicesRegisterNewNeedsHuman(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/devices", http.StatusOK,
+		`{"data":[{"type":"devices","id":"D1","attributes":{"name":"Phone","udid":"U-1","platform":"IOS","status":"ENABLED"}}]}`)
+	tl := mustTool(t, "signing_devices_register")
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"devices":[{"name":"Phone","udid":"U-1"},{"name":"New","udid":"U-2"}],"confirm":true}`),
+		tool.ErrHumanRequired.Code)
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("refused call mutated: %s", requestLog(k.ASC.Mutations()))
+	}
+	res := tooltest.MustOK(t, tooltest.Call(t, tl, k.Env, `{"devices":[{"name":"Phone","udid":"U-1"}]}`))
+	if o := tooltest.Decode[map[string]any](t, res); o["already"] != true || len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("all-known = %v", o)
 	}
 }
 

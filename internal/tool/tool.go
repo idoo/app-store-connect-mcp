@@ -26,8 +26,12 @@ type Meta struct {
 	Title   string
 	// Description is at most MaxDescription bytes; enums belong in the schema.
 	Description string
-	Class       Class
-	Idempotent  bool
+	// Class is R, W or D; it sets the annotations, read-only withholding and
+	// must match the name's verb (see TestRegistryNamingAndMeta).
+	Class Class
+	// Idempotent sets idempotentHint: repeating the call with the same input
+	// has no further effect. Every Read tool must set it.
+	Idempotent bool
 	// Local tools never call Apple or the network (openWorldHint=false).
 	Local bool
 	// NeedsTeamKey tools are withheld and refused for Individual API keys.
@@ -36,7 +40,9 @@ type Meta struct {
 	// mode; the tool restricts itself (e.g. asc_api_request becomes GET-only via
 	// ReadOnlyEnums) and receives no write capability.
 	AvailableReadOnly bool
-	Confirm           ConfirmMode
+	// Confirm is the gate mode: ConfirmByPlan (plan_id from a preview call) or
+	// ConfirmByFlag (confirm:true after a preview); zero means no gate.
+	Confirm ConfirmMode
 	// RequireHuman makes the confirm gate demand a human accept via
 	// elicitation (public, irreversible or money actions). Without
 	// elicitation the call is refused with [ErrHumanRequired] unless the

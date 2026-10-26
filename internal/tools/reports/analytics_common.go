@@ -69,8 +69,10 @@ func pctChange(cur, prev *big.Rat) string {
 	if cur == nil {
 		cur = new(big.Rat)
 	}
+	// Divide by |prev| so the sign follows the direction of change even when
+	// the previous period was negative (−5 → +10 is +300%, not −300%).
 	d := new(big.Rat).Sub(cur, prev)
-	d.Quo(d, prev)
+	d.Quo(d, new(big.Rat).Abs(prev))
 	d.Mul(d, big.NewRat(100, 1))
 	s := d.FloatString(1)
 	if d.Sign() > 0 {

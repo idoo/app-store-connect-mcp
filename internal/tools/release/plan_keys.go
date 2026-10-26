@@ -219,14 +219,15 @@ func stateFromVersion(versionString string, platform tool.Platform, v *versionDe
 }
 
 // versionedBuildRef pins "latest" and "latest-valid" to the version's
-// marketing version, so a newer upload of another version (a 2.4 TestFlight
-// build while 2.3.1 is prepared) is never picked. Other refs are kept.
+// marketing version ("latest:<v>", "latest-valid:<v>"), so a newer upload of
+// another version (a 2.4 TestFlight build while 2.3.1 is prepared) is never
+// picked. Other refs are kept.
 func versionedBuildRef(ref tool.BuildRef, versionString string) tool.BuildRef {
 	r := strings.ToLower(strings.TrimSpace(string(ref)))
 	if versionString == "" || (r != string(tool.BuildLatest) && r != string(tool.BuildLatestValid)) {
 		return ref
 	}
-	return tool.BuildRef("latest:" + versionString)
+	return tool.BuildRef(r + ":" + versionString)
 }
 
 // buildMarketingVersion returns the build's preReleaseVersion.version

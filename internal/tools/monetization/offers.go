@@ -369,7 +369,7 @@ type offersCreateIn struct {
 	Equalize  bool           `json:"equalize,omitempty" jsonschema:"expand the single prices entry to all territories (Apple equalization)"`
 	Name      string         `json:"name,omitempty" jsonschema:"promotional name, win-back reference name or offer-code campaign name"`
 	ID        string         `json:"identifier,omitempty" jsonschema:"promotional offer code / win-back offer id used in StoreKit"`
-	StartDate string         `json:"start_date,omitempty" jsonschema:"YYYY-MM-DD (intro, win-back: required)"`
+	StartDate string         `json:"start_date,omitempty" jsonschema:"YYYY-MM-DD; win-back: required; intro: default now"`
 	EndDate   string         `json:"end_date,omitempty" jsonschema:"YYYY-MM-DD"`
 	// Offer codes.
 	Customers        []string `json:"customer_eligibilities,omitempty" jsonschema:"offer code: who may redeem"`

@@ -44,7 +44,7 @@ var (
 	ErrStalePlan = &Error{
 		Code:    "stale_plan",
 		Message: "plan is unknown, expired, or the remote state changed since it was made",
-		Hint:    "call again without confirm to get a fresh plan",
+		Hint:    "re-run the planning call (release_status / *_plan, or this tool without plan_id/confirm) for a fresh plan",
 	}
 	ErrPreviewRequired = &Error{
 		Code:    "preview_required",

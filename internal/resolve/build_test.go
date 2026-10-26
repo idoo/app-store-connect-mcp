@@ -2,8 +2,10 @@ package resolve
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -57,6 +59,17 @@ func TestBuildRefForms(t *testing.T) {
 			want:      tool.Build{ID: "b3", Number: "7", ProcessingState: "VALID"},
 		},
 		{
+			// ReleaseDay-1: release tools pin latest-valid to the version.
+			name: "latest-valid marketing", ref: "latest-valid:2.1", reply: []res{build("b5", "8", "VALID")},
+			wantQuery: base("filter[expired]", "false", "filter[processingState]", "VALID", "filter[preReleaseVersion.version]", "2.1"),
+			want:      tool.Build{ID: "b5", Number: "8", ProcessingState: "VALID"},
+		},
+		{
+			name: "latest-valid marketing none", ref: "latest-valid:2.1",
+			wantQuery: base("filter[expired]", "false", "filter[processingState]", "VALID", "filter[preReleaseVersion.version]", "2.1"),
+			kind:      "notfound", next: "builds_list",
+		},
+		{
 			name: "explicit platform", platform: tool.MacOS, ref: "latest", reply: []res{build("b4", "9", "VALID")},
 			wantQuery: base("filter[expired]", "false", "filter[preReleaseVersion.platform]", "MAC_OS"),
 			want:      tool.Build{ID: "b4", Number: "9", ProcessingState: "VALID"},
@@ -72,6 +85,7 @@ func TestBuildRefForms(t *testing.T) {
 		},
 		{name: "none", ref: "latest", wantQuery: base("filter[expired]", "false"), kind: "notfound", next: "builds_list"},
 		{name: "empty marketing", ref: "latest:", kind: "notfound", next: "builds_list"},
+		{name: "empty latest-valid marketing", ref: "latest-valid:", kind: "notfound", next: "builds_list"},
 		{name: "id", ref: "8d6f-uuid", want: tool.Build{ID: "8d6f-uuid", Number: "5", ProcessingState: "VALID"}},
 		{name: "id missing", ref: "gone-uuid", kind: "notfound", next: "builds_list"},
 	}
@@ -103,5 +117,17 @@ func TestBuildRefForms(t *testing.T) {
 				t.Fatalf("platform inference requests = %d, want inference %v", platformReqs, wantInfer)
 			}
 		})
+	}
+}
+
+// ReleaseDay-1: the not_found hint echoes the user's ref.
+func TestBuildNotFoundEchoesRef(t *testing.T) {
+	f := tooltest.NewFakeASC(t)
+	serveVersions(t, f, map[string][]res{"a1": {ver("v", "IOS", "1.0", "READY_FOR_DISTRIBUTION", "")}})
+	f.Handle(http.MethodGet, "/v1/builds", 200, body(t))
+	_, err := New(f, Options{}).Build(context.Background(), "a1", "", "latest-valid:2.1")
+	var nf *tool.ErrNotFound
+	if !errors.As(err, &nf) || !strings.Contains(nf.Hint, `"latest-valid:2.1"`) || !strings.Contains(nf.Hint, "VALID build of version 2.1") {
+		t.Fatalf("err = %v", err)
 	}
 }

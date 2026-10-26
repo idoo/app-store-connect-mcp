@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -87,6 +89,17 @@ type harness struct {
 // protocol version (default 2025-11-25, which allows in-request elicitation).
 func connect(t *testing.T, deps Deps, client string, elicit func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error), proto ...string) *harness {
 	t.Helper()
+	version := "2025-11-25"
+	if len(proto) > 0 {
+		version = proto[0]
+	}
+	return connectOpts(t, deps, client, &mcp.ClientOptions{ElicitationHandler: elicit}, version)
+}
+
+// connectOpts is connect with explicit client options (e.g. declared
+// capabilities); the list_changed handler is always installed.
+func connectOpts(t *testing.T, deps Deps, client string, opts *mcp.ClientOptions, version string) *harness {
+	t.Helper()
 	ctx := context.Background()
 	s, err := newSession(deps)
 	if err != nil {
@@ -98,14 +111,7 @@ func connect(t *testing.T, deps Deps, client string, elicit func(context.Context
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts := &mcp.ClientOptions{
-		ElicitationHandler:     elicit,
-		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) { h.changed <- struct{}{} },
-	}
-	version := "2025-11-25"
-	if len(proto) > 0 {
-		version = proto[0]
-	}
+	opts.ToolListChangedHandler = func(context.Context, *mcp.ToolListChangedRequest) { h.changed <- struct{}{} }
 	h.cs, err = mcp.NewClient(&mcp.Implementation{Name: client, Version: "1"}, opts).Connect(ctx, ct, &mcp.ClientSessionOptions{ProtocolVersion: version})
 	if err != nil {
 		t.Fatal(err)
@@ -250,10 +256,19 @@ func TestToolsetsToolNotReadOnlyHint(t *testing.T) {
 }
 
 func TestEnableWrites(t *testing.T) {
-	accept := func(approve bool) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-		return func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"approve": approve}}, nil
+	answer := func(action string) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			if props, _ := req.Params.RequestedSchema.(map[string]any)["properties"].(map[string]any); len(props) != 0 {
+				return nil, fmt.Errorf("approval form has fields: %v", props)
+			}
+			return &mcp.ElicitResult{Action: action, Content: map[string]any{}}, nil
 		}
+	}
+	accept := func(ok bool) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		if ok {
+			return answer("accept")
+		}
+		return answer("decline")
 	}
 	args := map[string]any{"action": "enable_writes"}
 
@@ -288,6 +303,27 @@ func TestEnableWrites(t *testing.T) {
 		instr, _ := dataOf(body)["instructions"].(string)
 		if res.IsError || !strings.Contains(instr, "~/.cursor/mcp.json") || !strings.Contains(instr, "HAMN_ALLOW_WRITES") {
 			t.Fatalf("fallback = %v", body)
+		}
+	})
+	t.Run("cancel", func(t *testing.T) {
+		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", answer("cancel"))
+		if res, body := h.call(t, "toolsets", args); !res.IsError || dataOf(body)["error"] != "declined" {
+			t.Fatalf("cancel result = %v", body)
+		}
+	})
+	t.Run("url-only elicitation gets setup instructions", func(t *testing.T) {
+		opts := &mcp.ClientOptions{
+			ElicitationHandler: answer("accept"),
+			Capabilities:       &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{URL: &mcp.URLElicitationCapabilities{}}},
+		}
+		h := connectOpts(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "cursor", opts, "2025-11-25")
+		res, body := h.call(t, "toolsets", args)
+		instr, _ := dataOf(body)["instructions"].(string)
+		if res.IsError || !strings.Contains(instr, "HAMN_ALLOW_WRITES") {
+			t.Fatalf("url-only result = %v", body)
+		}
+		if got := h.names(t); slices.Contains(got, "release_submit") {
+			t.Fatal("writes enabled without a form approval")
 		}
 	})
 	t.Run("2026-07-28 client is capped and can approve", func(t *testing.T) {
@@ -462,6 +498,25 @@ func TestResourcesAndPrompts(t *testing.T) {
 	if err != nil || !strings.Contains(gp.Messages[0].Content.(*mcp.TextContent).Text, "Hjul version 2.0") {
 		t.Fatalf("get prompt: %v", err)
 	}
+	gp, err = h.cs.GetPrompt(ctx, &mcp.GetPromptParams{Name: "reply_to_reviews", Arguments: map[string]string{"app": "Hjul"}})
+	if err != nil || !strings.Contains(gp.Messages[0].Content.(*mcp.TextContent).Text, "since last_seen") {
+		t.Fatalf("optional since: %v", err)
+	}
+	_, err = h.cs.GetPrompt(ctx, &mcp.GetPromptParams{Name: "release_checklist", Arguments: map[string]string{"app": "Hjul"}})
+	var werr *jsonrpc.Error
+	if !errors.As(err, &werr) || werr.Code != jsonrpc.CodeInvalidParams {
+		t.Fatalf("missing arg err = %#v, want invalid params", err)
+	}
+	for p, err := range h.cs.Prompts(ctx, nil) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range p.Arguments {
+			if a.Description == "" || (a.Name == "since") == a.Required {
+				t.Errorf("prompt %s arg %s: desc=%q required=%v", p.Name, a.Name, a.Description, a.Required)
+			}
+		}
+	}
 }
 
 func TestWritesDisabledErrorPointsToEnableWrites(t *testing.T) {
@@ -509,6 +564,7 @@ func TestHiddenToolCall(t *testing.T) {
 		counted("release_submit", tool.Release, tool.Destructive),
 		counted("store_lookup", tool.Store, tool.Read),
 		stub("users_list", tool.Admin, tool.Read, func(m *tool.Meta) { m.NeedsTeamKey = true }),
+		counted(apiRequestName, tool.Core, tool.Destructive),
 	}
 	nextOf := func(body map[string]any) []map[string]any {
 		var out []map[string]any
@@ -566,6 +622,29 @@ func TestHiddenToolCall(t *testing.T) {
 		res, body := h.call(t, "release_submit", map[string]any{"confirm": true})
 		if d := dataOf(body); !res.IsError || d["error"] != "writes_disabled" || d["hint"] != errWritesLocked.Hint {
 			t.Fatalf("result = %v", body)
+		}
+	})
+	t.Run("api_request_read_redirects_to_get", func(t *testing.T) {
+		h := connect(t, Deps{Tools: tools, Profile: team(false)}, "test", nil)
+		for _, method := range []string{"", "GET", "get"} {
+			args := map[string]any{"path": "/v1/apps", "query": map[string]any{"limit": "1"}}
+			if method != "" {
+				args["method"] = method
+			}
+			res, body := h.call(t, apiRequestName, args)
+			next := nextOf(body)
+			got, _ := json.Marshal(next)
+			if !res.IsError || dataOf(body)["error"] != tool.ErrInvalidArgs.Code || len(next) != 1 ||
+				string(got) != `[{"args":{"path":"/v1/apps","query":{"limit":"1"}},"tool":"asc_api_get"}]` {
+				t.Fatalf("method %q: result = %v", method, body)
+			}
+		}
+		res, body := h.call(t, apiRequestName, map[string]any{"method": "DELETE", "path": "/v1/apps/1", "confirm": true})
+		if !res.IsError || dataOf(body)["error"] != "writes_disabled" {
+			t.Fatalf("DELETE result = %v", body)
+		}
+		if calls.Load() != 0 {
+			t.Fatal("hidden tool handler ran")
 		}
 	})
 }

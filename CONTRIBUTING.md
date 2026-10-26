@@ -11,10 +11,11 @@ make build      # bin/hamn
 make test       # go test -race ./...
 make vet
 make lint
-make generate   # docs/TOOLS.md and docs/tools.json (the spec index needs HAMN_SPEC)
+make docs       # regenerates docs/TOOLS.md and docs/tools.json, fails on any diff
+make spec       # spec index only; needs HAMN_SPEC=/path/to/openapi.oas.json
 ```
 
-CI fails if `go generate` changes anything, so commit what it writes.
+CI fails if docsgen changes anything, so run `make docs` and commit what it writes.
 
 ## No live writes
 
@@ -32,16 +33,18 @@ The recorder is GET-only and swaps out ids, names and emails. Read what it wrote
 
 ## Adding a tool
 
+New tools go in a non-default toolset unless agreed in an issue; the default list has a fixed byte budget.
+
 1. Register it in `internal/tools/<toolset>` with `tool.New` in `init()`.
 2. Pick the class honestly: read, write or destructive. The name's verb must match or the registry test fails. Public or irreversible means destructive.
-3. Confirm mode: `plan` when the change depends on remote state, `human` for public, people or irreversible actions.
+3. Gate it in `tool.Meta`. `Confirm: tool.ConfirmByPlan` (embed `tool.ConfirmPlan`) when the change depends on remote state and must be re-checked; `Confirm: tool.ConfirmByFlag` (embed `tool.ConfirmFlag`) for a preview followed by `confirm:true`. Add `RequireHuman: true` for public, people, money or irreversible actions; the client then asks the human, and calls without elicitation are refused. Destructive tools need a Confirm mode.
 4. Description ≤ 280 characters. Enums go in the schema.
 5. Accept names as well as ids through `env.Resolve` (`app`, `version`, `build`, `group`, locales).
 6. Wrap third-party text as untrusted. The client does it for spec free-text fields; check anything you build by hand.
 7. Removal only through an explicit `remove` list.
 8. Fan out with `tool.Parallel`. If you wait on Apple and `env.HasProgress()` is false, cap the wait at `tool.NoProgressWaitCap` and return a resume step.
 9. Test via `tooltest`, including the preview and stale-plan paths. CI runs on Windows too, so no POSIX assumptions.
-10. `make generate` and make sure the context budget test still passes.
+10. `make docs` and make sure the context budget test still passes.
 
 Tool names, arguments and output fields are a public API that agents depend on. Add optional arguments instead of renaming. If you must rename, say so in the PR and `CHANGELOG.md`.
 

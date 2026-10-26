@@ -206,7 +206,7 @@ func TestPctChangeAndWindows(t *testing.T) {
 	for _, c := range []struct {
 		cur, prev int64
 		want      string
-	}{{120, 100, "+20.0%"}, {50, 100, "-50.0%"}, {100, 100, "0.0%"}, {5, 0, ""}, {0, 3, "-100.0%"}} {
+	}{{120, 100, "+20.0%"}, {50, 100, "-50.0%"}, {100, 100, "0.0%"}, {5, 0, ""}, {0, 3, "-100.0%"}, {10, -5, "+300.0%"}, {-2, -10, "+80.0%"}} {
 		if got := pctChange(big.NewRat(c.cur, 1), big.NewRat(c.prev, 1)); got != c.want {
 			t.Errorf("pctChange(%d,%d) = %q, want %q", c.cur, c.prev, got, c.want)
 		}

@@ -78,16 +78,16 @@ func envCredentials(getenv func(string) string) (c envCreds, ok bool, err error)
 			c.Problems = append(c.Problems, `ASC_KEY_PATH is set but hamn reads ASC_PRIVATE_KEY_PATH; export ASC_PRIVATE_KEY_PATH="$ASC_KEY_PATH" or run hamn auth import`)
 		}
 	}
-	c.Problems = append(c.Problems, kindProblems(c.Profile, EnvKeyKind+"=individual")...)
+	c.Problems = append(c.Problems, kindProblems(c.Profile, EnvIssuerID)...)
 	return c, true, nil
 }
 
-// kindProblems explains an undetermined or inconsistent key kind. fix names
-// the setting that declares an individual key.
+// kindProblems explains an inferred or inconsistent key kind. fix names the
+// setting that holds a team key's issuer id.
 func kindProblems(p Profile, fix string) []string {
 	switch {
 	case p.KeyKind == "" && p.IssuerID == "":
-		return []string{"Issuer ID missing. Team keys need it (Users and Access → Integrations → App Store Connect API). Set " + fix + " if this is an Individual key."}
+		return []string{"no issuer ID: using an Individual key. Set " + fix + " for a team key."}
 	case p.KeyKind == tool.KeyTeam && p.IssuerID == "":
 		return []string{"key kind is team but the Issuer ID is missing (Users and Access → Integrations → App Store Connect API)."}
 	case p.KeyKind == tool.KeyIndividual && p.IssuerID != "":

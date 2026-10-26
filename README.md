@@ -21,19 +21,21 @@ Or with Homebrew: `brew install idoo/tap/hamn`, then follow [docs/INSTALL.md](do
 
 ## Compared
 
-| | Hamn | [forgeops](https://github.com/forgeopslabs/appstore-mcp) | [asc-mcp](https://github.com/zelentsov-dev/asc-mcp) | [Joshua](https://github.com/JoshuaRileyDev/app-store-connect-mcp-server) | [`asc`](https://github.com/rorkai/App-Store-Connect-CLI) |
+| | Hamn | [forgeops](https://github.com/forgeopslabs/appstore-mcp) | [asc-mcp](https://github.com/zelentsov-dev/asc-mcp) | [Joshua (archived)](https://github.com/JoshuaRileyDev/app-store-connect-mcp-server) | [`asc`](https://github.com/rorkai/App-Store-Connect-CLI) |
 |---|:-:|:-:|:-:|:-:|:-:|
 | MCP | + | + | + | + | − |
 | Read-only default | + | − | − | − | − |
-| Asks before publishing | + | − | − | − | − |
+| Asks before publishing | + | − | ~ | − | ~ |
 | Injection guard | + | − | − | − | − |
-| Release preflight | + | − | − | − | + |
-| Sales reports | + | − | + | − | + |
+| Release preflight | + | − | ~ | − | + |
+| Sales reports | + | − | + | + | + |
 | One binary, any OS | + | + | − | − | + |
+
+`~` partial
 
 ## Security
 
-Hamn can't break anything until you let it. Anything public, permanent or costing money waits for your yes. A 1-star review that says "ignore previous instructions" is still just a 1-star review. More in [docs/SAFETY.md](docs/SAFETY.md).
+Hamn can't break anything until you let it. Anything public, money-moving or hard to undo for your users and team waits for your yes. Build uploads and Xcode Cloud runs don't ask. A 1-star review that says "ignore previous instructions" is still just a 1-star review. More in [docs/SAFETY.md](docs/SAFETY.md).
 
 ## What it does
 

@@ -19,7 +19,10 @@ Hamn holds a key that can publish apps, answer customers in public, change price
 
 **A human says yes.** Public, permanent and money-moving tools need you to accept an approval form in the client: `reviews_reply`, `release_submit`, `release_cancel`, `release_publish`, `builds_expire`, `testflight_testers_remove`, `pricing_apply`, `offers_create`, `offer_codes_generate`, `users_invite`, `users_remove`, `webhooks_upsert`, `webhooks_delete`, `signing_revoke`, and any `asc_api_request` call. Sometimes also:
 
-- `release_phased` with `complete`;
+- `release_phased` with `complete` or `remove`;
+- `metadata_apply` when it changes promotional text on the live version (public at once, no review);
+- `iap_upsert` / `subscriptions_upsert` when `availability` removes territories (sales stop there);
+- `signing_devices_register` when a device is new (each one uses a yearly device slot);
 - `iap_upsert` / `subscriptions_upsert` when they create a product (its id is burned for good), turn on family sharing or change a subscription's level;
 - `signing_capabilities_set` when it disables a capability;
 - `testflight_distribute` / `testflight_testers_add` when they touch an external group, submit for beta review, answer export compliance or overwrite review details.
@@ -32,7 +35,7 @@ The form shows what will happen first and any stranger-written text last, fenced
 
 **Nothing deleted by omission.** Metadata, screenshot and tester tools only remove what's listed in `remove`. A 409 "already exists" counts as done. Mutations are never retried except after a 429. A timeout on one returns `outcome_unknown` instead of trying again and burning a product id.
 
-**Keys stay out of chat.** No tool takes or returns key material; only `hamn auth` edits profiles. The config holds paths or keychain references and is refused if others can write it. JWTs, PEM blocks, `Authorization` headers and signed URL queries are redacted from results, errors and logs. JWTs only go to the API base URL. One-time offer codes go to `offer-codes/<batch_id>.csv` under the project root, not into the transcript.
+**Keys stay out of chat.** No tool takes or returns key material; only `hamn auth` edits profiles. The config holds paths or keychain references and is refused if others can write it. JWTs, PEM blocks, `Authorization` headers and signed URL queries are redacted from results, errors and logs. JWTs only go to the API base URL. One-time offer codes go to `offer-codes/<batch_id>.csv` under the project root (git-ignored, mode 0600), not into the transcript.
 
 **URLs and files are fenced.** Presigned URLs must be https on port 443 with no userinfo and public IPs, checked again at dial time, sent without `Authorization`, `Cookie`, `Host` or `Proxy-*`. Pagination cursors can't change host, path or query keys. File tools work through an `os.Root` on the project root, so `..` and symlinks don't get out. Results are capped at 60 KB, so a hostile payload can't flood the context.
 

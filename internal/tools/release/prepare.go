@@ -83,6 +83,7 @@ type prepareOut struct {
 	Steps          []prepStep            `json:"steps"`
 	WhatsNew       []metadata.ItemResult `json:"whats_new,omitempty"`
 	SkippedLocales []string              `json:"skipped_locales,omitempty"`
+	Note           string                `json:"note,omitempty"`
 }
 
 func releasePrepare(ctx context.Context, env *tool.Env, in prepareIn) (*tool.Result, error) {
@@ -158,7 +159,12 @@ func releasePrepare(ctx context.Context, env *tool.Env, in prepareIn) (*tool.Res
 			Then(tool.NextStep{Tool: "builds_wait", Args: map[string]any{"app": app.ID, "build": build.ID}},
 				statusNext(app, platform, versionString, desiredArgs(d))), nil
 	}
-	return tool.OK(p.out).Then(statusNext(app, platform, versionString, nil)), nil
+	// The confirmed changes alter the version, so any submit plan_id from
+	// the earlier release_status is stale: release_submit previews afresh.
+	p.out.Note = "re-preview: prepare changed the version"
+	return tool.OK(p.out).Then(
+		tool.NextStep{Tool: "release_submit", Args: map[string]any{"app": app.ID, "platform": string(platform), "version": versionString}},
+		statusNext(app, platform, versionString, nil)), nil
 }
 
 // desiredArgs renders release_status's desired object for d.
@@ -182,7 +188,22 @@ type preparer struct {
 	build        *tool.Build
 	created      bool
 	buildPending bool
-	out          prepareOut
+	// prior caches priorReleased for the phased and whatsNew steps.
+	prior *bool
+	out   prepareOut
+}
+
+// priorReleased reports (once per call) whether a previous version of the
+// platform reached the store.
+func (p *preparer) priorReleased(ctx context.Context) (bool, error) {
+	if p.prior == nil {
+		v, err := priorReleased(ctx, p.env, p.app.ID, p.platform)
+		if err != nil {
+			return false, err
+		}
+		p.prior = &v
+	}
+	return *p.prior, nil
 }
 
 func (p *preparer) step(name, status, detail string) {
@@ -401,6 +422,14 @@ func (p *preparer) phased(ctx context.Context) error {
 	case *p.d.Phased && has:
 		p.step("phased_release", stepAlready, "phased release configured")
 	case *p.d.Phased:
+		prior, err := p.priorReleased(ctx)
+		if err != nil {
+			return err
+		}
+		if !prior {
+			p.step("phased_release", stepSkipped, "phased release is only available for updates")
+			return nil
+		}
 		if _, err := doWrite(ctx, p.env, http.MethodPost, "/v1/appStoreVersionPhasedReleases",
 			jsonapiBody("appStoreVersionPhasedReleases", "", map[string]any{"phasedReleaseState": "INACTIVE"},
 				map[string]string{"appStoreVersion": "appStoreVersions:" + p.out.Version.ID})); err != nil {
@@ -422,7 +451,7 @@ func (p *preparer) whatsNew(ctx context.Context) error {
 	if len(wn) == 0 {
 		return nil
 	}
-	prior, err := priorReleased(ctx, p.env, p.app.ID, p.platform)
+	prior, err := p.priorReleased(ctx)
 	if err != nil {
 		return err
 	}

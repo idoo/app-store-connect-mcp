@@ -297,3 +297,24 @@ func TestFinanceReportPending(t *testing.T) {
 		t.Errorf("requests = %d, want 2", n)
 	}
 }
+
+func TestSubscribersRefundsEitherSign(t *testing.T) {
+	cols := []string{"Subscription Offer Type", "Developer Proceeds", "Proceeds Currency", "Refund", "Units"}
+	for _, units := range []string{"-1", "1"} {
+		t.Run("refund units "+units, func(t *testing.T) {
+			tab := &reports.Table{Columns: cols, Rows: [][]string{
+				{"Free Trial", "0", "USD", "", "3"},
+				{"", "4.00", "USD", "", "2"},
+				{"Free Trial", "4.00", "USD", "Yes", units},
+			}}
+			var out salesOut
+			if err := subscribers(&out, []dayTable{{Date: "2026-10-24", Table: tab}}, nil); err != nil {
+				t.Fatal(err)
+			}
+			s := out.Subscribers
+			if s.Units != 5 || s.Refunds != 1 || s.ByOfferType["Free Trial"] != 3 || len(s.ByOfferType) != 1 {
+				t.Fatalf("summary = %+v", s)
+			}
+		})
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -145,6 +146,93 @@ func TestDecodeExactRowLimitOK(t *testing.T) {
 	tab, err := Decode(strings.NewReader("A\n1\n2\n"), Limits{MaxRows: 2, MaxColumns: 1})
 	if err != nil || len(tab.Rows) != 2 {
 		t.Fatalf("tab=%v err=%v", tab, err)
+	}
+}
+
+// decodeAlloc decodes in and returns the error and the bytes allocated by
+// Decode alone.
+func decodeAlloc(t *testing.T, in []byte) (uint64, error) {
+	t.Helper()
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := Decode(bytes.NewReader(in), DefaultLimits())
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc, err
+}
+
+// storedGzip wraps b in a gzip stream without compression, which keeps the
+// 64 MiB tests fast under -race while still exercising the gzip path.
+func storedGzip(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.NoCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zw.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestDecodeHugeInputsStayBounded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates 64 MiB inputs")
+	}
+	tests := []struct {
+		name string
+		fill byte
+		want error
+		msg  string
+	}{
+		{"64 MiB of tabs", '\t', ErrTooLarge, "columns"},
+		{"64 MiB of newlines", '\n', ErrCorrupt, "no header"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := storedGzip(t, bytes.Repeat([]byte{tt.fill}, int(DefaultMaxBytes)))
+			alloc, err := decodeAlloc(t, in)
+			if !errors.Is(err, tt.want) || !strings.Contains(err.Error(), tt.msg) {
+				t.Fatalf("err = %v, want %v (%s)", err, tt.want, tt.msg)
+			}
+			if limit := uint64(3 * DefaultMaxBytes); alloc > limit {
+				t.Fatalf("Decode allocated %d bytes, want <= %d", alloc, limit)
+			}
+		})
+	}
+}
+
+func TestDecodeKeepsEverySection(t *testing.T) {
+	in := "Quantity\tTitle\n1\ta\n2\tb\nTotal_Rows\t2\n\nquantity\ttitle\t\n3\tc\nTotal_Rows\t1\n"
+	tab, err := Decode(strings.NewReader(in), Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, r := range tab.Rows {
+		titles = append(titles, r[1])
+	}
+	if got := strings.Join(titles, ","); got != "a,b,c" {
+		t.Fatalf("rows = %s, want a,b,c", got)
+	}
+	if tab.Footer["Total_Rows"] != "2" || tab.Footer["Total_Rows#2"] != "1" {
+		t.Fatalf("footer = %v", tab.Footer)
+	}
+}
+
+func TestDecodeRowAfterFooterIsCorrupt(t *testing.T) {
+	for _, in := range []string{
+		"Quantity\tTitle\n1\ta\nTotal_Rows\t1\n2\tb\n",
+		"Quantity,Title\n1,a\nTotal_Rows,1\n2,b\n",
+	} {
+		_, err := Decode(strings.NewReader(in), Limits{})
+		if !errors.Is(err, ErrCorrupt) || !strings.Contains(err.Error(), "after report footer") {
+			t.Fatalf("Decode(%q) err = %v, want ErrCorrupt after footer", in, err)
+		}
 	}
 }
 

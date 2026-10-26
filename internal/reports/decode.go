@@ -62,11 +62,7 @@ func Decode(r io.Reader, lim Limits) (*Table, error) {
 	if !utf8.Valid(data) {
 		data = bytes.ToValidUTF8(data, []byte("\uFFFD"))
 	}
-	records, err := splitRecords(data, sniffDelimiter(data))
-	if err != nil {
-		return nil, err
-	}
-	return buildTable(records, lim)
+	return scan(data, sniffDelimiter(data), lim)
 }
 
 // readAll returns the decompressed bytes, at most max of them.
@@ -86,17 +82,72 @@ func readAll(r io.Reader, maxBytes int64) ([]byte, error) {
 		defer func() { _ = zr.Close() }()
 		src = zr
 	}
-	data, err := io.ReadAll(io.LimitReader(src, maxBytes+1))
+	data, err := readCapped(src, maxBytes)
 	if err != nil {
+		if errors.Is(err, ErrTooLarge) {
+			return nil, err
+		}
 		if gz {
 			return nil, fmt.Errorf("reports: gzip stream: %w: %w", ErrCorrupt, err)
 		}
 		return nil, fmt.Errorf("reports: read: %w", err)
 	}
-	if int64(len(data)) > maxBytes {
-		return nil, fmt.Errorf("reports: decompressed size exceeds %d bytes: %w", maxBytes, ErrTooLarge)
+	return data, nil
+}
+
+// readCapped reads at most maxBytes from r into one exactly sized buffer. It
+// fills chunks of growing size (64 KiB up to 4 MiB) and joins them once, so a
+// report costs about twice its size in allocations rather than the repeated
+// regrowth of io.ReadAll.
+func readCapped(r io.Reader, maxBytes int64) ([]byte, error) {
+	const minChunk, maxChunk = 64 << 10, 4 << 20
+	var (
+		chunks [][]byte
+		total  int64
+		size   = minChunk
+	)
+	lr := io.LimitReader(r, maxBytes+1)
+	for {
+		buf := make([]byte, size)
+		n, err := fill(lr, buf)
+		total += int64(n)
+		if n > 0 {
+			chunks = append(chunks, buf[:n])
+		}
+		if total > maxBytes {
+			return nil, fmt.Errorf("reports: decompressed size exceeds %d bytes: %w", maxBytes, ErrTooLarge)
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		size = min(size*2, maxChunk)
+	}
+	if len(chunks) == 1 {
+		return chunks[0], nil
+	}
+	data := make([]byte, 0, total)
+	for _, c := range chunks {
+		data = append(data, c...)
 	}
 	return data, nil
+}
+
+// fill reads into buf until it is full or r fails. Unlike io.ReadFull it
+// returns r's own error, so a truncated gzip stream's io.ErrUnexpectedEOF is
+// not mistaken for a clean end of input.
+func fill(r io.Reader, buf []byte) (int, error) {
+	n := 0
+	for n < len(buf) {
+		m, err := r.Read(buf[n:])
+		n += m
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
 }
 
 // sniffDelimiter picks tab or comma from the first line.
@@ -111,25 +162,64 @@ func sniffDelimiter(data []byte) rune {
 	return '\t'
 }
 
-// splitRecords splits data into cells. TSV is split literally (Apple does not
-// quote TSV and titles may contain quotes); CSV uses RFC 4180 parsing.
-func splitRecords(data []byte, delim rune) ([][]string, error) {
+// scan decodes data record by record without materialising every record
+// first. TSV is split literally line by line (Apple does not quote TSV and
+// titles may contain quotes), checking the column count before splitting;
+// CSV uses RFC 4180 parsing one record at a time.
+func scan(data []byte, delim rune, lim Limits) (*Table, error) {
+	b := tableBuilder{lim: lim}
 	if delim == '\t' {
-		lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-		out := make([][]string, 0, len(lines))
-		for _, l := range lines {
-			out = append(out, strings.Split(strings.TrimSuffix(l, "\r"), "\t"))
+		for len(data) > 0 {
+			// Skip a run of line breaks at once: blank lines cost O(1)
+			// memory and no per-line work.
+			if data[0] == '\n' || data[0] == '\r' {
+				data = bytes.TrimLeft(data, "\r\n")
+				continue
+			}
+			line := data
+			if i := bytes.IndexByte(data, '\n'); i >= 0 {
+				line, data = data[:i], data[i+1:]
+			} else {
+				data = nil
+			}
+			line = bytes.TrimSuffix(line, []byte{'\r'})
+			if n := bytes.Count(line, []byte{'\t'}) + 1; n > lim.MaxColumns {
+				return nil, tooManyColumns(n, lim.MaxColumns)
+			}
+			if len(bytes.TrimSpace(line)) == 0 {
+				continue
+			}
+			if err := b.add(strings.Split(string(line), "\t")); err != nil {
+				return nil, err
+			}
 		}
-		return out, nil
+		return b.table()
 	}
 	cr := csv.NewReader(bytes.NewReader(data))
 	cr.FieldsPerRecord = -1
 	cr.LazyQuotes = true
-	out, err := cr.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("reports: csv: %w: %w", ErrCorrupt, err)
+	for {
+		rec, err := cr.Read()
+		if errors.Is(err, io.EOF) {
+			return b.table()
+		}
+		if err != nil {
+			return nil, fmt.Errorf("reports: csv: %w: %w", ErrCorrupt, err)
+		}
+		if len(rec) > lim.MaxColumns {
+			return nil, tooManyColumns(len(rec), lim.MaxColumns)
+		}
+		if blank(rec) {
+			continue
+		}
+		if err := b.add(rec); err != nil {
+			return nil, err
+		}
 	}
-	return out, nil
+}
+
+func tooManyColumns(n, maxCols int) error {
+	return fmt.Errorf("reports: %d columns exceeds %d: %w", n, maxCols, ErrTooLarge)
 }
 
 func blank(rec []string) bool {
@@ -160,47 +250,84 @@ func firstValue(rec []string) string {
 	return ""
 }
 
-func buildTable(records [][]string, lim Limits) (*Table, error) {
-	t := &Table{}
-	inFooter := false
-	for _, rec := range records {
-		if len(rec) > lim.MaxColumns {
-			return nil, fmt.Errorf("reports: %d columns exceeds %d: %w", len(rec), lim.MaxColumns, ErrTooLarge)
+// tableBuilder assembles a Table from non-blank records. Total_* rows form
+// the footer of the current section; a repeated header after a footer starts
+// a new section whose rows append to the same table. Any other record after
+// a footer is corrupt: rows are never silently dropped.
+type tableBuilder struct {
+	lim      Limits
+	t        Table
+	header   []string // normalized header cells
+	records  int      // data and footer records seen
+	section  int
+	inFooter bool
+}
+
+func (b *tableBuilder) add(rec []string) error {
+	if b.t.Columns == nil {
+		b.t.Columns = make([]string, len(rec))
+		b.header = make([]string, len(rec))
+		for i, c := range rec {
+			b.t.Columns[i] = strings.TrimSpace(c)
+			b.header[i] = normalizeHeader(c)
 		}
-		if blank(rec) {
-			continue
-		}
-		if t.Columns == nil {
-			t.Columns = make([]string, len(rec))
-			for i, c := range rec {
-				t.Columns[i] = strings.TrimSpace(c)
-			}
-			continue
-		}
-		if k, ok := footerKey(rec); ok || inFooter {
-			inFooter = true
-			if t.Footer == nil {
-				t.Footer = map[string]string{}
-			}
-			if k == "" {
-				k = strings.TrimSpace(rec[0])
-			}
-			t.Footer[k] = firstValue(rec)
-			continue
-		}
-		if len(t.Rows) >= lim.MaxRows {
-			return nil, fmt.Errorf("reports: more than %d rows: %w", lim.MaxRows, ErrTooLarge)
-		}
-		row := make([]string, len(t.Columns))
-		for i := range row {
-			if i < len(rec) {
-				row[i] = strings.TrimSpace(rec[i])
-			}
-		}
-		t.Rows = append(t.Rows, row)
+		b.section = 1
+		return nil
 	}
-	if t.Columns == nil {
+	if b.inFooter && b.isHeader(rec) {
+		b.inFooter = false
+		b.section++
+		return nil
+	}
+	if b.records >= b.lim.MaxRows {
+		return fmt.Errorf("reports: more than %d rows: %w", b.lim.MaxRows, ErrTooLarge)
+	}
+	b.records++
+	if k, ok := footerKey(rec); ok {
+		b.inFooter = true
+		if b.t.Footer == nil {
+			b.t.Footer = map[string]string{}
+		}
+		if b.section > 1 {
+			k = fmt.Sprintf("%s#%d", k, b.section)
+		}
+		b.t.Footer[k] = firstValue(rec)
+		return nil
+	}
+	if b.inFooter {
+		return fmt.Errorf("reports: data after report footer: %w", ErrCorrupt)
+	}
+	row := make([]string, len(b.t.Columns))
+	for i := range row {
+		if i < len(rec) {
+			row[i] = strings.TrimSpace(rec[i])
+		}
+	}
+	b.t.Rows = append(b.t.Rows, row)
+	return nil
+}
+
+// isHeader reports whether rec repeats the header, ignoring trailing blank
+// cells and the header normalisation used by Col.
+func (b *tableBuilder) isHeader(rec []string) bool {
+	for i := range max(len(rec), len(b.header)) {
+		var got, want string
+		if i < len(rec) {
+			got = normalizeHeader(rec[i])
+		}
+		if i < len(b.header) {
+			want = b.header[i]
+		}
+		if got != want {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *tableBuilder) table() (*Table, error) {
+	if b.t.Columns == nil {
 		return nil, fmt.Errorf("reports: no header row: %w", ErrCorrupt)
 	}
-	return t, nil
+	return &b.t, nil
 }

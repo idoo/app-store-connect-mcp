@@ -370,12 +370,16 @@ func subscribers(out *salesOut, tables []dayTable, app *tool.App) error {
 				continue
 			}
 			out.Rows++
-			s.Units += r.Units
+			// Refund rows count as positive refunds whichever column carries
+			// the sign; units stay gross non-refund subscribers. Proceeds
+			// below stay signed.
 			if r.Refund {
-				s.Refunds += r.Units
-			}
-			if r.OfferType != "" {
-				s.ByOfferType[r.OfferType] += r.Units
+				s.Refunds += absInt64(r.Units)
+			} else {
+				s.Units += r.Units
+				if r.OfferType != "" {
+					s.ByOfferType[r.OfferType] += r.Units
+				}
 			}
 			if r.DeveloperProceeds != nil {
 				proceeds.Add(r.ProceedsCurrency, new(big.Rat).Mul(new(big.Rat).SetInt64(r.Units), r.DeveloperProceeds))
@@ -385,6 +389,13 @@ func subscribers(out *salesOut, tables []dayTable, app *tool.App) error {
 	s.Proceeds = sortedAmounts(proceeds)
 	out.Subscribers = &s
 	return nil
+}
+
+func absInt64(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 // subscriptionRowMatches filters SUBSCRIPTION_EVENT / SUBSCRIBER rows by App

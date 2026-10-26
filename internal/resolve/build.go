@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/idoo/hamn/internal/tool"
@@ -16,25 +17,34 @@ const buildFields = "version,processingState,expired,uploadedDate"
 // latestPrefix introduces "latest:<marketing version>".
 const latestPrefix = "latest:"
 
+// latestValidPrefix introduces "latest-valid:<marketing version>": the newest
+// non-expired VALID build of that version.
+const latestValidPrefix = "latest-valid:"
+
 var buildNumber = regexp.MustCompile(`^\d+(\.\d+)*$`)
 
 // Build implements [tool.Resolver]. ref is "" or "latest" (newest
 // non-expired upload), "latest-valid" (newest non-expired VALID build),
-// "latest:<marketing version>", a build number (CFBundleVersion) or a build
-// id. An empty platform is inferred from the app's versions.
+// "latest:<marketing version>", "latest-valid:<marketing version>", a build
+// number (CFBundleVersion) or a build id. An empty platform is inferred from
+// the app's versions.
 func (r *Resolver) Build(ctx context.Context, appID string, platform tool.Platform, ref tool.BuildRef) (tool.Build, error) {
 	s := strings.TrimSpace(string(ref))
 	low := strings.ToLower(s)
 	isKeyword := low == "" || low == string(tool.BuildLatest) || low == string(tool.BuildLatestValid) ||
-		strings.HasPrefix(low, latestPrefix)
+		strings.HasPrefix(low, latestPrefix) || strings.HasPrefix(low, latestValidPrefix)
 	if !isKeyword && !buildNumber.MatchString(s) {
 		return r.buildByID(ctx, appID, s)
 	}
-	marketing := ""
-	if strings.HasPrefix(low, latestPrefix) {
-		if marketing = strings.TrimSpace(s[len(latestPrefix):]); marketing == "" {
+	marketing, valid := "", low == string(tool.BuildLatestValid)
+	for _, p := range []string{latestPrefix, latestValidPrefix} {
+		if !strings.HasPrefix(low, p) {
+			continue
+		}
+		valid = p == latestValidPrefix
+		if marketing = strings.TrimSpace(s[len(p):]); marketing == "" {
 			return tool.Build{}, &tool.ErrNotFound{
-				Kind: "build", Ref: s, Hint: "use latest:<marketing version>, e.g. latest:2.1",
+				Kind: "build", Ref: s, Hint: "use " + p + "<marketing version>, e.g. " + p + "2.1",
 				Next: next("builds_list", map[string]any{"app": appID}),
 			}
 		}
@@ -57,14 +67,14 @@ func (r *Resolver) Build(ctx context.Context, appID string, platform tool.Platfo
 		// Build numbers are unique per marketing version only: never guess.
 		q.Set("filter[version]", s)
 		q.Set("limit", "5")
-	case low == string(tool.BuildLatestValid):
-		q.Set("filter[expired]", "false")
-		q.Set("filter[processingState]", "VALID")
-	case marketing != "":
-		q.Set("filter[expired]", "false")
-		q.Set("filter[preReleaseVersion.version]", marketing)
 	default:
 		q.Set("filter[expired]", "false")
+		if valid {
+			q.Set("filter[processingState]", "VALID")
+		}
+		if marketing != "" {
+			q.Set("filter[preReleaseVersion.version]", marketing)
+		}
 	}
 	res, err := r.asc.Get(ctx, "/v1/builds", q)
 	if err != nil {
@@ -73,7 +83,7 @@ func (r *Resolver) Build(ctx context.Context, appID string, platform tool.Platfo
 	switch len(res.Data) {
 	case 0:
 		return tool.Build{}, &tool.ErrNotFound{
-			Kind: "build", Ref: s, Hint: "no matching build" + forPlatform(plat) + "; uploads take a few minutes to appear",
+			Kind: "build", Ref: s, Hint: notFoundHint(s, valid, marketing) + forPlatform(plat) + "; uploads take a few minutes to appear",
 			Next: next("builds_list", map[string]any{"app": appID}),
 		}
 	case 1:
@@ -88,12 +98,29 @@ func (r *Resolver) Build(ctx context.Context, appID string, platform tool.Platfo
 	return tool.Build{}, amb
 }
 
+// notFoundHint echoes what the user asked for.
+func notFoundHint(ref string, valid bool, marketing string) string {
+	if ref == "" {
+		ref = string(tool.BuildLatest)
+	}
+	h := "no matching build for " + strconv.Quote(ref)
+	switch {
+	case valid && marketing != "":
+		h += " (no non-expired VALID build of version " + marketing + ")"
+	case valid:
+		h += " (no non-expired VALID build)"
+	case marketing != "":
+		h += " (no non-expired build of version " + marketing + ")"
+	}
+	return h
+}
+
 func (r *Resolver) buildByID(ctx context.Context, appID, id string) (tool.Build, error) {
 	res, err := r.asc.Get(ctx, "/v1/builds/"+id, url.Values{"fields[builds]": {buildFields}})
 	if err != nil {
 		if tool.IsNotFound(err) {
 			return tool.Build{}, &tool.ErrNotFound{
-				Kind: "build", Ref: id, Hint: "use latest, latest-valid, latest:<version>, a build number or a build id",
+				Kind: "build", Ref: id, Hint: "use latest, latest-valid, latest:<version>, latest-valid:<version>, a build number or a build id",
 				Next: next("builds_list", map[string]any{"app": appID}),
 			}
 		}

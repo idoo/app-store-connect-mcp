@@ -61,6 +61,16 @@ class Hamn < Formula
     bin.install "hamn"
   end
 
+  def caveats
+    <<~TEXT
+      hamn needs an App Store Connect API key:
+        App Store Connect > Users and Access > Integrations > App Store Connect API
+      Then register it and connect your client:
+        hamn auth import
+        hamn config install <client>   # claude-code, claude-desktop, codex, cursor, vscode, windsurf
+    TEXT
+  end
+
   test do
     assert_match version.to_s, shell_output("#{bin}/hamn version")
   end

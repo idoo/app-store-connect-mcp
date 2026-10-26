@@ -132,8 +132,13 @@ func TestReleasePrepareAppliesStatusPlan(t *testing.T) {
 	if len(out.WhatsNew) != 2 {
 		t.Errorf("whats_new results = %+v", out.WhatsNew)
 	}
-	if len(res.Next) == 0 || res.Next[0].Tool != "release_status" {
+	// AgentUX-1: the next step is a fresh release_submit preview (no stale plan_id).
+	if len(res.Next) != 2 || res.Next[0].Tool != "release_submit" || res.Next[0].Args["plan_id"] != nil ||
+		res.Next[0].Args["version"] != "1.4" || res.Next[1].Tool != "release_status" {
 		t.Errorf("next = %+v", res.Next)
+	}
+	if out.Note != "re-preview: prepare changed the version" {
+		t.Errorf("note = %q", out.Note)
 	}
 	tooltest.AssertGolden(t, "testdata/prepare_submit/prepare_full.json", map[string]any{"requests": mutationLog(k), "result": res.Data})
 	if got := len(k.ASC.Requests()) - before; got > 14 {

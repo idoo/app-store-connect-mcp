@@ -302,7 +302,8 @@ func resolveProducts(ctx context.Context, env *tool.Env, appID string, iaps, sub
 	var notes []string
 	if len(iaps) > 0 {
 		list, err := env.ASC.List(ctx, "/v1/apps/"+appID+"/inAppPurchasesV2", tool.ListOptions{
-			Fields: map[string][]string{"inAppPurchases": {"name", "productId", "state"}},
+			Fields:   map[string][]string{"inAppPurchases": {"name", "productId", "state"}},
+			MaxItems: productsMax,
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("list in-app purchases: %w", err)
@@ -321,8 +322,9 @@ func resolveProducts(ctx context.Context, env *tool.Env, appID string, iaps, sub
 	}
 	if len(subs) > 0 {
 		groups, err := env.ASC.List(ctx, "/v1/apps/"+appID+"/subscriptionGroups", tool.ListOptions{
-			Include: []string{"subscriptions"},
-			Query:   url.Values{"limit[subscriptions]": {"50"}},
+			Include:  []string{"subscriptions"},
+			Query:    url.Values{"limit[subscriptions]": {"50"}},
+			MaxItems: productsMax,
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("list subscription groups: %w", err)

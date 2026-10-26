@@ -189,6 +189,49 @@ func TestListFanOutOmitsAppsWithoutReviews(t *testing.T) {
 	}
 }
 
+// Without app or default_app, more than 25 apps is refused after the one
+// apps lookup; app:"all" is the explicit opt-in.
+func TestListImplicitFanOutOver25AppsRefused(t *testing.T) {
+	k := listKit(t)
+	k.Env.Profile.DefaultApp = ""
+	apps := make([]string, 30)
+	for i := range apps {
+		apps[i] = fmt.Sprintf(`{"type":"apps","id":"x%d","attributes":{"name":"App %d"}}`, i, i)
+	}
+	k.ASC.Handle("GET", "/v1/apps", 200, `{"data":[`+strings.Join(apps, ",")+`]}`)
+	res := tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{}`)
+	body := tooltest.MustFail(t, res, tool.ErrInvalidArgs.Code)
+	if !strings.Contains(tooltest.JSON(t, body), `30 apps: pass app, or app:\"all\" to fan out`) {
+		t.Fatalf("body = %s", tooltest.JSON(t, body))
+	}
+	if len(res.Next) != 1 || res.Next[0].Tool != "apps_list" {
+		t.Fatalf("next = %+v", res.Next)
+	}
+	if n := len(k.ASC.Requests()); n != 1 {
+		t.Fatalf("requests = %d, want 1", n)
+	}
+}
+
+// last_seen with no stored cursor says so and points at mark_seen.
+func TestListLastSeenWithoutCursorNotes(t *testing.T) {
+	k := listKit(t)
+	twoPages(k)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"app":"a1","since":"last_seen","limit":2}`))
+	d := tooltest.Decode[map[string]any](t, res)
+	if d["note"] != "no last_seen cursor yet; showing newest 2. Pass mark_seen:true to start tracking" {
+		t.Fatalf("note = %v", d["note"])
+	}
+	var next *tool.NextStep
+	for i := range res.Next {
+		if res.Next[i].Tool == "reviews_list" {
+			next = &res.Next[i]
+		}
+	}
+	if next == nil || next.Args["since"] != "last_seen" || next.Args["mark_seen"] != true || next.Args["app"] != "a1" {
+		t.Fatalf("next = %+v", res.Next)
+	}
+}
+
 func TestListUnansweredFilterQuery(t *testing.T) {
 	k := listKit(t)
 	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews?exists[publishedResponse]=false", 200, page("", nil, review("b1", 1, d14, "SWE", "")))

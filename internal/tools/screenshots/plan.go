@@ -51,11 +51,11 @@ type sourceIn struct {
 	Platform tool.Platform   `json:"platform,omitempty"`
 	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or a version string of an editable version"`
 	Dir      string          `json:"dir" jsonschema:"screenshots directory inside the project: <locale>/*.png|jpg (fastlane; display inferred from pixels) or <locale>/<display>/*.png"`
-	Mode     string          `json:"mode,omitempty" jsonschema:"replace (default): each touched set becomes exactly the local files, extra remote screenshots are deleted; add: only upload missing ones"`
+	Mode     string          `json:"mode,omitempty" jsonschema:"add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)"`
 	Locales  tool.LocaleSet  `json:"locales,omitempty" jsonschema:"only these locales of the directory (default all)"`
 }
 
-var modeEnum = []any{modeReplace, modeAdd}
+var modeEnum = []any{modeAdd, modeReplace}
 
 // localFile is one validated local screenshot.
 type localFile struct {
@@ -205,7 +205,7 @@ func screenshotsPlan(ctx context.Context, env *tool.Env, in sourceIn) (*tool.Res
 func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, error) {
 	mode := in.Mode
 	if mode == "" {
-		mode = modeReplace
+		mode = modeAdd
 	}
 	if mode != modeReplace && mode != modeAdd {
 		return nil, fmt.Errorf("%w: mode must be replace or add", tool.ErrInvalidArgs)

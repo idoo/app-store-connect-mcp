@@ -18,8 +18,13 @@ const (
 	listMax     = 500
 	pageMax     = 200 // Apple's maximum limit for customer reviews
 	fanOut      = 4
-	lastSeen    = "last_seen"
-	allApps     = "all"
+	// implicitFanOutMax caps an implicit every-app fan-out (no app, no
+	// default_app); more apps need app:"all".
+	implicitFanOutMax = 25
+	// fanOutPageMin is the smallest per-app page in a fan-out.
+	fanOutPageMin = 10
+	lastSeen      = "last_seen"
+	allApps       = "all"
 )
 
 type listIn struct {
@@ -93,10 +98,15 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 	if err != nil {
 		return nil, err
 	}
+	// A fan-out reads a fair share per app; trimOverall keeps the newest limit.
+	perApp := limit
+	if len(apps) > 1 {
+		perApp = max(fanOutPageMin, (limit+len(apps)-1)/len(apps))
+	}
 	groups := make([]appReviews, len(apps))
 	// Per-app failures are kept in the group; only cancellation aborts.
 	if err := tool.Parallel(ctx, fanOut, apps, func(ctx context.Context, i int, app appRef) error {
-		groups[i] = listApp(ctx, env, app, query, in.Since, since, limit)
+		groups[i] = listApp(ctx, env, app, query, in.Since, since, perApp)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -105,6 +115,10 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 		return tool.Fail(groups[0].errCause), nil
 	}
 
+	noCursor := false
+	for _, g := range groups {
+		noCursor = noCursor || (g.Cursor == "" && g.Error == nil)
+	}
 	trimOverall(groups, limit)
 	res := &tool.Result{}
 	total, unanswered := 0, 0
@@ -143,6 +157,14 @@ func reviewsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, e
 	}
 	data["apps"] = sortGroups(groups)
 	res.Data = data
+	if in.Since == lastSeen && noCursor && !in.MarkSeen {
+		data["note"] = fmt.Sprintf("no last_seen cursor yet; showing newest %d. Pass mark_seen:true to start tracking", total)
+		args := map[string]any{"since": lastSeen, "mark_seen": true}
+		if in.App != "" {
+			args["app"] = string(in.App)
+		}
+		res.Then(tool.NextStep{Tool: "reviews_list", Args: args})
+	}
 	if unanswered > 0 {
 		res.Then(tool.NextStep{Tool: "reviews_reply", Args: map[string]any{"replies": []map[string]any{{"review_id": "<id>", "body": "<reply>"}}}})
 	}
@@ -175,7 +197,9 @@ func filterQuery(in listIn) (url.Values, error) {
 	return q, nil
 }
 
-// targetApps resolves one app, or lists every app for a fan-out.
+// targetApps resolves one app, or lists every app for a fan-out. An implicit
+// fan-out (no app, no default_app) over more than implicitFanOutMax apps is
+// refused: app:"all" opts in.
 func targetApps(ctx context.Context, env *tool.Env, ref tool.AppRef) ([]appRef, error) {
 	if !strings.EqualFold(string(ref), allApps) && (ref != "" || env.Profile.DefaultApp != "") {
 		app, err := env.Resolve.App(ctx, ref)
@@ -189,6 +213,10 @@ func targetApps(ctx context.Context, env *tool.Env, ref tool.AppRef) ([]appRef, 
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list apps: %w", err)
+	}
+	if ref == "" && len(res.Data) > implicitFanOutMax {
+		return nil, tool.WithNext(tool.InvalidArgs("%d apps: pass app, or app:\"all\" to fan out", len(res.Data)),
+			tool.NextStep{Tool: "apps_list"})
 	}
 	out := make([]appRef, 0, len(res.Data))
 	for _, a := range res.Data {

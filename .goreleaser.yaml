@@ -67,7 +67,7 @@ signs:
     signature: "${artifact}.sigstore.json"
     args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
 
-# HTTP-mode image (`hamn serve --http`), distroless static, multi-arch.
+# Docker image, distroless static, multi-arch: stdio by default; HTTP needs --allow-remote and TLS.
 dockers_v2:
   - id: hamn
     ids: [hamn]

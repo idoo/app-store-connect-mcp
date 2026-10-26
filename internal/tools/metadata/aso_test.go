@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/idoo/hamn/internal/tool"
 	"github.com/idoo/hamn/internal/tool/tooltest"
 )
 
@@ -49,6 +50,26 @@ func TestPlanLiveVersionPromoOnly(t *testing.T) {
 	}
 	if !strings.Contains(stringify(out["warnings"]), "field_locked_on_live") {
 		t.Errorf("warnings = %v", out["warnings"])
+	}
+}
+
+// Promotional text on the live version is public at once: applying it needs
+// a human even with a valid plan_id, and nothing is written without one.
+func TestApplyLivePromoNeedsHuman(t *testing.T) {
+	k := kit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appInfos", http.StatusOK,
+		`{"data":[{"type":"appInfos","id":"info1","attributes":{"state":"READY_FOR_DISTRIBUTION"}}],"links":{}}`)
+	k.ASC.Handle(http.MethodGet, "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", http.StatusOK, versionLocs("Ride"))
+	args := `{"version":"live","listing":{"locales":{"en-US":{"promotionalText":"Summer sale"}}}}`
+	plan := decode(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_plan"), k.Env, args)))
+	id, _ := plan["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan = %v", plan)
+	}
+	confirmed := strings.TrimSuffix(args, "}") + `,"plan_id":"` + id + `"}`
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "metadata_apply"), k.Env, confirmed), tool.ErrHumanRequired.Code)
+	if n := len(k.ASC.Mutations()); n != 0 {
+		t.Fatalf("live promo applied without a human: %d mutations", n)
 	}
 }
 
