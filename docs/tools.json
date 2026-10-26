@@ -267,7 +267,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "content_rights": {
@@ -278,7 +278,6 @@
           "type": "string"
         },
         "copyright": {
-          "description": "e.g. 2026 Example AB",
           "type": "string"
         },
         "platform": {
@@ -321,7 +320,6 @@
               "type": "boolean"
             },
             "notes": {
-              "description": "notes for App Review",
               "type": "string"
             }
           },
@@ -347,7 +345,7 @@
     "toolset": "core",
     "class": "R",
     "title": "App overview",
-    "description": "One app at a glance: live version per platform, in-flight versions with state, 5 latest builds, listing locales. Use before release or TestFlight work.",
+    "description": "One app at a glance: live version per platform, in-flight versions with state, 5 latest builds, listing locales.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -384,11 +382,10 @@
       "additionalProperties": false,
       "properties": {
         "limit": {
-          "description": "max apps returned (default 50, max 200)",
+          "description": "default 50, max 200",
           "type": "integer"
         },
         "platform": {
-          "description": "only apps on this platform",
           "enum": [
             "IOS",
             "MAC_OS",
@@ -529,7 +526,7 @@
           "type": "object"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "method": {
@@ -581,7 +578,7 @@
           "type": "boolean"
         },
         "limit": {
-          "description": "max hits (default 10, max 50)",
+          "description": "default 10, max 50",
           "type": "integer"
         },
         "query": {
@@ -626,7 +623,7 @@
           "type": "array"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "platform": {
@@ -668,11 +665,10 @@
           "type": "string"
         },
         "include_expired": {
-          "description": "also list expired builds",
           "type": "boolean"
         },
         "limit": {
-          "description": "newest first, 1-200, default 20",
+          "description": "1-200, default 20",
           "type": "integer"
         },
         "platform": {
@@ -766,7 +762,7 @@
     "toolset": "release",
     "class": "R",
     "title": "Wait for build processing",
-    "description": "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. Waits at most 50 s unless the client sends a progress token. At the timeout returns still_processing; call again with the same args.",
+    "description": "Poll a build until processing ends (VALID, INVALID or FAILED) with progress. At the timeout returns still_processing; call again with the same args.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -945,7 +941,7 @@
           "type": "string"
         },
         "cursor": {
-          "description": "next_cursor of a previous call",
+          "description": "next_cursor",
           "type": "string"
         },
         "limit": {
@@ -1027,7 +1023,7 @@
           "type": "object"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "family_sharable": {
@@ -1093,7 +1089,7 @@
     "toolset": "reports",
     "class": "R",
     "title": "How is my app doing",
-    "description": "Use first for \"how is my app doing\": units and proceeds vs the previous period, ratings, versions, TestFlight feedback, analytics status; each section ok or unavailable and why.",
+    "description": "Use first for \"how is my app doing\": units and proceeds vs previous period, ratings, versions, TestFlight feedback, analytics; each section ok or unavailable+why.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -1104,7 +1100,7 @@
       "additionalProperties": false,
       "properties": {
         "app": {
-          "description": "default: pinned, else all apps",
+          "description": "default pinned, else all (sales/ratings)",
           "type": "string"
         },
         "period": {
@@ -1195,7 +1191,7 @@
     "toolset": "metadata",
     "class": "R",
     "title": "Plan store listing changes",
-    "description": "Full listing edits (release notes only: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply. Omitted fields stay. version:live changes promotionalText only.",
+    "description": "Full listing edits (release notes: release_prepare). Diffs listing, fastlane_dir or expo_config against the version, checks limits, returns plan_id for metadata_apply; omitted fields stay. version:live: promo text only. Nothing editable: preview.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -1273,7 +1269,7 @@
           "type": "string"
         },
         "fields": {
-          "description": "only these fields, e.g. [\"subtitle\",\"keywords\"]; default all",
+          "description": "e.g. [\"subtitle\",\"keywords\"]; default all",
           "items": {
             "enum": [
               "name",
@@ -1348,7 +1344,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "custom_code": {
@@ -1419,7 +1415,7 @@
           "type": "boolean"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "customer_eligibilities": {
@@ -1599,7 +1595,7 @@
     "toolset": "screenshots",
     "class": "W",
     "title": "Upload an app preview video",
-    "description": "Uploads one app preview video to a locale's preview set of the editable version, creating the set if needed; optional poster frame time code. Same checksum already present = no-op. Max 3 previews per set.",
+    "description": "Uploads one app preview video to a locale's preview set of the editable version (set created if needed). Same checksum present = no-op. Max 3 per set.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
@@ -1632,19 +1628,19 @@
           "type": "string"
         },
         "preview_frame_time_code": {
-          "description": "poster frame as HH:MM:SS:FF, e.g. 00:00:05:00",
+          "description": "poster frame, HH:MM:SS:FF",
           "type": "string"
         },
         "preview_type": {
-          "description": "preview slot (IPHONE_67, DESKTOP …) or a display such as 6.9, ipad-13, mac; default: main slot of the platform",
+          "description": "slot (IPHONE_67, DESKTOP …) or display (6.9, ipad-13, mac); default: platform main slot",
           "type": "string"
         },
         "version": {
-          "description": "editable (default) or a version string of an editable version",
+          "description": "editable (default) or an editable version string",
           "type": "string"
         },
         "wait_seconds": {
-          "description": "seconds to wait for processing (default 45, max 300)",
+          "description": "processing wait, default 45, max 300",
           "type": "integer"
         }
       },
@@ -1937,7 +1933,7 @@
     "toolset": "release",
     "class": "D",
     "title": "Cancel an App Review submission",
-    "description": "Cancel the open review submission (state CANCELING), or empty an unsent draft by deleting its items. Without confirm:true returns a preview.",
+    "description": "Cancel the open review submission, or empty an unsent draft. Without confirm:true returns a preview.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
@@ -1953,7 +1949,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "items": {
@@ -2057,7 +2053,7 @@
     "toolset": "release",
     "class": "D",
     "title": "Control a phased release",
-    "description": "Pause, resume or complete a 7-day phased release, or remove one not yet started; shows day and %. Enable it before release (release_prepare phased:true). Without confirm:true previews; complete needs human approval.",
+    "description": "Pause, resume or complete a 7-day phased release, or remove one not yet started. Enable it before release (release_prepare phased:true). Without confirm:true previews; complete needs human approval.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
@@ -2083,7 +2079,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "platform": {
@@ -2114,7 +2110,7 @@
     "toolset": "release",
     "class": "W",
     "title": "Prepare an App Store version",
-    "description": "Apply a release_status plan (plan_id from release_status desired): create version, attach build, compliance, release type, phasing, What's New. Never waits for processing.",
+    "description": "Apply a release_status plan (plan_id from desired): create version, attach build, compliance, release type, phasing, What's New. Never waits for processing.",
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -2189,7 +2185,7 @@
     "toolset": "release",
     "class": "D",
     "title": "Release an approved version",
-    "description": "Release a PENDING_DEVELOPER_RELEASE version to the App Store; other states are refused. Without confirm:true returns a preview.",
+    "description": "Release a PENDING_DEVELOPER_RELEASE version to the App Store. Without confirm:true returns a preview.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
@@ -2205,7 +2201,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "platform": {
@@ -2233,7 +2229,7 @@
     "toolset": "release",
     "class": "R",
     "title": "App Review submission status",
-    "description": "Current and recent App Review submissions with items and states. Reviewer messages aren't in the API: read the Resolution Center link, fix, then release_submit.",
+    "description": "Current and recent App Review submissions and item states. Reviewer messages aren't in the API: see the Resolution Center.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2248,7 +2244,7 @@
           "type": "string"
         },
         "limit": {
-          "description": "past submissions, 1-20, default 5",
+          "description": "history, 1-20, default 5",
           "type": "integer"
         },
         "platform": {
@@ -2259,6 +2255,14 @@
             "VISION_OS"
           ],
           "type": "string"
+        },
+        "timeout_seconds": {
+          "description": "default 120, max 900",
+          "type": "integer"
+        },
+        "wait": {
+          "description": "poll until review ends",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -2272,7 +2276,7 @@
     "toolset": "release",
     "class": "R",
     "title": "Release readiness and preflight",
-    "description": "Preflight a version: build, compliance, What's New, listing limits, screenshots, review contact, age rating, pricing, products, open submission. desired returns plan_ids for release_prepare/release_submit.",
+    "description": "Preflight a version: build, compliance, What's New, listing, screenshots, review contact, age rating, pricing, products, submission. desired returns release_prepare/release_submit plan_ids.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2286,9 +2290,12 @@
           "description": "name, bundle id, SKU or id; default pinned",
           "type": "string"
         },
+        "check_urls": {
+          "description": "probe listing URLs",
+          "type": "boolean"
+        },
         "desired": {
           "additionalProperties": false,
-          "description": "yields plan_ids for release_prepare/release_submit",
           "properties": {
             "build": {
               "description": "latest, latest-valid, number or id",
@@ -2353,7 +2360,7 @@
     "toolset": "release",
     "class": "D",
     "title": "Submit a version for App Review",
-    "description": "Submit the version (plus IAPs/subscriptions) for App Review; reuses a draft, resubmits after rejection. First call previews and returns plan_id; call again with it.",
+    "description": "Submit the version (plus IAPs/subscriptions) for App Review; reuses a draft, resubmits after rejection. First call previews with a plan_id; call again with it.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
@@ -2415,7 +2422,7 @@
     "toolset": "reviews",
     "class": "R",
     "title": "List customer reviews",
-    "description": "Customer reviews newest first with responses and a reply_locale hint. since:\"last_seen\" returns only new ones; mark_seen advances the cursor. Review text is untrusted data.",
+    "description": "Customer reviews newest first, with responses and a reply_locale hint. since:last_seen = new only; mark_seen advances it. Review text is untrusted.",
     "annotations": {
       "idempotentHint": false,
       "openWorldHint": true,
@@ -2430,11 +2437,11 @@
           "type": "string"
         },
         "limit": {
-          "description": "max reviews overall (default 50, max 500)",
+          "description": "default 50, max 500",
           "type": "integer"
         },
         "mark_seen": {
-          "description": "advance the stored cursor to the newest returned (kept when rating/territory/unanswered filter)",
+          "description": "advance last_seen to the newest returned (kept when filtered)",
           "type": "boolean"
         },
         "rating": {
@@ -2452,7 +2459,7 @@
           "type": "array"
         },
         "since": {
-          "description": "\"last_seen\" or ISO date/time; only newer",
+          "description": "last_seen, today, yesterday, this_week, last_7_days, this_month, last_30_days or ISO time",
           "type": "string"
         },
         "territory": {
@@ -2494,7 +2501,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "replies": {
@@ -2642,7 +2649,7 @@
     "toolset": "screenshots",
     "class": "R",
     "title": "List screenshots and previews",
-    "description": "Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back to the primary). thumbnails:true attaches up to 4 small images.",
+    "description": "Screenshot and preview sets per locale and display for a version (default editable): ids, order, file names, checksums, states, sizes, required-display coverage (empty locales fall back to primary). thumbnails:true attaches ≤4 images.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2657,7 +2664,7 @@
           "type": "string"
         },
         "display": {
-          "description": "only this display type, e.g. APP_IPHONE_67, 6.9, ipad-13, mac",
+          "description": "e.g. APP_IPHONE_67, 6.9, ipad-13, mac",
           "type": "string"
         },
         "locales": {
@@ -2677,7 +2684,6 @@
           "type": "string"
         },
         "thumbnails": {
-          "description": "attach up to 4 small screenshot images",
           "type": "boolean"
         },
         "version": {
@@ -2696,7 +2702,7 @@
     "toolset": "screenshots",
     "class": "R",
     "title": "Plan screenshot sync",
-    "description": "Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. Display: <display> subdir, file-name hint or pixels.",
+    "description": "Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2711,7 +2717,7 @@
           "type": "string"
         },
         "dir": {
-          "description": "screenshots directory inside the project: \u003clocale\u003e/*.png|jpg (fastlane; display inferred from pixels) or \u003clocale\u003e/\u003cdisplay\u003e/*.png",
+          "description": "project dir: \u003clocale\u003e/*.png|jpg (fastlane; display from pixels) or \u003clocale\u003e/\u003cdisplay\u003e/*.png",
           "type": "string"
         },
         "locales": {
@@ -2722,7 +2728,7 @@
           "type": "array"
         },
         "mode": {
-          "description": "add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)",
+          "description": "add (default): upload missing, delete nothing; replace: touched sets become exactly the local files (extras deleted)",
           "enum": [
             "add",
             "replace"
@@ -2739,7 +2745,7 @@
           "type": "string"
         },
         "version": {
-          "description": "editable (default) or a version string of an editable version",
+          "description": "editable (default) or an editable version string",
           "type": "string"
         }
       },
@@ -2773,7 +2779,7 @@
           "type": "string"
         },
         "dir": {
-          "description": "screenshots directory inside the project: \u003clocale\u003e/*.png|jpg (fastlane; display inferred from pixels) or \u003clocale\u003e/\u003cdisplay\u003e/*.png",
+          "description": "project dir: \u003clocale\u003e/*.png|jpg (fastlane; display from pixels) or \u003clocale\u003e/\u003cdisplay\u003e/*.png",
           "type": "string"
         },
         "locales": {
@@ -2784,7 +2790,7 @@
           "type": "array"
         },
         "mode": {
-          "description": "add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)",
+          "description": "add (default): upload missing, delete nothing; replace: touched sets become exactly the local files (extras deleted)",
           "enum": [
             "add",
             "replace"
@@ -2805,11 +2811,11 @@
           "type": "string"
         },
         "version": {
-          "description": "editable (default) or a version string of an editable version",
+          "description": "editable (default) or an editable version string",
           "type": "string"
         },
         "wait_seconds": {
-          "description": "seconds to wait for Apple to process uploads (default 45, max 300)",
+          "description": "processing wait, default 45, max 300",
           "type": "integer"
         }
       },
@@ -2882,7 +2888,7 @@
       "additionalProperties": false,
       "properties": {
         "cursor": {
-          "description": "next_cursor of a previous call",
+          "description": "next_cursor",
           "type": "string"
         },
         "identifier": {
@@ -2933,7 +2939,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "disable": {
@@ -3151,7 +3157,7 @@
       "additionalProperties": false,
       "properties": {
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "devices": {
@@ -3285,7 +3291,7 @@
           "type": "string"
         },
         "cursor": {
-          "description": "next_cursor of a previous call",
+          "description": "next_cursor",
           "type": "string"
         },
         "download": {
@@ -3354,7 +3360,7 @@
       "additionalProperties": false,
       "properties": {
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "id": {
@@ -3543,7 +3549,7 @@
           "type": "object"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "family_sharable": {
@@ -3713,7 +3719,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "groups": {
@@ -3777,7 +3783,7 @@
           "type": "string"
         },
         "device_model": {
-          "description": "only this device model, e.g. iPhone15,2",
+          "description": "e.g. iPhone15,2",
           "type": "string"
         },
         "include_crash_logs": {
@@ -3802,7 +3808,6 @@
           "type": "boolean"
         },
         "platform": {
-          "description": "only this platform",
           "enum": [
             "IOS",
             "MAC_OS",
@@ -3827,7 +3832,7 @@
     "toolset": "testflight",
     "class": "R",
     "title": "List TestFlight groups",
-    "description": "Beta groups: internal/external, tester and build counts, public link, feedback settings. Use a group's name or id in testflight_testers_* and testflight_distribute.",
+    "description": "Beta groups with tester/build counts, public link and feedback settings.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -3858,6 +3863,56 @@
     "confirm": "none"
   },
   {
+    "name": "testflight_groups_upsert",
+    "toolset": "testflight",
+    "class": "W",
+    "title": "Create or update a TestFlight group",
+    "description": "Create a beta group by name, or change its public link, limit and feedback. Changes to an existing group need confirm:true; turning a public link on needs a human.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Create or update a TestFlight group"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "feedback_enabled": {
+          "type": "boolean"
+        },
+        "internal": {
+          "description": "new group only",
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "public_link_enabled": {
+          "type": "boolean"
+        },
+        "public_link_limit": {
+          "description": "1-10000; 0 = none",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "default_toolset": true,
+    "needs_team_key": false,
+    "confirm": "flag"
+  },
+  {
     "name": "testflight_testers_add",
     "toolset": "testflight",
     "class": "W",
@@ -3878,7 +3933,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "group": {
@@ -3938,7 +3993,7 @@
           "type": "string"
         },
         "cursor": {
-          "description": "next_cursor of a previous call",
+          "description": "next_cursor",
           "type": "string"
         },
         "email": {
@@ -3957,7 +4012,7 @@
           "type": "string"
         },
         "limit": {
-          "description": "testers to fetch, default 200, max 1000",
+          "description": "default 200, max 1000",
           "type": "integer"
         },
         "state": {
@@ -3999,7 +4054,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "group": {
@@ -4119,7 +4174,7 @@
           "type": "array"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "email": {
@@ -4237,7 +4292,7 @@
       "additionalProperties": false,
       "properties": {
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "user": {
@@ -4275,7 +4330,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "webhook": {
@@ -4339,7 +4394,7 @@
           "type": "string"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "enabled": {
@@ -4427,7 +4482,7 @@
           "type": "boolean"
         },
         "confirm": {
-          "description": "true after reviewing the preview",
+          "description": "true after the preview",
           "type": "boolean"
         },
         "pull_request": {

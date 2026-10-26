@@ -23,7 +23,7 @@ const (
 
 type searchIn struct {
 	Query         string `json:"query" jsonschema:"keywords, type, tag or operation id"`
-	Limit         int    `json:"limit,omitempty" jsonschema:"max hits (default 10, max 50)"`
+	Limit         int    `json:"limit,omitempty" jsonschema:"default 10, max 50"`
 	IncludeWrites bool   `json:"include_writes,omitempty" jsonschema:"in read-only mode, also list mutations"`
 }
 

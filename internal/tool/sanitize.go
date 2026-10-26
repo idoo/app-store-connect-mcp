@@ -4,28 +4,78 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
-// invisibleRanges are runes that render invisibly or reorder text (control,
-// format, bidi and tag characters). [SanitizeText] makes each one visible.
+// invisibleRanges are runes that render invisibly or reorder text but are
+// not all covered by the Unicode properties [invisible] also checks
+// (controls, Hangul fillers, the blank Braille pattern, Mongolian
+// selectors, reserved specials). [SanitizeText] makes each one visible.
 var invisibleRanges = [][2]rune{
 	{0x00, 0x08},
 	{0x0B, 0x1F}, // C0 except \t and \n
 	{0x7F, 0x9F}, // DEL and C1
 	{0xAD, 0xAD}, // soft hyphen
+	{0x034F, 0x034F},
 	{0x061C, 0x061C},
-	{0x180E, 0x180E},
+	{0x115F, 0x1160}, // Hangul choseong/jungseong fillers
+	{0x17B4, 0x17B5},
+	{0x180B, 0x180F}, // Mongolian selectors and vowel separator
 	{0x200B, 0x200F},
 	{0x202A, 0x202E},
 	{0x2060, 0x206F},
+	{0x2800, 0x2800}, // blank Braille pattern
+	{0x3164, 0x3164}, // Hangul filler
 	{0xFEFF, 0xFEFF},
-	{0xFFF9, 0xFFFB},
+	{0xFFA0, 0xFFA0}, // halfwidth Hangul filler
+	{0xFFF0, 0xFFFB},
 	{0xE0000, 0xE007F}, // tag characters
 }
 
+// invisible reports a rune [SanitizeText] marks: a C0/C1 control other
+// than \t and \n, any format (Cf) rune, variation selector or other
+// default-ignorable code point, or one of [invisibleRanges]. The emoji
+// presentation selector U+FE0F is invisible here; [SanitizeText] keeps it
+// only after a pictographic rune.
 func invisible(r rune) bool {
+	if r < utf8.RuneSelf {
+		return (r < 0x20 && r != '\t' && r != '\n') || r == 0x7F
+	}
 	for _, rg := range invisibleRanges {
 		if r >= rg[0] && r <= rg[1] {
+			return true
+		}
+	}
+	return unicode.In(r, unicode.Cf, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
+}
+
+// pictographicExtra are emoji bases outside the So category.
+var pictographicExtra = [][2]rune{
+	{0x203C, 0x203C},
+	{0x2049, 0x2049},
+	{0x2139, 0x2139},
+	{0x2194, 0x2199},
+	{0x25FB, 0x25FE},
+	{0x2934, 0x2935},
+	{0x3030, 0x3030},
+	{0x303D, 0x303D},
+}
+
+// keptVS16 reports whether r is U+FE0F requesting emoji presentation of
+// prev: a pictographic (So) rune, or a keycap base 0-9 # * when next is
+// the combining enclosing keycap U+20E3.
+func keptVS16(prev, r, next rune) bool {
+	if r != 0xFE0F {
+		return false
+	}
+	if (prev >= '0' && prev <= '9') || prev == '#' || prev == '*' {
+		return next == 0x20E3
+	}
+	if unicode.Is(unicode.So, prev) {
+		return true
+	}
+	for _, rg := range pictographicExtra {
+		if prev >= rg[0] && prev <= rg[1] {
 			return true
 		}
 	}
@@ -33,20 +83,27 @@ func invisible(r rune) bool {
 }
 
 // SanitizeText makes third-party text inert for display: each invisible,
-// control, bidi or tag rune becomes the visible token "⟨U+XXXX⟩". Newlines
-// and tabs are kept; everything else is returned unchanged.
+// control, bidi, tag, variation-selector or other default-ignorable rune
+// becomes the visible token "⟨U+XXXX⟩", except U+FE0F directly after an
+// emoji. Newlines and tabs are kept; everything else is returned unchanged.
 func SanitizeText(s string) string {
 	if strings.IndexFunc(s, invisible) < 0 {
 		return s
 	}
 	var b strings.Builder
 	b.Grow(len(s) + 16)
-	for _, r := range s {
+	prev := rune(-1)
+	for i, r := range s {
 		if invisible(r) {
-			fmt.Fprintf(&b, "⟨U+%04X⟩", r)
-			continue
+			next, _ := utf8.DecodeRuneInString(s[i+utf8.RuneLen(r):])
+			if !keptVS16(prev, r, next) {
+				fmt.Fprintf(&b, "⟨U+%04X⟩", r)
+				prev = r
+				continue
+			}
 		}
 		b.WriteRune(r)
+		prev = r
 	}
 	return b.String()
 }
@@ -56,6 +113,7 @@ func SanitizeText(s string) string {
 // than two "⏎" collapse to "⏎⏎", then [SanitizeText] makes the remaining
 // invisible runes visible, [MarkLookalikes] flags words that impersonate
 // Latin text, and the result is truncated to maxRunes runes ending in "…".
+// Truncation never splits a "⟨…⟩" token: one cut in half is dropped whole.
 // A maxRunes ≤ 0 means no limit.
 func SanitizeLine(s string, maxRunes int) string {
 	var b strings.Builder
@@ -81,9 +139,14 @@ func SanitizeLine(s string, maxRunes int) string {
 		b.WriteRune(r)
 	}
 	out := MarkLookalikes(SanitizeText(b.String()))
-	if maxRunes > 0 && strings.Count(out, "")-1 > maxRunes {
-		rs := []rune(out)
-		out = string(rs[:max(maxRunes-1, 0)]) + "…"
+	if maxRunes > 0 && utf8.RuneCountInString(out) > maxRunes {
+		head := string([]rune(out)[:max(maxRunes-1, 0)])
+		// Token bodies never contain "⟩", so an unclosed last "⟨" is a
+		// token (or a literal) the cut fell inside: drop it whole.
+		if open := strings.LastIndex(head, "⟨"); open >= 0 && !strings.Contains(head[open:], "⟩") {
+			head = head[:open]
+		}
+		out = head + "…"
 	}
 	return out
 }

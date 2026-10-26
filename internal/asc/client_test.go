@@ -193,25 +193,37 @@ func TestBackoffJitterBounded(t *testing.T) {
 	}
 }
 
-func TestParseRetryAfter(t *testing.T) {
-	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
-	tests := []struct {
-		in   string
-		want time.Duration
-		ok   bool
-	}{
-		{"7", 7 * time.Second, true},
-		{now.Add(20 * time.Second).Format(http.TimeFormat), 20 * time.Second, true},
-		{now.Add(-time.Minute).Format(http.TimeFormat), 0, true},
-		{"", 0, false},
-		{"-1", 0, false},
-		{"soon", 0, false},
-	}
-	for _, tt := range tests {
-		got, ok := parseRetryAfter(tt.in, now)
-		if got != tt.want || ok != tt.ok {
-			t.Errorf("parseRetryAfter(%q) = %v, %v; want %v, %v", tt.in, got, ok, tt.want, tt.ok)
-		}
+// TestRetryAfterUnusableUsesBackoffFloor (CF2+CF5): through the client, a
+// 429 with Retry-After 0, negative or a past date sleeps the backoff floor
+// (≥ 500 ms), never 0; an overflowing value fails fast without sleeping.
+func TestRetryAfterUnusableUsesBackoffFloor(t *testing.T) {
+	past := time.Date(2026, 10, 25, 11, 0, 0, 0, time.UTC).Format(http.TimeFormat) // harness clock is 12:00
+	for _, h := range []string{"0", "-5", past, "9223372036854775807"} {
+		t.Run(h, func(t *testing.T) {
+			var n atomic.Int32
+			hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+				if n.Add(1) == 1 {
+					w.Header().Set("Retry-After", h)
+					writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", "slow down", "")
+					return
+				}
+				_, _ = io.WriteString(w, `{"data":[]}`)
+			}, nil)
+			_, err := hs.c.Get(context.Background(), "/v1/apps", nil)
+			slept := hs.clock.slept()
+			if h == "9223372036854775807" {
+				if !errors.Is(err, tool.ErrRateLimited) || len(slept) != 0 {
+					t.Fatalf("err = %v, sleeps = %v; want rate_limited, no sleep", err, slept)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(slept) != 1 || slept[0] < baseBackoff {
+				t.Fatalf("sleeps = %v, want one ≥ %v", slept, baseBackoff)
+			}
+		})
 	}
 }
 

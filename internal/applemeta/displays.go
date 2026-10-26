@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
@@ -49,6 +50,35 @@ const (
 	IMessageIPad105        DisplayType = "IMESSAGE_APP_IPAD_105"
 	IMessageIPad97         DisplayType = "IMESSAGE_APP_IPAD_97"
 )
+
+// AppIPhoneDuo is the iPhone Duo screenshot slot Apple announced. It is not
+// in the pinned spec (4.5.1), so it is pending: absent from [Displays] and
+// [ParseDisplay], and callers must not send it to Apple unless the spec
+// index lists it as a ScreenshotDisplayType value.
+const AppIPhoneDuo DisplayType = "APP_IPHONE_DUO"
+
+// PendingDisplay is an announced screenshot slot the pinned spec lacks.
+type PendingDisplay struct {
+	Type     DisplayType
+	Platform tool.Platform
+	// RequiredFrom is the first day (UTC) submissions need the slot.
+	RequiredFrom time.Time
+}
+
+var pendingDisplays = []PendingDisplay{
+	{Type: AppIPhoneDuo, Platform: tool.IOS, RequiredFrom: time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC)},
+}
+
+// PendingDisplays returns the pending slots of platform.
+func PendingDisplays(platform tool.Platform) []PendingDisplay {
+	var out []PendingDisplay
+	for _, p := range pendingDisplays {
+		if p.Platform == platform {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // PreviewType is an App Store Connect PreviewType enum value (app preview
 // video slot).

@@ -6,8 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -15,8 +13,6 @@ import (
 // Retry timing.
 const (
 	baseBackoff = 500 * time.Millisecond
-	// maxRetryAfter caps an honoured Retry-After; longer waits fail fast.
-	maxRetryAfter = 30 * time.Second
 	// jitterFraction is the maximum backoff jitter (25%).
 	jitterFraction = 0.25
 )
@@ -86,25 +82,6 @@ func idempotent(method string) bool {
 // changed nothing at Apple (GET/HEAD), so it is never outcome_unknown.
 func outcomeKnown(method string) bool {
 	return method == http.MethodGet || method == http.MethodHead
-}
-
-// parseRetryAfter parses a Retry-After header in seconds or as an HTTP-date.
-func parseRetryAfter(v string, now time.Time) (time.Duration, bool) {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return 0, false
-	}
-	if n, err := strconv.Atoi(v); err == nil {
-		if n < 0 {
-			return 0, false
-		}
-		return time.Duration(n) * time.Second, true
-	}
-	t, err := http.ParseTime(v)
-	if err != nil {
-		return 0, false
-	}
-	return max(t.Sub(now), 0), true
 }
 
 // isConnRefused reports a connection refused before the request was sent.

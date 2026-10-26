@@ -126,27 +126,36 @@ func TestReleaseStatusProductListTruncated(t *testing.T) {
 	}
 }
 
-// ReleaseDay-3: an inferred platform with no builds names the other
-// platforms that have some.
+// ReleaseDay-3 / R7 AO5: an inferred platform with no builds while exactly
+// one other platform has some lists that platform's builds instead.
 func TestBuildsListOtherPlatforms(t *testing.T) {
 	k := tooltest.New(t).ReadOnly()
 	k.Resolve.Apps = []tool.App{{ID: "100", Name: "Hjul", BundleID: "se.jvcr.hjul", Platforms: []tool.Platform{tool.IOS, tool.MacOS}}}
 	k.ASC.HandleFunc("GET", "/v1/builds", func(r tool.Request) tooltest.Fixture {
 		if r.Query.Get("filter[preReleaseVersion.platform]") == "MAC_OS" {
-			if r.Query.Get("limit") != "1" {
-				t.Errorf("probe limit = %q", r.Query.Get("limit"))
-			}
-			return tooltest.Fixture{Status: 200, Body: []byte(`{"data":[{"type":"builds","id":"m1","attributes":{"version":"7"}}],"meta":{"paging":{"total":13,"limit":1}}}`)}
+			return tooltest.Fixture{Status: 200, Body: []byte(`{"data":[{"type":"builds","id":"m1","attributes":{"version":"7","processingState":"VALID"}}],"meta":{"paging":{"total":13,"limit":1}}}`)}
 		}
 		return tooltest.Fixture{Status: 200, Body: []byte(`{"data":[]}`)}
 	})
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "builds_list"), k.Env, `{"app":"Hjul"}`))
 	out := tooltest.Decode[buildsListOut](t, res)
-	if out.Platform != tool.IOS || out.OtherPlatforms[tool.MacOS] != 13 || len(out.OtherPlatforms) != 1 {
+	if out.Platform != tool.MacOS || out.PlatformFallback == nil || out.PlatformFallback.From != tool.IOS ||
+		out.PlatformFallback.To != tool.MacOS || len(out.Builds) != 1 || out.Builds[0].ID != "m1" || out.OtherPlatforms != nil {
 		t.Fatalf("out = %+v", out)
 	}
-	if len(res.Next) != 1 || res.Next[0].Tool != "builds_list" || res.Next[0].Args["platform"] != "MAC_OS" {
-		t.Errorf("next = %+v", res.Next)
+	for _, n := range res.Next {
+		if n.Tool == "builds_list" {
+			t.Errorf("next = %+v", res.Next)
+		}
+	}
+	probes := 0
+	for _, r := range k.ASC.RequestsTo("GET", "/v1/builds") {
+		if r.Query.Get("limit") == "1" {
+			probes++
+		}
+	}
+	if probes != 1 {
+		t.Errorf("probes = %d, want 1", probes)
 	}
 
 	// An explicit platform is never second-guessed.

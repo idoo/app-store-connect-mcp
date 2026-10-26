@@ -32,10 +32,9 @@ type groupOut struct {
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "testflight_groups_list", Toolset: tool.TestFlight, Class: tool.Read, Idempotent: true,
-		Title: "List TestFlight groups",
-		Description: "Beta groups: internal/external, tester and build counts, public link, feedback settings. Use a " +
-			"group's name or id in testflight_testers_* and testflight_distribute.",
-		Enums: map[string][]any{"type": {"internal", "external", "all"}},
+		Title:       "List TestFlight groups",
+		Description: "Beta groups with tester/build counts, public link and feedback settings.",
+		Enums:       map[string][]any{"type": {"internal", "external", "all"}},
 	}, groupsList))
 }
 

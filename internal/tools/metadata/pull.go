@@ -21,7 +21,7 @@ type pullIn struct {
 	Version   tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, else live), live or a version string"`
 	Locales   tool.LocaleSet  `json:"locales,omitempty" jsonschema:"locales or aliases; default all"`
 	ExportDir string          `json:"export_dir,omitempty" jsonschema:"fastlane dir; never overwrites edited files"`
-	Fields    []string        `json:"fields,omitempty" jsonschema:"only these fields, e.g. [\"subtitle\",\"keywords\"]; default all"`
+	Fields    []string        `json:"fields,omitempty" jsonschema:"e.g. [\"subtitle\",\"keywords\"]; default all"`
 }
 
 type pullOut struct {

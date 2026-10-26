@@ -18,19 +18,19 @@ import (
 const productsMax = 5000
 
 type statusIn struct {
-	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
-	Platform tool.Platform   `json:"platform,omitempty"`
-	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default), live or a version"`
-	Desired  *releaseDesired `json:"desired,omitempty" jsonschema:"yields plan_ids for release_prepare/release_submit"`
+	App       tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform  tool.Platform   `json:"platform,omitempty"`
+	Version   tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default), live or a version"`
+	Desired   *releaseDesired `json:"desired,omitempty"`
+	CheckURLs bool            `json:"check_urls,omitempty" jsonschema:"probe listing URLs"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_status", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "Release readiness and preflight", UI: "release",
-		Description: "Preflight a version: build, compliance, What's New, listing limits, screenshots, review contact, age " +
-			"rating, pricing, products, open submission. desired returns plan_ids for " +
-			"release_prepare/release_submit.",
+		Description: "Preflight a version: build, compliance, What's New, listing, screenshots, review contact, age rating, " +
+			"pricing, products, submission. desired returns release_prepare/release_submit plan_ids.",
 		Enums: map[string][]any{
 			"platform":             {"IOS", "MAC_OS", "TV_OS", "VISION_OS"},
 			"desired.release_type": {releaseManual, releaseAfterApproval, releaseScheduled},
@@ -173,6 +173,9 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 		return nil, err
 	}
 	out := statusOut{App: app, Checks: runChecks(s), AppStoreLink: versionURL(app.ID, platform)}
+	if in.CheckURLs {
+		out.Checks = append(out.Checks, checkURLs(ctx, s))
+	}
 	out.Version = statusVersion{String: string(ref), Platform: platform}
 	if s.Version != nil {
 		v := s.Version.Version
@@ -298,7 +301,7 @@ func phaseFor(state string) string {
 // loadStatusSnapshot reads everything the preflight needs: 9 GETs plus one
 // per version localization (screenshot sets).
 func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, ref tool.VersionRef) (*statusSnapshot, error) {
-	s := &statusSnapshot{App: app, Platform: platform, VersionRef: ref, Screenshots: map[string][]screenshotSet{}, IAPs: map[string]string{}, Subscriptions: map[string]string{}}
+	s := &statusSnapshot{App: app, Platform: platform, VersionRef: ref, Now: env.Clock.Now(), Uploadable: pendingUploadable(env.Spec, platform), Screenshots: map[string][]screenshotSet{}, IAPs: map[string]string{}, Subscriptions: map[string]string{}}
 
 	appResp, err := env.ASC.Get(ctx, "/v1/apps/"+app.ID, url.Values{
 		"fields[apps]":             {"primaryLocale,contentRightsDeclaration,appStoreVersions"},
@@ -367,6 +370,7 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 		s.Submission = &sub
 	}
 	fetchAccessibility(ctx, env, s)
+	fetchCPPKeywords(ctx, env, s)
 	if err := loadProducts(ctx, env, s); err != nil {
 		return nil, err
 	}

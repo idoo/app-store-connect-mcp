@@ -38,7 +38,7 @@ type profilesListIn struct {
 	Name     string `json:"name,omitempty" jsonschema:"profile name filter passed to Apple"`
 	BundleID string `json:"bundle_id,omitempty" jsonschema:"keep only profiles of this bundle identifier"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"maximum profiles to read (default 200, max 1000)"`
-	Cursor   string `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
+	Cursor   string `json:"cursor,omitempty" jsonschema:"next_cursor"`
 }
 
 type profilesListOut struct {

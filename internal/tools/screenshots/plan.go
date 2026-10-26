@@ -51,9 +51,9 @@ const (
 type sourceIn struct {
 	App      tool.AppRef     `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
 	Platform tool.Platform   `json:"platform,omitempty"`
-	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or a version string of an editable version"`
-	Dir      string          `json:"dir" jsonschema:"screenshots directory inside the project: <locale>/*.png|jpg (fastlane; display inferred from pixels) or <locale>/<display>/*.png"`
-	Mode     string          `json:"mode,omitempty" jsonschema:"add (default): upload missing, delete nothing; replace: each touched set becomes exactly the local files (extra remote ones deleted)"`
+	Version  tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default) or an editable version string"`
+	Dir      string          `json:"dir" jsonschema:"project dir: <locale>/*.png|jpg (fastlane; display from pixels) or <locale>/<display>/*.png"`
+	Mode     string          `json:"mode,omitempty" jsonschema:"add (default): upload missing, delete nothing; replace: touched sets become exactly the local files (extras deleted)"`
 	Locales  tool.LocaleSet  `json:"locales,omitempty" jsonschema:"only these locales of the directory (default all)"`
 }
 
@@ -167,8 +167,7 @@ func init() {
 		Name: "screenshots_plan", Toolset: tool.Screenshots, Class: tool.Read, Idempotent: true,
 		Title: "Plan screenshot sync",
 		Description: "Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal " +
-			"checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. " +
-			"Display: <display> subdir, file-name hint or pixels.",
+			"checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync.",
 		Enums: map[string][]any{"platform": platformEnum, "mode": modeEnum},
 	}, screenshotsPlan))
 }

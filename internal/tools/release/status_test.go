@@ -44,6 +44,8 @@ type fixture struct {
 	a11y string
 	// age overrides age rating declaration attributes.
 	age map[string]any
+	// cpp routes the custom product page GETs (nil: no pages).
+	cpp func(k *tooltest.Kit)
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -258,6 +260,11 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 	} else {
 		k.ASC.Handle("GET", "/v1/apps/{id}/accessibilityDeclarations", 200, doc(t, decls))
 	}
+	if f.cpp != nil {
+		f.cpp(k)
+	} else {
+		k.ASC.Handle("GET", "/v1/apps/{id}/appCustomProductPages", 200, `{"data":[]}`)
+	}
 	return k
 }
 
@@ -292,8 +299,11 @@ func TestReleaseStatusReady(t *testing.T) {
 	out, res := call(t, k, `{"app":"Hjul"}`)
 	for _, c := range out.Checks {
 		want := statusOK
-		if c.ID == "app_privacy" {
+		switch c.ID {
+		case "app_privacy":
 			want = statusManual
+		case "iphone_duo_screenshots": // pending slot, not uploadable via the API
+			want = statusWarn
 		}
 		if c.Status != want {
 			t.Errorf("check %s = %s: %s %v", c.ID, c.Status, c.Detail, c.Items)
@@ -371,8 +381,8 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 		t.Errorf("15-locale fixture not ready: %+v", out.Checks)
 	}
 	reqs := k.ASC.Requests()
-	if len(reqs) > 26 {
-		t.Fatalf("%d requests for 15 locales, want ≤ 26", len(reqs))
+	if len(reqs) > 27 { // 26 + the custom product page list
+		t.Fatalf("%d requests for 15 locales, want ≤ 27", len(reqs))
 	}
 	for _, r := range reqs {
 		if r.Method != http.MethodGet {

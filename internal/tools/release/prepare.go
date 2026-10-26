@@ -43,7 +43,7 @@ func init() {
 		Name: "release_prepare", Toolset: tool.Release, Class: tool.Write, Idempotent: true,
 		Confirm: tool.ConfirmByPlan,
 		Title:   "Prepare an App Store version",
-		Description: "Apply a release_status plan (plan_id from release_status desired): create version, attach build, " +
+		Description: "Apply a release_status plan (plan_id from desired): create version, attach build, " +
 			"compliance, release type, phasing, What's New. Never waits for processing.",
 		Enums: map[string][]any{
 			"platform":     {"IOS", "MAC_OS", "TV_OS", "VISION_OS"},

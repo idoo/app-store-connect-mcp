@@ -37,14 +37,14 @@ func init() {
 		Confirm: tool.ConfirmByPlan, RequireHuman: true,
 		Title: "Submit a version for App Review",
 		Description: "Submit the version (plus IAPs/subscriptions) for App Review; reuses a draft, resubmits after " +
-			"rejection. First call previews and returns plan_id; call again with it.",
+			"rejection. First call previews with a plan_id; call again with it.",
 		Enums: map[string][]any{"platform": platforms},
 	}, releaseSubmit))
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_cancel", Toolset: tool.Release, Class: tool.Destructive, Idempotent: true,
 		Confirm: tool.ConfirmByFlag, RequireHuman: true,
 		Title: "Cancel an App Review submission",
-		Description: "Cancel the open review submission (state CANCELING), or empty an unsent draft by deleting its items. " +
+		Description: "Cancel the open review submission, or empty an unsent draft. " +
 			"Without confirm:true returns a preview.",
 		Enums: map[string][]any{"platform": platforms},
 	}, releaseCancel))

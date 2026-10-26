@@ -312,8 +312,10 @@ func lockBlocker(vs []activeVersion, platform tool.Platform) string {
 }
 
 // computePlan pulls the remote listing and diffs the desired one against it.
-// The returned plan may carry validation errors.
-func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, error) {
+// The returned plan may carry validation errors. With preview an
+// unspecified version falls back to the live one when nothing is editable;
+// such a plan is a read-only preview (target.FellBack) and is never proposed.
+func computePlan(ctx context.Context, env *tool.Env, in sourceIn, preview bool) (*planned, error) {
 	desired, source, err := in.desired(env)
 	if err != nil {
 		return nil, err
@@ -324,7 +326,7 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 	}
 	sum := sha256.Sum256(digest)
 
-	t, err := resolveTarget(ctx, env, in.App, in.Platform, in.Version, false)
+	t, err := resolveTarget(ctx, env, in.App, in.Platform, in.Version, preview)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +358,7 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 	case infos.Live != nil:
 		opts.AppInfoState = infos.Live.Str("state")
 	}
-	opts.PromoOnly = t.Version.State == versionStateLive || slices.Contains(inFlightLocked, t.Version.State)
+	opts.PromoOnly = !t.FellBack && (t.Version.State == versionStateLive || slices.Contains(inFlightLocked, t.Version.State))
 	remote, err := metadata.Pull(ctx, env.ASC, t.Version.ID, pullInfo)
 	if err != nil {
 		return nil, err
@@ -418,6 +420,9 @@ type planOut struct {
 	Warnings []metadata.Issue `json:"warnings,omitempty"`
 	Errors   []metadata.Issue `json:"errors,omitempty"`
 	PlanID   string           `json:"plan_id,omitempty"`
+	// Applicable is false for a preview against the live version.
+	Applicable *bool  `json:"applicable,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 // Plan statuses.

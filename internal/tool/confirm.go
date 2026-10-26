@@ -32,7 +32,7 @@ const (
 
 // ConfirmFlag is embedded in the input of [ConfirmByFlag] tools.
 type ConfirmFlag struct {
-	Confirm bool `json:"confirm,omitempty" jsonschema:"true after reviewing the preview"`
+	Confirm bool `json:"confirm,omitempty" jsonschema:"true after the preview"`
 }
 
 // ConfirmPlan is embedded in the input of [ConfirmByPlan] tools.

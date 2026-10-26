@@ -27,9 +27,9 @@ var platformEnum = []any{string(tool.IOS), string(tool.MacOS), string(tool.TVOS)
 
 type appsListIn struct {
 	Query    string `json:"query,omitempty" jsonschema:"fuzzy; empty lists all"`
-	Platform string `json:"platform,omitempty" jsonschema:"only apps on this platform"`
+	Platform string `json:"platform,omitempty"`
 	State    string `json:"state,omitempty" jsonschema:"in-flight version state"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"max apps returned (default 50, max 200)"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"default 50, max 200"`
 }
 
 type appSummary struct {
@@ -105,7 +105,7 @@ func init() {
 		Name: "apps_get", Toolset: tool.Core, Class: tool.Read, Idempotent: true,
 		Title: "App overview",
 		Description: "One app at a glance: live version per platform, in-flight versions with state, 5 latest builds, " +
-			"listing locales. Use before release or TestFlight work.",
+			"listing locales.",
 	}, appsGet))
 }
 

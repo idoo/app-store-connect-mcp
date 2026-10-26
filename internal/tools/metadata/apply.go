@@ -36,7 +36,7 @@ func init() {
 }
 
 func metadataApply(ctx context.Context, env *tool.Env, in applyIn) (*tool.Result, error) {
-	p, err := computePlan(ctx, env, in.sourceIn)
+	p, err := computePlan(ctx, env, in.sourceIn, false)
 	if err != nil {
 		return nil, err
 	}

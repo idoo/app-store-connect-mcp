@@ -49,7 +49,7 @@ type bundleIDsListIn struct {
 	Platform   string `json:"platform,omitempty"`
 	Query      string `json:"query,omitempty" jsonschema:"case-insensitive substring of the name or identifier"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"maximum bundle IDs to read (default 200, max 1000)"`
-	Cursor     string `json:"cursor,omitempty" jsonschema:"next_cursor of a previous call"`
+	Cursor     string `json:"cursor,omitempty" jsonschema:"next_cursor"`
 }
 
 type bundleIDsListOut struct {

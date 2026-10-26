@@ -6,22 +6,25 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
 type reviewStatusIn struct {
-	App      tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
-	Platform tool.Platform `json:"platform,omitempty"`
-	Limit    int           `json:"limit,omitempty" jsonschema:"past submissions, 1-20, default 5"`
+	App            tool.AppRef   `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; default pinned"`
+	Platform       tool.Platform `json:"platform,omitempty"`
+	Limit          int           `json:"limit,omitempty" jsonschema:"history, 1-20, default 5"`
+	Wait           bool          `json:"wait,omitempty" jsonschema:"poll until review ends"`
+	TimeoutSeconds int           `json:"timeout_seconds,omitempty" jsonschema:"default 120, max 900"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_review_status", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
 		Title: "App Review submission status",
-		Description: "Current and recent App Review submissions with items and states. Reviewer messages aren't in the " +
-			"API: read the Resolution Center link, fix, then release_submit.",
+		Description: "Current and recent App Review submissions and item states. Reviewer messages aren't in the API: " +
+			"see the Resolution Center.",
 		Enums: map[string][]any{"platform": platformEnum},
 	}, releaseReviewStatus))
 }
@@ -51,6 +54,20 @@ type reviewStatusOut struct {
 	History          []reviewSubmissionOut `json:"history"`
 	Rejection        *rejectionOut         `json:"rejection,omitempty"`
 	ResolutionCenter string                `json:"resolution_center"`
+	Polls            int                   `json:"polls,omitempty"`
+	WaitedSeconds    int                   `json:"waited_seconds,omitempty"`
+}
+
+// Review wait bounds.
+const (
+	reviewWaitDefault  = 120 * time.Second
+	reviewWaitMax      = 900 * time.Second
+	reviewWaitInterval = 30 * time.Second
+)
+
+// inReview reports a submission App Review has not finished.
+func inReview(cur *reviewSubmissionOut) bool {
+	return cur != nil && (cur.State == "WAITING_FOR_REVIEW" || cur.State == "IN_REVIEW")
 }
 
 // rejectedVersionStates are appVersionState values after an App Review rejection.
@@ -67,6 +84,56 @@ func releaseReviewStatus(ctx context.Context, env *tool.Env, in reviewStatusIn) 
 		limit = 5
 	}
 	limit = min(limit, 20)
+	out, err := loadReviewStatus(ctx, env, app, platform, limit)
+	if err != nil {
+		return nil, err
+	}
+	if in.Wait && inReview(out.Current) {
+		timeout := reviewWaitDefault
+		if in.TimeoutSeconds > 0 {
+			timeout = min(time.Duration(in.TimeoutSeconds)*time.Second, reviewWaitMax)
+		}
+		if !env.HasProgress() {
+			timeout = min(timeout, tool.NoProgressWaitCap)
+		}
+		start := env.Clock.Now()
+		for polls := 1; ; polls++ {
+			waited := env.Clock.Now().Sub(start)
+			out.Polls, out.WaitedSeconds = polls, int(waited/time.Second)
+			state := "none"
+			if out.Current != nil {
+				state = out.Current.State
+			}
+			env.Progress(waited.Seconds(), timeout.Seconds(), "review submission: "+state)
+			if !inReview(out.Current) {
+				break
+			}
+			remaining := timeout - waited
+			if remaining <= 0 {
+				args := map[string]any{"app": app.ID, "platform": string(platform), "wait": true, "timeout_seconds": int(timeout / time.Second)}
+				return tool.OK(map[string]any{
+					"status":      "still_in_review",
+					"resume_hint": "call release_review_status again with wait:true; review often takes 24-48 h, so for longer waits use webhooks_upsert",
+					"result":      out,
+				}).Then(tool.NextStep{Tool: "release_review_status", Args: args}), nil
+			}
+			if err := env.Clock.Sleep(ctx, min(reviewWaitInterval, remaining)); err != nil {
+				return nil, err
+			}
+			if out, err = loadReviewStatus(ctx, env, app, platform, limit); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if out.Current == nil {
+		return tool.OK(out).Then(statusNext(app, platform, "", nil)), nil
+	}
+	return tool.OK(out).Then(reviewNext(app, platform, out.Current)...), nil
+}
+
+// loadReviewStatus reads the newest limit submissions; the newest is
+// Current, with its items.
+func loadReviewStatus(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, limit int) (reviewStatusOut, error) {
 	resp, err := env.ASC.Get(ctx, "/v1/reviewSubmissions", url.Values{
 		"filter[app]":                   {app.ID},
 		"filter[platform]":              {string(platform)},
@@ -78,7 +145,7 @@ func releaseReviewStatus(ctx context.Context, env *tool.Env, in reviewStatusIn) 
 		"limit":                         {"50"},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list review submissions: %w", err)
+		return reviewStatusOut{}, fmt.Errorf("list review submissions: %w", err)
 	}
 	subs := slices.Clone(resp.Data)
 	// Unsent drafts have no submittedDate and are the newest; then newest first.
@@ -119,7 +186,7 @@ func releaseReviewStatus(ctx context.Context, env *tool.Env, in reviewStatusIn) 
 		}
 		if i == 0 {
 			if v.Items, err = fetchSubmissionItems(ctx, env, s.ID); err != nil {
-				return nil, err
+				return reviewStatusOut{}, err
 			}
 			v.ItemCount = len(v.Items)
 			cur := v
@@ -128,11 +195,10 @@ func releaseReviewStatus(ctx context.Context, env *tool.Env, in reviewStatusIn) 
 		}
 		out.History = append(out.History, v)
 	}
-	if out.Current == nil {
-		return tool.OK(out).Then(statusNext(app, platform, "", nil)), nil
+	if out.Current != nil {
+		out.Rejection = rejection(out.Current, rc)
 	}
-	out.Rejection = rejection(out.Current, rc)
-	return tool.OK(out).Then(reviewNext(app, platform, out.Current)...), nil
+	return out, nil
 }
 
 // rejection reports a rejected current submission (nil when not rejected).
