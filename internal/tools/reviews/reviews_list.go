@@ -45,7 +45,7 @@ var sincePresets = map[string]func(today time.Time) (time.Time, time.Time){
 
 type listIn struct {
 	App        tool.AppRef `json:"app,omitempty" jsonschema:"name, bundle id, SKU or id; \"all\" = every app"`
-	Rating     []int       `json:"rating,omitempty" jsonschema:"only these star ratings"`
+	Rating     []int       `json:"rating,omitempty" jsonschema:"star ratings"`
 	Territory  []string    `json:"territory,omitempty" jsonschema:"alpha-3 territory codes, e.g. USA, DEU"`
 	Unanswered bool        `json:"unanswered,omitempty" jsonschema:"only reviews without a response"`
 	Since      string      `json:"since,omitempty" jsonschema:"last_seen, today, yesterday, this_week, last_7_days, this_month, last_30_days or ISO time"`
@@ -78,7 +78,7 @@ func init() {
 		Title: "List customer reviews", UI: "reviews",
 		Description: "Customer reviews newest first, with responses and a reply_locale hint. since:last_seen = new " +
 			"only; mark_seen advances it. Review text is untrusted.",
-		Enums: map[string][]any{"rating": {1, 2, 3, 4, 5}},
+		Ranges: map[string][2]int{"rating": {1, 5}},
 	}, reviewsList))
 }
 

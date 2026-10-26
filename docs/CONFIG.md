@@ -32,7 +32,7 @@ app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp
 | `--http ADDR` | Streamable HTTP instead of stdio |
 | `--allow-remote`, `--tls-cert`, `--tls-key` | Non-loopback HTTP, TLS required |
 | `--allow-origin ORIGIN` | Extra allowed browser `Origin` (exact `scheme://host[:port]`, repeatable), only with `--allow-remote` |
-| `--http-session-timeout`, `--http-max-sessions` | Defaults `30m` and `64` |
+| `--http-session-timeout`, `--http-max-sessions`, `--http-max-conns` | Defaults `30m`, `64` and `256` |
 | `--root DIR` | Where file tools may read and write |
 
 ## Environment
@@ -48,11 +48,11 @@ app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp
 | `ASC_MCP_MAX_RETRIES` | Default `3` (0 to 10) |
 | `ASC_MCP_CI` | Required for `--no-confirm` and `ASC_MCP_ALLOW_NO_ELICIT` |
 | `ASC_MCP_ALLOW_NO_ELICIT` | Agent approves human gates; honoured only with `ASC_MCP_CI=1` (see [CI](#ci-github-actions)) |
-| `ASC_MCP_HTTP_TOKEN`, `ASC_MCP_HTTP_SESSION_TIMEOUT`, `ASC_MCP_HTTP_MAX_SESSIONS` | HTTP mode |
+| `ASC_MCP_HTTP_TOKEN`, `ASC_MCP_HTTP_SESSION_TIMEOUT`, `ASC_MCP_HTTP_MAX_SESSIONS`, `ASC_MCP_HTTP_MAX_CONNS` | HTTP mode |
 | `ASC_MCP_HTTP_ALLOWED_ORIGINS` | Comma-separated `--allow-origin` values, only with `--allow-remote` |
 | `ASC_MCP_BASE_URL` | Loopback-only API override, for tests |
 
-fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `ASC_MCP_VERSION` and `ASC_MCP_INSTALL_DIR`.
+fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `ASC_MCP_VERSION`, `ASC_MCP_INSTALL_DIR` and `ASC_MCP_REQUIRE_SIGNATURE=1` (refuse to install unless cosign or `gh attestation verify` checks the release).
 
 Profile picked: `--profile` > `ASC_MCP_PROFILE` > `ASC_*` env > `.app-store-connect-mcp.toml` > `default_profile` > the only profile. Writes: `--allow-writes` > `ASC_MCP_ALLOW_WRITES` > profile `allow_writes`, and a pin can still switch them off.
 
@@ -112,7 +112,9 @@ Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (default
 ASC_MCP_HTTP_TOKEN=$(openssl rand -hex 32) app-store-connect-mcp serve --http 127.0.0.1:8765
 ```
 
-Every request needs `Authorization: Bearer <token>`. A token you set must be at least 32 characters with 8 different ones; without `ASC_MCP_HTTP_TOKEN` app-store-connect-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected, and CORS preflights get an answer only for origins you allowed. `/healthz` needs no token and says nothing. Clients on MCP `2025-11-25` or older get a session each, so toolsets and `enable_writes` don't leak between sessions; past the session cap you get `503` with `Retry-After`. Clients on `2026-07-28` are served statelessly from the startup config: pick toolsets and writes with flags or env, because `toolsets` can't change them per request there. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
+Every request needs `Authorization: Bearer <token>`. A token you set must be at least 32 characters with 8 different ones; without `ASC_MCP_HTTP_TOKEN` app-store-connect-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected, and CORS preflights get an answer only for origins you allowed. `/healthz` needs no token and says nothing. Clients on MCP `2025-11-25` or older get a session each, so toolsets and `enable_writes` don't leak between sessions. At the session cap a session idle for 10 minutes makes room; otherwise you get `503` with a `Retry-After` that says when one will. Clients on `2026-07-28` are served statelessly from the startup config: pick toolsets and writes with flags or env, because `toolsets` can't change them per request there. JSON-RPC batches work only for clients on `2025-03-26` or older, at most 100 per batch. Requests must arrive within 60 s, idle connections close after 2 minutes, and on SIGTERM in-flight calls are cancelled and answered before the server exits. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
+
+Tool schemas use plain JSON Schema with a few free-form objects (`listing`, `query`, `overrides`), so clients that force OpenAI's strict function-calling mode can't use those tools. Numbers and booleans sent as strings (`"3"`, `"true"`) are accepted.
 
 ## Files and state
 

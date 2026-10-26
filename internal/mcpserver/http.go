@@ -1,11 +1,14 @@
 package mcpserver
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,6 +41,33 @@ const (
 	DefaultSessionTimeout = 30 * time.Minute
 	// DefaultMaxSessions caps concurrently open sessions.
 	DefaultMaxSessions = 64
+	// sessionEvictIdle is how long a session must sit idle before a new
+	// session at the cap may evict it.
+	sessionEvictIdle = 10 * time.Minute
+)
+
+// Connection and request limits for HTTP mode.
+const (
+	EnvHTTPMaxConns = "ASC_MCP_HTTP_MAX_CONNS"
+	// DefaultMaxConns caps concurrently open TCP connections.
+	DefaultMaxConns = 256
+	// readTimeout bounds reading one request including its body; the
+	// server clears it once the body is read, so long calls and SSE streams
+	// are unaffected.
+	readTimeout    = 60 * time.Second
+	idleTimeout    = 120 * time.Second
+	maxHeaderBytes = 64 << 10
+	// rejectWriteTimeout bounds writing a rejection to a slow reader.
+	rejectWriteTimeout = 10 * time.Second
+	// shutdownGrace is how long in-flight requests get after cancellation
+	// before connections are closed.
+	shutdownGrace = 10 * time.Second
+	// maxBodyBytes matches the SDK's own POST body cap.
+	maxBodyBytes = 4 << 20
+	// maxBatchLen caps the messages in one JSON-RPC batch.
+	maxBatchLen = 100
+	// batchMaxProtocol is the last protocol revision with JSON-RPC batches.
+	batchMaxProtocol = "2025-03-26"
 )
 
 // HTTP header names the transport inspects.
@@ -96,6 +126,10 @@ type HTTPOptions struct {
 	// MaxSessions caps open sessions (new ones get 503); 0 reads
 	// ASC_MCP_HTTP_MAX_SESSIONS, else DefaultMaxSessions. Negative is unlimited.
 	MaxSessions int
+	// MaxConns caps open TCP connections (further ones wait to be
+	// accepted); 0 reads ASC_MCP_HTTP_MAX_CONNS, else DefaultMaxConns.
+	// Negative is unlimited.
+	MaxConns int
 }
 
 // ServeHTTP serves MCP over Streamable HTTP on addr until ctx ends. It binds
@@ -121,11 +155,42 @@ func ServeHTTP(ctx context.Context, addr string, opts HTTPOptions) error {
 	if err != nil {
 		return err
 	}
+	maxConns, err := connLimit(opts)
+	if err != nil {
+		return err
+	}
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("mcpserver: http: listen %s: %w", addr, err)
 	}
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	if maxConns > 0 {
+		ln = newLimitListener(ln, maxConns)
+	}
+	return serveListener(ctx, ln, h, opts)
+}
+
+// newHTTPServer returns the server for h: bounded request reads, idle
+// keep-alives and headers, no global write timeout (SSE streams and long
+// tool calls), and base as every request's parent context.
+func newHTTPServer(base context.Context, h http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+		BaseContext:       func(net.Listener) context.Context { return base },
+	}
+}
+
+// serveListener serves h on ln until ctx ends. Then it cancels every
+// request's context, so in-flight tool calls end with a cancelled result
+// the client still receives, waits up to shutdownGrace for them, and closes
+// what remains. A shutdown is a clean exit: it returns nil.
+func serveListener(ctx context.Context, ln net.Listener, h http.Handler, opts HTTPOptions) error {
+	base, cancelBase := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelBase()
+	srv := newHTTPServer(base, h)
 	errc := make(chan error, 1)
 	go func() {
 		if opts.TLSCert != "" {
@@ -138,13 +203,80 @@ func ServeHTTP(ctx context.Context, addr string, opts HTTPOptions) error {
 	case err := <-errc:
 		return fmt.Errorf("mcpserver: http: %w", err)
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("mcpserver: http: shutdown: %w", err)
-		}
-		return nil
 	}
+	cancelBase()
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Warn("http: shutdown grace expired; closing connections", "err", err)
+		}
+		_ = srv.Close()
+	}
+	return nil
+}
+
+// connLimit resolves the connection cap (0 = unlimited) from opts, then
+// env, then DefaultMaxConns.
+func connLimit(opts HTTPOptions) (int, error) {
+	n := opts.MaxConns
+	if n == 0 {
+		n = DefaultMaxConns
+		if v := os.Getenv(EnvHTTPMaxConns); v != "" {
+			p, err := strconv.Atoi(v)
+			if err != nil || p == 0 {
+				return 0, fmt.Errorf("mcpserver: http: %s=%q: want a connection count (negative is unlimited)", EnvHTTPMaxConns, v)
+			}
+			n = p
+		}
+	}
+	return max(n, 0), nil
+}
+
+// limitListener accepts at most cap(sem) open connections; Accept waits for
+// one to close.
+type limitListener struct {
+	net.Listener
+	sem       chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func newLimitListener(ln net.Listener, n int) *limitListener {
+	return &limitListener{Listener: ln, sem: make(chan struct{}, n), done: make(chan struct{})}
+}
+
+func (l *limitListener) Accept() (net.Conn, error) {
+	select {
+	case l.sem <- struct{}{}:
+	case <-l.done:
+		return nil, net.ErrClosed
+	}
+	c, err := l.Listener.Accept()
+	if err != nil {
+		<-l.sem
+		return nil, err
+	}
+	return &limitConn{Conn: c, release: func() { <-l.sem }}, nil
+}
+
+func (l *limitListener) Close() error {
+	err := l.Listener.Close()
+	l.closeOnce.Do(func() { close(l.done) })
+	return err
+}
+
+// limitConn frees its listener slot on the first Close.
+type limitConn struct {
+	net.Conn
+	once    sync.Once
+	release func()
+}
+
+func (c *limitConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(c.release)
+	return err
 }
 
 // CheckListenAddr enforces the bind policy: loopback hosts only, unless
@@ -204,7 +336,7 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 	if opts.NewStatelessServer != nil {
 		stateless = mcp.NewStreamableHTTPHandler(opts.NewStatelessServer, &mcp.StreamableHTTPOptions{Logger: opts.Logger, Stateless: true})
 	}
-	limit := &sessionLimiter{max: maxSessions}
+	limit := &sessionLimiter{max: maxSessions, idleTimeout: timeout, now: httpNow}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -216,7 +348,7 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 			return
 		}
 		if !originAllowed(origin, opts.AllowedOrigins) {
-			http.Error(w, "forbidden origin", http.StatusForbidden)
+			reject(w, "forbidden origin", http.StatusForbidden)
 			return
 		}
 		if origin != "" {
@@ -225,24 +357,30 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 			h.Add("Vary", "Origin")
 			h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
 		}
-		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		got, ok := bearerToken(r.Header.Get("Authorization"))
 		sum := sha256.Sum256([]byte(got))
 		if !ok || subtle.ConstantTimeCompare(sum[:], want[:]) != 1 {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="app-store-connect-mcp"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			reject(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if stateless != nil && r.Header.Get(protocolVersionHeader) >= statelessProtocolVersion {
 			stateless.ServeHTTP(w, r)
 			return
 		}
-		if r.Header.Get(sessionIDHeader) != "" {
+		id := r.Header.Get(sessionIDHeader)
+		if !gateBatch(w, r, func() string { return limit.protocolVersion(id) }) {
+			return
+		}
+		if id != "" {
+			limit.begin(id)
+			defer limit.end(id)
 			mcpHandler.ServeHTTP(w, r)
 			return
 		}
-		if !limit.acquire() {
-			w.Header().Set("Retry-After", "60")
-			http.Error(w, "too many open sessions; close one or wait for idle ones to expire", http.StatusServiceUnavailable)
+		if ok, retry := limit.acquire(); !ok {
+			w.Header().Set("Retry-After", strconv.Itoa(int(retry/time.Second)))
+			reject(w, "too many open sessions; close one or wait for idle ones to expire", http.StatusServiceUnavailable)
 			return
 		}
 		slot := &buildSlot{}
@@ -252,12 +390,112 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 	return mux, nil
 }
 
+// httpNow is the session limiter's clock (tests replace it).
+var httpNow = time.Now
+
+// reject answers a refused request and closes the connection afterwards,
+// so an unread (possibly endless) body never pins it, with a write deadline
+// against slow readers.
+func reject(w http.ResponseWriter, msg string, code int) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(rejectWriteTimeout))
+	w.Header().Set("Connection", "close")
+	http.Error(w, msg, code)
+}
+
+// rejectRPC is reject with a JSON-RPC invalid-request error body.
+func rejectRPC(w http.ResponseWriter, msg string, code int) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(rejectWriteTimeout))
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0", "id": nil,
+		"error": map[string]any{"code": -32600, "message": msg},
+	})
+	h := w.Header()
+	h.Set("Connection", "close")
+	h.Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = w.Write(body)
+}
+
+// bearerToken extracts the token of a Bearer Authorization header; the
+// scheme is case-insensitive (RFC 9110 §11.1) and the token trimmed.
+func bearerToken(h string) (string, bool) {
+	scheme, tok, ok := strings.Cut(strings.TrimSpace(h), " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return "", false
+	}
+	tok = strings.TrimSpace(tok)
+	return tok, tok != ""
+}
+
+// gateBatch peeks at a POST body: a JSON-RPC batch (top-level array) is
+// refused unless the protocol (header, else the session's negotiated one)
+// is 2025-03-26 or older, and is capped at maxBatchLen messages. r.Body is
+// restored for the SDK. It reports whether the request may proceed.
+func gateBatch(w http.ResponseWriter, r *http.Request, sessionVersion func() string) bool {
+	if r.Method != http.MethodPost || r.Body == nil || r.Body == http.NoBody {
+		return true
+	}
+	orig := r.Body
+	br := bufio.NewReader(orig)
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{br, orig}
+	if !startsWithArray(br) {
+		return true
+	}
+	v := r.Header.Get(protocolVersionHeader)
+	if v == "" {
+		v = sessionVersion()
+	}
+	if v == "" || v > batchMaxProtocol {
+		rejectRPC(w, "JSON-RPC batches need protocol "+batchMaxProtocol+" or older", http.StatusBadRequest)
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(br, maxBodyBytes+1))
+	switch {
+	case err != nil:
+		reject(w, "failed to read body", http.StatusBadRequest)
+		return false
+	case len(body) > maxBodyBytes:
+		reject(w, fmt.Sprintf("request body exceeds %d bytes", maxBodyBytes), http.StatusRequestEntityTooLarge)
+		return false
+	}
+	var items []json.RawMessage
+	if json.Unmarshal(body, &items) == nil && len(items) > maxBatchLen {
+		rejectRPC(w, fmt.Sprintf("JSON-RPC batch has %d messages; the limit is %d", len(items), maxBatchLen), http.StatusBadRequest)
+		return false
+	}
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{bytes.NewReader(body), orig}
+	return true
+}
+
+// startsWithArray reports whether the first non-whitespace byte is '['.
+func startsWithArray(br *bufio.Reader) bool {
+	for i := 1; ; i++ {
+		b, _ := br.Peek(i)
+		if len(b) < i {
+			return false
+		}
+		switch b[i-1] {
+		case ' ', '\t', '\r', '\n':
+		case '[':
+			return true
+		default:
+			return false
+		}
+	}
+}
+
 // preflight answers a CORS preflight: an allow-listed browser Origin gets
 // the allowed headers and methods echoed for it, anything else 403. It runs
 // before authentication because browsers never send credentials on it.
 func preflight(w http.ResponseWriter, origin string, extra []string) {
 	if origin == "" || !originAllowed(origin, extra) {
-		http.Error(w, "forbidden origin", http.StatusForbidden)
+		reject(w, "forbidden origin", http.StatusForbidden)
 		return
 	}
 	h := w.Header()
@@ -305,37 +543,152 @@ type buildSlot struct{ srv *mcp.Server }
 
 // sessionLimiter counts open sessions: each new-session request reserves a
 // place, and afterwards its server counts while it still has a session (the
-// SDK drops sessions on DELETE and idle timeout).
+// SDK drops sessions on DELETE and idle timeout). It tracks each session's
+// last activity so a new session at the cap can evict the longest-idle one.
 type sessionLimiter struct {
-	max     int // 0 = unlimited
-	mu      sync.Mutex
-	pending int
-	servers []*mcp.Server
+	max         int           // 0 = unlimited
+	idleTimeout time.Duration // SDK idle expiry; 0 = never
+	now         func() time.Time
+	mu          sync.Mutex
+	pending     int
+	servers     []*mcp.Server
+	activity    map[string]*sessionActivity
 }
 
-func (l *sessionLimiter) acquire() bool {
+// sessionActivity is one session's in-flight request count and the time
+// its last request started or ended.
+type sessionActivity struct {
+	last   time.Time
+	active int
+}
+
+// prune drops servers without sessions and activity of gone sessions; it
+// returns the live sessions by ID with their servers. l.mu must be held.
+func (l *sessionLimiter) prune() map[string]*mcp.Server {
+	live := map[string]*mcp.Server{}
+	l.servers = slices.DeleteFunc(l.servers, func(s *mcp.Server) bool {
+		n := 0
+		for ss := range s.Sessions() {
+			live[ss.ID()] = s
+			n++
+		}
+		return n == 0
+	})
+	for id := range l.activity {
+		if live[id] == nil {
+			delete(l.activity, id)
+		}
+	}
+	return live
+}
+
+// acquire reserves a place for a new session. At the cap it evicts the
+// longest-idle session once it has been idle sessionEvictIdle; otherwise it
+// refuses with the wait until that becomes possible (or the SDK expires it).
+func (l *sessionLimiter) acquire() (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.servers = slices.DeleteFunc(l.servers, func(s *mcp.Server) bool {
-		for range s.Sessions() {
-			return false
-		}
-		return true
-	})
-	if l.max > 0 && len(l.servers)+l.pending >= l.max {
-		return false
+	live := l.prune()
+	if l.max <= 0 || len(l.servers)+l.pending < l.max {
+		l.pending++
+		return true, 0
 	}
-	l.pending++
-	return true
+	now := l.now()
+	if l.activity == nil {
+		l.activity = map[string]*sessionActivity{}
+	}
+	oldest, oldestIdle := "", time.Duration(-1)
+	for id := range live {
+		a := l.activity[id]
+		if a == nil {
+			a = &sessionActivity{last: now}
+			l.activity[id] = a
+		}
+		if idle := now.Sub(a.last); a.active == 0 && idle > oldestIdle {
+			oldest, oldestIdle = id, idle
+		}
+	}
+	if oldest != "" && oldestIdle >= sessionEvictIdle {
+		srv := live[oldest]
+		for ss := range srv.Sessions() {
+			if ss.ID() == oldest {
+				_ = ss.Close()
+			}
+		}
+		l.servers = slices.DeleteFunc(l.servers, func(s *mcp.Server) bool { return s == srv })
+		delete(l.activity, oldest)
+		l.pending++
+		return true, 0
+	}
+	horizon := sessionEvictIdle
+	if l.idleTimeout > 0 {
+		horizon = min(horizon, l.idleTimeout)
+	}
+	wait := horizon
+	if oldest != "" {
+		wait = horizon - oldestIdle
+	}
+	wait = (wait + time.Second - 1).Truncate(time.Second)
+	return false, min(max(wait, time.Second), horizon)
 }
 
+// release ends a new-session request; srv (if any) now holds its session.
 func (l *sessionLimiter) release(srv *mcp.Server) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.pending--
-	if srv != nil {
-		l.servers = append(l.servers, srv)
+	if srv == nil {
+		return
 	}
+	l.servers = append(l.servers, srv)
+	if l.activity == nil {
+		l.activity = map[string]*sessionActivity{}
+	}
+	for ss := range srv.Sessions() {
+		if l.activity[ss.ID()] == nil {
+			l.activity[ss.ID()] = &sessionActivity{last: l.now()}
+		}
+	}
+}
+
+// begin and end bracket a request of a known session; unknown IDs are
+// ignored (the SDK answers them 404).
+func (l *sessionLimiter) begin(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if a := l.activity[id]; a != nil {
+		a.active++
+		a.last = l.now()
+	}
+}
+
+func (l *sessionLimiter) end(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if a := l.activity[id]; a != nil && a.active > 0 {
+		a.active--
+		a.last = l.now()
+	}
+}
+
+// protocolVersion returns the protocol a live session negotiated, or "".
+func (l *sessionLimiter) protocolVersion(id string) string {
+	if id == "" {
+		return ""
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, s := range l.servers {
+		for ss := range s.Sessions() {
+			if ss.ID() == id {
+				if p := ss.InitializeParams(); p != nil {
+					return p.ProtocolVersion
+				}
+				return ""
+			}
+		}
+	}
+	return ""
 }
 
 func originAllowed(origin string, extra []string) bool {

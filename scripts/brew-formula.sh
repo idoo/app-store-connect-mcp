@@ -25,9 +25,8 @@ linux_amd64=$(sha linux_amd64)
 
 cat <<EOF
 class AppStoreConnectMcp < Formula
-  desc "App Store Connect MCP server: ship iOS and macOS apps from your agent"
+  desc "MCP server to ship iOS and macOS apps through App Store Connect"
   homepage "https://github.com/idoo/app-store-connect-mcp"
-  version "$version"
   license "MIT"
 
   livecheck do

@@ -3,6 +3,7 @@ package metadata
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -145,10 +146,9 @@ func Diff(remote, desired *Listing, opts DiffOptions) (*Plan, error) {
 		remove[code] = true
 	}
 
-	codes := make([]string, 0, len(want)+len(remove))
-	for c := range want {
-		codes = append(codes, c)
-	}
+	// Union of desired and removed locales, built without capacity arithmetic
+	// (len(want)+len(remove) was CodeQL go/allocation-size-overflow #1).
+	codes := slices.Collect(maps.Keys(want))
 	for c := range remove {
 		if _, ok := want[c]; !ok {
 			codes = append(codes, c)

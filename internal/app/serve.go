@@ -54,9 +54,6 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	if pf, ok := env.Files.(*ProjectFiles); ok {
 		defer func() { _ = pf.Close() }()
 	}
-	if _, none := env.ASC.(noCredentialsASC); none {
-		logger.Warn(ErrNoProfile.Error())
-	}
 	deps := mcpserver.Deps{
 		Env:            *env,
 		Profile:        env.Profile,

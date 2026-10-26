@@ -53,8 +53,12 @@ type Meta struct {
 	// profile sets AllowNoElicit. Requires a Confirm mode.
 	RequireHuman bool
 	// Enums adds enum constraints to input properties; keys are property paths
-	// with "." between levels (array items are traversed implicitly).
+	// with "." between levels (array items are traversed implicitly). Integer
+	// enums are rejected: Gemini allows enum only on strings; use Ranges.
 	Enums map[string][]any
+	// Ranges adds minimum/maximum to integer input properties (paths as in
+	// Enums).
+	Ranges map[string][2]int
 	// ReadOnlyEnums replaces enums in read-only mode (schema and validation).
 	ReadOnlyEnums map[string][]any
 	// ReadOnlyDescription replaces Description in read-only mode.
@@ -96,6 +100,9 @@ func New[In any](m Meta, h Handler[In]) Tool {
 		panic(fmt.Sprintf("tool %q: %v", m.Name, err))
 	}
 	if err := applyEnums(s, m.Enums); err != nil {
+		panic(fmt.Sprintf("tool %q: %v", m.Name, err))
+	}
+	if err := applyRanges(s, m.Ranges); err != nil {
 		panic(fmt.Sprintf("tool %q: %v", m.Name, err))
 	}
 	t := Tool{meta: m, schema: s}
@@ -166,23 +173,51 @@ func checkConfirmField(mode ConfirmMode, s *jsonschema.Schema) error {
 
 func applyEnums(s *jsonschema.Schema, enums map[string][]any) error {
 	for path, values := range enums {
-		cur := s
-		for seg := range strings.SplitSeq(path, ".") {
-			for cur.Items != nil && cur.Properties == nil {
-				cur = cur.Items
-			}
-			next := cur.Properties[seg]
-			if next == nil {
-				return fmt.Errorf("enum path %q: no property %q", path, seg)
-			}
-			cur = next
+		cur, err := leafSchema(s, path)
+		if err != nil {
+			return fmt.Errorf("enum path %q: %w", path, err)
 		}
-		for cur.Items != nil && (cur.Type == "array" || slices.Contains(cur.Types, "array")) {
-			cur = cur.Items
+		if cur.Type == "integer" {
+			return fmt.Errorf("enum path %q: integer enum; use Meta.Ranges", path)
 		}
 		cur.Enum = slices.Clone(values)
 	}
 	return nil
+}
+
+func applyRanges(s *jsonschema.Schema, ranges map[string][2]int) error {
+	for path, r := range ranges {
+		cur, err := leafSchema(s, path)
+		if err != nil {
+			return fmt.Errorf("range path %q: %w", path, err)
+		}
+		if cur.Type != "integer" || r[0] > r[1] {
+			return fmt.Errorf("range path %q: need an integer property and min <= max", path)
+		}
+		lo, hi := float64(r[0]), float64(r[1])
+		cur.Minimum, cur.Maximum = &lo, &hi
+	}
+	return nil
+}
+
+// leafSchema walks a "."-separated property path, traversing array items
+// implicitly, and returns the scalar (or item) schema at its end.
+func leafSchema(s *jsonschema.Schema, path string) (*jsonschema.Schema, error) {
+	cur := s
+	for seg := range strings.SplitSeq(path, ".") {
+		for cur.Items != nil && cur.Properties == nil {
+			cur = cur.Items
+		}
+		next := cur.Properties[seg]
+		if next == nil {
+			return nil, fmt.Errorf("no property %q", seg)
+		}
+		cur = next
+	}
+	for cur.Items != nil && (cur.Type == "array" || slices.Contains(cur.Types, "array")) {
+		cur = cur.Items
+	}
+	return cur, nil
 }
 
 // Meta returns the tool's declaration.

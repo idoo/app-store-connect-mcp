@@ -49,6 +49,9 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  # install.sh is listed (and so cosign-signed) with the archives.
+  extra_files:
+    - glob: ./install.sh
 
 sboms:
   - artifacts: archive
@@ -125,11 +128,15 @@ release:
   draft: true
   replace_existing_draft: false
   mode: keep-existing
+  # The installer is served from the immutable release, not from main:
+  # https://github.com/idoo/app-store-connect-mcp/releases/latest/download/install.sh
+  extra_files:
+    - glob: ./install.sh
   footer: |
-    **Install:** `brew install idoo/tap/app-store-connect-mcp`, `curl -fsSL https://raw.githubusercontent.com/idoo/app-store-connect-mcp/main/install.sh | sh`,
+    **Install:** `brew install idoo/tap/app-store-connect-mcp`, `curl -fsSL https://github.com/idoo/app-store-connect-mcp/releases/download/{{ .Tag }}/install.sh | sh`,
     `go install github.com/idoo/app-store-connect-mcp/cmd/app-store-connect-mcp@{{ .Tag }}`, `docker pull ghcr.io/idoo/app-store-connect-mcp:{{ .Version }}`,
     or `app-store-connect-mcp-{{ .Version }}.mcpb` for Claude Desktop.
 
-    **Verify:** `gh attestation verify app-store-connect-mcp_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp`, or
+    **Verify:** `gh attestation verify app-store-connect-mcp_{{ .Version }}_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp --signer-workflow idoo/app-store-connect-mcp/.github/workflows/release.yml --source-ref refs/tags/{{ .Tag }}`, or
     `cosign verify-blob --bundle checksums.txt.sigstore.json --certificate-identity 'https://github.com/idoo/app-store-connect-mcp/.github/workflows/release.yml@refs/tags/{{ .Tag }}' --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt`.
-    The .mcpb is listed in `app-store-connect-mcp-{{ .Version }}.mcpb.sha256`.
+    The .mcpb and tools.json are listed in `checksums-extra.txt`; verify it the same way with `--bundle checksums-extra.txt.sigstore.json ... checksums-extra.txt`.
