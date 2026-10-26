@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"maps"
 	"net/http"
 	"path"
 	"slices"
@@ -210,12 +211,33 @@ func body(req tool.Request) map[string]any {
 func (f *fake) routes() {
 	t, k := f.t, f.k
 	k.ASC.Handle("GET", "/v1/apps/{id}", 200, `{"data":{"type":"apps","id":"app1","attributes":{"primaryLocale":"en-US"}}}`)
-	k.ASC.HandleFunc("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", func(tool.Request) tooltest.Fixture {
-		var data []jres
-		for _, l := range []string{"de-DE", "en-US"} {
-			data = append(data, jres{Type: "appStoreVersionLocalizations", ID: f.locs[l], Attrs: map[string]any{"locale": l}})
+	k.ASC.HandleFunc("GET", "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", func(req tool.Request) tooltest.Fixture {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		include := req.Query.Get("include")
+		var data, inc []jres
+		for _, l := range slices.Sorted(maps.Keys(f.locs)) {
+			id := f.locs[l]
+			r := jres{Type: "appStoreVersionLocalizations", ID: id, Attrs: map[string]any{"locale": l}, Rels: map[string]any{}}
+			if strings.Contains(include, "appScreenshotSets") {
+				ids := []string{}
+				for _, s := range f.sets[id] {
+					ids = append(ids, "appScreenshotSets:"+s.id)
+					inc = append(inc, jres{Type: "appScreenshotSets", ID: s.id, Attrs: map[string]any{"screenshotDisplayType": s.display}})
+				}
+				r.Rels["appScreenshotSets"] = ids
+			}
+			if strings.Contains(include, "appPreviewSets") {
+				ids := []string{}
+				for _, s := range f.previews[id] {
+					ids = append(ids, "appPreviewSets:"+s.id)
+					inc = append(inc, jres{Type: "appPreviewSets", ID: s.id, Attrs: map[string]any{"previewType": s.previewType}})
+				}
+				r.Rels["appPreviewSets"] = ids
+			}
+			data = append(data, r)
 		}
-		return tooltest.Fixture{Status: 200, Body: doc(t, data)}
+		return tooltest.Fixture{Status: 200, Body: doc(t, data, inc...)}
 	})
 	k.ASC.HandleFunc("GET", "/v1/appStoreVersionLocalizations/{id}/appScreenshotSets", func(req tool.Request) tooltest.Fixture {
 		f.mu.Lock()
@@ -620,8 +642,10 @@ func TestListWithThumbnails(t *testing.T) {
 	if len(res.Images) != 1 || res.Images[0].MIMEType != "image/jpeg" {
 		t.Errorf("images = %+v", res.Images)
 	}
-	if n := len(k.ASC.Requests()); n != 4 {
-		t.Errorf("requests = %d, want 4", n)
+	// Localizations (with set linkage), the one locale's screenshot sets and
+	// the primary locale; no preview request since en-US has no preview sets.
+	if n := len(k.ASC.Requests()); n != 3 {
+		t.Errorf("requests = %d, want 3", n)
 	}
 }
 

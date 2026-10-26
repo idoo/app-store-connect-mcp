@@ -36,14 +36,31 @@ func hasNext(next []tool.NextStep, name string) bool {
 	return slices.ContainsFunc(next, func(n tool.NextStep) bool { return n.Tool == name })
 }
 
+// mustBatchFail asserts res is an all-items-failed [tool.Batch] error with
+// the given code; it returns the result's Next steps.
+func mustBatchFail(t *testing.T, res *tool.Result, code string) []tool.NextStep {
+	t.Helper()
+	if !res.IsError {
+		t.Fatalf("expected error %q, got %s", code, tooltest.JSON(t, res.Data))
+	}
+	b := tooltest.Decode[struct {
+		tool.ErrorBody
+		Items any `json:"items"`
+	}](t, res)
+	if b.Error != code || b.Items == nil {
+		t.Fatalf("error = %q items = %v, want %q with items", b.Error, b.Items, code)
+	}
+	return res.Next
+}
+
 func TestApplyAllFailIsOutcomeUnknownError(t *testing.T) {
 	k := kit(t)
 	listing(k)
 	k.ASC.HandleFixture(http.MethodPatch, "/v1/appStoreVersionLocalizations/{id}", unknown500())
 	k.ASC.HandleFixture(http.MethodPatch, "/v1/appInfoLocalizations/{id}", unknown500())
-	body := tooltest.MustFail(t, applyTwoPatches(t, k), "outcome_unknown")
-	if !hasNext(body.Next, "metadata_plan") {
-		t.Errorf("next = %+v, want metadata_plan", body.Next)
+	next := mustBatchFail(t, applyTwoPatches(t, k), "outcome_unknown")
+	if !hasNext(next, "metadata_plan") {
+		t.Errorf("next = %+v, want metadata_plan", next)
 	}
 	if n := len(k.ASC.Mutations()); n != 2 {
 		t.Errorf("mutations = %d, want 2", n)
@@ -104,11 +121,11 @@ func TestAppinfoAllFailIsTypedError(t *testing.T) {
 	k := appinfoKit(t)
 	k.ASC.HandleFixture(http.MethodPatch, "/v1/appStoreVersions/{id}", unknown500())
 	k.ASC.Handle(http.MethodPatch, "/v1/apps/{id}", http.StatusConflict, stateError409)
-	body := tooltest.MustFail(t, confirmAppinfo(t, k), "outcome_unknown")
-	if !hasNext(body.Next, "appinfo_update") {
-		t.Errorf("next = %+v, want appinfo_update", body.Next)
+	next := mustBatchFail(t, confirmAppinfo(t, k), "outcome_unknown")
+	if !hasNext(next, "appinfo_update") {
+		t.Errorf("next = %+v, want appinfo_update", next)
 	}
-	for _, n := range body.Next {
+	for _, n := range next {
 		if n.Tool == "appinfo_update" && n.Args["confirm"] != nil {
 			t.Errorf("replan args keep confirm: %v", n.Args)
 		}

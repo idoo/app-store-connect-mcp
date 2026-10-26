@@ -186,7 +186,7 @@ func applyAvail(ctx context.Context, env *tool.Env, k availKind, productID strin
 	}}
 	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: k.CreatePath, Write: true, Body: body})
 	if err != nil {
-		it.Action, it.Error = actionFailed, err.Error()
+		it.fail(err)
 		return it
 	}
 	if r, ok := resp.First(); ok {

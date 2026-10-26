@@ -36,9 +36,9 @@ type buildOut struct {
 
 // localeOutcome is the outcome of one per-locale write.
 type localeOutcome struct {
-	Locale  string `json:"locale"`
-	Outcome string `json:"outcome"`
-	Error   string `json:"error,omitempty"`
+	Locale  string          `json:"locale"`
+	Outcome string          `json:"outcome"`
+	Error   *tool.ErrorBody `json:"error,omitempty"`
 }
 
 // localeMap splits a locale-keyed argument into its "*" entry and explicit

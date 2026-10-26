@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -15,7 +14,7 @@ const maxReplies = 20
 
 type replyIn struct {
 	tool.ConfirmFlag
-	App     tool.AppRef `json:"app,omitempty" jsonschema:"the reviews' app (advances its cursor); default: pinned"`
+	App     tool.AppRef `json:"app,omitempty" jsonschema:"the reviews' app (named in the result); default: pinned"`
 	Replies []replyItem `json:"replies" jsonschema:"1-20 replies; an existing response is replaced"`
 }
 
@@ -40,7 +39,10 @@ type replyOutcome struct {
 	ResponseID string `json:"response_id,omitempty"`
 	State      string `json:"state,omitempty"`
 	Replaced   string `json:"replaced_response_id,omitempty"`
-	Error      any    `json:"error,omitempty"`
+	// Outcome is "error" or "unknown" (may have been applied) for a failed reply.
+	Outcome string `json:"outcome,omitempty"`
+	Error   any    `json:"error,omitempty"`
+	err     error
 }
 
 func init() {
@@ -84,13 +86,9 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 	if err := validateReplies(in.Replies); err != nil {
 		return nil, err
 	}
-	res := &tool.Result{}
 	app, appErr := env.Resolve.App(ctx, in.App)
-	if appErr != nil {
-		if in.App != "" {
-			return nil, appErr
-		}
-		res.Warn("no app resolved; the reviews cursor is not advanced (pass app)")
+	if appErr != nil && in.App != "" {
+		return nil, appErr
 	}
 
 	reviews := make([]reviewOut, len(in.Replies))
@@ -129,36 +127,22 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 	}
 
 	outcomes := make([]replyOutcome, len(in.Replies))
-	var newest time.Time
-	var newestValue string
-	failed := 0
+	var errs []error
 	for i, r := range in.Replies {
 		out := postReply(wctx, env, reviews[i], r.Body)
 		outcomes[i] = out
-		if out.Status == "failed" {
-			failed++
-			continue
-		}
-		if reviews[i].created.After(newest) {
-			newest, newestValue = reviews[i].created, reviews[i].Created
+		if out.err != nil {
+			errs = append(errs, out.err)
 		}
 	}
+	failed := len(errs)
+	// Replying never moves the reviews_list cursor: only reviews_list
+	// mark_seen, which knows what the agent actually read, does.
 	data := map[string]any{"replied": len(outcomes) - failed, "failed": failed, "results": outcomes}
 	if appErr == nil {
 		data["app"] = appRef{ID: app.ID, Name: app.Name, BundleID: app.BundleID}
-		if newestValue != "" {
-			cur, err := advanceCursor(env, app.ID, newest, newestValue)
-			if err != nil {
-				res.Warn(err.Error())
-			}
-			data["cursor"] = cur
-		}
 	}
-	if failed > 0 {
-		res.Warn(fmt.Sprintf("%d of %d replies failed; see results", failed, len(outcomes)))
-	}
-	res.Data = data
-	return res, nil
+	return tool.Batch(data, len(outcomes)-failed, 0, errs), nil
 }
 
 // postReply creates the response of one review. Apple's POST
@@ -182,7 +166,9 @@ func postReply(ctx context.Context, env *tool.Env, rv reviewOut, body string) re
 		if rv.Response != nil {
 			msg = "replace reply (the existing response " + rv.Response.ID + " is unchanged unless Apple applied it; check reviews_list)"
 		}
-		out.Status, out.Error = "failed", tool.BodyFor(fmt.Errorf("%s: %w", msg, err))
+		out.err = fmt.Errorf("%s: %w", msg, err)
+		out.Status = "failed"
+		out.Outcome, out.Error = tool.ItemError(out.err)
 		return out
 	}
 	if rv.Response != nil {

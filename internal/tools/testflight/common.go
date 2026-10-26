@@ -6,7 +6,6 @@ package testflight
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -127,13 +126,11 @@ func testerLinkage(ids []string) map[string]any {
 	return map[string]any{"data": data}
 }
 
-// errText is a short error description for per-item outcomes.
-func errText(err error) string {
-	var api *tool.APIError
-	if errors.As(err, &api) {
-		return api.Error()
-	}
-	return err.Error()
+// itemError classifies one failed item: outcome is "unknown" when Apple may
+// have applied it, "error" otherwise; the body is the structured error.
+func itemError(err error) (string, *tool.ErrorBody) {
+	outcome, body := tool.ItemError(err)
+	return outcome, &body
 }
 
 // relationshipTotals reads relationships.<rel>.meta.paging.total of every

@@ -43,6 +43,7 @@ const (
 	problemMissingLocalization = "missing_localization"
 	problemTooMany             = "too_many_screenshots"
 	problemLayout              = "unexpected_layout"
+	problemDuplicateLocale     = "duplicate_locale"
 )
 
 // sourceIn is shared by screenshots_plan and screenshots_sync.
@@ -327,13 +328,16 @@ func fingerprintSets(sets []remoteSet) []remoteSet {
 
 // scanDir walks root: <locale>/<file> or <locale>/<display>/<file>. Files are
 // in natural order (2.png before 10.png); warnings name locale directories
-// folded into another listing (de-CH → de-DE).
+// folded into another listing (de-CH → de-DE). A second directory mapping to
+// an already-seen locale is a duplicate_locale problem and is skipped.
 func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) ([]localFile, []problem, []string, error) {
 	var files []localFile
 	var problems []problem
 	var warnings []string
 	badLocales := map[string]bool{}
 	folded := map[string]bool{}
+	dirOf := map[string]string{}    // locale code → first raw dir
+	duplicates := map[string]bool{} // raw dirs already reported
 	err := env.Files.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -370,6 +374,18 @@ func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) 
 			return nil
 		}
 		if only != nil && !slices.Contains(only, locale) {
+			return nil
+		}
+		if first, seen := dirOf[locale]; !seen {
+			dirOf[locale] = parts[0]
+		} else if first != parts[0] {
+			if !duplicates[parts[0]] {
+				duplicates[parts[0]] = true
+				problems = append(problems, problem{
+					File: parts[0], Kind: problemDuplicateLocale,
+					Message: fmt.Sprintf("locales %q and %q both map to %s; keep one directory (%s/ skipped)", first, parts[0], locale, parts[0]),
+				})
+			}
 			return nil
 		}
 		if !folded[parts[0]] && applemeta.LocaleFolded(parts[0], locale) {

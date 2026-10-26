@@ -512,7 +512,8 @@ func TestResourcesAndPrompts(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, a := range p.Arguments {
-			if a.Description == "" || (a.Name == "since") == a.Required {
+			optional := a.Name == "since" || a.Name == "platform"
+			if a.Description == "" || optional == a.Required {
 				t.Errorf("prompt %s arg %s: desc=%q required=%v", p.Name, a.Name, a.Description, a.Required)
 			}
 		}

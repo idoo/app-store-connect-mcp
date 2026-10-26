@@ -79,6 +79,7 @@ func TestPlanAppInfoInReviewIsNotEditable(t *testing.T) {
  {"type":"appInfos","id":"info1","attributes":{"state":"READY_FOR_DISTRIBUTION"}},
  {"type":"appInfos","id":"info3","attributes":{"state":"WAITING_FOR_REVIEW"}}],"links":{}}`)
 	k.ASC.Handle(http.MethodGet, "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", http.StatusOK, versionLocs("Ride"))
+	k.ASC.Handle(http.MethodGet, "/v1/appInfos/{id}/appInfoLocalizations", http.StatusOK, infoLocs)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_plan"), k.Env,
 		`{"listing":{"locales":{"en-US":{"subtitle":"New"}}}}`))
 	out := decode(t, res)

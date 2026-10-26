@@ -174,11 +174,12 @@ func loadBuildState(ctx context.Context, env *tool.Env, buildID string) (*buildS
 }
 
 type groupOutcome struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Internal bool   `json:"internal"`
-	Outcome  string `json:"outcome"`
-	Error    string `json:"error,omitempty"`
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	Internal bool            `json:"internal"`
+	Outcome  string          `json:"outcome"`
+	Error    *tool.ErrorBody `json:"error,omitempty"`
+	err      error
 }
 
 type complianceOut struct {
@@ -187,15 +188,16 @@ type complianceOut struct {
 }
 
 type reviewDetailOut struct {
-	Outcome string   `json:"outcome"`
-	Fields  []string `json:"fields,omitempty"`
-	Error   string   `json:"error,omitempty"`
+	Outcome string          `json:"outcome"`
+	Fields  []string        `json:"fields,omitempty"`
+	Error   *tool.ErrorBody `json:"error,omitempty"`
 }
 
 type betaReviewOut struct {
-	State   string `json:"state,omitempty"`
-	Outcome string `json:"outcome"` // submitted|already|rejected|skipped|error
-	Note    string `json:"note,omitempty"`
+	State   string          `json:"state,omitempty"`
+	Outcome string          `json:"outcome"` // submitted|already|rejected|skipped|error|unknown
+	Note    string          `json:"note,omitempty"`
+	Error   *tool.ErrorBody `json:"error,omitempty"`
 }
 
 type distributeOut struct {
@@ -221,6 +223,7 @@ type distribution struct {
 	st       *buildState
 	out      *distributeOut
 	changed  int
+	errs     []error // failed writes, one per failed step
 	warnings []string
 }
 
@@ -369,14 +372,14 @@ func distribute(ctx context.Context, env *tool.Env, in distributeIn) (*tool.Resu
 		}
 		return res, nil
 	}
-	res := tool.OK(d.out)
+	res := tool.Batch(d.out, d.changed, 0, d.errs)
 	for _, w := range d.warnings {
 		res.Warn(w)
 	}
 	if r := d.out.BetaReview; r != nil && r.Outcome == outcomeRejected {
 		res.Warn("Beta App Review rejected this build; calling again will not resubmit it. See beta_review.note").
 			Then(tool.NextStep{Tool: "builds_list", Args: map[string]any{"app": app.ID}})
-	} else if d.out.Errors > 0 {
+	} else if d.out.Errors > 0 && !res.IsError {
 		res.Warn(fmt.Sprintf("%d step(s) failed; see error fields. Calling again retries only what is missing", d.out.Errors))
 	}
 	return res, nil
@@ -530,11 +533,17 @@ func (d *distribution) betaAppInfo(ctx context.Context, want map[string]betaAppI
 func (d *distribution) record(o *localeOutcome, err error) {
 	switch {
 	case err != nil:
-		o.Outcome, o.Error = outcomeError, errText(err)
-		d.out.Errors++
+		o.Outcome, o.Error = itemError(err)
+		d.fail(err)
 	case o.Outcome != outcomeUnchanged:
 		d.changed++
 	}
+}
+
+// fail counts one failed write step.
+func (d *distribution) fail(err error) {
+	d.out.Errors++
+	d.errs = append(d.errs, err)
 }
 
 // reviewDetail PATCHes the app's beta review detail (a singleton, never
@@ -548,8 +557,8 @@ func (d *distribution) reviewDetail(ctx context.Context, cur tool.Resource, want
 	out := &reviewDetailOut{Outcome: outcomeUpdated, Fields: slices.Sorted(maps.Keys(diff))}
 	if _, err := write(ctx, d.env, http.MethodPatch, "/v1/betaAppReviewDetails/"+cur.ID,
 		patchBody("betaAppReviewDetails", cur.ID, diff)); err != nil {
-		out.Outcome, out.Error = outcomeError, errText(err)
-		d.out.Errors++
+		out.Outcome, out.Error = itemError(err)
+		d.fail(err)
 	} else {
 		d.changed++
 	}
@@ -567,10 +576,12 @@ func (d *distribution) addToGroups(ctx context.Context) {
 				map[string]any{"data": []map[string]string{ref("builds", d.build.ID)}})
 			switch {
 			case tool.IsConflict(err):
-				o.Outcome, o.Error = outcomeError, errText(err)
+				o.Outcome, o.Error = itemError(err)
+				o.err = err
 				conflicts = append(conflicts, len(d.out.Groups))
 			case err != nil:
-				o.Outcome, o.Error = outcomeError, errText(err)
+				o.Outcome, o.Error = itemError(err)
+				o.err = err
 			default:
 				o.Outcome = outcomeAdded
 				d.changed++
@@ -582,14 +593,15 @@ func (d *distribution) addToGroups(ctx context.Context) {
 		if st, err := loadBuildState(ctx, d.env, d.build.ID); err == nil {
 			for _, i := range conflicts {
 				if slices.Contains(st.groups, d.out.Groups[i].ID) {
-					d.out.Groups[i].Outcome, d.out.Groups[i].Error = outcomeAlready, ""
+					g := &d.out.Groups[i]
+					g.Outcome, g.Error, g.err = outcomeAlready, nil, nil
 				}
 			}
 		}
 	}
 	for _, g := range d.out.Groups {
-		if g.Outcome == outcomeError {
-			d.out.Errors++
+		if g.err != nil {
+			d.fail(g.err)
 		}
 	}
 }
@@ -599,7 +611,7 @@ func (d *distribution) addToGroups(ctx context.Context) {
 func (d *distribution) submitForReview(ctx context.Context) {
 	out := &betaReviewOut{}
 	d.out.BetaReview = out
-	ok := slices.ContainsFunc(d.out.Groups, func(g groupOutcome) bool { return !g.Internal && g.Outcome != outcomeError })
+	ok := slices.ContainsFunc(d.out.Groups, func(g groupOutcome) bool { return !g.Internal && g.err == nil })
 	switch {
 	case d.st.reviewState != "":
 		out.State, out.Outcome = d.st.reviewState, outcomeAlready
@@ -622,11 +634,11 @@ func (d *distribution) submitForReview(ctx context.Context) {
 					break
 				}
 			}
-			out.Outcome, out.Note = outcomeError, errText(err)
-			d.out.Errors++
+			out.Outcome, out.Error = itemError(err)
+			d.fail(err)
 		case err != nil:
-			out.Outcome, out.Note = outcomeError, errText(err)
-			d.out.Errors++
+			out.Outcome, out.Error = itemError(err)
+			d.fail(err)
 		default:
 			d.changed++
 			out.Outcome = "submitted"

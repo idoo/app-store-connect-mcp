@@ -2,6 +2,7 @@ package signing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -95,7 +96,12 @@ func signingRevoke(ctx context.Context, env *tool.Env, in revokeIn) (*tool.Resul
 		return res, nil
 	}
 	if _, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodDelete, Path: path, Write: true}); err != nil {
-		return nil, fmt.Errorf("%s %s: %w", in.Kind, in.ID, err)
+		if !errors.Is(err, tool.ErrAlreadyGone) {
+			return nil, fmt.Errorf("%s %s: %w", in.Kind, in.ID, err)
+		}
+		// A replayed DELETE found the object gone: the first attempt applied.
+		next := tool.NextStep{Tool: "signing_profiles_list", Args: map[string]any{"state": "INVALID"}}
+		return tool.Already(revokeOut{Revoked: target}).Then(next), nil
 	}
 	next := tool.NextStep{Tool: "signing_profiles_list", Args: map[string]any{"state": "INVALID"}}
 	return tool.OK(revokeOut{Revoked: target}).Then(next), nil

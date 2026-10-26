@@ -248,12 +248,18 @@ func TestListUnansweredFilterQuery(t *testing.T) {
 
 func replyKit(t *testing.T) *tooltest.Kit {
 	t.Helper()
+	return replyKitPost(t, http.StatusCreated,
+		`{"data":{"type":"customerReviewResponses","id":"new1","attributes":{"responseBody":"x","state":"PENDING_PUBLISH"}}}`)
+}
+
+// replyKitPost is replyKit with the reply POST answering status and body.
+func replyKitPost(t *testing.T, status int, body string) *tooltest.Kit {
+	t.Helper()
 	k := listKit(t)
 	k.ASC.Handle("GET", "/v1/customerReviews/r3", 200,
 		`{"data":`+review("r3", 2, d18, "DEU", "resp1")+`,"included":[`+response("resp1", "Old reply")+`]}`)
 	k.ASC.Handle("GET", "/v1/customerReviews/r4", 200, `{"data":`+review("r4", 5, d20, "USA", "")+`}`)
-	k.ASC.Handle("POST", "/v1/customerReviewResponses", http.StatusCreated,
-		`{"data":{"type":"customerReviewResponses","id":"new1","attributes":{"responseBody":"x","state":"PENDING_PUBLISH"}}}`)
+	k.ASC.Handle("POST", "/v1/customerReviewResponses", status, body)
 	return k
 }
 
@@ -283,8 +289,40 @@ func TestReplyReplacesExistingWithSinglePost(t *testing.T) {
 	if first["status"] != "replaced" || first["response_id"] != "new1" || first["replaced_response_id"] != "resp1" {
 		t.Fatalf("result = %v", out)
 	}
-	if cur, _ := k.State.Cursor("test", "a1", cursorName); cur != d18 {
-		t.Fatalf("cursor = %q, want %q", cur, d18)
+	// Replying never moves the reviews_list cursor.
+	if cur, _ := k.State.Cursor("test", "a1", cursorName); cur != "" {
+		t.Fatalf("cursor = %q, want unset", cur)
+	}
+}
+
+// When every reply fails the result is an error carrying each item's code.
+func TestReplyAllFailedIsError(t *testing.T) {
+	k := replyKitPost(t, http.StatusConflict,
+		`{"errors":[{"status":"409","code":"STATE_ERROR","title":"nope"}]}`)
+	k.Elicit(true)
+	res := tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, replyArgs)
+	if !res.IsError {
+		t.Fatalf("want error, got %+v", res)
+	}
+	js := tooltest.JSON(t, res.Data)
+	if !strings.Contains(js, `"outcome":"error"`) || !strings.Contains(js, `"code":"STATE_ERROR"`) || !strings.Contains(js, `"items"`) {
+		t.Fatalf("data = %s", js)
+	}
+	if cur, _ := k.State.Cursor("test", "a1", cursorName); cur != "" {
+		t.Fatalf("cursor = %q", cur)
+	}
+}
+
+// A filtered list hides reviews, so mark_seen keeps the cursor and warns.
+func TestListFilteredMarkSeenKeepsCursor(t *testing.T) {
+	k := listKit(t)
+	k.ASC.Handle("GET", "/v1/apps/a2/customerReviews?exists[publishedResponse]=false", 200, page("", nil, review("b1", 1, d14, "SWE", "")))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_list"), k.Env, `{"app":"a2","unanswered":true,"mark_seen":true}`))
+	if cur, _ := k.State.Cursor("test", "a2", cursorName); cur != "" {
+		t.Fatalf("cursor moved to %q", cur)
+	}
+	if !strings.Contains(strings.Join(res.Meta.Warnings, "|"), "cursor was kept") {
+		t.Fatalf("warnings = %v", res.Meta.Warnings)
 	}
 }
 

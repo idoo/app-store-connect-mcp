@@ -162,6 +162,39 @@ func TestIAPUpsertExistingPatchesOnlyDiff(t *testing.T) {
 	}
 }
 
+// When every write fails the upsert is an error whose items carry each code.
+func TestIAPUpsertAllFailedIsError(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, iapProductDoc("iap1", "Coins", "note", false))
+	k.ASC.Handle(http.MethodGet, "/v2/inAppPurchases/{id}/versions", http.StatusOK, jsonapiDoc(
+		`[{"type":"inAppPurchaseVersions","id":"ver1","attributes":{"version":2,"state":"PREPARE_FOR_SUBMISSION"},
+		 "relationships":{"localizations":{"data":[{"type":"inAppPurchaseLocalizations","id":"loc-en"}]}}}]`,
+		`{"type":"inAppPurchaseLocalizations","id":"loc-en","attributes":{"locale":"en-US","name":"100 coins","description":"A bag"}}`))
+	const invalid = `{"errors":[{"status":"422","code":"ENTITY_ERROR.ATTRIBUTE.INVALID","title":"bad"}]}`
+	k.ASC.Handle(http.MethodPatch, "/v2/inAppPurchaseLocalizations/{id}", http.StatusUnprocessableEntity, invalid)
+	k.ASC.Handle(http.MethodPost, "/v2/inAppPurchaseLocalizations", http.StatusUnprocessableEntity, invalid)
+
+	const args = `"product_id":"` + iapTestProduct + `","reference_name":"Coins","review_note":"note",
+		"localizations":{"en-US":{"name":"100 coins","description":"A bag of coins"},"de-DE":{"name":"100 Münzen"}}`
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{`+args+`}`))
+	res := tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env, `{`+args+`,"confirm":true}`)
+	if !res.IsError {
+		t.Fatalf("want error, got %s", tooltest.JSON(t, res.Data))
+	}
+	body := tooltest.Decode[struct {
+		Error string       `json:"error"`
+		Items iapUpsertOut `json:"items"`
+	}](t, res)
+	if body.Error != "api_error" || body.Items.Failed != 2 || len(body.Items.Localizations) != 2 {
+		t.Fatalf("body = %+v", body)
+	}
+	for _, it := range body.Items.Localizations {
+		if it.Outcome != "error" || it.Error == nil || it.Error.Code != "ENTITY_ERROR.ATTRIBUTE.INVALID" {
+			t.Errorf("item %s = %+v", it.Locale, it)
+		}
+	}
+}
+
 func TestIAPUpsertUnchangedIsAlready(t *testing.T) {
 	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, iapProductDoc("iap1", "Coins", "note", true))

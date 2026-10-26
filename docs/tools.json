@@ -2182,7 +2182,7 @@
           "type": "integer"
         },
         "mark_seen": {
-          "description": "advance the stored cursor to the newest returned",
+          "description": "advance the stored cursor to the newest returned (kept when rating/territory/unanswered filter)",
           "type": "boolean"
         },
         "rating": {
@@ -2238,7 +2238,7 @@
       "additionalProperties": false,
       "properties": {
         "app": {
-          "description": "the reviews' app (advances its cursor); default: pinned",
+          "description": "the reviews' app (named in the result); default: pinned",
           "type": "string"
         },
         "confirm": {

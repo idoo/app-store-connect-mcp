@@ -227,13 +227,15 @@ const (
 	capAlreadyEnabled  = "already_enabled"
 	capAlreadyDisabled = "already_disabled"
 	capFailed          = "failed"
+	capUnknown         = "unknown" // the change may have been applied
 )
 
 type capItem struct {
-	Type   string `json:"type"`
-	Action string `json:"action"`
-	ID     string `json:"id,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Type   string          `json:"type"`
+	Action string          `json:"action"`
+	ID     string          `json:"id,omitempty"`
+	Error  *tool.ErrorBody `json:"error,omitempty"`
+	err    error
 }
 
 type capsSetOut struct {
@@ -372,15 +374,21 @@ func capabilitiesSet(ctx context.Context, env *tool.Env, in capsSetIn) (*tool.Re
 		return res, nil
 	}
 
+	var errs []error
+	applied := 0
 	for _, ch := range changes {
 		item := capApply(wctx, env, b.ID, ch)
-		if item.Action == capFailed {
+		if item.err != nil {
 			out.Failed++
+			errs = append(errs, item.err)
+		} else if item.Action != capAlreadyDisabled {
+			applied++
 		}
 		out.Items = append(out.Items, item)
 	}
-	result := tool.OK(out)
-	if out.Failed > 0 {
+	already := len(out.Items) - applied - len(errs)
+	result := tool.Batch(out, applied, already, errs)
+	if out.Failed > 0 && !result.IsError {
 		result.Warn(fmt.Sprintf("%d capability change(s) failed; re-run signing_bundle_ids_list to read the current state", out.Failed))
 	}
 	return result, nil
@@ -449,9 +457,11 @@ func capApply(ctx context.Context, env *tool.Env, bundleID string, ch capChange)
 		}
 	}
 	if err != nil {
-		b := tool.BodyFor(err)
-		item.Action = capFailed
-		item.Error = strings.TrimSpace(b.Error + ": " + b.Message)
+		outcome, b := tool.ItemError(fmt.Errorf("%s %s: %w", ch.action, ch.enable.Type, err))
+		item.Action, item.Error, item.err = capFailed, &b, err
+		if outcome == "unknown" {
+			item.Action = capUnknown
+		}
 	}
 	return item
 }

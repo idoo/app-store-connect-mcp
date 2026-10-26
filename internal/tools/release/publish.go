@@ -84,7 +84,7 @@ func releasePublish(ctx context.Context, env *tool.Env, in publishIn) (*tool.Res
 		intended = append(intended, "phased release starts: day 1, 1% of automatic updates")
 	}
 	preview := tool.PlanPreview{
-		Summary:      fmt.Sprintf("release %s %s to the App Store now", app.Name, out.Version.String),
+		Summary:      fmt.Sprintf("release %q %s to the App Store now", app.Name, out.Version.String),
 		Current:      out.Version,
 		Intended:     intended,
 		Affected:     []string{app.ID, out.Version.ID},
@@ -180,14 +180,14 @@ func releasePhased(ctx context.Context, env *tool.Env, in phasedIn) (*tool.Resul
 	preview := tool.PlanPreview{Current: out.Before, Affected: []string{app.ID, out.Version.ID, ph.ID}}
 	switch in.Action {
 	case "remove":
-		preview.Summary = fmt.Sprintf("remove the phased release of %s %s: it will release to all users at once", app.Name, out.Version.String)
+		preview.Summary = fmt.Sprintf("remove the phased release of %q %s: it will release to all users at once", app.Name, out.Version.String)
 		preview.Intended = []string{"phased release deleted"}
 	case "complete":
-		preview.Summary = fmt.Sprintf("complete the phased release of %s %s: all users get it now", app.Name, out.Version.String)
+		preview.Summary = fmt.Sprintf("complete the phased release of %q %s: all users get it now", app.Name, out.Version.String)
 		preview.Intended = []string{"phasedReleaseState " + cur + " → COMPLETE (100%)"}
 		preview.Irreversible = []string{"a completed phased release cannot be paused or restarted"}
 	default:
-		preview.Summary = fmt.Sprintf("%s the phased release of %s %s (day %d, %d%%)", in.Action, app.Name, out.Version.String, out.Before.CurrentDay, out.Before.Percent)
+		preview.Summary = fmt.Sprintf("%s the phased release of %q %s (day %d, %d%%)", in.Action, app.Name, out.Version.String, out.Before.CurrentDay, out.Before.Percent)
 		preview.Intended = []string{"phasedReleaseState " + cur + " → " + tr.to}
 	}
 	gate := tool.RequireConfirm

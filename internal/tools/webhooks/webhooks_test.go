@@ -142,6 +142,54 @@ func TestWebhooksCreateGeneratesSecretOnce(t *testing.T) {
 	}
 }
 
+// A failed create keeps the generated secret in its 0600 pending file, written
+// before the POST, and names that file in the hint.
+func TestWebhooksCreateFailureKeepsPendingSecret(t *testing.T) {
+	k := kit(t)
+	k.Elicit(true)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, hooksDoc)
+	k.ASC.Handle(http.MethodPost, "/v1/webhooks", http.StatusInternalServerError, `{"errors":[{"status":"500","code":"UNEXPECTED_ERROR","title":"boom"}]}`)
+	res := tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env, createArgs)
+	if !res.IsError {
+		t.Fatalf("want error, got %+v", res)
+	}
+	pending, err := filepath.Glob(filepath.Join(k.Files.Root, "webhook-secrets", "pending-*.txt"))
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending files = %v, %v", pending, err)
+	}
+	secret := bodyOf(t, k.ASC.Requests()[1])["attributes"].(map[string]any)["secret"].(string)
+	saved, err := os.ReadFile(pending[0])
+	if err != nil || strings.TrimSpace(string(saved)) != secret {
+		t.Fatalf("pending file = %q, %v", saved, err)
+	}
+	if fi, err := os.Stat(pending[0]); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
+		t.Fatalf("pending mode = %v, %v", fi, err)
+	}
+	b := tooltest.Decode[tool.ErrorBody](t, res)
+	if !strings.Contains(b.Hint, pending[0]) || strings.Contains(tooltest.JSON(t, res.Data), secret) {
+		t.Fatalf("hint = %q", b.Hint)
+	}
+}
+
+// An existing webhook-secrets/.gitignore that is not exactly "*\n" is refused
+// before any approval or POST.
+func TestWebhooksCreateRefusesWeakGitignore(t *testing.T) {
+	k := kit(t)
+	asked := k.Elicit(true)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, hooksDoc)
+	k.ASC.Handle(http.MethodPost, "/v1/webhooks", http.StatusCreated, createdDoc)
+	if err := k.Files.WriteFile("webhook-secrets/.gitignore", []byte("!*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res := tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env, createArgs)
+	if b := tooltest.Decode[tool.ErrorBody](t, res); !res.IsError || b.Error != "invalid_arguments" {
+		t.Fatalf("res = %+v", res)
+	}
+	if got := k.ASC.RequestsTo(http.MethodPost, "/v1/webhooks"); len(got) != 0 || len(*asked) != 0 {
+		t.Fatalf("posted %d, asked %d", len(got), len(*asked))
+	}
+}
+
 // Without a writable file root a generated secret could not be saved, so the
 // create is refused before anything reaches Apple.
 func TestWebhooksCreateWithoutFileRootRefused(t *testing.T) {
