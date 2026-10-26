@@ -163,8 +163,7 @@ func (SystemClock) Sleep(ctx context.Context, d time.Duration) error {
 // Env is everything a tool handler may use. The server builds one per
 // session; tests use tooltest.New. Inside a handler every member is non-nil:
 // [Tool.Call] substitutes stand-ins that fail with [ErrUnavailable] (and a
-// no-op Progress, an Elicit returning [ErrElicitationUnavailable], the
-// system clock).
+// no-op Progress, the system clock).
 type Env struct {
 	ASC      ASC
 	Spec     Spec
@@ -196,10 +195,13 @@ type Env struct {
 	Roots func(ctx context.Context) ([]string, error)
 	// Progress reports progress to the client.
 	Progress func(done, total float64, msg string)
-	// Elicit asks the human a yes/no question. It returns false when the human
-	// declines and an error wrapping [ErrElicitationUnavailable] when the
-	// client cannot ask.
-	Elicit func(ctx context.Context, msg string) (bool, error)
+	// CanElicit reports that the client can show a human-approval form
+	// (form elicitation, asked via an MCP input-required round on every
+	// protocol version). Without it human gates fail closed.
+	CanElicit bool
+	// Reply is the client's answer to an approval asked on an earlier round
+	// of this call; nil on a first call. See [AskHuman].
+	Reply *ApprovalReply
 
 	// noProgress records that Progress was nil before [Env.complete].
 	noProgress bool
@@ -252,11 +254,6 @@ func (e *Env) complete() *Env {
 	if c.Progress == nil {
 		c.noProgress = true
 		c.Progress = func(float64, float64, string) {}
-	}
-	if c.Elicit == nil {
-		c.Elicit = func(context.Context, string) (bool, error) {
-			return false, ErrElicitationUnavailable
-		}
 	}
 	return &c
 }

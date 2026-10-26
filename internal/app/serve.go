@@ -83,5 +83,6 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	h := opts.HTTP
 	h.Logger = logger
 	h.NewServer = mcpserver.SessionFactory(deps)
+	h.NewStatelessServer = mcpserver.StatelessFactory(deps)
 	return mcpserver.ServeHTTP(ctx, opts.HTTPAddr, h)
 }

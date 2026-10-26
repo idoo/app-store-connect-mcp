@@ -91,7 +91,8 @@ func TestUsersInvitePromptShowsEmailRolesApps(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/userInvitations", http.StatusCreated,
 		`{"data":{"type":"userInvitations","id":"I9","attributes":{"email":"qa@example.com","firstName":"Quinn","lastName":"Tester","roles":["APP_MANAGER","DEVELOPER"],"allAppsVisible":false,"expirationDate":"2026-11-25T00:00:00Z"}}}`)
 	res := tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "users_invite"), k.Env, inviteArgs))
-	wantLog(t, k, "GET /v1/users", "GET /v1/userInvitations", "POST /v1/userInvitations")
+	// The approval ask and the approved re-run both look the invitee up.
+	wantLog(t, k, "GET /v1/users", "GET /v1/userInvitations", "GET /v1/users", "GET /v1/userInvitations", "POST /v1/userInvitations")
 	if len(*asked) != 1 {
 		t.Fatalf("asked = %v", *asked)
 	}
@@ -100,7 +101,7 @@ func TestUsersInvitePromptShowsEmailRolesApps(t *testing.T) {
 			t.Fatalf("prompt lacks %q: %s", want, (*asked)[0])
 		}
 	}
-	b, _ := json.Marshal(k.ASC.Requests()[2].Body)
+	b, _ := json.Marshal(k.ASC.RequestsTo(http.MethodPost, "/v1/userInvitations")[0].Body)
 	body := string(b)
 	if !strings.Contains(body, `"visibleApps":{"data":[{"id":"A1","type":"apps"},{"id":"A2","type":"apps"}]}`) ||
 		!strings.Contains(body, `"allAppsVisible":false`) {
@@ -191,7 +192,7 @@ func TestUsersRemoveUserByEmail(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/users", http.StatusOK, usersDoc)
 	k.ASC.Handle(http.MethodDelete, "/v1/users/U2", http.StatusNoContent, ``)
 	res := tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "users_remove"), k.Env, `{"user":"dev@example.com","confirm":true}`))
-	wantLog(t, k, "GET /v1/users", "DELETE /v1/users/U2")
+	wantLog(t, k, "GET /v1/users", "GET /v1/users", "DELETE /v1/users/U2")
 	if k.ASC.Requests()[0].Query.Get("filter[username]") != "dev@example.com" {
 		t.Fatalf("query = %s", k.ASC.Requests()[0].Query.Encode())
 	}
@@ -207,7 +208,7 @@ func TestUsersRemoveInvitation(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/userInvitations", http.StatusOK, invitesDoc)
 	k.ASC.Handle(http.MethodDelete, "/v1/userInvitations/I1", http.StatusNoContent, ``)
 	res := tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "users_remove"), k.Env, `{"user":"new@example.com","confirm":true}`))
-	wantLog(t, k, "GET /v1/users", "GET /v1/userInvitations", "DELETE /v1/userInvitations/I1")
+	wantLog(t, k, "GET /v1/users", "GET /v1/userInvitations", "GET /v1/users", "GET /v1/userInvitations", "DELETE /v1/userInvitations/I1")
 	if m := tooltest.Decode[map[string]any](t, res); m["cancelled_invitation"] == nil || !strings.Contains((*asked)[0], "cancel the pending invitation of new@example.com") {
 		t.Fatalf("out = %v prompt = %v", m, *asked)
 	}

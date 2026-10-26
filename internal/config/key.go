@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -61,6 +62,9 @@ func (r KeyRef) String() string {
 func (r KeyRef) Read(getenv func(string) string) ([]byte, error) {
 	switch r.Source {
 	case KeyFromFile:
+		if _, err := r.CheckPerm(); err != nil {
+			return nil, fmt.Errorf("read private key: %w", err)
+		}
 		b, err := os.ReadFile(filepath.Clean(r.Path))
 		if err != nil {
 			return nil, fmt.Errorf("read private key: %w", err)
@@ -73,6 +77,9 @@ func (r KeyRef) Read(getenv func(string) string) ([]byte, error) {
 		}
 		return normalizePEM([]byte(v), r.EnvVar)
 	case KeyFromFastlaneJSON:
+		if _, err := r.CheckPerm(); err != nil {
+			return nil, fmt.Errorf("read private key: %w", err)
+		}
 		f, err := readFastlaneJSON(r.Path)
 		if err != nil {
 			return nil, err
@@ -86,6 +93,25 @@ func (r KeyRef) Read(getenv func(string) string) ([]byte, error) {
 	default:
 		return nil, errors.New("read private key: no key source configured")
 	}
+}
+
+// CheckPerm applies config.toml's permission rules to a key file (unix
+// only): a group- or world-writable file is refused, since another user
+// could swap the key; a group- or world-readable one yields a warning.
+// Sources without a file, and files that do not exist yet, pass; Read
+// reports missing files.
+func (r KeyRef) CheckPerm() ([]string, error) {
+	if (r.Source != KeyFromFile && r.Source != KeyFromFastlaneJSON) || runtime.GOOS == "windows" {
+		return nil, nil
+	}
+	info, err := os.Stat(r.Path)
+	if err != nil {
+		return nil, nil //nolint:nilerr // a missing or unreadable key is reported by Read with its own error
+	}
+	if err := checkWritable(r.Path, info); err != nil {
+		return nil, err
+	}
+	return permWarnings(r.Path, info), nil
 }
 
 var pemBegin = []byte("-----BEGIN ")

@@ -112,13 +112,13 @@ Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (default
 ASC_MCP_HTTP_TOKEN=$(openssl rand -hex 32) app-store-connect-mcp serve --http 127.0.0.1:8765
 ```
 
-Every request needs `Authorization: Bearer <token>`. Without `ASC_MCP_HTTP_TOKEN` app-store-connect-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected. `/healthz` needs no token and says nothing. Each session gets its own server, so toolsets and `enable_writes` don't leak between sessions. Past the session cap you get `503` with `Retry-After`. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
+Every request needs `Authorization: Bearer <token>`. A token you set must be at least 32 characters with 8 different ones; without `ASC_MCP_HTTP_TOKEN` app-store-connect-mcp prints a generated one to stderr once (and refuses if stderr isn't a terminal). Non-loopback `Origin` headers are rejected, and CORS preflights get an answer only for origins you allowed. `/healthz` needs no token and says nothing. Clients on MCP `2025-11-25` or older get a session each, so toolsets and `enable_writes` don't leak between sessions; past the session cap you get `503` with `Retry-After`. Clients on `2026-07-28` are served statelessly from the startup config: pick toolsets and writes with flags or env, because `toolsets` can't change them per request there. The Docker image is `ghcr.io/idoo/app-store-connect-mcp`.
 
 ## Files and state
 
 File tools work inside one root: `--root`, `ASC_MCP_ROOT`, the client's first `file://` MCP root, then the git root. An automatic pick of `/` or your home dir is refused. `doctor` shows it as `file_root`.
 
-app-store-connect-mcp advertises MCP protocol versions up to `2025-11-25`, because newer ones forbid asking the user mid-call and that's how approvals work.
+app-store-connect-mcp speaks MCP up to `2026-07-28`. Approvals use the multi-round-trip input request there; older clients get the same form through `elicitation/create`.
 
 Review and feedback cursors and upload resume files live in `~/.local/state/app-store-connect-mcp` (or `$XDG_STATE_HOME`, `%LocalAppData%` on Windows). Plans live in memory only.
 

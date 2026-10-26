@@ -68,6 +68,9 @@ type Result struct {
 	Meta ResultMeta
 	// Links are rendered as resource_link content after the text.
 	Links []Link
+	// Ask, when set, asks the human for approval: the server renders an
+	// input-required result and ignores every other field.
+	Ask *ApprovalAsk
 }
 
 // WithLink appends a resource link to r and returns r.

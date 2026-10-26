@@ -65,7 +65,9 @@ func TestSubscriptionsUpsertCreatesGroupAndSubscription(t *testing.T) {
 		"product_id":"`+subsTestProduct+`","name":"Yearly","period":"ONE_YEAR","group_level":1,
 		"localizations":{"en-US":{"name":"Plus yearly","description":"All features, billed yearly"}},"confirm":true}`))
 
+	// The approval ask and the approved re-run both look the group up.
 	equalLines(t, requestLog(k.ASC.Requests()), []string{
+		"GET /v1/apps/app1/subscriptionGroups",
 		"GET /v1/apps/app1/subscriptionGroups",
 		"POST /v1/subscriptionGroups",
 		"GET /v1/subscriptionGroups/gN/versions",
@@ -76,7 +78,7 @@ func TestSubscriptionsUpsertCreatesGroupAndSubscription(t *testing.T) {
 		"GET /v1/subscriptions/sN/versions",
 		"POST /v2/subscriptionLocalizations",
 	})
-	reqs := k.ASC.Requests()
+	reqs := k.ASC.Requests()[1:]
 	if got := reqRel(t, reqs[1], "app"); got != "apps/app1" {
 		t.Fatalf("group app rel = %s", got)
 	}

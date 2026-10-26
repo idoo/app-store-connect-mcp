@@ -233,8 +233,12 @@ func (f *FakeFiles) Resolve(path string) (string, error) {
 	return resolved, nil
 }
 
-// ReadFile implements tool.Files.
+// ReadFile implements tool.Files, refusing a symlinked last element like
+// the real Files.
 func (f *FakeFiles) ReadFile(path string) ([]byte, error) {
+	if err := tool.RefuseSymlink(f.Root, path); err != nil {
+		return nil, err
+	}
 	p, err := f.Resolve(path)
 	if err != nil {
 		return nil, err
@@ -254,8 +258,12 @@ func (f *FakeFiles) WriteFile(path string, data []byte, perm fs.FileMode) error 
 	return os.WriteFile(p, data, perm)
 }
 
-// Open implements tool.Files.
+// Open implements tool.Files, refusing a symlinked last element like the
+// real Files.
 func (f *FakeFiles) Open(path string) (*os.File, error) {
+	if err := tool.RefuseSymlink(f.Root, path); err != nil {
+		return nil, err
+	}
 	p, err := f.Resolve(path)
 	if err != nil {
 		return nil, err

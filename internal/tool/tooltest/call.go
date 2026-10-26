@@ -18,10 +18,26 @@ import (
 var update = flag.Bool("update", false, "rewrite golden files")
 
 // Call runs tl with argsJSON ("" means {}) against env and returns the result.
+// Like an MCP client, it answers approval asks with the handler installed by
+// [Kit.Elicit] and retries the call with the reply and the echoed state.
 func Call(t testing.TB, tl tool.Tool, env *tool.Env, argsJSON string) *tool.Result {
 	t.Helper()
-	return tl.Call(context.Background(), env, json.RawMessage(argsJSON))
+	ctx := context.Background()
+	res := tl.Call(ctx, env, json.RawMessage(argsJSON))
+	for round := 0; res.Ask != nil; round++ {
+		answer, ok := elicitors.Load(env)
+		if !ok || round >= maxApprovalRounds {
+			t.Fatalf("tooltest: unanswered approval ask (round %d): %s", round, res.Ask.Prompt)
+		}
+		retry := *env
+		retry.Reply = &tool.ApprovalReply{State: res.Ask.State, Action: answer.(func(string) string)(res.Ask.Prompt)}
+		res = tl.Call(ctx, &retry, json.RawMessage(argsJSON))
+	}
+	return res
 }
+
+// maxApprovalRounds bounds the approval retries of one [Call].
+const maxApprovalRounds = 3
 
 // MustOK fails the test if res is an error result and returns res.
 func MustOK(t testing.TB, res *tool.Result) *tool.Result {

@@ -4,6 +4,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
+### Added
+
+- MCP `2026-07-28`. Approvals use the new multi-round-trip input request: the call comes back asking for your yes, and the retry carries a signed, single-use approval bound to the tool, its arguments, the profile and the plan. Older clients still get the same form through `elicitation/create`.
+- HTTP mode serves `2026-07-28` clients statelessly from the startup config. Older clients keep their per-session servers on the same `/mcp` endpoint.
+- The server now has a title, a description, a website and an icon (inline, never fetched), and list results carry short private cache hints.
+
+### Changed
+
+- An unknown resource returns the standard `-32602` resource-not-found error.
+- On `2026-07-28` HTTP, `toolsets` can list but not enable toolsets or writes; use `--toolsets` and `--allow-writes`.
+- Reads that happen before an approval run twice: once to ask, once after you say yes. Apple state is checked again on the second run, and a changed state still refuses.
+
+### Security
+
+- Approval forms are safe to render as markdown or HTML. Warnings (`Irreversible`, notes, "looks like a private key or token") come first; every value sits in a code span or fence; `<`, `>` and `&` show as `⟨U+003C⟩` tokens. A fork's branch named `fix<!--` can no longer hide the rest of the form, and a reply with a markdown link shows the link, not just its text.
+- Lookalike words in names and form lines are marked: `⟨mixed-script: Аpp⟩`, `⟨lookalike: 𝐀pp⟩`, `⟨combining: a̸b⟩`.
+- `reviews_reply` also spots disguised contacts (`ivan at example dot com`, `evil[.]example`, fullwidth `＠`, Cyrillic lookalikes) and warns about ids or API key ids in a reply.
+- The approval form warns when a value looks like a private key or JWT.
+- A key file that others can write is refused; one they can read gets a warning in `doctor`.
+- File tools refuse symlinks. A fastlane `release_notes.txt` linked to your `.p8` used to be read as release notes.
+- Redaction also catches base64-encoded PEM and bare key bodies.
+- HTTP mode refuses a configured token shorter than 32 characters or with fewer than 8 different characters, and answers CORS preflights only for origins you allowed.
+- Beta group names no longer appear in a not-found hint.
+- Release pipeline: no npm code runs in the job that signs and attests. `go.mod` pins `toolchain go1.26.10`, so `go install` doesn't build with a vulnerable Go. A stale `hamn` binary was removed from the repo, with a CI check against tracked binaries and a `.dockerignore`. `install.sh` requires curl, verifies cosign against the exact release identity, and says so when it could only check the sha256.
+
+### Not done
+
+- The tasks extension: go-sdk v1.8.0 has no support yet. Long waits still return a resume hint.
+
 ## [0.6.0] - 2026-10-26
 
 ### Security
@@ -122,7 +153,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.3.0...v0.4.0

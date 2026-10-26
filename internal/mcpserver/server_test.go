@@ -326,10 +326,10 @@ func TestEnableWrites(t *testing.T) {
 			t.Fatal("writes enabled without a form approval")
 		}
 	})
-	t.Run("2026-07-28 client is capped and can approve", func(t *testing.T) {
-		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", accept(true), mrtrProtocol)
-		if got := h.cs.InitializeResult().ProtocolVersion; got != "2025-11-25" {
-			t.Fatalf("negotiated %q, want 2025-11-25", got)
+	t.Run("2026-07-28 client negotiates it and approves via input requests", func(t *testing.T) {
+		h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", accept(true), "2026-07-28")
+		if got := h.cs.InitializeResult().ProtocolVersion; got != "2026-07-28" {
+			t.Fatalf("negotiated %q, want 2026-07-28", got)
 		}
 		res, body := h.call(t, "toolsets", args)
 		if res.IsError || dataOf(body)["instructions"] != nil {
@@ -707,7 +707,7 @@ func TestSpecResourceNotFoundCode(t *testing.T) {
 	h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", nil)
 	_, err := h.cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: specOpPrefix + "nope"})
 	var we *jsonrpc.Error
-	if !errors.As(err, &we) || we.Code != -32002 {
+	if !errors.As(err, &we) || we.Code != jsonrpc.CodeInvalidParams {
 		t.Fatalf("err = %#v", err)
 	}
 }

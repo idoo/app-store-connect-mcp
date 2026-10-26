@@ -18,6 +18,10 @@ const (
 	uiExtension = "io.modelcontextprotocol/ui"
 	uiMIMEType  = "text/html;profile=mcp-app"
 	uiURIPrefix = "ui://app-store-connect-mcp/"
+	// uiProtocolVersion is the MCP Apps protocol version the views send in
+	// ui/initialize (ext-apps LATEST_PROTOCOL_VERSION, checked 2026-10-26);
+	// TestUIProtocolVersion keeps ui/*.html in step with it.
+	uiProtocolVersion = "2026-01-26"
 )
 
 // uiScreens are the embedded views, one file per screen in ui/<name>.html.

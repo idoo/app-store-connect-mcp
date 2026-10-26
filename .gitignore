@@ -1,4 +1,6 @@
 /app-store-connect-mcp
+/hamn
+/asc-mcp
 /bin/
 /dist/
 *.test

@@ -77,7 +77,9 @@ func TestIAPUpsertCreatesFullSequence(t *testing.T) {
 		"localizations":{"en":{"name":"100 coins","description":"A bag of coins"},"Swedish":{"name":"100 mynt"}},
 		"review_screenshot":"review.png","confirm":true}`))
 
+	// The approval ask and the approved re-run both look the product up.
 	equalLines(t, requestLog(k.ASC.Requests()), []string{
+		"GET /v1/apps/app1/inAppPurchasesV2",
 		"GET /v1/apps/app1/inAppPurchasesV2",
 		"POST /v2/inAppPurchases",
 		"GET /v2/inAppPurchases/iapN/versions",
@@ -88,7 +90,7 @@ func TestIAPUpsertCreatesFullSequence(t *testing.T) {
 		"POST /v1/inAppPurchaseAppStoreReviewScreenshots",
 		"PATCH /v1/inAppPurchaseAppStoreReviewScreenshots/shotN",
 	})
-	reqs := k.ASC.Requests()
+	reqs := k.ASC.Requests()[1:]
 	if a := reqAttrs(t, reqs[1]); a["productId"] != iapTestProduct || a["name"] != "Coins 100" || a["inAppPurchaseType"] != "CONSUMABLE" {
 		t.Fatalf("create attrs = %v", a)
 	}
@@ -210,6 +212,8 @@ func TestIAPUpsertUnchangedIsAlready(t *testing.T) {
 
 func TestIAPUpsertConflictReadsBack(t *testing.T) {
 	k := newKit(t)
+	// Approval ask and approved re-run both miss; the 409 read-back finds it.
+	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, jsonapiDoc(`[]`))
 	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, jsonapiDoc(`[]`))
 	k.ASC.Handle(http.MethodGet, iapLookup, http.StatusOK, iapProductDoc("iapR", "Coins", "", false))
 	k.ASC.Handle(http.MethodPost, "/v2/inAppPurchases", http.StatusConflict, conflictBody)
@@ -217,6 +221,7 @@ func TestIAPUpsertConflictReadsBack(t *testing.T) {
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "iap_upsert"), k.Env,
 		`{"product_id":"`+iapTestProduct+`","type":"CONSUMABLE","reference_name":"Coins","confirm":true}`))
 	equalLines(t, requestLog(k.ASC.Requests()), []string{
+		"GET /v1/apps/app1/inAppPurchasesV2",
 		"GET /v1/apps/app1/inAppPurchasesV2",
 		"POST /v2/inAppPurchases",
 		"GET /v1/apps/app1/inAppPurchasesV2",

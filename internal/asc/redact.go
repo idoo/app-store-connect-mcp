@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/idoo/app-store-connect-mcp/internal/secrets"
 )
 
 // Redaction placeholders.
@@ -16,13 +18,6 @@ const (
 )
 
 var (
-	// pemBlock matches a complete PEM block, including JSON-escaped newlines.
-	// It never crosses an unescaped `"`, so a match stays inside one JSON
-	// string and cannot swallow neighbouring values.
-	pemBlock = regexp.MustCompile(`-----BEGIN [A-Z0-9 ]+-----(?:[^"\\]|\\.)*?-----END [A-Z0-9 ]+-----`)
-	// pemOpenKey matches an unterminated private key (e.g. a cut log line).
-	pemOpenKey = regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?:[A-Za-z0-9+/=\s]|\\[nr])*`)
-	jwtToken   = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{2,}\.eyJ[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*`)
 	// authHeader matches "Authorization: <scheme> <credentials>" in header,
 	// JSON and key=value forms.
 	authHeader = regexp.MustCompile(`(?i)(\bauthorization["']?\s*[:=]\s*["']?(?:bearer\s+|basic\s+)?)[^\s"',;]+`)
@@ -36,7 +31,8 @@ var (
 	redactLetters = regexp.MustCompile(`^[A-Za-z]+$`)
 )
 
-// Redact removes credentials from s: JWTs, PEM blocks, Authorization and
+// Redact removes credentials from s: JWTs, PEM blocks (also base64-encoded,
+// and bare base64 private-key DER bodies), Authorization and
 // Bearer credentials, and the query string of signed URLs (X-Amz-*,
 // Signature, Expires, Key-Pair-Id, Policy, token, sig), keeping their scheme,
 // host and path. Text without secrets is returned unchanged.
@@ -51,14 +47,20 @@ func Redact(s string) string {
 // RedactBytes is [Redact] for byte slices. It returns b itself when nothing
 // needs redacting.
 func RedactBytes(b []byte) []byte {
-	if pemBlock.Match(b) {
-		b = pemBlock.ReplaceAllLiteral(b, []byte(redactedPEM))
+	if secrets.PEMBlock.Match(b) {
+		b = secrets.PEMBlock.ReplaceAllLiteral(b, []byte(redactedPEM))
 	}
-	if pemOpenKey.Match(b) {
-		b = pemOpenKey.ReplaceAllLiteral(b, []byte(redactedPEM))
+	if secrets.PEMOpenKey.Match(b) {
+		b = secrets.PEMOpenKey.ReplaceAllLiteral(b, []byte(redactedPEM))
 	}
-	if jwtToken.Match(b) {
-		b = jwtToken.ReplaceAllLiteral(b, []byte(redactedJWT))
+	if secrets.PEMBase64.Match(b) {
+		b = secrets.PEMBase64.ReplaceAllLiteral(b, []byte(redactedPEM))
+	}
+	if secrets.DERKeyBase64.Match(b) {
+		b = secrets.DERKeyBase64.ReplaceAllFunc(b, redactDERKey)
+	}
+	if secrets.JWT.Match(b) {
+		b = secrets.JWT.ReplaceAllLiteral(b, []byte(redactedJWT))
 	}
 	if authHeader.Match(b) {
 		b = authHeader.ReplaceAll(b, []byte("${1}"+redactedValue))
@@ -73,6 +75,17 @@ func RedactBytes(b []byte) []byte {
 		b = signedParam.ReplaceAll(b, []byte("${1}="+redactedValue))
 	}
 	return b
+}
+
+// redactDERKey replaces a [secrets.DERKeyBase64] match whose decoded header
+// is a private key, keeping the boundary byte before it. Certificates and
+// provisioning profiles (also MII…) are left alone.
+func redactDERKey(m []byte) []byte {
+	sub := secrets.DERKeyBase64.FindSubmatch(m)
+	if !secrets.IsPrivateKeyDERBase64(sub[2]) {
+		return m
+	}
+	return append(append([]byte{}, sub[1]...), redactedPEM...)
 }
 
 // redactBearer replaces a bearer credential unless it is a plain word

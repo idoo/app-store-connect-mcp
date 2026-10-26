@@ -11,7 +11,6 @@
 package tooltest
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -105,13 +104,25 @@ func (k *Kit) Individual() *Kit {
 	return k
 }
 
-// Elicit installs an elicitation handler that answers accept and records
-// the questions asked.
+// elicitors maps a Kit's *tool.Env to the approval handler [Call] uses to
+// answer approval asks: func(prompt string) (action string).
+var elicitors sync.Map
+
+// Elicit declares form elicitation on the Kit's Env and installs a handler
+// that accepts (or declines) every approval ask, recording the prompts.
 func (k *Kit) Elicit(accept bool) *[]string {
 	asked := &[]string{}
-	k.Env.Elicit = func(_ context.Context, msg string) (bool, error) {
-		*asked = append(*asked, msg)
-		return accept, nil
+	var mu sync.Mutex
+	action := "decline"
+	if accept {
+		action = "accept"
 	}
+	k.Env.CanElicit = true
+	elicitors.Store(k.Env, func(prompt string) string {
+		mu.Lock()
+		defer mu.Unlock()
+		*asked = append(*asked, prompt)
+		return action
+	})
 	return asked
 }

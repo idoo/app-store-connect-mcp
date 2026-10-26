@@ -22,7 +22,7 @@ type Deps struct {
 	// Tools to expose; nil means every registered tool ([tool.All]).
 	Tools []tool.Tool
 	// Env is the base environment. Plans, Toolsets, Profile, Version,
-	// Progress and Elicit are supplied per session and per request.
+	// Progress and the approval fields are supplied per session and request.
 	Env tool.Env
 	// Profile is the active profile; Profile.AllowWrites is the start mode.
 	Profile tool.ProfileInfo
@@ -33,6 +33,9 @@ type Deps struct {
 	Toolsets []tool.Toolset
 	// Discovery starts with only the core toolset listed.
 	Discovery bool
+	// Stateless serves 2026-07-28 HTTP requests without sessions: toolsets
+	// and write mode stay at their server-level start values.
+	Stateless bool
 	// Version is reported in serverInfo and to tools.
 	Version string
 	// Logger receives SDK and server logs (never stdout); nil discards.
@@ -113,14 +116,14 @@ func newSession(deps Deps) (*session, error) {
 		seen[t.Name()] = true
 		s.tools = append(s.tools, t)
 	}
-	s.srv = mcp.NewServer(&mcp.Implementation{Name: "app-store-connect-mcp", Title: "app-store-connect-mcp", Version: deps.Version}, &mcp.ServerOptions{
-		Instructions:              Instructions,
-		Logger:                    deps.Logger,
-		CompletionHandler:         s.complete,
-		Capabilities:              &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}, Completions: &mcp.CompletionCapabilities{}},
-		SupportedProtocolVersions: legacyProtocolVersions(),
+	s.srv = mcp.NewServer(serverImplementation(deps.Version), &mcp.ServerOptions{
+		Instructions:      Instructions,
+		Logger:            deps.Logger,
+		CompletionHandler: s.complete,
+		SetCacheable:      setCacheable,
+		Capabilities:      &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{ListChanged: true}, Completions: &mcp.CompletionCapabilities{}},
 	})
-	s.srv.AddReceivingMiddleware(s.hiddenToolMiddleware)
+	s.srv.AddReceivingMiddleware(s.hiddenToolMiddleware, s.approvalMiddleware)
 	s.addResources()
 	s.addUIResources()
 	s.srv.AddReceivingMiddleware(s.uiMiddleware)
@@ -185,15 +188,6 @@ func (s *session) mcpTool(t tool.Tool, writes bool) *mcp.Tool {
 			OpenWorldHint:   a.OpenWorldHint,
 		},
 	}
-}
-
-// legacyProtocolVersions is every SDK protocol version older than
-// mrtrProtocol. On 2026-07-28 a server may no longer send elicitation/create
-// mid-request, which is how app-store-connect-mcp asks the human to approve, so app-store-connect-mcp caps
-// sessions at 2025-11-25: a 2026-07-28 client is told the supported list and
-// falls back to the initialize handshake at 2025-11-25.
-func legacyProtocolVersions() []string {
-	return slices.DeleteFunc(mcp.SupportedProtocolVersions(), func(v string) bool { return v >= mrtrProtocol })
 }
 
 // flatSchema returns a copy of in where every nullable type array such as

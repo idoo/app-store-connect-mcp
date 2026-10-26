@@ -102,8 +102,10 @@ func TestWebhooksCreateGeneratesSecretOnce(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, hooksDoc)
 	k.ASC.Handle(http.MethodPost, "/v1/webhooks", http.StatusCreated, createdDoc)
 	res := tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env, createArgs))
-	wantLog(t, k, "GET /v1/apps/A1/webhooks", "POST /v1/webhooks")
-	data := bodyOf(t, k.ASC.Requests()[1])
+	// The approval re-run repeats the read; the secret is generated only on
+	// the approved run, after the gate, so exactly one POST carries it.
+	wantLog(t, k, "GET /v1/apps/A1/webhooks", "GET /v1/apps/A1/webhooks", "POST /v1/webhooks")
+	data := bodyOf(t, k.ASC.RequestsTo(http.MethodPost, "/v1/webhooks")[0])
 	attrs := data["attributes"].(map[string]any)
 	secret, _ := attrs["secret"].(string)
 	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(secret) || attrs["enabled"] != true {
@@ -157,7 +159,11 @@ func TestWebhooksCreateFailureKeepsPendingSecret(t *testing.T) {
 	if err != nil || len(pending) != 1 {
 		t.Fatalf("pending files = %v, %v", pending, err)
 	}
-	secret := bodyOf(t, k.ASC.Requests()[1])["attributes"].(map[string]any)["secret"].(string)
+	posts := k.ASC.RequestsTo(http.MethodPost, "/v1/webhooks")
+	if len(posts) != 1 || len(k.ASC.Mutations()) != 1 {
+		t.Fatalf("posts = %d, mutations = %d; want 1, 1", len(posts), len(k.ASC.Mutations()))
+	}
+	secret := bodyOf(t, posts[0])["attributes"].(map[string]any)["secret"].(string)
 	saved, err := os.ReadFile(pending[0])
 	if err != nil || strings.TrimSpace(string(saved)) != secret {
 		t.Fatalf("pending file = %q, %v", saved, err)
@@ -275,12 +281,13 @@ func TestWebhooksUpdateByNameAndPing(t *testing.T) {
 	k.ASC.Handle(http.MethodPost, "/v1/webhookPings", http.StatusCreated, `{"data":{"type":"webhookPings","id":"P1"}}`)
 	res := tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "webhooks_upsert"), k.Env,
 		`{"name":"CI","enabled":false,"ping":true,"confirm":true}`))
-	wantLog(t, k, "GET /v1/apps/A1/webhooks", "PATCH /v1/webhooks/W1", "POST /v1/webhookPings")
-	attrs := bodyOf(t, k.ASC.Requests()[1])["attributes"].(map[string]any)
+	// The approval ask and the approved re-run both read the hooks.
+	wantLog(t, k, "GET /v1/apps/A1/webhooks", "GET /v1/apps/A1/webhooks", "PATCH /v1/webhooks/W1", "POST /v1/webhookPings")
+	attrs := bodyOf(t, k.ASC.Requests()[2])["attributes"].(map[string]any)
 	if len(attrs) != 2 || attrs["enabled"] != false || attrs["name"] != "CI" {
 		t.Fatalf("patch attrs = %v", attrs)
 	}
-	ping := bodyOf(t, k.ASC.Requests()[2])
+	ping := bodyOf(t, k.ASC.Requests()[3])
 	if ping["relationships"].(map[string]any)["webhook"].(map[string]any)["data"].(map[string]any)["id"] != "W1" {
 		t.Fatalf("ping = %v", ping)
 	}
@@ -309,7 +316,7 @@ func TestWebhooksRedirectNamesOldAndNewHost(t *testing.T) {
 	if strings.Contains(form, "h\u043e\u043eks") {
 		t.Errorf("form shows the look-alike host unescaped:\n%s", form)
 	}
-	if !strings.Contains(form, `Notes: non-ASCII host "h\u043e\u043eks.example.com"`) {
+	if !strings.Contains(form, "Notes: `non-ASCII host \"h\\u043e\\u043eks.example.com\"") {
 		t.Errorf("form lacks the non-ASCII note:\n%s", form)
 	}
 
@@ -339,7 +346,7 @@ func TestWebhooksDelete(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/A1/webhooks", http.StatusOK, hooksDoc)
 	k.ASC.Handle(http.MethodDelete, "/v1/webhooks/W1", http.StatusNoContent, ``)
 	res := tooltest.MustOK(t, tooltest.Call(t, lookupTool(t, "webhooks_delete"), k.Env, `{"webhook":"ci","confirm":true}`))
-	wantLog(t, k, "GET /v1/apps/A1/webhooks", "DELETE /v1/webhooks/W1")
+	wantLog(t, k, "GET /v1/apps/A1/webhooks", "GET /v1/apps/A1/webhooks", "DELETE /v1/webhooks/W1")
 	if tooltest.Decode[map[string]any](t, res)["deleted"] != "W1" || !strings.Contains((*asked)[0], "Irreversible") {
 		t.Fatalf("out = %s prompt = %v", tooltest.JSON(t, res.Data), *asked)
 	}

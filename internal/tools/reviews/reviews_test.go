@@ -372,7 +372,7 @@ func TestReplyLinkOrEmailWarns(t *testing.T) {
 	}
 	asked := k.Elicit(true)
 	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "reviews_reply"), k.Env, strings.Replace(args, `{"app":"a1",`, `{"app":"a1","confirm":true,`, 1)))
-	if len(*asked) != 1 || !strings.Contains((*asked)[0], "\nNotes: "+line) {
+	if len(*asked) != 1 || !strings.Contains((*asked)[0], "\nNotes: `"+line+"`") {
 		t.Fatalf("prompt = %q", *asked)
 	}
 	if len(k.ASC.Mutations()) != 1 {

@@ -40,8 +40,26 @@ const (
 	DefaultMaxSessions = 64
 )
 
-// sessionIDHeader is the Streamable HTTP session header.
-const sessionIDHeader = "Mcp-Session-Id"
+// HTTP header names the transport inspects.
+const (
+	sessionIDHeader       = "Mcp-Session-Id"
+	protocolVersionHeader = "Mcp-Protocol-Version"
+)
+
+// statelessProtocolVersion is the first protocol revision served by the
+// stateless handler; older clients keep the sessionful one.
+const statelessProtocolVersion = "2026-07-28"
+
+// minTokenLen is the shortest configured bearer token accepted.
+const minTokenLen = 32
+
+// CORS answers for allow-listed browser origins. Never "*".
+const (
+	corsAllowHeaders  = "authorization, content-type, mcp-session-id, mcp-protocol-version, mcp-method, mcp-name, last-event-id"
+	corsAllowMethods  = "POST, GET, DELETE"
+	corsMaxAge        = "600"
+	corsExposeHeaders = sessionIDHeader
+)
 
 // ErrTokenRequired means HTTP mode has no token and cannot print a generated
 // one because stderr is not a terminal.
@@ -58,8 +76,13 @@ type HTTPOptions struct {
 	// AllowedOrigins lists extra exact Origin values (scheme://host[:port])
 	// besides loopback origins.
 	AllowedOrigins []string
-	// NewServer builds one MCP server per client session.
+	// NewServer builds one MCP server per client session (protocol
+	// revisions before 2026-07-28).
 	NewServer func(*http.Request) *mcp.Server
+	// NewStatelessServer returns the server for 2026-07-28 requests, which
+	// are served without sessions; nil leaves them to the sessionful handler,
+	// which rejects them.
+	NewStatelessServer func(*http.Request) *mcp.Server
 	// Logger receives transport logs; nil discards.
 	Logger *slog.Logger
 	// Stderr receives the generated token; nil means os.Stderr.
@@ -81,6 +104,11 @@ type HTTPOptions struct {
 func ServeHTTP(ctx context.Context, addr string, opts HTTPOptions) error {
 	if err := CheckListenAddr(addr, opts); err != nil {
 		return err
+	}
+	if opts.Token != "" {
+		if err := CheckToken(opts.Token); err != nil {
+			return err
+		}
 	}
 	if opts.Token == "" {
 		tok, err := generateToken(opts)
@@ -141,7 +169,24 @@ func CheckListenAddr(addr string, opts HTTPOptions) error {
 	return nil
 }
 
+// CheckToken refuses a configured bearer token that is short or obviously
+// low-entropy (few distinct characters).
+func CheckToken(tok string) error {
+	distinct := map[rune]bool{}
+	for _, r := range tok {
+		distinct[r] = true
+	}
+	if len(tok) < minTokenLen || len(distinct) < 8 {
+		return fmt.Errorf("mcpserver: http: %s is too weak (want at least %d random characters, e.g. `openssl rand -hex 32`); unset it to have a random token generated and printed when stderr is a terminal", EnvHTTPToken, minTokenLen)
+	}
+	return nil
+}
+
 // HTTPHandler returns the authenticated MCP handler. opts.Token must be set.
+// Requests carrying Mcp-Protocol-Version 2026-07-28 or later go to the
+// stateless handler (when configured); everything else to the sessionful one.
+// CORS preflights are answered before authentication; Origin and bearer
+// checks run before either handler.
 func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 	if opts.Token == "" {
 		return nil, ErrTokenRequired
@@ -155,21 +200,40 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 		return nil, err
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(opts.NewServer, &mcp.StreamableHTTPOptions{Logger: opts.Logger, SessionTimeout: timeout})
+	var stateless http.Handler
+	if opts.NewStatelessServer != nil {
+		stateless = mcp.NewStreamableHTTPHandler(opts.NewStatelessServer, &mcp.StreamableHTTPOptions{Logger: opts.Logger, Stateless: true})
+	}
 	limit := &sessionLimiter{max: maxSessions}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !originAllowed(r.Header.Get("Origin"), opts.AllowedOrigins) {
+		origin := r.Header.Get("Origin")
+		if r.Method == http.MethodOptions {
+			preflight(w, origin, opts.AllowedOrigins)
+			return
+		}
+		if !originAllowed(origin, opts.AllowedOrigins) {
 			http.Error(w, "forbidden origin", http.StatusForbidden)
 			return
+		}
+		if origin != "" {
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", origin)
+			h.Add("Vary", "Origin")
+			h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
 		}
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		sum := sha256.Sum256([]byte(got))
 		if !ok || subtle.ConstantTimeCompare(sum[:], want[:]) != 1 {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="app-store-connect-mcp"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if stateless != nil && r.Header.Get(protocolVersionHeader) >= statelessProtocolVersion {
+			stateless.ServeHTTP(w, r)
 			return
 		}
 		if r.Header.Get(sessionIDHeader) != "" {
@@ -186,6 +250,23 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 		limit.release(slot.srv)
 	}))
 	return mux, nil
+}
+
+// preflight answers a CORS preflight: an allow-listed browser Origin gets
+// the allowed headers and methods echoed for it, anything else 403. It runs
+// before authentication because browsers never send credentials on it.
+func preflight(w http.ResponseWriter, origin string, extra []string) {
+	if origin == "" || !originAllowed(origin, extra) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+		return
+	}
+	h := w.Header()
+	h.Set("Access-Control-Allow-Origin", origin)
+	h.Add("Vary", "Origin")
+	h.Set("Access-Control-Allow-Headers", corsAllowHeaders)
+	h.Set("Access-Control-Allow-Methods", corsAllowMethods)
+	h.Set("Access-Control-Max-Age", corsMaxAge)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // sessionLimits resolves the idle timeout (0 = never, for the SDK) and the
@@ -295,10 +376,7 @@ func SessionFactory(deps Deps) func(*http.Request) *mcp.Server {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	probe := mcp.NewServer(&mcp.Implementation{Name: "app-store-connect-mcp", Version: deps.Version}, &mcp.ServerOptions{
-		Logger:                    logger,
-		SupportedProtocolVersions: legacyProtocolVersions(),
-	})
+	probe := mcp.NewServer(serverImplementation(deps.Version), &mcp.ServerOptions{Logger: logger})
 	return func(req *http.Request) *mcp.Server {
 		if req.Header.Get(sessionIDHeader) != "" {
 			return probe
@@ -314,6 +392,28 @@ func SessionFactory(deps Deps) func(*http.Request) *mcp.Server {
 		}
 		if slot != nil {
 			slot.srv = srv
+		}
+		return srv
+	}
+}
+
+// StatelessFactory returns an [HTTPOptions.NewStatelessServer] serving every
+// 2026-07-28 request from one server built from the server-level config
+// (flags, env, profile): its toolsets and write mode are fixed, so toolsets
+// enable/disable and enable_writes are refused there. Approval states are
+// signed per process and plans live on that one server, so multi-round
+// approval and plan_id work without a session. A build failure is logged and
+// answered with 400 by the SDK.
+func StatelessFactory(deps Deps) func(*http.Request) *mcp.Server {
+	deps.Stateless = true
+	build := sync.OnceValues(func() (*mcp.Server, error) { return Build(context.Background(), deps) })
+	return func(*http.Request) *mcp.Server {
+		srv, err := build()
+		if err != nil {
+			if deps.Logger != nil {
+				deps.Logger.Error("build stateless server", "err", err)
+			}
+			return nil
 		}
 		return srv
 	}

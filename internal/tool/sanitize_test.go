@@ -101,3 +101,25 @@ func TestSanitizeLine(t *testing.T) {
 		})
 	}
 }
+
+// TestSanitizeLineMarksLookalikes (PI4): lookalike, mixed-script and
+// combining-mark words are flagged; single-script words stay as they are.
+func TestSanitizeLineMarksLookalikes(t *testing.T) {
+	for in, want := range map[string]string{
+		"release \u0410pp St\u043ere 2.0": "release ⟨mixed-script: \u0410pp⟩ ⟨mixed-script: St\u043ere⟩ 2.0",
+		"\U0001D400pp":                    "⟨lookalike: \U0001D400pp⟩",
+		"\uFF21pp Store":                  "⟨lookalike: \uFF21pp⟩ Store",
+		"a\u0338b":                        "⟨combining: a\u0338b⟩",
+		"p\u0430ssword":                   "⟨mixed-script: p\u0430ssword⟩",
+		"Привет, отличное приложение!": "Привет, отличное приложение!",
+		"Καλημέρα κόσμε":               "Καλημέρα κόσμε",
+		"नमस्ते दुनिया":                "नमस्ते दुनिया",
+		"iPhoneアプリ、素晴らしい！":             "iPhoneアプリ、素晴らしい！",
+		"café Telegram-бот":            "café Telegram-бот",
+		"plain ASCII":                  "plain ASCII",
+	} {
+		if got := SanitizeLine(in, 0); got != want {
+			t.Errorf("SanitizeLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

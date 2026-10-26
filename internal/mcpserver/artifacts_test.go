@@ -52,7 +52,7 @@ func TestArtifactRoundTripAndNotFound(t *testing.T) {
 	}
 	_, err = h.cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: artifactPrefix + "00000000000000000000000000000000"})
 	var we *jsonrpc.Error
-	if !errors.As(err, &we) || we.Code != -32002 {
+	if !errors.As(err, &we) || we.Code != jsonrpc.CodeInvalidParams {
 		t.Errorf("missing artifact err = %v", err)
 	}
 }

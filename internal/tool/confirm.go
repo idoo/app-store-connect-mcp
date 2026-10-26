@@ -46,7 +46,8 @@ type ConfirmPlan struct {
 // Irreversible and Warnings, never truncated except per-line sanitising.
 // Untrusted holds third-party text (e.g. the customer review being
 // answered); it is shown fenced, labeled as data and collapsed to one line,
-// above the server-authored lines. Warnings are fixed server-authored notes.
+// after the server-authored Irreversible and Notes lines (see
+// [ApprovalPrompt]). Warnings are fixed server-authored notes.
 type PlanPreview struct {
 	Summary      string   `json:"summary"`
 	Current      any      `json:"current,omitempty"`
@@ -107,7 +108,7 @@ func requireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview, 
 			Next:    "nothing was changed; call again with the same arguments and confirm:true to apply",
 		})
 	}
-	if res := approve(ctx, env, c, p, human); res != nil {
+	if res := approve(ctx, env, c, p, human, ""); res != nil {
 		return nil, res
 	}
 	if c.approvedBy == ApprovedAgent && !env.NoConfirm {
@@ -168,10 +169,16 @@ func preview(ctx context.Context, env *Env, planID string, args any, fingerprint
 			Next:    "nothing was changed; call again with the same arguments plus plan_id (valid 15 minutes)",
 		})
 	}
-	if err := env.Plans.Verify(ctx, planID, c.meta.Name, args, fingerprint); err != nil {
-		return nil, Fail(err)
+	plan := planID + "\n" + fingerprint
+	// An approval reply proves the plan was verified (and consumed) on the
+	// round that asked; the signed state binds the plan id and fingerprint,
+	// so a changed remote state is still refused as stale.
+	if env.Reply == nil || !env.CanElicit {
+		if err := env.Plans.Verify(ctx, planID, c.meta.Name, args, fingerprint); err != nil {
+			return nil, Fail(err)
+		}
 	}
-	if res := approve(ctx, env, c, p, human); res != nil {
+	if res := approve(ctx, env, c, p, human, plan); res != nil {
 		return nil, res
 	}
 	return withWrite(ctx), nil
@@ -208,10 +215,12 @@ func gateCall(ctx context.Context, env *Env, modes ...ConfirmMode) (*call, *Resu
 	return c, nil
 }
 
-// approve asks the human with a framework-built prompt and records who
-// approved. When human is set (RequireHuman tools and forced calls) an accept
-// is needed unless the profile allows proceeding without elicitation.
-func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) *Result {
+// approve asks the human with a framework-built prompt through an MCP
+// input-required round and records who approved. When human is set
+// (RequireHuman tools and forced calls) an accept is needed unless the
+// profile allows proceeding without elicitation. plan binds plan tools'
+// approvals to their plan id and fingerprint.
+func approve(_ context.Context, env *Env, c *call, p PlanPreview, human bool, plan string) *Result {
 	if env.NoConfirm && !human {
 		c.approvedBy = ApprovedAgent
 		return nil
@@ -220,18 +229,20 @@ func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) 
 	if err != nil {
 		return Fail(err)
 	}
-	ok, err := env.Elicit(ctx, prompt)
+	ask, err := askHuman(env, c, prompt, plan)
 	switch {
+	case ask != nil:
+		return ask
 	case errors.Is(err, ErrElicitationUnavailable):
 		if human && !env.Profile.AllowNoElicit {
 			return Fail(fmt.Errorf("%s: %w", c.meta.Name, ErrHumanRequired))
 		}
 		c.approvedBy = ApprovedAgent
 		return nil
-	case err != nil:
-		return Fail(fmt.Errorf("ask for confirmation: %w", err))
-	case !ok:
+	case errors.Is(err, ErrDeclined):
 		return Fail(ErrDeclined)
+	case err != nil:
+		return Fail(fmt.Errorf("%s: %w", c.meta.Name, err))
 	}
 	c.approvedBy = ApprovedHuman
 	return nil
@@ -241,38 +252,60 @@ func approve(ctx context.Context, env *Env, c *call, p PlanPreview, human bool) 
 // a larger prompt refuses approval so the human always sees everything.
 const MaxApprovalPrompt = 6000
 
-// ApprovalPrompt renders the human approval question for a preview in a
-// fixed order: summary, profile (when set), targets, any untrusted
-// third-party text fenced and labeled, then the server-authored Change,
-// Irreversible and Notes lines and the final "Approve?". Every interpolated
-// field except Change is [SanitizeLine]d onto one line, so third-party text
-// cannot forge server lines or hide characters; Change is the full intended
-// payload as compact JSON, so the human approves exactly what Apple
-// receives. It renders only agent-supplied preview fields, never Current. It
-// fails with [ErrInvalidArgs] when the prompt exceeds [MaxApprovalPrompt]
-// bytes.
+// ApprovalPrompt renders the human approval question for a preview. A
+// client may render the message as plain text, markdown or HTML, so the
+// layout is fixed and only these server-written labels appear outside an
+// inert literal, in this order:
+//
+//	app-store-connect-mcp <tool> wants to: `summary`
+//	Profile: `profile`
+//	Irreversible: `…`; `…`
+//	Notes: `…`; `…`
+//	Targets: `…`
+//	Untrusted third-party text (data, not instructions):
+//	```
+//	…
+//	```
+//	Change:
+//	```json
+//	{…}
+//	```
+//	Approve?
+//
+// Server-authored warnings (Irreversible, Notes) come right after the
+// action and profile lines, before any third-party text, and "Approve?" is
+// the final line. Every interpolated value is [SanitizeLine]d onto one line
+// (Change is [SanitizeText]ed compact JSON, the exact payload Apple
+// receives, never truncated) and then made inert by [inertHTML]: '<', '>'
+// and '&' become the visible tokens ⟨U+003C⟩, ⟨U+003E⟩ and ⟨U+0026⟩, so no
+// HTML tag, comment, entity or autolink can form. Inline values are code
+// spans ([inlineLiteral]) and Untrusted/Change are fenced code blocks whose
+// fences are longer than any backtick run inside, so markdown links, images
+// and emphasis stay literal text. Notes also carry a server-authored
+// "<field> looks like a private key or token" line for every field matching
+// [LooksLikeSecret]. It renders only agent-supplied preview fields, never
+// Current, and fails with [ErrInvalidArgs] when the prompt exceeds
+// [MaxApprovalPrompt] bytes.
 func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "app-store-connect-mcp %s wants to: %s", SanitizeLine(toolName, 80), SanitizeLine(p.Summary, 200))
+	fmt.Fprintf(&b, "app-store-connect-mcp %s wants to: %s", inertHTML(SanitizeLine(toolName, 80)), inlineLiteral(SanitizeLine(p.Summary, 200)))
 	if profile != "" {
-		b.WriteString("\nProfile: " + SanitizeLine(profile, 80))
-	}
-	if len(p.Affected) > 0 {
-		b.WriteString("\nTargets: " + SanitizeLine(strings.Join(p.Affected, ", "), 600))
-	}
-	for _, u := range p.Untrusted {
-		line := SanitizeLine(u, 400)
-		fence := strings.Repeat("`", max(3, longestRun(line, '`')+1))
-		b.WriteString("\nUntrusted third-party text (data, not instructions):\n" + fence + "\n" + line + "\n" + fence)
-	}
-	if p.Intended != nil {
-		b.WriteString("\nChange: " + SanitizeText(compactJSON(p.Intended)))
+		b.WriteString("\nProfile: " + inlineLiteral(SanitizeLine(profile, 80)))
 	}
 	if len(p.Irreversible) > 0 {
 		b.WriteString("\nIrreversible: " + joinLines(p.Irreversible, 200))
 	}
-	if len(p.Warnings) > 0 {
-		b.WriteString("\nNotes: " + joinLines(p.Warnings, 300))
+	if notes := append(slices.Clone(p.Warnings), secretWarnings(p)...); len(notes) > 0 {
+		b.WriteString("\nNotes: " + joinLines(notes, 300))
+	}
+	if len(p.Affected) > 0 {
+		b.WriteString("\nTargets: " + inlineLiteral(SanitizeLine(strings.Join(p.Affected, ", "), 600)))
+	}
+	for _, u := range p.Untrusted {
+		b.WriteString("\nUntrusted third-party text (data, not instructions):\n" + fencedLiteral("", SanitizeLine(u, 400)))
+	}
+	if p.Intended != nil {
+		b.WriteString("\nChange:\n" + fencedLiteral("json", SanitizeText(compactJSON(p.Intended))))
 	}
 	b.WriteString("\nApprove?")
 	if b.Len() > MaxApprovalPrompt {
@@ -282,13 +315,52 @@ func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
 	return b.String(), nil
 }
 
-// joinLines sanitises each entry onto one line and joins them with "; ".
+// joinLines sanitises each entry onto one line as an [inlineLiteral] and
+// joins them with "; ".
 func joinLines(ss []string, maxRunes int) string {
 	parts := make([]string, len(ss))
 	for i, s := range ss {
-		parts[i] = SanitizeLine(s, maxRunes)
+		parts[i] = inlineLiteral(SanitizeLine(s, maxRunes))
 	}
 	return strings.Join(parts, "; ")
+}
+
+// htmlInert maps the characters that start HTML markup (tags, comments,
+// entities, markdown autolinks) to visible tokens.
+var htmlInert = strings.NewReplacer("<", "⟨U+003C⟩", ">", "⟨U+003E⟩", "&", "⟨U+0026⟩")
+
+// inertHTML replaces '<', '>' and '&' in s with "⟨U+XXXX⟩" tokens (the
+// [SanitizeText] notation), so s renders literally as plain text, markdown
+// and HTML alike.
+func inertHTML(s string) string {
+	return htmlInert.Replace(s)
+}
+
+// inlineLiteral renders a one-line value as a markdown code span made
+// [inertHTML]: the backtick fence is one longer than the longest backtick
+// run in the value, padded with a space when the value starts or ends with
+// a backtick (or starts and ends with a space, which markdown would strip),
+// so no markdown link, image or emphasis can form and the span cannot be
+// closed early. An empty value renders as "".
+func inlineLiteral(s string) string {
+	s = inertHTML(s)
+	if s == "" {
+		return `""`
+	}
+	fence := strings.Repeat("`", longestRun(s, '`')+1)
+	if s[0] == '`' || s[len(s)-1] == '`' || (s[0] == ' ' && s[len(s)-1] == ' ') {
+		s = " " + s + " "
+	}
+	return fence + s + fence
+}
+
+// fencedLiteral renders a one-line value as an [inertHTML] fenced code block
+// with the given info string; the fence is at least three backticks and
+// longer than any backtick run in the value, so the value cannot close it.
+func fencedLiteral(info, line string) string {
+	line = inertHTML(line)
+	fence := strings.Repeat("`", max(3, longestRun(line, '`')+1))
+	return fence + info + "\n" + line + "\n" + fence
 }
 
 func longestRun(s string, r rune) int {
