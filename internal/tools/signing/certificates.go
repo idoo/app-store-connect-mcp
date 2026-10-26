@@ -30,17 +30,17 @@ type certificatesListIn struct {
 }
 
 type certificateOut struct {
-	ID             string `json:"id"`
-	Name           string `json:"name,omitempty"`
-	DisplayName    string `json:"display_name,omitempty"`
-	Type           string `json:"type"`
-	Platform       string `json:"platform,omitempty"`
-	SerialNumber   string `json:"serial_number,omitempty"`
-	ExpirationDate string `json:"expiration_date,omitempty"`
-	DaysLeft       *int   `json:"days_left,omitempty"`
-	Expired        bool   `json:"expired"`
-	Activated      *bool  `json:"activated,omitempty"`
-	Content        string `json:"content,omitempty"`
+	ID             string         `json:"id"`
+	Name           tool.Untrusted `json:"name,omitempty"`
+	DisplayName    tool.Untrusted `json:"display_name,omitempty"`
+	Type           string         `json:"type"`
+	Platform       string         `json:"platform,omitempty"`
+	SerialNumber   string         `json:"serial_number,omitempty"`
+	ExpirationDate string         `json:"expiration_date,omitempty"`
+	DaysLeft       *int           `json:"days_left,omitempty"`
+	Expired        bool           `json:"expired"`
+	Activated      *bool          `json:"activated,omitempty"`
+	Content        string         `json:"content,omitempty"`
 
 	exp time.Time
 }
@@ -79,7 +79,7 @@ func certificatesList(ctx context.Context, env *tool.Env, in certificatesListIn)
 	out := certificatesListOut{Certificates: []certificateOut{}, NextCursor: res.NextCursor}
 	for _, r := range res.Data {
 		c := certificateOut{
-			ID: r.ID, Name: r.Str("name"), DisplayName: r.Str("displayName"), Type: r.Str("certificateType"),
+			ID: r.ID, Name: r.Text("name"), DisplayName: r.Text("displayName"), Type: r.Str("certificateType"),
 			Platform: r.Str("platform"), SerialNumber: r.Str("serialNumber"), ExpirationDate: r.Str("expirationDate"),
 		}
 		if v, ok := r.Bool("activated"); ok {

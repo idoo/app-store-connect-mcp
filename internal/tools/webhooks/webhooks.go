@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -62,12 +63,12 @@ func init() {
 
 // hook is a webhook without its secret.
 type hook struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	URLHost    string     `json:"url_host"`
-	EventTypes []string   `json:"event_types"`
-	Enabled    bool       `json:"enabled"`
-	Deliveries []delivery `json:"recent_deliveries,omitempty"`
+	ID         string         `json:"id"`
+	Name       tool.Untrusted `json:"name"`
+	URLHost    string         `json:"url_host"`
+	EventTypes []string       `json:"event_types"`
+	Enabled    bool           `json:"enabled"`
+	Deliveries []delivery     `json:"recent_deliveries,omitempty"`
 
 	url string
 }
@@ -92,6 +93,28 @@ func host(raw string) string {
 	return u.Host
 }
 
+// showHost renders a host for an approval form: a non-ASCII host (a possible
+// look-alike such as Cyrillic "аpple.com") is shown escaped, never as glyphs.
+func showHost(h string) string {
+	for i := range len(h) {
+		if h[i] >= 0x80 {
+			return strconv.QuoteToASCII(h)
+		}
+	}
+	return h
+}
+
+// hostWarnings returns a fixed note per non-ASCII host, for PlanPreview.Warnings.
+func hostWarnings(hosts ...string) []string {
+	var w []string
+	for _, h := range hosts {
+		if s := showHost(h); s != h {
+			w = append(w, "non-ASCII host "+s+": check it is the domain you expect, not a look-alike")
+		}
+	}
+	return w
+}
+
 // checkURL enforces an absolute https URL without credentials.
 func checkURL(raw string) error {
 	u, err := url.Parse(raw)
@@ -107,7 +130,7 @@ func checkURL(raw string) error {
 }
 
 func toHook(r tool.Resource) hook {
-	h := hook{ID: r.ID, Name: r.Str("name"), url: r.Str("url"), EventTypes: []string{}}
+	h := hook{ID: r.ID, Name: r.Text("name"), url: r.Str("url"), EventTypes: []string{}}
 	h.URLHost = host(h.url)
 	h.Enabled, _ = r.Bool("enabled")
 	if evs, ok := r.Attributes["eventTypes"].([]any); ok {
@@ -145,7 +168,7 @@ func find(hooks []hook, ref string) (hook, error) {
 	}
 	var hits []hook
 	for _, h := range hooks {
-		if strings.EqualFold(h.Name, ref) {
+		if strings.EqualFold(string(h.Name), ref) {
 			hits = append(hits, h)
 		}
 	}
@@ -157,7 +180,7 @@ func find(hooks []hook, ref string) (hook, error) {
 	}
 	amb := &tool.ErrAmbiguous{Kind: "webhook", Ref: ref}
 	for _, h := range hits {
-		amb.Candidates = append(amb.Candidates, tool.Candidate{ID: h.ID, Label: h.Name + " (" + h.URLHost + ")"})
+		amb.Candidates = append(amb.Candidates, tool.Candidate{ID: h.ID, Label: tool.SanitizeLine(string(h.Name), 80) + " (" + showHost(h.URLHost) + ")"})
 	}
 	return hook{}, amb
 }
@@ -296,9 +319,10 @@ func create(ctx context.Context, env *tool.Env, app tool.App, in upsertIn, event
 		}
 	}
 	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
-		Summary:  fmt.Sprintf("create webhook %q for %s (%s) posting to %s", in.Name, app.Name, app.ID, in.URL),
-		Intended: change{Name: in.Name, URL: in.URL, EventTypes: events, Enabled: &enabled, Secret: secretNote, Ping: in.Ping},
-		Affected: []string{in.URL},
+		Summary:  fmt.Sprintf("create webhook %q for %s (%s) posting to host %s", in.Name, app.Name, app.ID, showHost(host(in.URL))),
+		Intended: change{Name: in.Name, URL: showHost(in.URL), EventTypes: events, Enabled: &enabled, Secret: secretNote, Ping: in.Ping},
+		Affected: []string{showHost(in.URL)},
+		Warnings: hostWarnings(host(in.URL)),
 	})
 	if res != nil {
 		return res, nil
@@ -412,7 +436,7 @@ func ensureSecretsIgnored(files tool.Files) error {
 func update(ctx context.Context, env *tool.Env, cur hook, in upsertIn, events []string) (*tool.Result, error) {
 	attrs := map[string]any{}
 	var ch change
-	if in.Name != "" && in.Name != cur.Name {
+	if in.Name != "" && in.Name != string(cur.Name) {
 		attrs["name"], ch.Name = in.Name, in.Name
 	}
 	if in.URL != "" && in.URL != cur.url {
@@ -431,19 +455,26 @@ func update(ctx context.Context, env *tool.Env, cur hook, in upsertIn, events []
 		return tool.Already(upsertOut{Action: "unchanged", Webhook: cur}), nil
 	}
 	ch.Ping = in.Ping
-	summary := fmt.Sprintf("update webhook %q (%s) posting to %s", cur.Name, cur.ID, cur.URLHost)
+	summary := fmt.Sprintf("update webhook %q (%s) posting to %s", cur.Name, cur.ID, showHost(cur.URLHost))
+	if ch.URL != "" {
+		summary = fmt.Sprintf("update webhook %q (%s), redirecting deliveries from host %s to new host %s", cur.Name, cur.ID, showHost(cur.URLHost), showHost(host(ch.URL)))
+	}
 	if len(attrs) == 0 {
-		summary = fmt.Sprintf("send a test ping to webhook %q (%s) at %s", cur.Name, cur.ID, cur.URLHost)
+		summary = fmt.Sprintf("send a test ping to webhook %q (%s) at %s", cur.Name, cur.ID, showHost(cur.URLHost))
 	}
 	affected := []string{cur.ID}
+	var warnings []string
 	if ch.URL != "" {
+		ch.URL = showHost(ch.URL) // display only: the PATCH sends attrs
 		affected = append(affected, ch.URL)
+		warnings = hostWarnings(host(in.URL))
 	}
 	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
 		Summary:  summary,
 		Current:  cur,
 		Intended: ch,
 		Affected: affected,
+		Warnings: warnings,
 	})
 	if res != nil {
 		return res, nil
@@ -506,9 +537,9 @@ func deleteWebhook(ctx context.Context, env *tool.Env, in deleteIn) (*tool.Resul
 		return nil, err
 	}
 	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
-		Summary:      fmt.Sprintf("delete webhook %q (%s) of %s posting to %s", h.Name, h.ID, app.Name, h.URLHost),
+		Summary:      fmt.Sprintf("delete webhook %q (%s) of %s posting to %s", h.Name, h.ID, app.Name, showHost(h.URLHost)),
 		Current:      h,
-		Affected:     []string{h.ID, h.URLHost},
+		Affected:     []string{h.ID, showHost(h.URLHost)},
 		Irreversible: []string{"deliveries stop immediately", "the webhook and its secret cannot be restored"},
 	})
 	if res != nil {

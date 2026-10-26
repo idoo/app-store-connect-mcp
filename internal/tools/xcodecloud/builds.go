@@ -13,10 +13,10 @@ import (
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "xcc_build_start", Toolset: tool.XcodeCloud, Class: tool.Write,
+		Name: "xcc_build_start", Toolset: tool.XcodeCloud, Class: tool.Write, Confirm: tool.ConfirmByFlag,
 		Title: "Start an Xcode Cloud build",
-		Description: "Start a build run of a workflow (name or id) on a branch, tag or open pull request number; without a source " +
-			"Xcode Cloud uses the workflow's default. clean forces a clean build. Not idempotent: each call starts a new run.",
+		Description: "Start a build run of a workflow (name or id) on a branch, tag or open pull request number (default: the " +
+			"workflow's source). Preview first, then confirm:true; PR builds need a human, fork PRs also allow_fork_pr. Each confirm starts a new run.",
 	}, buildStart))
 	tool.Register(tool.New(tool.Meta{
 		Name: "xcc_build_status", Toolset: tool.XcodeCloud, Class: tool.Read, Idempotent: true,
@@ -34,13 +34,22 @@ type buildStartIn struct {
 	Branch      string      `json:"branch,omitempty" jsonschema:"branch name, e.g. main"`
 	Tag         string      `json:"tag,omitempty" jsonschema:"tag name, e.g. v1.2.0"`
 	PullRequest int         `json:"pull_request,omitempty" jsonschema:"open pull request number"`
+	AllowForkPR bool        `json:"allow_fork_pr,omitempty" jsonschema:"allow a pull request from another repository (still human-approved)"`
 	Clean       *bool       `json:"clean,omitempty" jsonschema:"clean build (default: the workflow setting)"`
+	tool.ConfirmFlag
 }
 
 type sourceOut struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Branch is a pull request's source branch (third-party text).
+	Branch tool.Untrusted `json:"branch,omitempty"`
+
+	// Pull request details for the gate.
+	cross bool
+	repo  string
+	title tool.Untrusted
 }
 
 type runOut struct {
@@ -67,8 +76,8 @@ type buildStartOut struct {
 }
 
 type workflowRef struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID   string         `json:"id"`
+	Name tool.Untrusted `json:"name"`
 }
 
 func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Result, error) {
@@ -103,6 +112,10 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 			return nil, err
 		}
 	}
+	wctx, res := startGate(ctx, env, in, wf.Name, src)
+	if res != nil {
+		return res, nil
+	}
 	rels := map[string]any{"workflow": relData("ciWorkflows", wf.ID)}
 	if src != nil {
 		if src.Kind == "PULL_REQUEST" {
@@ -115,7 +128,7 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 	if in.Clean != nil {
 		data["attributes"] = map[string]any{"clean": *in.Clean}
 	}
-	resp, err := env.ASC.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/ciBuildRuns", Body: map[string]any{"data": data}, Write: true})
+	resp, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodPost, Path: "/v1/ciBuildRuns", Body: map[string]any{"data": data}, Write: true})
 	if err != nil {
 		return nil, fmt.Errorf("start build of workflow %s: %w", wf.Name, err)
 	}
@@ -132,11 +145,42 @@ func relData(typ, id string) map[string]any {
 	return map[string]any{"data": map[string]any{"type": typ, "id": id}}
 }
 
+// startGate previews the run and asks for confirmation. A pull request runs
+// its own ci_scripts with the workflow's secrets and signing, so it needs a
+// human; one from another repository is refused unless allow_fork_pr.
+func startGate(ctx context.Context, env *tool.Env, in buildStartIn, workflow tool.Untrusted, src *sourceOut) (context.Context, *tool.Result) {
+	kind, name := "default source", ""
+	if src != nil {
+		kind, name = strings.ToLower(strings.ReplaceAll(src.Kind, "_", " ")), src.Name
+	}
+	p := tool.PlanPreview{Summary: fmt.Sprintf("start Xcode Cloud workflow %q on %s %q", workflow, kind, name)}
+	if src == nil || src.Kind != "PULL_REQUEST" {
+		if src != nil {
+			p.Affected = []string{fmt.Sprintf("%s %q (%s)", kind, src.Name, src.ID)}
+		}
+		return tool.RequireConfirm(ctx, env, in.Confirm, p)
+	}
+	if src.cross && !in.AllowForkPR {
+		return nil, tool.Fail(tool.InvalidArgs("pull request #%d comes from another repository (%q); pass allow_fork_pr:true to build it (a human must still approve)", in.PullRequest, src.repo))
+	}
+	origin := "same repository"
+	if src.cross {
+		origin = "fork"
+	}
+	p.Affected = []string{fmt.Sprintf("pull request %s from %s %q, branch %q (%s)", src.Name, origin, src.repo, string(src.Branch), src.ID)}
+	p.Irreversible = []string{"runs ci_scripts from this PR with the workflow's secrets and signing"}
+	p.Warnings = []string{"a human must approve this pull request build in the client"}
+	if src.title != "" {
+		p.Untrusted = []string{string(src.title)}
+	}
+	return tool.RequireHumanConfirm(ctx, env, in.Confirm, p)
+}
+
 // resolveSource finds the git reference or open pull request named in in.
 func resolveSource(ctx context.Context, env *tool.Env, repoID string, in buildStartIn) (*sourceOut, error) {
 	base := "/v1/scmRepositories/" + url.PathEscape(repoID)
 	if in.PullRequest != 0 {
-		q := url.Values{"fields[scmPullRequests]": {"title,number,isClosed,sourceBranchName,destinationBranchName"}}
+		q := url.Values{"fields[scmPullRequests]": {"title,number,isClosed,isCrossRepository,sourceRepositoryOwner,sourceRepositoryName,sourceBranchName,destinationBranchName"}}
 		res, err := env.ASC.List(ctx, base+"/pullRequests", tool.ListOptions{Query: q, MaxItems: 1000})
 		if err != nil {
 			return nil, fmt.Errorf("list pull requests: %w", err)
@@ -148,7 +192,11 @@ func resolveSource(ctx context.Context, env *tool.Env, repoID string, in buildSt
 			if closed, _ := r.Bool("isClosed"); closed {
 				return nil, tool.InvalidArgs("pull request #%d is closed", in.PullRequest)
 			}
-			return &sourceOut{Kind: "PULL_REQUEST", ID: r.ID, Name: fmt.Sprintf("#%d %s", in.PullRequest, r.Str("sourceBranchName"))}, nil
+			cross, _ := r.Bool("isCrossRepository")
+			return &sourceOut{
+				Kind: "PULL_REQUEST", ID: r.ID, Name: fmt.Sprintf("#%d", in.PullRequest), Branch: r.Text("sourceBranchName"),
+				cross: cross, repo: r.Str("sourceRepositoryOwner") + "/" + r.Str("sourceRepositoryName"), title: r.Text("title"),
+			}, nil
 		}
 		return nil, &tool.ErrNotFound{Kind: "pull request", Ref: fmt.Sprintf("#%d", in.PullRequest), Hint: "Xcode Cloud lists open pull requests of the workflow repository only"}
 	}
@@ -168,8 +216,8 @@ func resolveSource(ctx context.Context, env *tool.Env, repoID string, in buildSt
 		if deleted, _ := r.Bool("isDeleted"); deleted {
 			continue
 		}
-		if r.Str("name") == name || r.Str("canonicalName") == prefix+name || r.Str("canonicalName") == name {
-			return &sourceOut{Kind: kind, ID: r.ID, Name: r.Str("name")}, nil
+		if r.Str("name") == name || r.Str("canonicalName") == prefix+name || r.Str("canonicalName") == name { // trusted: compared with the caller's ref
+			return &sourceOut{Kind: kind, ID: r.ID, Name: name}, nil
 		}
 	}
 	return nil, &tool.ErrNotFound{
@@ -205,10 +253,10 @@ type artifactOut struct {
 }
 
 type testFailure struct {
-	Class   string `json:"class,omitempty"`
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	Message any    `json:"message,omitempty"`
+	Class   tool.Untrusted `json:"class,omitempty"`
+	Name    tool.Untrusted `json:"name"`
+	Status  string         `json:"status"`
+	Message any            `json:"message,omitempty"`
 }
 
 type testSummary struct {
@@ -218,15 +266,15 @@ type testSummary struct {
 }
 
 type actionOut struct {
-	ID                string        `json:"id"`
-	Name              string        `json:"name"`
-	Type              string        `json:"type"`
-	ExecutionProgress string        `json:"execution_progress,omitempty"`
-	CompletionStatus  string        `json:"completion_status,omitempty"`
-	RequiredToPass    bool          `json:"required_to_pass,omitempty"`
-	Issues            *issueCount   `json:"issues,omitempty"`
-	Tests             *testSummary  `json:"tests,omitempty"`
-	Artifacts         []artifactOut `json:"artifacts,omitempty"`
+	ID                string         `json:"id"`
+	Name              tool.Untrusted `json:"name"`
+	Type              string         `json:"type"`
+	ExecutionProgress string         `json:"execution_progress,omitempty"`
+	CompletionStatus  string         `json:"completion_status,omitempty"`
+	RequiredToPass    bool           `json:"required_to_pass,omitempty"`
+	Issues            *issueCount    `json:"issues,omitempty"`
+	Tests             *testSummary   `json:"tests,omitempty"`
+	Artifacts         []artifactOut  `json:"artifacts,omitempty"`
 }
 
 type buildStatusOut struct {
@@ -311,7 +359,7 @@ func latestRun(ctx context.Context, env *tool.Env, app tool.AppRef, workflow str
 	r, ok := resp.First()
 	if !ok {
 		return "", &tool.ErrNotFound{
-			Kind: "build run", Ref: wf.Name, Hint: "the workflow has no runs yet",
+			Kind: "build run", Ref: fmt.Sprintf("%q", wf.Name), Hint: "the workflow has no runs yet",
 			Next: []tool.NextStep{{Tool: "xcc_build_start", Args: map[string]any{"workflow": wf.ID}}},
 		}
 	}
@@ -379,7 +427,7 @@ func readActions(ctx context.Context, env *tool.Env, runID string, includeURLs b
 	var detail []int // indexes into out of completed actions to detail
 	for _, r := range res.Data {
 		a := actionOut{
-			ID: r.ID, Name: r.Str("name"), Type: r.Str("actionType"), ExecutionProgress: r.Str("executionProgress"),
+			ID: r.ID, Name: r.Text("name"), Type: r.Str("actionType"), ExecutionProgress: r.Str("executionProgress"),
 			CompletionStatus: r.Str("completionStatus"), Issues: issues(r.Attributes["issueCounts"]),
 		}
 		a.RequiredToPass, _ = r.Bool("isRequiredToPass")
@@ -439,9 +487,9 @@ func readTests(ctx context.Context, env *tool.Env, actionID string) (*testSummar
 		s.Total++
 		s.ByStatus[st]++
 		if (st == "FAILURE" || st == "MIXED") && len(s.Failures) < maxFailures {
-			f := testFailure{Class: r.Str("className"), Name: r.Str("name"), Status: st}
-			if m := r.Str("message"); m != "" {
-				f.Message = tool.Untrusted(m)
+			f := testFailure{Class: r.Text("className"), Name: r.Text("name"), Status: st}
+			if m := r.Text("message"); m != "" {
+				f.Message = m
 			}
 			s.Failures = append(s.Failures, f)
 		}

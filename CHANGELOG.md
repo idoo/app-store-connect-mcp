@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-26
+
+### Security
+
+- Approval forms can't be faked by stranger text any more. The form now lists what will happen and the targets first, then the stranger's text fenced on a single line, then the server's own `Change`, `Irreversible` and `Approve?` lines. A review can no longer draw its own "Irreversible: none" line.
+- Bidi, zero-width, tag and control characters in third-party text are shown as visible `⟨U+202E⟩` tokens, in tool results and approval forms.
+- `webhooks_upsert`: moving a webhook names the old and the new host, and a non-ASCII (lookalike) host is shown escaped with a warning.
+- Email addresses in `users_invite`, TestFlight tools and the App Review contact must be plain ASCII addresses. Newlines, non-breaking spaces and bidi characters are refused before anything is sent.
+- `xcc_build_start` needs `confirm:true`. Pull-request builds also need your approval, and PRs from forks are refused unless you pass `allow_fork_pr`.
+- `screenshots_sync` always needs a `plan_id` from `screenshots_plan`.
+- `reviews_reply` warns, and the approval form says so, when a reply contains a link or email address.
+- Names, commit messages, branch names, PR titles, Xcode Cloud test failures and user names are now wrapped as `{"untrusted": ...}`, including on the raw `asc_api_get` / `asc_api_request` path. The digest checks TestFlight device fields like `testflight_feedback_list` does.
+- PEM redaction can no longer join two strings and erase the reviews between them.
+- The server instructions and every prompt that reads reviews, feedback or listing text say it is data, not instructions. `reply_to_reviews` waits for your yes before confirming.
+
+### Changed
+
+- `release_health_report`: only crash diagnostics of the new build count as production data. With no signatures on the current build the verdict is `unknown`. Ratings need at least 20 reviews in each window, and the window starts at the release (phased start, scheduled release, review submission or version creation, the last two marked approximate). TestFlight crashes count only from the window start. Analytics crashes and performance are informational. `reasons` are objects with `level`, `source`, `message` and `pausing`.
+- `guard --pause-on-breach` pauses only on a breach from crash diagnostics; rating drops and TestFlight crashes never pause. With no live version it exits 5.
+- App names in `apps_list` / `apps_get` and Xcode Cloud names come back as `{"untrusted": ...}`.
+- `release_submit` approval shows the build number, which listing fields changed per locale against the live version, and the What's New text.
+- In MCP Apps views, third-party text sits in its own labelled box, a button turns into Confirm only when the tool returned a preview, and buttons for tools without a preview say "(runs now)".
+
+### Fixed
+
+- `digest_summary` no longer loses reviews or feedback that Apple publishes late (72-hour overlap), reports builds that fail processing after they were first seen, and keeps both watermarks when two calls read different sources.
+- Prompt completion offers app names again, not only bundle ids.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added
@@ -94,7 +122,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.2.0...v0.3.0

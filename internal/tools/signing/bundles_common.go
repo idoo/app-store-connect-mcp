@@ -68,12 +68,12 @@ type capOut struct {
 
 // bundleOut is a bundle ID with its capabilities.
 type bundleOut struct {
-	ID           string   `json:"id"`
-	Identifier   string   `json:"identifier"`
-	Name         string   `json:"name"`
-	Platform     string   `json:"platform"`
-	SeedID       string   `json:"seed_id,omitempty"`
-	Capabilities []capOut `json:"capabilities"`
+	ID           string         `json:"id"`
+	Identifier   string         `json:"identifier"`
+	Name         tool.Untrusted `json:"name"`
+	Platform     string         `json:"platform"`
+	SeedID       string         `json:"seed_id,omitempty"`
+	Capabilities []capOut       `json:"capabilities"`
 }
 
 // indexIncluded indexes included resources by type and id.
@@ -132,7 +132,7 @@ func flattenCap(r tool.Resource) capOut {
 // sorted by capability type.
 func flattenBundle(r tool.Resource, inc map[string]tool.Resource) bundleOut {
 	b := bundleOut{
-		ID: r.ID, Identifier: r.Str("identifier"), Name: r.Str("name"),
+		ID: r.ID, Identifier: r.Str("identifier"), Name: r.Text("name"),
 		Platform: r.Str("platform"), SeedID: r.Str("seedId"), Capabilities: []capOut{},
 	}
 	for _, id := range r.RelIDs("bundleIdCapabilities") {

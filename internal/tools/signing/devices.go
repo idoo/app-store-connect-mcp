@@ -45,7 +45,7 @@ const (
 
 type deviceResult struct {
 	UDID     string          `json:"udid"`
-	Name     string          `json:"name"`
+	Name     tool.Untrusted  `json:"name"`
 	Action   string          `json:"action"`
 	ID       string          `json:"id,omitempty"`
 	Platform string          `json:"platform,omitempty"`
@@ -145,10 +145,10 @@ func devicesRegister(ctx context.Context, env *tool.Env, in devicesRegisterIn) (
 // registerOne registers one device unless its UDID is already known. A failed
 // item also returns its error.
 func registerOne(ctx context.Context, env *tool.Env, d deviceIn, existing map[string]tool.Resource) (deviceResult, error) {
-	item := deviceResult{UDID: d.UDID, Name: d.Name, Platform: d.Platform}
+	item := deviceResult{UDID: d.UDID, Name: tool.Untrusted(d.Name), Platform: d.Platform}
 	already := func(r tool.Resource) (deviceResult, error) {
 		item.Action, item.ID, item.Status, item.Platform = devAlready, r.ID, r.Str("status"), r.Str("platform")
-		if n := r.Str("name"); n != "" {
+		if n := r.Text("name"); n != "" {
 			item.Name = n
 		}
 		return item, nil

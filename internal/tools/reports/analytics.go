@@ -310,7 +310,7 @@ func listAnalyticsReports(ctx context.Context, env *tool.Env, requestID, categor
 	}
 	out := make([]reportOut, 0, len(res.Data))
 	for _, r := range res.Data {
-		out = append(out, reportOut{ID: r.ID, Name: r.Str("name"), Category: r.Str("category")})
+		out = append(out, reportOut{ID: r.ID, Name: r.Str("name"), Category: r.Str("category")}) // trusted: Apple's fixed analytics report catalog name
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Category != out[j].Category {

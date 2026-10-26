@@ -33,12 +33,12 @@ type appsListIn struct {
 }
 
 type appSummary struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	BundleID      string   `json:"bundle_id"`
-	SKU           string   `json:"sku,omitempty"`
-	PrimaryLocale string   `json:"primary_locale,omitempty"`
-	Platforms     []string `json:"platforms"`
+	ID            string         `json:"id"`
+	Name          tool.Untrusted `json:"name"`
+	BundleID      string         `json:"bundle_id"`
+	SKU           string         `json:"sku,omitempty"`
+	PrimaryLocale string         `json:"primary_locale,omitempty"`
+	Platforms     []string       `json:"platforms"`
 }
 
 // listedApp is an apps_list row: the summary plus versions still moving
@@ -180,7 +180,7 @@ func appsList(ctx context.Context, env *tool.Env, in appsListIn) (*tool.Result, 
 		if c := cmp.Compare(y.score, x.score); c != 0 {
 			return c
 		}
-		return cmp.Compare(strings.ToLower(x.app.Name), strings.ToLower(y.app.Name))
+		return cmp.Compare(strings.ToLower(string(x.app.Name)), strings.ToLower(string(y.app.Name)))
 	})
 	matched := len(hits)
 	apps := make([]listedApp, 0, min(matched, limit))
@@ -212,7 +212,7 @@ const scoreSubsequence = 20
 
 func summarizeApp(r tool.Resource, platformOf map[string]string) appSummary {
 	a := appSummary{
-		ID: r.ID, Name: r.Str("name"), BundleID: r.Str("bundleId"), SKU: r.Str("sku"),
+		ID: r.ID, Name: r.Text("name"), BundleID: r.Str("bundleId"), SKU: r.Str("sku"),
 		PrimaryLocale: r.Str("primaryLocale"), Platforms: []string{},
 	}
 	for _, id := range r.RelIDs("appStoreVersions") {
@@ -233,7 +233,7 @@ func fuzzyScore(query string, a appSummary) int {
 	if q == "" {
 		return 1
 	}
-	name, bundle, sku := strings.ToLower(a.Name), strings.ToLower(a.BundleID), strings.ToLower(a.SKU)
+	name, bundle, sku := strings.ToLower(string(a.Name)), strings.ToLower(a.BundleID), strings.ToLower(a.SKU)
 	switch {
 	case q == a.ID || q == name || q == bundle || (sku != "" && q == sku):
 		return 100

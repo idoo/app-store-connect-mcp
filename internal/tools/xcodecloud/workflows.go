@@ -41,7 +41,7 @@ func workflowsList(ctx context.Context, env *tool.Env, in workflowsListIn) (*too
 	}
 	for i, p := range shown {
 		out.Products = append(out.Products, productOut{
-			ID: p.ID, Name: p.Str("name"), Type: p.Str("productType"), AppID: p.RelID("app"), Workflows: lists[i],
+			ID: p.ID, Name: p.Text("name"), Type: p.Str("productType"), AppID: p.RelID("app"), Workflows: lists[i],
 		})
 	}
 	res := tool.OK(out)

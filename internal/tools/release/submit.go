@@ -147,7 +147,10 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 			rejected = append(rejected, it.ID)
 		}
 	}
-	intended := []string{}
+	intended, untrusted, err := submitContent(ctx, env, app, platform, snap, ss.AppAttrs.Str("primaryLocale"))
+	if err != nil {
+		return nil, err
+	}
 	if out.Submission.ID == "" {
 		intended = append(intended, "create review submission")
 	}
@@ -180,6 +183,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 		Summary:      fmt.Sprintf("submit %q %s %s for App Review", app.Name, platform, out.Version.String),
 		Current:      out.Submission,
 		Intended:     intended,
+		Untrusted:    untrusted,
 		Affected:     []string{app.ID, ver.ID},
 		Irreversible: []string{"App Review starts; the version is locked until review ends or the submission is cancelled"},
 	})
@@ -257,6 +261,72 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	}
 	out.Submission = submissionView{ID: subID, State: state, Items: out.Submission.Items}
 	return tool.OK(out).Then(reviewStatusNext(app, platform)), nil
+}
+
+// submittedLocaleFields are the version localization fields compared with the
+// live version in the submit preview.
+var submittedLocaleFields = []string{"description", "keywords", "marketingUrl", "promotionalText", "supportUrl", "whatsNew"}
+
+// submitContent describes what goes to App Review for the approval form: the
+// build and version, per-locale field names changed since the live version
+// and, as untrusted text, the primary locale's What's New excerpt.
+func submitContent(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, s *releaseSnapshot, primary string) (intended, untrusted []string, err error) {
+	b, _ := s.attachedBuild()
+	intended = []string{fmt.Sprintf("build %s, version %s", b.Str("version"), s.Detail.Version.Str("versionString"))}
+	cur := s.Detail.localizations()
+	live := map[string]tool.Resource{}
+	liveName := "no live version"
+	lv, err := env.Resolve.Version(ctx, app.ID, platform, tool.VersionLive)
+	switch {
+	case err == nil && lv.ID != s.Detail.Version.ID:
+		resp, err := env.ASC.Get(ctx, "/v1/appStoreVersions/"+lv.ID+"/appStoreVersionLocalizations", url.Values{
+			"fields[appStoreVersionLocalizations]": {"locale," + strings.Join(submittedLocaleFields, ",")},
+			"limit":                                {"50"},
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("read live version localizations: %w", err)
+		}
+		for _, r := range resp.Data {
+			live[r.Str("locale")] = r
+		}
+		liveName = "live " + lv.String
+	case err != nil && !tool.IsNotFound(err):
+		return nil, nil, err
+	}
+	unchanged := 0
+	for _, l := range cur {
+		loc := l.Str("locale")
+		old, ok := live[loc]
+		if !ok {
+			intended = append(intended, fmt.Sprintf("%s: new locale (%s)", loc, liveName))
+			continue
+		}
+		var changed []string
+		for _, f := range submittedLocaleFields {
+			if l.Str(f) != old.Str(f) { // trusted: comparison only; names are listed, not text
+				changed = append(changed, f)
+			}
+		}
+		if len(changed) == 0 {
+			unchanged++
+			continue
+		}
+		intended = append(intended, fmt.Sprintf("%s: changed %s vs %s", loc, strings.Join(changed, ", "), liveName))
+	}
+	if unchanged > 0 {
+		intended = append(intended, fmt.Sprintf("%d locale(s) unchanged vs %s", unchanged, liveName))
+	}
+	for _, l := range cur {
+		if l.Str("locale") == primary {
+			if wn := []rune(strings.TrimSpace(l.Str("whatsNew"))); len(wn) > 0 { // trusted: wrapped as Untrusted below
+				if len(wn) > 300 {
+					wn = append(wn[:300], '…')
+				}
+				untrusted = append(untrusted, "What's New ("+primary+"): "+string(wn))
+			}
+		}
+	}
+	return intended, untrusted, nil
 }
 
 // preflightBlocks refuses a submission release_status would block, before
@@ -379,7 +449,7 @@ func productLabel(p tool.Resource) string {
 	if id := p.Str("productId"); id != "" {
 		return id
 	}
-	return p.Str("name")
+	return p.Str("name") // trusted: team-created product label, sanitised in the approval prompt
 }
 
 // matchProduct finds ref by id, product id or case-insensitive name.
@@ -389,7 +459,7 @@ func matchProduct(rs []tool.Resource, kind, ref string) (tool.Resource, error) {
 		if r.ID == ref || r.Str("productId") == ref {
 			return r, nil
 		}
-		if strings.EqualFold(r.Str("name"), ref) {
+		if strings.EqualFold(r.Str("name"), ref) { // trusted: comparison only
 			hits = append(hits, r)
 		}
 	}
@@ -424,7 +494,7 @@ func productVersion(ctx context.Context, env *tool.Env, kind, path, parent, labe
 // groupVersion returns the subscription group's version item when the group
 // was never approved (a brand-new group must be reviewed too).
 func groupVersion(ctx context.Context, env *tool.Env, g tool.Resource) (*wantedItem, string, error) {
-	label := "group " + g.Str("referenceName")
+	label := "group " + g.Str("referenceName") // trusted: team-created group label, sanitised in the approval prompt
 	resp, err := env.ASC.Get(ctx, "/v1/subscriptionGroups/"+g.ID+"/versions", url.Values{
 		"fields[subscriptionGroupVersions]": {"version,state"},
 	})

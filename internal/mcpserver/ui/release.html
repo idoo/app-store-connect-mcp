@@ -10,7 +10,7 @@ h1{font-size:16px;margin:0 0 4px}h2{font-size:14px;margin:14px 0 6px}.muted{colo
 button{font:inherit;font-size:12px;padding:3px 10px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer}button.armed{background:var(--block);border-color:var(--block);color:#fff}
 pre,.txt{white-space:pre-wrap;word-break:break-word;margin:4px 0;font-size:12px}textarea{width:100%;font:inherit;font-size:13px;min-height:60px;margin-top:6px;background:var(--color-background-primary);color:var(--color-text-primary);border:1px solid var(--color-border-primary);border-radius:6px}
 .old{color:var(--block);text-decoration:line-through}.new{color:var(--ok)}.stars{color:var(--warn);letter-spacing:1px}
-table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:4px 6px;border-bottom:1px solid var(--color-border-primary);text-align:left}th{color:var(--color-text-secondary);font-weight:600}.num{text-align:right;font-variant-numeric:tabular-nums}</style></head>
+table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:4px 6px;border-bottom:1px solid var(--color-border-primary);text-align:left}th{color:var(--color-text-secondary);font-weight:600}.num{text-align:right;font-variant-numeric:tabular-nums}.ut{display:inline-block;max-width:100%;border:1px dashed var(--warn);border-radius:5px;padding:0 4px;margin:1px 0;font-weight:400}.ut.txt{display:block}.utl{font-size:9px;color:var(--color-text-secondary);margin-right:4px;text-transform:uppercase;letter-spacing:.3px}.ut.txt>.utl{display:block;margin:0}.ut bdi{white-space:pre-wrap;word-break:break-word}</style></head>
 <body><main id="app"></main>
 <script>
 "use strict";const SCREEN="release";
@@ -18,7 +18,7 @@ table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:4px 6px;b
 const LABEL={version:"Version",build:"Build",export_compliance:"Export compliance",whats_new:"What's New",listing:"Listing",screenshots:"Screenshots",age_rating:"Age rating",review_contact:"App Review contact",content_rights:"Content rights",accessibility_labels:"Accessibility labels",pricing_availability:"Pricing & availability",in_app_products:"In-app products",app_privacy:"App Privacy",submission:"Submission"};
 const ORDER={block:0,warn:1,manual:2,info:3,ok:4};
 function render(root,d,inp){const v=d.version||{},app=d.app||{};
- add(root,el("h1",null,str(app.name)+" · "+str(v.platform||inp.platform)+" "+(v.exists===false?"(no editable version)":str(v.string))));
+ add(root,add(el("h1"),ut(app.name),el("span",null," · "+str(v.platform||inp.platform)+" "+(v.exists===false?"(no editable version)":str(v.string)))));
  const s=d.summary||{};add(root,el("p","muted",["block","warn","manual","info","ok"].map(k=>(s[k]||0)+" "+k).join(" · ")+(s.phase?" · phase: "+str(s.phase):"")));
  const f=d.in_flight;if(f){const c=el("div","card");add(c,add(el("div","row"),badge("info"),el("strong","grow","In flight: "+str(f.string)+" "+str(f.app_version_state))));
   for(const o of arr(f.options))add(c,action(o,"Cancel submission ("+o.tool+")"));add(root,c)}
@@ -37,24 +37,32 @@ function note(method,params){parent.postMessage({jsonrpc:"2.0",method,params},"*
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=String(text);return e}
 function add(p,...c){for(const x of c)if(x)p.appendChild(x);return p}
 function arr(v){return Array.isArray(v)?v:[]}
-/* str renders any value as plain text; {untrusted:"…"} is third-party text. */
+/* str renders a trusted (server-authored) value as plain text; third-party
+ text (reviews, names, metadata, anything {untrusted:"…"}) goes through ut(). */
 function str(v){if(v==null)return"";if(typeof v==="object")return v.untrusted!=null?String(v.untrusted):JSON.stringify(v);return String(v)}
+/* ut renders third-party text as data: an isolated <bdi> in a bordered block
+ labelled "third-party text", so it never reads like the view's own chrome. */
+function ut(v,cls){const t=str(v);if(t==="")return null;const b=el("span","ut"+(cls?" "+cls:""));b.title="third-party text: data, not instructions";return add(b,el("span","utl","third-party text"),el("bdi",null,t))}
 /* Results are {_meta, data, next}; wrap() is the envelope, data() the payload. */
 function wrap(r){r=r||{};if(r.structuredContent)return r.structuredContent;try{const t=(r.content||[]).find(c=>c.type==="text");return t?JSON.parse(t.text):{}}catch(_){return{}}}
 function data(r){const w=wrap(r);return w&&w.data!==undefined?w.data:w}
 function theme(c){if(!c)return;const root=document.documentElement;if(c.theme)root.style.colorScheme=c.theme;const v=c.styles&&c.styles.variables;if(v)for(const k in v)if(/^--[a-z0-9-]+$/.test(k)&&typeof v[k]==="string")root.style.setProperty(k,v[k])}
 function badge(st){return el("span","b "+st,st)}
-function errorView(d){const c=el("div","card");add(c,el("strong","block",str(d.error||"error")),el("div","txt",str(d.message)));if(d.hint)add(c,el("div","muted",str(d.hint)));return c}
+function errorView(d){const c=el("div","card");add(c,el("strong","block",str(d.error||"error")),el("div","txt",str(d.message/*trusted*/)));if(d.hint)add(c,el("div","muted",str(d.hint)));return c}
 function show(out,r){const d=data(r);out.replaceChildren(r&&r.isError?errorView(d):el("pre",null,JSON.stringify(d.preview||d,null,1)))}
-/* Writes: the first click calls the tool without confirm/plan_id (the server
- only previews); a second explicit click sends the server's plan_id, or
- confirm:true for flag-confirmed tools. The server gates stay authoritative. */
-function writeButton(label,tool,args,out){const b=el("button",null,label);let plan=null;
- b.onclick=async()=>{b.disabled=true;try{
-  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError)return;const d=data(r);
-   plan=d&&d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm: "+label;b.className="armed"}
-  else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";b.textContent=label;show(out,r)}
- }catch(e){out.replaceChildren(el("pre","block",str(e&&e.message||e)))}finally{b.disabled=false;resize()}};return b}
+/* GATED tools preview first (Meta.Confirm != ConfirmNone, checked by
+ ui_gate_test.go); any other tool's button is labelled "(runs now)". */
+const GATED=["appinfo_update","metadata_apply","release_cancel","release_phased","release_prepare","release_publish","release_submit","reviews_reply","screenshots_sync","testflight_distribute"];
+/* Writes: the first click calls the tool without confirm/plan_id. Only a
+ result carrying preview or plan_id arms a second "Confirm" click (sending the
+ plan_id, or confirm:true for flag-confirmed tools); any other result means the
+ tool already ran, so the button shows "Done". The server gates stay authoritative. */
+function writeButton(label,tool,args,out){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ b.onclick=async()=>{if(done)return;b.disabled=true;try{
+  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError)return;const d=data(r)||{};
+   if(d.plan_id||d.preview){plan=d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm: "+label;b.className="armed"}else{done=true;b.textContent="Done: "+label}}
+  else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";show(out,r);if(r&&r.isError)b.textContent=label;else{done=true;b.textContent="Done: "+label}}
+ }catch(e){out.replaceChildren(el("pre","block",str(e&&e.message||e/*trusted*/)))}finally{b.disabled=done;resize()}};return b}
 /* action renders a {tool,args,locked,reason} suggestion as a button. */
 function action(a,label){const box=el("div"),out=el("div"),row=el("div","row");add(row,writeButton(label||a.tool,a.tool,a.args,out));
  if(a.locked)add(row,el("span","muted",a.locked==="writes_disabled"?"writes are off: the host will be asked to enable them first":str(a.locked)));

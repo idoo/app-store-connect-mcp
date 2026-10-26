@@ -53,23 +53,23 @@ func init() {
 
 // appOut is an app a member can see.
 type appOut struct {
-	ID       string `json:"id"`
-	Name     string `json:"name,omitempty"`
-	BundleID string `json:"bundle_id,omitempty"`
+	ID       string         `json:"id"`
+	Name     tool.Untrusted `json:"name,omitempty"`
+	BundleID string         `json:"bundle_id,omitempty"`
 }
 
 // member is a user or a pending invitation.
 type member struct {
-	ID                  string   `json:"id"`
-	Email               string   `json:"email"`
-	FirstName           string   `json:"first_name,omitempty"`
-	LastName            string   `json:"last_name,omitempty"`
-	Roles               []string `json:"roles"`
-	AllApps             bool     `json:"all_apps"`
-	ProvisioningAllowed bool     `json:"provisioning_allowed,omitempty"`
-	Apps                []appOut `json:"apps,omitempty"`
-	AppsTruncated       bool     `json:"apps_truncated,omitempty"`
-	Expires             string   `json:"expires,omitempty"`
+	ID                  string         `json:"id"`
+	Email               string         `json:"email"`
+	FirstName           tool.Untrusted `json:"first_name,omitempty"`
+	LastName            tool.Untrusted `json:"last_name,omitempty"`
+	Roles               []string       `json:"roles"`
+	AllApps             bool           `json:"all_apps"`
+	ProvisioningAllowed bool           `json:"provisioning_allowed,omitempty"`
+	Apps                []appOut       `json:"apps,omitempty"`
+	AppsTruncated       bool           `json:"apps_truncated,omitempty"`
+	Expires             string         `json:"expires,omitempty"`
 	// Pending marks an invitation not yet accepted.
 	Pending bool `json:"pending,omitempty"`
 }
@@ -90,11 +90,11 @@ func strs(v any) []string {
 // app ids to their names.
 func toMember(r tool.Resource, apps map[string]appOut) member {
 	m := member{
-		ID: r.ID, Email: r.Str("username"), FirstName: r.Str("firstName"), LastName: r.Str("lastName"),
+		ID: r.ID, Email: r.Str("username"), FirstName: r.Text("firstName"), LastName: r.Text("lastName"),
 		Roles: strs(r.Attributes["roles"]), Expires: r.Str("expirationDate"),
 	}
 	if r.Type == "userInvitations" {
-		m.Email, m.Pending = r.Str("email"), true
+		m.Email, m.Pending = r.Str("email"), true // trusted: Apple-validated address, used to match and quote %q
 	}
 	m.AllApps, _ = r.Bool("allAppsVisible")
 	m.ProvisioningAllowed, _ = r.Bool("provisioningAllowed")
@@ -130,7 +130,7 @@ func listMembers(ctx context.Context, env *tool.Env, path, typ string, fields []
 	apps := map[string]appOut{}
 	for _, r := range res.Included {
 		if r.Type == "apps" {
-			apps[r.ID] = appOut{ID: r.ID, Name: r.Str("name"), BundleID: r.Str("bundleId")}
+			apps[r.ID] = appOut{ID: r.ID, Name: r.Text("name"), BundleID: r.Str("bundleId")}
 		}
 	}
 	out := make([]member, 0, len(res.Data))
@@ -153,7 +153,7 @@ type listOut struct {
 
 func matches(m member, q string) bool {
 	q = strings.ToLower(q)
-	return q == "" || strings.Contains(strings.ToLower(m.Email+" "+m.FirstName+" "+m.LastName), q)
+	return q == "" || strings.Contains(strings.ToLower(m.Email+" "+string(m.FirstName)+" "+string(m.LastName)), q)
 }
 
 func list(ctx context.Context, env *tool.Env, in listIn) (*tool.Result, error) {
@@ -213,11 +213,13 @@ func findMember(ctx context.Context, env *tool.Env, email string) (*member, erro
 }
 
 func invite(ctx context.Context, env *tool.Env, in inviteIn) (*tool.Result, error) {
-	email := strings.TrimSpace(in.Email)
-	at := strings.LastIndex(email, "@")
+	// Validated untrimmed: surrounding newlines, NBSP or bidi marks are refused,
+	// never silently stripped into a different-looking address.
+	email := in.Email
+	if err := tool.ValidEmail(email); err != nil {
+		return nil, err
+	}
 	switch {
-	case at < 1 || at == len(email)-1 || strings.ContainsAny(email, " ,;<>"):
-		return nil, tool.InvalidArgs("email %q is not an email address", in.Email)
 	case strings.TrimSpace(in.FirstName) == "" || strings.TrimSpace(in.LastName) == "":
 		return nil, tool.InvalidArgs("first_name and last_name are required")
 	case len(in.Roles) == 0:
@@ -264,10 +266,10 @@ func invite(ctx context.Context, env *tool.Env, in inviteIn) (*tool.Result, erro
 		"apps": appLabels, "provisioning_allowed": in.ProvisioningAllowed,
 	}
 	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
-		Summary:      fmt.Sprintf("invite %s as %s with access to %s", email, strings.Join(rs, ", "), strings.Join(appLabels, ", ")),
+		Summary:      fmt.Sprintf("grant %s on %s to new invitee %q", strings.Join(rs, ", "), strings.Join(appLabels, ", "), email),
 		Intended:     intended,
-		Affected:     []string{email},
-		Irreversible: []string{"Apple emails the invitation to " + email + " immediately"},
+		Affected:     []string{fmt.Sprintf("%q", email)},
+		Irreversible: []string{fmt.Sprintf("Apple emails the invitation to %q immediately", email)},
 	})
 	if res != nil {
 		return res, nil
@@ -302,7 +304,7 @@ func invite(ctx context.Context, env *tool.Env, in inviteIn) (*tool.Result, erro
 	inv := toMember(r, nil)
 	inv.Apps = nil
 	for _, a := range apps {
-		inv.Apps = append(inv.Apps, appOut{ID: a.ID, Name: a.Name, BundleID: a.BundleID})
+		inv.Apps = append(inv.Apps, appOut{ID: a.ID, Name: tool.Untrusted(a.Name), BundleID: a.BundleID})
 	}
 	return tool.OK(map[string]any{"invited": inv}), nil
 }

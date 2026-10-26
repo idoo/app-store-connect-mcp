@@ -34,9 +34,9 @@ var (
 
 // offerSub is one subscription an offer belongs to.
 type offerSub struct {
-	ID        string `json:"id"`
-	ProductID string `json:"product_id"`
-	Name      string `json:"name,omitempty"`
+	ID        string         `json:"id"`
+	ProductID string         `json:"product_id"`
+	Name      tool.Untrusted `json:"name,omitempty"`
 }
 
 // offerPriceIn is one wanted territory price of an offer.
@@ -71,7 +71,7 @@ func offerSubs(ctx context.Context, env *tool.Env, appID string) ([]offerSub, er
 	var out []offerSub
 	for _, g := range res.Data {
 		for _, s := range related(g, "subscriptions", "subscriptions", inc) {
-			out = append(out, offerSub{ID: s.ID, ProductID: s.Str("productId"), Name: s.Str("name")})
+			out = append(out, offerSub{ID: s.ID, ProductID: s.Str("productId"), Name: s.Text("name")})
 		}
 	}
 	return out, nil

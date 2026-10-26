@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -359,10 +358,10 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 		ID: r.ID, Kind: k.name, Created: r.Str("createdDate"),
 		Build: builds[r.RelID("build")], Platform: r.Str("appPlatform"),
 	}
-	o.Device = o.cleanDeviceField(deviceModelRE, r.Str("deviceModel"))
-	o.OSVersion = o.cleanDeviceField(osVersionRE, r.Str("osVersion"))
-	o.Locale = o.cleanDeviceField(localeRE, r.Str("locale"))
-	o.Tester, o.Comment = tool.Untrusted(r.Str("email")), tool.Untrusted(r.Str("comment"))
+	o.Device = o.cleanDeviceField(tool.DeviceModel, r.Str("deviceModel")) // trusted: shape-checked by tool.DeviceField
+	o.OSVersion = o.cleanDeviceField(tool.OSVersion, r.Str("osVersion"))  // trusted: shape-checked by tool.DeviceField
+	o.Locale = o.cleanDeviceField(tool.Locale, r.Str("locale"))
+	o.Tester, o.Comment = r.Text("email"), r.Text("comment")
 	shots, _ := tool.Unwrap(r.Attributes["screenshots"]).([]any)
 	for _, s := range shots {
 		m, _ := s.(map[string]any)
@@ -375,28 +374,15 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 	return o
 }
 
-// Shapes of the tester-device-controlled feedback fields.
-var (
-	// localeRE matches BCP-47-like locales such as en, en-US, zh_Hans_CN.
-	localeRE = regexp.MustCompile(`^[a-z]{2,3}([-_][A-Za-z0-9]{2,8}){0,2}$`)
-	// osVersionRE matches versions such as 18.1, 17.4.1 or 26.0 (23A341).
-	osVersionRE = regexp.MustCompile(`^[0-9]{1,3}(\.[0-9]{1,3}){0,3}( \([0-9A-Za-z]{1,10}\))?$`)
-	// deviceModelRE matches hardware identifiers such as iPhone17,1.
-	deviceModelRE = regexp.MustCompile(`^[A-Za-z]{2,12}[0-9]{1,3},[0-9]{1,3}$`)
-)
-
 // cleanDeviceField keeps s when it has the field's shape and drops it
 // otherwise (counting the drop), so a tester's device can't carry
 // instructions. Empty values are neither kept nor counted.
-func (o *feedbackOut) cleanDeviceField(shape *regexp.Regexp, s string) string {
-	if s == "" {
-		return ""
-	}
-	if !shape.MatchString(s) {
+func (o *feedbackOut) cleanDeviceField(kind tool.DeviceKind, s string) string {
+	clean, dropped := tool.DeviceField(kind, s)
+	if dropped {
 		o.dropped++
-		return ""
 	}
-	return s
+	return clean
 }
 
 // screenshotURLs returns the signed screenshot URLs of a feedback item.

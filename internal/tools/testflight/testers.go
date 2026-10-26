@@ -66,6 +66,12 @@ func testersList(ctx context.Context, env *tool.Env, in testersListIn) (*tool.Re
 	case in.Limit == 0:
 		in.Limit = 200
 	}
+	in.Email = strings.TrimSpace(in.Email)
+	if in.Email != "" {
+		if err := tool.ValidEmail(in.Email); err != nil {
+			return nil, err
+		}
+	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
 		return nil, err
@@ -87,8 +93,8 @@ func testersList(ctx context.Context, env *tool.Env, in testersListIn) (*tool.Re
 	} else {
 		q.Set("filter[apps]", app.ID)
 	}
-	if e := strings.TrimSpace(in.Email); e != "" {
-		q.Set("filter[email]", e)
+	if in.Email != "" {
+		q.Set("filter[email]", in.Email)
 	}
 	if in.InviteType != "" {
 		q.Set("filter[inviteType]", in.InviteType)
@@ -180,7 +186,7 @@ func testersAdd(ctx context.Context, env *tool.Env, in testersAddIn) (*tool.Resu
 			continue
 		}
 		pos[key] = len(outcomes)
-		if !validEmail(t.Email) {
+		if err := tool.ValidEmail(t.Email); err != nil {
 			outcomes = append(outcomes, addOutcome{Email: t.Email, Outcome: outcomeError, Detail: "not a valid email address"})
 			continue
 		}
@@ -537,7 +543,7 @@ func matchTesters(ctx context.Context, env *tool.Env, filter url.Values, refs []
 			notFound = append(notFound, ref)
 			return
 		}
-		targets = append(targets, removeTarget{Ref: ref, ID: r.ID, Email: tool.Untrusted(r.Str("email")), State: r.Str("state")})
+		targets = append(targets, removeTarget{Ref: ref, ID: r.ID, Email: r.Text("email"), State: r.Str("state")})
 	}
 	for _, e := range emails {
 		r, ok := mailIdx[emailKey(e)]

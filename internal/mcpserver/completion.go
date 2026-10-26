@@ -95,7 +95,7 @@ func (s *session) completionApps(ctx context.Context) ([]string, error) {
 	var vals []string
 	for _, r := range res.Data {
 		for _, k := range []string{"name", "bundleId"} {
-			if v, ok := r.Attributes[k].(string); ok && v != "" && !slices.Contains(vals, v) {
+			if v, ok := tool.Unwrap(r.Attributes[k]).(string); ok && v != "" && !slices.Contains(vals, v) {
 				vals = append(vals, v)
 			}
 		}

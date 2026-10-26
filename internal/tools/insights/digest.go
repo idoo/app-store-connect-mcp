@@ -5,11 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/reports"
@@ -76,11 +79,14 @@ type digestSourceOut struct {
 	Skipped    int    `json:"skipped,omitempty"`
 	Note       string `json:"note,omitempty"`
 	// Baseline is the start date used because the source had no watermark.
-	Baseline    string             `json:"baseline,omitempty"`
-	Items       []map[string]any   `json:"items,omitempty"`
-	Transitions []digestTransition `json:"transitions,omitempty"`
-	Sales       *digestSalesOut    `json:"sales,omitempty"`
-	Error       *tool.ErrorBody    `json:"error,omitempty"`
+	Baseline string `json:"baseline,omitempty"`
+	// DroppedDevice counts feedback device fields withheld for not having a
+	// device-model or OS-version shape.
+	DroppedDevice int                `json:"dropped_device_fields,omitempty"`
+	Items         []map[string]any   `json:"items,omitempty"`
+	Transitions   []digestTransition `json:"transitions,omitempty"`
+	Sales         *digestSalesOut    `json:"sales,omitempty"`
+	Error         *tool.ErrorBody    `json:"error,omitempty"`
 
 	// gapTool is the list tool that catches up on a gap.
 	gapTool string
@@ -110,8 +116,8 @@ type digestAppOut struct {
 }
 
 type digestAppRef struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
+	ID   string         `json:"id"`
+	Name tool.Untrusted `json:"name,omitempty"`
 }
 
 func init() {
@@ -211,7 +217,7 @@ func digestTargets(ctx context.Context, env *tool.Env, ref tool.AppRef, res *too
 	}
 	apps := make([]tool.App, 0, min(len(list.Data), digestAllMax))
 	for _, a := range list.Data {
-		apps = append(apps, tool.App{ID: a.ID, Name: a.Str("name"), BundleID: a.Str("bundleId"), SKU: a.Str("sku")})
+		apps = append(apps, tool.App{ID: a.ID, Name: a.Str("name"), BundleID: a.Str("bundleId"), SKU: a.Str("sku")}) // trusted: tool.App holds the raw name; digestAppRef wraps it on output
 	}
 	if len(apps) > digestAllMax {
 		res.Warn(fmt.Sprintf("app \"all\" is capped at %d of %d apps; pass app for the others", digestAllMax, len(apps)))
@@ -223,20 +229,12 @@ func digestTargets(ctx context.Context, env *tool.Env, ref tool.AppRef, res *too
 // digestApp reads every source of one app. A failing source keeps its
 // watermark; the state is saved only with mark_seen and a working store.
 func digestApp(ctx context.Context, env *tool.Env, app tool.App, sources []string, limit int, markSeen, acceptGap bool, base time.Time) (digestAppOut, []string, error) {
-	out := digestAppOut{App: digestAppRef{ID: app.ID, Name: app.Name}, Sources: map[string]digestSourceOut{}}
+	out := digestAppOut{App: digestAppRef{ID: app.ID, Name: tool.Untrusted(app.Name)}, Sources: map[string]digestSourceOut{}}
 	key := digestStateKey(env.Profile.Name, app.ID)
-	var st digestState
-	_, stateErr := env.State.Load(digestStateKind, key, &st)
-	if stateErr != nil {
-		st = digestState{}
-	}
-	if st.Sources == nil {
-		st.Sources = map[string]digestWatermark{}
-	}
-	if st.Snapshot == nil {
-		st.Snapshot = map[string]string{}
-	}
-	next := digestState{Sources: digestCopyWM(st.Sources), Snapshot: digestCopyStr(st.Snapshot)}
+	unlock := digestLock(key)
+	defer unlock()
+	st, stateErr := digestLoad(env, key)
+	next := digestState{Sources: maps.Clone(st.Sources), Snapshot: maps.Clone(st.Snapshot)}
 	now := env.Clock.Now().UTC()
 	var warns []string
 	for _, s := range sources {
@@ -273,28 +271,67 @@ func digestApp(ctx context.Context, env *tool.Env, app tool.App, sources []strin
 		out.Sources[s] = so
 	}
 	if markSeen && stateErr == nil {
-		next.UpdatedAt = now.Format(time.RFC3339)
-		if err := env.State.Save(digestStateKind, key, next); err != nil {
+		// Another call (or process) may have saved since st was loaded:
+		// apply only this call's changes onto the latest record.
+		latest, err := digestLoad(env, key)
+		if err != nil {
+			return out, warns, err
+		}
+		digestMerge(&latest, st, next)
+		latest.UpdatedAt = now.Format(time.RFC3339)
+		if err := env.State.Save(digestStateKind, key, latest); err != nil {
 			return out, warns, err
 		}
 	}
 	return out, warns, stateErr
 }
 
-func digestCopyWM(m map[string]digestWatermark) map[string]digestWatermark {
-	out := make(map[string]digestWatermark, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
+// digestLocks serialises load→compute→save of one profile+app record within
+// the process.
+var digestLocks sync.Map // key → *sync.Mutex
+
+func digestLock(key string) func() {
+	m, _ := digestLocks.LoadOrStore(key, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
-func digestCopyStr(m map[string]string) map[string]string {
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		out[k] = v
+// digestLoad reads the record of key with non-nil maps and v0.5.0
+// watermarks upgraded; on a store error the record is empty.
+func digestLoad(env *tool.Env, key string) (digestState, error) {
+	var st digestState
+	if _, err := env.State.Load(digestStateKind, key, &st); err != nil {
+		return digestState{Sources: map[string]digestWatermark{}, Snapshot: map[string]string{}}, err
 	}
-	return out
+	if st.Sources == nil {
+		st.Sources = map[string]digestWatermark{}
+	}
+	if st.Snapshot == nil {
+		st.Snapshot = map[string]string{}
+	}
+	digestUpgrade(&st)
+	return st, nil
+}
+
+// digestMerge applies the changes from st to next (the sources this call
+// touched) onto latest, leaving every other source as latest has it.
+func digestMerge(latest *digestState, st, next digestState) {
+	for k, w := range next.Sources {
+		if old, ok := st.Sources[k]; !ok || !reflect.DeepEqual(old, w) {
+			latest.Sources[k] = w
+		}
+	}
+	for k, v := range next.Snapshot {
+		if old, ok := st.Snapshot[k]; !ok || old != v {
+			latest.Snapshot[k] = v
+		}
+	}
+	for k := range st.Snapshot {
+		if _, ok := next.Snapshot[k]; !ok {
+			delete(latest.Snapshot, k)
+		}
+	}
 }
 
 func digestFail(err error) digestSourceOut {
@@ -311,11 +348,12 @@ type digestScanResult struct {
 	BeyondCapped bool
 }
 
-// digestScan pages path newest-first until an item older than w's instant,
-// buffering at most digestScanMax items and counting (up to digestCountMax)
-// the unseen items past the buffer.
+// digestScan pages path newest-first down to w's floor (TS − 72h, or the
+// fresh baseline), skipping ids already seen, buffering at most
+// digestScanMax unseen items and counting (up to digestCountMax) the unseen
+// items past the buffer.
 func digestScan(ctx context.Context, env *tool.Env, path string, q url.Values, tsField string, w digestWatermark) (digestScanResult, error) {
-	wt, hasW := w.time()
+	floor := w.floor()
 	var out digestScanResult
 	visited := map[string]bool{}
 	for {
@@ -324,17 +362,17 @@ func digestScan(ctx context.Context, env *tool.Env, path string, q url.Values, t
 			return digestScanResult{}, err
 		}
 		for _, r := range res.Data {
-			ts := digestParseTime(r.Str(tsField))
-			if hasW && ts.Before(wt) {
+			if digestParseTime(r.Str(tsField)).Before(floor) {
 				return out, nil
 			}
 			switch {
+			case digestSeen(w, r.ID):
 			case len(out.Items) < digestScanMax:
 				out.Items = append(out.Items, r)
 			case out.Beyond >= digestCountMax:
 				out.BeyondCapped = true
 				return out, nil
-			case !digestSeen(w, r.ID, ts):
+			default:
 				out.Beyond++
 			}
 		}
@@ -385,6 +423,11 @@ func digestPick(scan digestScanResult, tsField, name string, w digestWatermark, 
 		p.Skipped = scan.Beyond
 	}
 	if w := digestAdvance(w, sel); w.TS != "" {
+		if scan.Beyond > 0 {
+			// accept_gap: the skipped items lie below the new watermark and
+			// must not come back through the overlap window.
+			w.Floor, _ = w.time()
+		}
 		next.Sources[name] = w
 	}
 	return p
@@ -420,8 +463,8 @@ func digestReviews(ctx context.Context, env *tool.Env, app tool.App, st digestSt
 		rating, _ := r.Int("rating")
 		so.Items = append(so.Items, map[string]any{
 			"id": r.ID, "created": r.Str("createdDate"), "rating": rating, "territory": r.Str("territory"),
-			"title": tool.Untrusted(r.Str("title")), "body": tool.Untrusted(r.Str("body")),
-			"nickname": tool.Untrusted(r.Str("reviewerNickname")),
+			"title": r.Text("title"), "body": r.Text("body"),
+			"nickname": r.Text("reviewerNickname"),
 		})
 	}
 	return so
@@ -451,10 +494,18 @@ func digestFeedback(ctx context.Context, env *tool.Env, app tool.App, st digestS
 		p := digestPick(scan, "createdDate", name, w, next, limit, acceptGap)
 		digestApplyPick(&so, p, scan.BeyondCapped)
 		for _, r := range p.Items {
+			device, d1 := tool.DeviceField(tool.DeviceModel, r.Str("deviceModel")) // trusted: shape-checked by DeviceField
+			osv, d2 := tool.DeviceField(tool.OSVersion, r.Str("osVersion"))        // trusted: shape-checked by DeviceField
+			if d1 {
+				so.DroppedDevice++
+			}
+			if d2 {
+				so.DroppedDevice++
+			}
 			item := map[string]any{
 				"id": r.ID, "kind": k.name, "created": r.Str("createdDate"),
-				"device": r.Str("deviceModel"), "os": r.Str("osVersion"), "platform": r.Str("appPlatform"),
-				"comment": tool.Untrusted(r.Str("comment")),
+				"device": device, "os": osv, "platform": r.Str("appPlatform"),
+				"comment": r.Text("comment"),
 			}
 			if shots, ok := tool.Unwrap(r.Attributes["screenshots"]).([]any); ok {
 				item["screenshot_count"] = len(shots)
@@ -552,7 +603,51 @@ func digestStates(ctx context.Context, env *tool.Env, app tool.App, st digestSta
 	return so
 }
 
+// digestBuildChunk is how many pending build ids one filter[id] GET carries.
+const digestBuildChunk = 50
+
+// digestBuildTerminal are the processing states a build never leaves.
+var digestBuildTerminal = []string{"VALID", "INVALID", "FAILED"}
+
 func digestBuilds(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, now time.Time, acceptGap bool, base time.Time) digestSourceOut {
+	// Builds reported while not yet terminal are re-read by id on every
+	// call, independent of the watermark, so a late transition is never
+	// missed. Terminal entries (from older records) are just dropped.
+	var pending []string
+	for k, state := range st.Snapshot {
+		id, ok := strings.CutPrefix(k, "builds/")
+		switch {
+		case !ok:
+		case slices.Contains(digestBuildTerminal, state):
+			delete(next.Snapshot, k)
+		default:
+			pending = append(pending, id)
+		}
+	}
+	slices.Sort(pending)
+	at := now.Format(time.RFC3339)
+	var cur []digestTransition
+	for chunk := range slices.Chunk(pending, digestBuildChunk) {
+		res, err := env.ASC.Get(ctx, "/v1/builds", url.Values{
+			"filter[id]":     {strings.Join(chunk, ",")},
+			"fields[builds]": {"processingState,version"},
+			"limit":          {strconv.Itoa(digestBuildChunk)},
+		})
+		if err != nil {
+			return digestFail(fmt.Errorf("pending builds: %w", err))
+		}
+		found := map[string]bool{}
+		for _, r := range res.Data {
+			found[r.ID] = true
+			k := "builds/" + r.ID
+			cur = append(cur, digestTransition{key: k, Object: k, Label: "build " + r.Str("version"), To: r.Str("processingState"), ObservedAt: at})
+		}
+		for _, id := range chunk {
+			if !found[id] {
+				delete(next.Snapshot, "builds/"+id)
+			}
+		}
+	}
 	q := url.Values{
 		"filter[app]":    {app.ID},
 		"sort":           {"-uploadedDate"},
@@ -570,27 +665,24 @@ func digestBuilds(ctx context.Context, env *tool.Env, app tool.App, st digestSta
 		so.Baseline = base.Format(time.DateOnly)
 	}
 	digestApplyPick(&so, p, scan.BeyondCapped)
-	isNew := map[string]bool{}
 	for _, r := range p.Items {
-		isNew[r.ID] = true
-		next.Snapshot["builds/"+r.ID] = r.Str("processingState")
+		state := r.Str("processingState")
+		if !slices.Contains(digestBuildTerminal, state) {
+			next.Snapshot["builds/"+r.ID] = state
+		}
 		expired, _ := r.Bool("expired")
 		so.Items = append(so.Items, map[string]any{
 			"id": r.ID, "version": r.Str("version"), "uploaded": r.Str("uploadedDate"),
-			"processing_state": r.Str("processingState"), "expired": expired,
+			"processing_state": state, "expired": expired,
 		})
-	}
-	// Processing changes of builds reported before (known to the snapshot).
-	var cur []digestTransition
-	for _, r := range scan.Items {
-		k := "builds/" + r.ID
-		if _, known := st.Snapshot[k]; !known || isNew[r.ID] {
-			continue
-		}
-		cur = append(cur, digestTransition{key: k, Object: k, Label: "build " + r.Str("version"), To: r.Str("processingState"), ObservedAt: now.Format(time.RFC3339)})
 	}
 	newCount := len(so.Items)
 	digestDiff(cur, st, next, limit, &so)
+	for _, t := range so.Transitions {
+		if slices.Contains(digestBuildTerminal, t.To) {
+			delete(next.Snapshot, t.key)
+		}
+	}
 	so.Returned += newCount
 	return so
 }

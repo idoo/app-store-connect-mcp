@@ -76,7 +76,7 @@
 |[`previews_upload`](#previews_upload)|W|none|Uploads one app preview video to a locale's preview set of the editable version, creating the set if needed; optional poster frame time code. Same checksum already present = no-op. Max 3 previews per set.|
 |[`screenshots_list`](#screenshots_list)|R|none|Screenshot and app preview sets per locale and display type for a version (default editable): ids, order, file names, checksums, delivery states, sizes, and coverage of required display types (empty locales fall back to the primary). thumbnails:true attaches up to 4 small images.|
 |[`screenshots_plan`](#screenshots_plan)|R|none|Diffs a local screenshot dir against the editable version: checks PNG/JPEG size and alpha, skips equal checksums, lists uploads, deletes (replace mode), reorders, problems. Returns plan_id for screenshots_sync. Display: <display> subdir, file-name hint or pixels.|
-|[`screenshots_sync`](#screenshots_sync)|D|plan|Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.|
+|[`screenshots_sync`](#screenshots_sync)|D|plan|Applies a screenshots_plan: same arguments plus its plan_id (required). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.|
 
 ## uploads
 
@@ -116,7 +116,7 @@
 
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
-|[`xcc_build_start`](#xcc_build_start)|W|none|Start a build run of a workflow (name or id) on a branch, tag or open pull request number; without a source Xcode Cloud uses the workflow's default. clean forces a clean build. Not idempotent: each call starts a new run.|
+|[`xcc_build_start`](#xcc_build_start)|W|flag|Start a build run of a workflow (name or id) on a branch, tag or open pull request number (default: the workflow's source). Preview first, then confirm:true; PR builds need a human, fork PRs also allow_fork_pr. Each confirm starts a new run.|
 |[`xcc_build_status`](#xcc_build_status)|R|none|Status of a build run (id, or latest of a workflow): progress, result, issue counts, actions, test summary, artifacts (URL host only unless include_urls). wait:true polls until complete (default 45 s, max 300 s), else still_processing.|
 |[`xcc_workflows_list`](#xcc_workflows_list)|R|none|Xcode Cloud products of the app (all apps when none is given or pinned) with their workflows: id, name, enabled, repository, start conditions summary and actions. Use the workflow name or id with xcc_build_start and xcc_build_status.|
 
@@ -149,7 +149,7 @@
 |---|---|---|---|
 |[`analytics_funnel_report`](#analytics_funnel_report)|R|none|Impressions → page views → downloads with conversion by source/territory, sessions, crashes, installs vs deletions; vs previous period with coverage and lag. Never creates requests: not_set_up points at analytics_setup.|
 |[`digest_summary`](#digest_summary)|R|none|What changed per app since last asked: new reviews, TestFlight feedback, version and review submission state changes, builds, a sales day-vs-week delta. Oldest unseen first; mark_seen advances per-source watermarks. Review/feedback text is untrusted.|
-|[`release_health_report`](#release_health_report)|R|none|Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy\|watch\|breach\|unknown (no production data); breach with an active phased release suggests pause.|
+|[`release_health_report`](#release_health_report)|R|none|Live (or given) version vs the previous one since its release instant: diagnostic signature deltas decide; TestFlight crashes, ratings (≥20 reviews per window), perf and analytics crashes are advisory. Verdict healthy\|watch\|breach\|unknown; pause only on a pausing breach.|
 
 ## Arguments
 
@@ -904,9 +904,11 @@ No arguments.
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
+|`allow_fork_pr`|boolean|||allow a pull request from another repository (still human-approved)|
 |`app`|string|||app used to find the workflow by name; default: pinned app|
 |`branch`|string|||branch name, e.g. main|
 |`clean`|boolean|||clean build (default: the workflow setting)|
+|`confirm`|boolean|||true after reviewing the preview|
 |`pull_request`|integer|||open pull request number|
 |`tag`|string|||tag name, e.g. v1.2.0|
 |`workflow`|string|yes||workflow name or id|

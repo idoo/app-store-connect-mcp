@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
@@ -114,6 +116,14 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 		}
 	}
 	summary := fmt.Sprintf("publish %d public App Store review replies", len(in.Replies))
+	var warnings []string
+	if links := replyLinks(in.Replies); len(links) > 0 {
+		q := make([]string, len(links))
+		for i, l := range links {
+			q[i] = fmt.Sprintf("%q", l)
+		}
+		warnings = []string{"Reply contains link/email: " + strings.Join(q, ", ") + " — confirm it is yours"}
+	}
 	irreversible := []string{"replies are public on the App Store immediately after Apple processes them"}
 	if replacing > 0 {
 		summary += fmt.Sprintf(" (%d replace existing responses)", replacing)
@@ -121,8 +131,12 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 	}
 	wctx, gate := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{
 		Summary: summary, Intended: previews, Affected: affected, Irreversible: irreversible, Untrusted: untrusted,
+		Warnings: warnings,
 	})
 	if gate != nil {
+		for _, w := range warnings {
+			gate.Warn(w)
+		}
 		return gate, nil
 	}
 
@@ -143,6 +157,24 @@ func reviewsReply(ctx context.Context, env *tool.Env, in replyIn) (*tool.Result,
 		data["app"] = appRef{ID: app.ID, Name: app.Name, BundleID: app.BundleID}
 	}
 	return tool.Batch(data, len(outcomes)-failed, 0, errs), nil
+}
+
+// linkRE matches URLs, email addresses and bare domain names (evil.example).
+var linkRE = regexp.MustCompile(`(?i)https?://\S+|[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+|\bwww\.\S+|\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}\b(?:/\S*)?`)
+
+// replyLinks returns the distinct links and emails in the reply bodies, so
+// the human confirms that text copied from a review isn't sent publicly.
+func replyLinks(replies []replyItem) []string {
+	var out []string
+	for _, r := range replies {
+		for _, m := range linkRE.FindAllString(r.Body, -1) {
+			m = strings.TrimRight(m, `.,;:!?)]}"'`)
+			if !slices.Contains(out, m) {
+				out = append(out, m)
+			}
+		}
+	}
+	return out
 }
 
 // postReply creates the response of one review. Apple's POST

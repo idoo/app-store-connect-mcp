@@ -235,7 +235,7 @@ func targetApps(ctx context.Context, env *tool.Env, ref tool.AppRef) ([]appRef, 
 	}
 	out := make([]appRef, 0, len(res.Data))
 	for _, a := range res.Data {
-		out = append(out, appRef{ID: a.ID, Name: a.Str("name"), BundleID: a.Str("bundleId")})
+		out = append(out, appRef{ID: a.ID, Name: a.Str("name"), BundleID: a.Str("bundleId")}) // trusted: the account's own app record, as tool.App.Name elsewhere
 	}
 	return out, nil
 }

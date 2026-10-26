@@ -121,6 +121,11 @@ func appinfoUpdate(ctx context.Context, env *tool.Env, in appinfoIn) (*tool.Resu
 	if !needInfo && !needVersion && in.ContentRights == "" && in.Accessibility == nil {
 		return nil, fmt.Errorf("%w: nothing to update; pass categories, age_rating, review, content_rights, copyright or accessibility", tool.ErrInvalidArgs)
 	}
+	if in.Review != nil && in.Review.ContactEmail != nil && *in.Review.ContactEmail != "" {
+		if err := tool.ValidEmail(*in.Review.ContactEmail); err != nil {
+			return nil, err
+		}
+	}
 	app, err := env.Resolve.App(ctx, in.App)
 	if err != nil {
 		return nil, err

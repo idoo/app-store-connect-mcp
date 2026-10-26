@@ -36,24 +36,24 @@ type repoOut struct {
 
 // workflowOut is a compact Xcode Cloud workflow.
 type workflowOut struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Enabled         bool     `json:"enabled"`
-	Locked          bool     `json:"locked,omitempty"`
-	Clean           bool     `json:"clean,omitempty"`
-	ProductID       string   `json:"product_id,omitempty"`
-	Repository      *repoOut `json:"repository,omitempty"`
-	StartConditions []string `json:"start_conditions"`
-	Actions         []string `json:"actions,omitempty"`
+	ID              string         `json:"id"`
+	Name            tool.Untrusted `json:"name"`
+	Enabled         bool           `json:"enabled"`
+	Locked          bool           `json:"locked,omitempty"`
+	Clean           bool           `json:"clean,omitempty"`
+	ProductID       string         `json:"product_id,omitempty"`
+	Repository      *repoOut       `json:"repository,omitempty"`
+	StartConditions []string       `json:"start_conditions"`
+	Actions         []string       `json:"actions,omitempty"`
 }
 
 // productOut is a compact Xcode Cloud product with its workflows.
 type productOut struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	Type      string        `json:"type,omitempty"`
-	AppID     string        `json:"app_id,omitempty"`
-	Workflows []workflowOut `json:"workflows"`
+	ID        string         `json:"id"`
+	Name      tool.Untrusted `json:"name"`
+	Type      string         `json:"type,omitempty"`
+	AppID     string         `json:"app_id,omitempty"`
+	Workflows []workflowOut  `json:"workflows"`
 }
 
 func indexIncluded(inc []tool.Resource) map[string]tool.Resource {
@@ -66,7 +66,7 @@ func indexIncluded(inc []tool.Resource) map[string]tool.Resource {
 
 // flattenWorkflow builds a workflowOut from a ciWorkflows resource.
 func flattenWorkflow(r tool.Resource, inc map[string]tool.Resource) workflowOut {
-	w := workflowOut{ID: r.ID, Name: r.Str("name"), ProductID: r.RelID("product"), StartConditions: startConditions(r)}
+	w := workflowOut{ID: r.ID, Name: r.Text("name"), ProductID: r.RelID("product"), StartConditions: startConditions(r)}
 	w.Enabled, _ = r.Bool("isEnabled")
 	w.Locked, _ = r.Bool("isLockedForEditing")
 	w.Clean, _ = r.Bool("clean")
@@ -245,9 +245,9 @@ func resolveWorkflow(ctx context.Context, env *tool.Env, app tool.AppRef, ref, n
 	var labels []string
 	for i, ws := range lists {
 		for _, w := range ws {
-			if ref == "" || strings.EqualFold(w.Name, ref) {
+			if ref == "" || strings.EqualFold(string(w.Name), ref) {
 				hits = append(hits, w)
-				labels = append(labels, w.Name+" ("+products[i].Str("name")+")")
+				labels = append(labels, fmt.Sprintf("%q (%q)", w.Name, products[i].Text("name")))
 			}
 		}
 	}

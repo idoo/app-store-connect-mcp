@@ -1,6 +1,7 @@
 package asc
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -72,5 +73,29 @@ func TestRedactBytesNoCopyWhenClean(t *testing.T) {
 	b := []byte(strings.Repeat("plain text ", 10))
 	if got := RedactBytes(b); &got[0] != &b[0] {
 		t.Fatal("clean input was copied")
+	}
+}
+
+// TestRedactPEMStaysInsideOneString is the IS-1 reproduction: a BEGIN marker
+// in review A and an END marker in review C must not erase review B.
+func TestRedactPEMStaysInsideOneString(t *testing.T) {
+	begin, end := "-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----"
+	doc := `[{"id":"a","body":"see ` + begin + ` lol"},` +
+		`{"id":"b","body":"Great app, five stars"},` +
+		`{"id":"c","body":"bye ` + end + `"},` +
+		`{"id":"d","body":"` + begin + `\nMIGTAgEAMBMGByqGSM49\n` + end + `"}]`
+	got := RedactBytes([]byte(doc))
+	if !json.Valid(got) {
+		t.Fatalf("redacted document is not valid JSON: %s", got)
+	}
+	var reviews []struct{ ID, Body string }
+	if err := json.Unmarshal(got, &reviews); err != nil {
+		t.Fatal(err)
+	}
+	if len(reviews) != 4 || reviews[1].Body != "Great app, five stars" {
+		t.Fatalf("review b damaged: %s", got)
+	}
+	if reviews[3].Body != redactedPEM {
+		t.Errorf("escaped PEM in one string not redacted: %q", reviews[3].Body)
 	}
 }

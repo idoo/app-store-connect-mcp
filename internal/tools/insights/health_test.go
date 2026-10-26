@@ -14,15 +14,32 @@ import (
 
 const healthAppID = "1000000002"
 
-// healthFixture describes one release health scenario.
+// healthFixture describes one release health scenario. The live version 1.1
+// was created 2026-10-10 (the default, approximate window start); 1.0 on
+// 2026-09-01.
 type healthFixture struct {
 	CurWeights, PrevWeights map[string]float64
 	Regressions             int
 	EmptyPerf               bool
-	Crashes                 int
+	// Crashes are TestFlight crashes dated after the window start;
+	// CrashesBefore are older ones on the same build.
+	Crashes, CrashesBefore  int
 	RatingsNow, RatingsPrev []int
 	Phased                  string
-	ExtraSignatures         int
+	// PhasedStart is the phased release startDate.
+	PhasedStart     string
+	ExtraSignatures int
+	// NoLive serves no READY_FOR_DISTRIBUTION version.
+	NoLive bool
+}
+
+// ratingsN repeats rating n times.
+func ratingsN(rating, n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = rating
+	}
+	return out
 }
 
 func jsonDoc(t testing.TB, data any, included ...map[string]any) string {
@@ -51,10 +68,15 @@ func installHealthFixture(t testing.TB, k *tooltest.Kit, f healthFixture) {
 	var inc []map[string]any
 	if f.Phased != "" {
 		curRels["appStoreVersionPhasedRelease"] = rel("appStoreVersionPhasedReleases", "pr1")
-		inc = append(inc, map[string]any{
-			"type": "appStoreVersionPhasedReleases", "id": "pr1",
-			"attributes": map[string]any{"phasedReleaseState": f.Phased, "currentDayNumber": 3},
-		})
+		attrs := map[string]any{"phasedReleaseState": f.Phased, "currentDayNumber": 3}
+		if f.PhasedStart != "" {
+			attrs["startDate"] = f.PhasedStart
+		}
+		inc = append(inc, map[string]any{"type": "appStoreVersionPhasedReleases", "id": "pr1", "attributes": attrs})
+	}
+	liveState := "READY_FOR_DISTRIBUTION"
+	if f.NoLive {
+		liveState = "PENDING_DEVELOPER_RELEASE"
 	}
 	versions := []map[string]any{
 		{
@@ -62,7 +84,7 @@ func installHealthFixture(t testing.TB, k *tooltest.Kit, f healthFixture) {
 			"relationships": map[string]any{"build": rel("builds", "b1")},
 		},
 		{
-			"type": "appStoreVersions", "id": "v2", "attributes": map[string]any{"versionString": "1.1", "appVersionState": "READY_FOR_DISTRIBUTION", "createdDate": "2026-10-10T00:00:00Z"},
+			"type": "appStoreVersions", "id": "v2", "attributes": map[string]any{"versionString": "1.1", "appVersionState": liveState, "createdDate": "2026-10-10T00:00:00Z"},
 			"relationships": curRels,
 		},
 	}
@@ -98,9 +120,13 @@ func installHealthFixture(t testing.TB, k *tooltest.Kit, f healthFixture) {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/perfPowerMetrics", http.StatusOK, string(pb))
 	crashes := []map[string]any{}
 	for i := range f.Crashes {
-		crashes = append(crashes, map[string]any{"type": "betaFeedbackCrashSubmissions", "id": fmt.Sprintf("c%d", i), "attributes": map[string]any{}})
+		crashes = append(crashes, map[string]any{"type": "betaFeedbackCrashSubmissions", "id": fmt.Sprintf("c%d", i), "attributes": map[string]any{"createdDate": "2026-10-15T00:00:00Z"}})
+	}
+	for i := range f.CrashesBefore {
+		crashes = append(crashes, map[string]any{"type": "betaFeedbackCrashSubmissions", "id": fmt.Sprintf("o%d", i), "attributes": map[string]any{"createdDate": "2026-10-01T00:00:00Z"}})
 	}
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/betaFeedbackCrashSubmissions", http.StatusOK, jsonDoc(t, crashes))
+	k.ASC.Handle(http.MethodGet, "/v1/reviewSubmissions", http.StatusOK, jsonDoc(t, []any{}))
 	reviews := []map[string]any{}
 	for i, r := range f.RatingsNow {
 		reviews = append(reviews, map[string]any{"type": "customerReviews", "id": fmt.Sprintf("n%d", i), "attributes": map[string]any{"rating": r, "createdDate": "2026-10-15T00:00:00Z"}})
@@ -137,6 +163,16 @@ func healthCall(t *testing.T, k *tooltest.Kit, args string) (*tool.Result, Healt
 	return res, tooltest.Decode[HealthReport](t, res)
 }
 
+// pauseNext reports whether res suggests release_phased pause.
+func pauseNext(res *tool.Result) bool {
+	for _, n := range res.Next {
+		if n.Tool == "release_phased" && n.Args["action"] == "pause" {
+			return true
+		}
+	}
+	return false
+}
+
 func TestReleaseHealthVerdicts(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -161,14 +197,9 @@ func TestReleaseHealthVerdicts(t *testing.T) {
 			if c.verdict != VerdictHealthy && len(out.Reasons) == 0 {
 				t.Error("no reasons")
 			}
-			pause := false
-			for _, n := range res.Next {
-				if n.Tool == "release_phased" {
-					pause = n.Args["action"] == "pause"
-				}
-			}
-			if pause != (c.verdict == VerdictBreach) {
-				t.Errorf("pause next = %v, next %+v", pause, res.Next)
+			// The breach comes from diagnostics, so it is pausing.
+			if p := pauseNext(res); p != (c.verdict == VerdictBreach) {
+				t.Errorf("pause next = %v, next %+v", p, res.Next)
 			}
 			if len(k.ASC.Mutations()) != 0 {
 				t.Errorf("mutations: %+v", k.ASC.Mutations())
@@ -181,12 +212,12 @@ func TestReleaseHealthUnknownWithoutProductionData(t *testing.T) {
 	k := tooltest.New(t).ReadOnly()
 	installHealthFixture(t, k, healthFixture{EmptyPerf: true, Crashes: 1, Phased: "ACTIVE"})
 	res, out := healthCall(t, k, `{"app":"Sail"}`)
-	if out.Verdict != VerdictUnknown || len(out.Reasons) == 0 || out.Reasons[0] != "no production data yet" {
+	if out.Verdict != VerdictUnknown || len(out.Reasons) == 0 || out.Reasons[0].Level != VerdictUnknown || out.Reasons[0].Source != SourceDiagnostics {
 		t.Fatalf("verdict %s reasons %v", out.Verdict, out.Reasons)
 	}
 	want := map[string]string{
-		"diagnostics": covNoData, "perf_power_metrics": covNoData, "analytics_crashes": covNotSetUp,
-		"testflight_crash_feedback": covMeasured, "ratings": covNoData,
+		SourceDiagnostics: covNoData, SourcePerf: covNoData, SourceAnalytics: covNotSetUp,
+		SourceTestFlight: covMeasured, SourceRatings: covNoData,
 	}
 	for src, st := range want {
 		if out.Coverage[src] != st {
@@ -196,15 +227,37 @@ func TestReleaseHealthUnknownWithoutProductionData(t *testing.T) {
 	setup := false
 	for _, n := range res.Next {
 		setup = setup || n.Tool == "analytics_setup"
-		if n.Tool == "release_phased" {
-			t.Errorf("pause suggested on unknown: %+v", n)
-		}
+	}
+	if pauseNext(res) {
+		t.Errorf("pause suggested on unknown: %+v", res.Next)
 	}
 	if !setup {
 		t.Errorf("no analytics_setup next: %+v", res.Next)
 	}
 	if len(k.ASC.Mutations()) != 0 {
 		t.Errorf("mutations: %+v", k.ASC.Mutations())
+	}
+}
+
+// Analytics crashes and perf metrics are informational: data from them alone
+// never makes the release measured.
+func TestReleaseHealthAnalyticsAndPerfNotProduction(t *testing.T) {
+	k := tooltest.New(t).ReadOnly()
+	installHealthFixture(t, k, healthFixture{Regressions: 3})
+	_, out := healthCall(t, k, `{"app":"Sail"}`)
+	if out.Coverage[SourcePerf] != covMeasured {
+		t.Fatalf("perf coverage %q", out.Coverage[SourcePerf])
+	}
+	if out.Verdict != VerdictUnknown {
+		t.Errorf("verdict %s, want unknown with only perf data; reasons %v", out.Verdict, out.Reasons)
+	}
+	for _, r := range out.Reasons {
+		if r.Source == SourcePerf && (r.Level != LevelInfo || r.Pausing) {
+			t.Errorf("perf reason not informational: %+v", r)
+		}
+	}
+	if len(out.ProductionSources) != 1 || out.ProductionSources[0] != SourceDiagnostics {
+		t.Errorf("production sources %v", out.ProductionSources)
 	}
 }
 
@@ -217,10 +270,8 @@ func TestReleaseHealthBreachPausedPhasedNoPauseNext(t *testing.T) {
 	if out.Verdict != VerdictBreach {
 		t.Fatalf("verdict %s", out.Verdict)
 	}
-	for _, n := range res.Next {
-		if n.Tool == "release_phased" {
-			t.Errorf("pause suggested for a paused release: %+v", n)
-		}
+	if pauseNext(res) {
+		t.Errorf("pause suggested for a paused release: %+v", res.Next)
 	}
 }
 
@@ -279,6 +330,7 @@ func TestReleaseHealthLargeSignaturesLinked(t *testing.T) {
 func TestEvaluateHealthTable(t *testing.T) {
 	i := func(n int) *int { return &n }
 	f := func(v float64) *float64 { return &v }
+	const n = MinReviewsPerWindow
 	for _, c := range []struct {
 		name string
 		s    HealthSignals
@@ -288,14 +340,15 @@ func TestEvaluateHealthTable(t *testing.T) {
 		{"new type", HealthSignals{Weights: map[string][2]float64{"HANGS": {1, 0}}}, VerdictWatch},
 		{"sig watch", HealthSignals{Weights: map[string][2]float64{"HANGS": {1.3, 1}}}, VerdictWatch},
 		{"sig breach", HealthSignals{Weights: map[string][2]float64{"HANGS": {2, 1}}}, VerdictBreach},
-		{"one regression", HealthSignals{Regressions: i(1)}, VerdictWatch},
-		{"two regressions", HealthSignals{Regressions: i(2)}, VerdictBreach},
+		{"regressions informational", HealthSignals{Regressions: i(5)}, VerdictHealthy},
 		{"crash watch", HealthSignals{CrashReports: i(3)}, VerdictWatch},
 		{"crash breach", HealthSignals{CrashReports: i(10)}, VerdictBreach},
-		{"rating only now", HealthSignals{RatingNow: f(1)}, VerdictHealthy},
-		{"rating watch", HealthSignals{RatingNow: f(4.5), RatingBefore: f(4.9)}, VerdictWatch},
-		{"rating breach", HealthSignals{RatingNow: f(3.5), RatingBefore: f(4.9)}, VerdictBreach},
-		{"breach wins", HealthSignals{CrashReports: i(3), Regressions: i(5)}, VerdictBreach},
+		{"rating only now", HealthSignals{RatingNow: f(1), RatingCountNow: n}, VerdictHealthy},
+		{"rating watch", HealthSignals{RatingNow: f(4.5), RatingBefore: f(4.9), RatingCountNow: n, RatingCountBefore: n}, VerdictWatch},
+		{"rating breach", HealthSignals{RatingNow: f(3.5), RatingBefore: f(4.9), RatingCountNow: n, RatingCountBefore: n}, VerdictBreach},
+		{"rating below floor", HealthSignals{RatingNow: f(1), RatingBefore: f(5), RatingCountNow: n - 1, RatingCountBefore: n}, VerdictHealthy},
+		{"rating approximate window", HealthSignals{RatingNow: f(1), RatingBefore: f(5), RatingCountNow: n, RatingCountBefore: n, ApproximateWindow: true}, VerdictHealthy},
+		{"breach wins", HealthSignals{CrashReports: i(3), Weights: map[string][2]float64{"HANGS": {5, 1}}}, VerdictBreach},
 	} {
 		if got, _ := EvaluateHealth(c.s, HealthThresholds{}); got != c.want {
 			t.Errorf("%s: %s, want %s", c.name, got, c.want)
@@ -303,5 +356,25 @@ func TestEvaluateHealthTable(t *testing.T) {
 	}
 	if got, _ := EvaluateHealth(HealthSignals{CrashReports: i(3)}, HealthThresholds{CrashWatch: 5, CrashBreach: 9}); got != VerdictHealthy {
 		t.Errorf("custom thresholds: %s", got)
+	}
+}
+
+func TestEvaluateHealthPausingOnlyDiagnostics(t *testing.T) {
+	i := func(n int) *int { return &n }
+	f := func(v float64) *float64 { return &v }
+	for _, c := range []struct {
+		name    string
+		s       HealthSignals
+		pausing bool
+	}{
+		{"diagnostics breach", HealthSignals{Weights: map[string][2]float64{"HANGS": {3, 1}}}, true},
+		{"diagnostics watch", HealthSignals{Weights: map[string][2]float64{"HANGS": {1.3, 1}}}, false},
+		{"testflight breach", HealthSignals{CrashReports: i(50)}, false},
+		{"ratings breach", HealthSignals{RatingNow: f(1), RatingBefore: f(5), RatingCountNow: 30, RatingCountBefore: 30}, false},
+	} {
+		v, rs := EvaluateHealth(c.s, HealthThresholds{})
+		if got := AnyPausing(rs); got != c.pausing {
+			t.Errorf("%s: verdict %s pausing %v, want %v (%+v)", c.name, v, got, c.pausing, rs)
+		}
 	}
 }

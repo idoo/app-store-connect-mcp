@@ -67,7 +67,7 @@ type bundleIDsListOut struct {
 type bundleRow struct {
 	ID           string                  `json:"id"`
 	Identifier   string                  `json:"identifier"`
-	Name         string                  `json:"name"`
+	Name         tool.Untrusted          `json:"name"`
 	Platform     string                  `json:"platform"`
 	SeedID       string                  `json:"seed_id,omitempty"`
 	Capabilities []string                `json:"capabilities"`
@@ -113,7 +113,7 @@ func bundleIDsList(ctx context.Context, env *tool.Env, in bundleIDsListIn) (*too
 	seeds := map[string]bool{}
 	for _, r := range res.Data {
 		b := flattenBundle(r, inc)
-		if needle != "" && !strings.Contains(strings.ToLower(b.Identifier), needle) && !strings.Contains(strings.ToLower(b.Name), needle) {
+		if needle != "" && !strings.Contains(strings.ToLower(b.Identifier), needle) && !strings.Contains(strings.ToLower(string(b.Name)), needle) {
 			continue
 		}
 		seeds[b.SeedID] = true

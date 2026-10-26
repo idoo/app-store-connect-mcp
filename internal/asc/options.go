@@ -66,7 +66,7 @@ type Options struct {
 	// Spec enriches error hints with valid enum values; optional.
 	Spec SpecHints
 	// FreeText returns the free-text attributes of a resource type for
-	// [tool.WrapUntrusted]; nil uses [tool.UntrustedFallback].
+	// [tool.WrapUntrusted], which always adds [tool.UntrustedFallback].
 	FreeText func(resourceType string) []string
 	// Clock defaults to the system clock.
 	Clock tool.Clock

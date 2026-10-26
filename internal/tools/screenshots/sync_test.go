@@ -3,6 +3,7 @@ package screenshots
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -36,6 +37,34 @@ func twoNewSets(t *testing.T, k *tooltest.Kit) {
 	write(t, k, "shots/de-DE/01.png", pngImage(t, 1290, 2796, false, 2))
 }
 
+// withPlan runs screenshots_plan with args and returns args plus its plan_id.
+func withPlan(t *testing.T, k *tooltest.Kit, args string) string {
+	t.Helper()
+	p := tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", args)))
+	if p.PlanID == "" {
+		t.Fatalf("plan %s has no plan_id: %+v", args, p)
+	}
+	return strings.TrimSuffix(args, "}") + fmt.Sprintf(`,"plan_id":%q}`, p.PlanID)
+}
+
+// CD-6: an additive sync without plan_id is refused before any request.
+func TestSyncWithoutPlanIDRefused(t *testing.T) {
+	k, _ := newKit(t)
+	twoNewSets(t, k)
+	for _, args := range []string{`{"dir":"shots","mode":"add"}`, `{"dir":"shots","mode":"replace"}`, `{"dir":"shots","plan_id":""}`} {
+		b := tooltest.MustFail(t, call(t, k, "screenshots_sync", args), "invalid_arguments")
+		if !strings.Contains(b.Message, "run screenshots_plan first") || len(b.Next) != 1 || b.Next[0].Tool != "screenshots_plan" {
+			t.Errorf("%s: body = %+v", args, b)
+		}
+	}
+	if n := len(k.ASC.Mutations()); n != 0 {
+		t.Fatalf("mutations = %v", mutations(k))
+	}
+	if len(k.Fetch.Calls) != 0 {
+		t.Fatalf("uploads = %v", k.Fetch.Calls)
+	}
+}
+
 func TestSyncAllFailIsOutcomeUnknownFirst(t *testing.T) {
 	k, f := newKit(t)
 	twoNewSets(t, k)
@@ -43,7 +72,7 @@ func TestSyncAllFailIsOutcomeUnknownFirst(t *testing.T) {
 		"loc-en": {Err: fmt.Errorf("%w: %w", tool.ErrOutcomeUnknown, &tool.APIError{Status: http.StatusInternalServerError})},
 		"loc-de": setConflict,
 	})
-	res := call(t, k, "screenshots_sync", `{"dir":"shots","mode":"add"}`)
+	res := call(t, k, "screenshots_sync", withPlan(t, k, `{"dir":"shots","mode":"add"}`))
 	if !res.IsError {
 		t.Fatalf("want error, got %s", tooltest.JSON(t, res.Data))
 	}
@@ -62,7 +91,7 @@ func TestSyncMixedIsPartialWithItemCode(t *testing.T) {
 	k, f := newKit(t)
 	twoNewSets(t, k)
 	failSetCreate(t, k, f, map[string]tooltest.Fixture{"loc-de": setConflict})
-	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots","mode":"add"}`))
+	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", withPlan(t, k, `{"dir":"shots","mode":"add"}`)))
 	out := tooltest.Decode[syncOut](t, res)
 	// The failed set creation plus its not-attempted upload.
 	if out.Status != "partial" || out.Uploaded != 1 || out.Failed != 2 {

@@ -56,18 +56,18 @@ func profileQuery(content bool) url.Values {
 
 // profileOut is one provisioning profile.
 type profileOut struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	Type             string `json:"type"`
-	State            string `json:"state"`
-	Platform         string `json:"platform,omitempty"`
-	UUID             string `json:"uuid,omitempty"`
-	BundleID         string `json:"bundle_id,omitempty"`
-	BundleIDRef      string `json:"bundle_id_ref,omitempty"`
-	ExpirationDate   string `json:"expiration_date,omitempty"`
-	DaysLeft         *int   `json:"days_left,omitempty"`
-	DeviceCount      int    `json:"device_count"`
-	CertificateCount int    `json:"certificate_count"`
+	ID               string         `json:"id"`
+	Name             tool.Untrusted `json:"name"`
+	Type             string         `json:"type"`
+	State            string         `json:"state"`
+	Platform         string         `json:"platform,omitempty"`
+	UUID             string         `json:"uuid,omitempty"`
+	BundleID         string         `json:"bundle_id,omitempty"`
+	BundleIDRef      string         `json:"bundle_id_ref,omitempty"`
+	ExpirationDate   string         `json:"expiration_date,omitempty"`
+	DaysLeft         *int           `json:"days_left,omitempty"`
+	DeviceCount      int            `json:"device_count"`
+	CertificateCount int            `json:"certificate_count"`
 	// CountsCapped means a count reached Apple's include limit (50) and is a
 	// lower bound.
 	CountsCapped bool   `json:"counts_capped,omitempty"`
@@ -79,7 +79,7 @@ type profileOut struct {
 // flattenProfile flattens a profiles resource with its included bundle ID.
 func flattenProfile(r tool.Resource, inc map[string]tool.Resource, now time.Time) profileOut {
 	p := profileOut{
-		ID: r.ID, Name: r.Str("name"), Type: r.Str("profileType"), State: r.Str("profileState"),
+		ID: r.ID, Name: r.Text("name"), Type: r.Str("profileType"), State: r.Str("profileState"),
 		Platform: r.Str("platform"), UUID: r.Str("uuid"), ExpirationDate: r.Str("expirationDate"),
 		BundleIDRef: r.RelID("bundleId"), Content: r.Str("profileContent"),
 		DeviceCount: len(r.RelIDs("devices")), certIDs: r.RelIDs("certificates"),

@@ -63,7 +63,7 @@ type offerOut struct {
 	Kind         string         `json:"kind"`
 	ID           string         `json:"id,omitempty"`
 	IDs          []string       `json:"ids,omitempty"`
-	Name         string         `json:"name,omitempty"`
+	Name         tool.Untrusted `json:"name,omitempty"`
 	Identifier   string         `json:"identifier,omitempty"`
 	Mode         string         `json:"mode,omitempty"`
 	Duration     string         `json:"duration,omitempty"`
@@ -273,9 +273,9 @@ func offerRow(kind string, r tool.Resource, inc map[string]tool.Resource) offerO
 			}
 		}
 	case offerKindPromo:
-		o.Name, o.Identifier = r.Str("name"), r.Str("offerCode")
+		o.Name, o.Identifier = r.Text("name"), r.Str("offerCode")
 	case offerKindWinBack:
-		o.Name, o.Identifier, o.Priority = r.Str("referenceName"), r.Str("offerId"), r.Str("priority")
+		o.Name, o.Identifier, o.Priority = r.Text("referenceName"), r.Str("offerId"), r.Str("priority")
 		o.Periods, _ = r.Int("periodCount")
 		o.Eligibility = map[string]any{}
 		for k, name := range map[string]string{
@@ -288,7 +288,7 @@ func offerRow(kind string, r tool.Resource, inc map[string]tool.Resource) offerO
 			}
 		}
 	case offerKindCode, offerKindIAPCode:
-		o.Name = r.Str("name")
+		o.Name = r.Text("name")
 		o.Eligibility = map[string]any{}
 		if v, ok := r.Attributes["customerEligibilities"]; ok && v != nil {
 			o.Eligibility["customers"] = v
@@ -576,7 +576,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		attrs["name"], attrs["offerCode"], attrs["numberOfPeriods"] = in.Name, in.ID, periods
 		sp = offerSpec{
 			path: "/v1/subscriptionPromotionalOffers", typ: "subscriptionPromotionalOffers", priceType: "subscriptionPromotionalOfferPrices",
-			match: func(r tool.Resource) bool { return r.Str("offerCode") == in.ID || r.Str("name") == in.Name },
+			match: func(r tool.Resource) bool { return r.Str("offerCode") == in.ID || r.Str("name") == in.Name }, // trusted: comparison only
 		}
 	case offerKindWinBack:
 		if err := offerFirstErr(need("name", in.Name), need("identifier", in.ID), need("start_date", in.StartDate)); err != nil {
@@ -597,7 +597,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		}
 		sp = offerSpec{
 			path: "/v1/winBackOffers", typ: "winBackOffers", priceType: "winBackOfferPrices",
-			match: func(r tool.Resource) bool { return r.Str("offerId") == in.ID || r.Str("referenceName") == in.Name },
+			match: func(r tool.Resource) bool { return r.Str("offerId") == in.ID || r.Str("referenceName") == in.Name }, // trusted: comparison only
 		}
 	case offerKindCode:
 		if err := offerFirstErr(need("name", in.Name), need("offer_eligibility", in.OfferEligibility)); err != nil {
@@ -617,7 +617,7 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		}
 		sp = offerSpec{
 			path: "/v1/subscriptionOfferCodes", typ: "subscriptionOfferCodes", priceType: "subscriptionOfferCodePrices",
-			match: func(r tool.Resource) bool { return r.Str("name") == in.Name },
+			match: func(r tool.Resource) bool { return r.Str("name") == in.Name }, // trusted: comparison only
 		}
 	default:
 		return nil, sp, tool.InvalidArgs("unknown kind %q", in.Kind)

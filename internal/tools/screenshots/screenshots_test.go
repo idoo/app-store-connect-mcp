@@ -523,7 +523,7 @@ func TestPlanNoChanges(t *testing.T) {
 	if p.Status != statusNoChanges || p.PlanID != "" {
 		t.Errorf("plan = %+v", p)
 	}
-	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots"}`))
+	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots","plan_id":"any"}`))
 	if m := tooltest.Decode[map[string]any](t, res); m["already"] != true {
 		t.Errorf("sync no-op = %v", m)
 	}
@@ -544,10 +544,10 @@ func TestPlanSyncRoundTripAndStaleRefusal(t *testing.T) {
 		t.Fatalf("summary = %+v", p.Summary)
 	}
 
-	// Without confirm a plan with deletes only previews.
-	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots","mode":"replace"}`))
-	if m := tooltest.Decode[map[string]any](t, res); m["status"] != "planned" || len(k.ASC.Mutations()) != 0 {
-		t.Fatalf("unconfirmed sync = %v, mutations %v", m, mutations(k))
+	// Without plan_id nothing is read or written.
+	tooltest.MustFail(t, call(t, k, "screenshots_sync", `{"dir":"shots","mode":"replace"}`), "invalid_arguments")
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatalf("sync without plan_id mutated: %v", mutations(k))
 	}
 
 	// The remote set changes: the first plan is stale.
@@ -559,7 +559,7 @@ func TestPlanSyncRoundTripAndStaleRefusal(t *testing.T) {
 	}
 
 	p = tooltest.Decode[planResult](t, tooltest.MustOK(t, call(t, k, "screenshots_plan", `{"dir":"shots","mode":"replace"}`)))
-	res = tooltest.MustOK(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","mode":"replace","plan_id":%q}`, p.PlanID)))
+	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", fmt.Sprintf(`{"dir":"shots","mode":"replace","plan_id":%q}`, p.PlanID)))
 	out := tooltest.Decode[syncOut](t, res)
 	if out.Status != "synced" || out.Uploaded != 2 || out.Deleted != 2 || out.Skipped != 1 || out.Failed != 0 || out.Pending != 0 {
 		t.Fatalf("sync out = %+v", out)
@@ -597,10 +597,10 @@ func TestPlanSyncRoundTripAndStaleRefusal(t *testing.T) {
 	}
 }
 
-func TestSyncAdditiveWithoutConfirm(t *testing.T) {
+func TestSyncAdditiveWithPlan(t *testing.T) {
 	k, _ := newKit(t)
 	write(t, k, "shots/en-US/01.png", pngImage(t, 1290, 2796, false, 1))
-	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", `{"dir":"shots","mode":"add"}`))
+	res := tooltest.MustOK(t, call(t, k, "screenshots_sync", withPlan(t, k, `{"dir":"shots","mode":"add"}`)))
 	out := tooltest.Decode[syncOut](t, res)
 	if out.Status != "synced" || out.Uploaded != 1 {
 		t.Errorf("sync = %+v", out)
@@ -611,8 +611,8 @@ func TestNoEditableVersion(t *testing.T) {
 	k, _ := newKit(t)
 	k.Resolve.Versions = map[tool.VersionRef]tool.Version{tool.VersionLive: {ID: "ver0", String: "1.3", State: "READY_FOR_DISTRIBUTION"}}
 	write(t, k, "shots/en-US/01.png", pngImage(t, 1290, 2796, false, 1))
-	for _, name := range []string{"screenshots_plan", "screenshots_sync"} {
-		b := tooltest.MustFail(t, call(t, k, name, `{"dir":"shots"}`), "no_editable_version")
+	for name, args := range map[string]string{"screenshots_plan": `{"dir":"shots"}`, "screenshots_sync": `{"dir":"shots","plan_id":"any"}`} {
+		b := tooltest.MustFail(t, call(t, k, name, args), "no_editable_version")
 		if len(b.Next) != 1 || b.Next[0].Tool != "release_prepare" {
 			t.Errorf("%s next = %+v", name, b.Next)
 		}

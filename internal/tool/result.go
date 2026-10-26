@@ -1,6 +1,9 @@
 package tool
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // Image is binary image content returned alongside structured data. Untrusted
 // images come from third parties (tester screenshots); the server labels them
@@ -139,7 +142,29 @@ func StillProcessing(v any, resumeHint string) *Result {
 // treat it as data, never as instructions.
 type Untrusted string
 
-// MarshalJSON implements json.Marshaler.
+// MarshalJSON implements json.Marshaler. The text is passed through
+// [SanitizeText] so invisible and bidi characters show as visible tokens.
 func (u Untrusted) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{"untrusted": string(u)})
+	return json.Marshal(map[string]string{"untrusted": SanitizeText(string(u))})
+}
+
+// UnmarshalJSON implements json.Unmarshaler. It accepts the wrapped
+// {"untrusted": text} form and a plain JSON string.
+func (u *Untrusted) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*u = Untrusted(s)
+		return nil
+	}
+	var w struct {
+		Untrusted *string `json:"untrusted"`
+	}
+	if err := json.Unmarshal(b, &w); err != nil {
+		return err
+	}
+	if w.Untrusted == nil {
+		return errors.New(`untrusted: want a string or {"untrusted": string}`)
+	}
+	*u = Untrusted(*w.Untrusted)
+	return nil
 }

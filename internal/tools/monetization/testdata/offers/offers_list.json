@@ -12,7 +12,9 @@
       {
         "id": "s1",
         "product_id": "se.jvcr.hjul.plus.year",
-        "name": "Yearly",
+        "name": {
+          "untrusted": "Yearly"
+        },
         "counts": {
           "intro": 3,
           "offer_code": 1,
@@ -52,7 +54,9 @@
           {
             "kind": "promotional",
             "id": "po1",
-            "name": "Winter",
+            "name": {
+              "untrusted": "Winter"
+            },
             "identifier": "winter",
             "mode": "PAY_UP_FRONT",
             "duration": "THREE_MONTHS",
@@ -62,7 +66,9 @@
           {
             "kind": "win_back",
             "id": "wb1",
-            "name": "Come back",
+            "name": {
+              "untrusted": "Come back"
+            },
             "identifier": "comeback",
             "mode": "PAY_AS_YOU_GO",
             "duration": "ONE_MONTH",
@@ -81,7 +87,9 @@
           {
             "kind": "offer_code",
             "id": "oc1",
-            "name": "Spring",
+            "name": {
+              "untrusted": "Spring"
+            },
             "mode": "FREE_TRIAL",
             "duration": "ONE_MONTH",
             "periods": 1,
