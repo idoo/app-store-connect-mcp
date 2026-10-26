@@ -78,7 +78,7 @@ func runGuard(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	fs.SetOutput(stderr)
 	profile := fs.String("profile", "", "profile to use")
 	appRef := fs.String("app", "", "app name, bundle id, SKU or id")
-	platform := fs.String("platform", "IOS", "IOS, MAC_OS, TV_OS or VISION_OS")
+	platform := fs.String("platform", "", "IOS, MAC_OS, TV_OS or VISION_OS (default: the platform the app is live on)")
 	version := fs.String("version", "", "version string (default: live)")
 	pause := fs.Bool("pause-on-breach", false, "pause an ACTIVE phased release on a pausing breach (needs writes)")
 	allowWrites := fs.Bool("allow-writes", false, "enable writes (only used by --pause-on-breach)")
@@ -116,7 +116,7 @@ func runGuard(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	out := guardOut{HealthReport: rep}
 	if *pause && rep.Verdict == insights.VerdictBreach {
 		if insights.AnyPausing(rep.Reasons) {
-			out.Pause = pausePhased(ctx, env, writes, in.Platform, rep, stderr)
+			out.Pause = pausePhased(ctx, env, writes, rep.Platform, rep, stderr)
 		} else {
 			out.Pause = logPause(stderr, &pauseOutcome{Action: "skipped", Reason: "breach has no pausing reason (TestFlight and ratings never pause)"})
 		}

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -167,9 +168,12 @@ func ranks(ctx context.Context, env *tool.Env, in ranksIn) (*tool.Result, error)
 	}
 	now := env.Clock.Now()
 	out := ranksOut{App: trackID, Action: action}
+	// apply replays this call's changes onto the freshly reloaded history.
+	var apply func(*asoHistory)
 	switch action {
 	case "untrack":
 		out.Untracked = h.untrack(keywords, countries)
+		apply = func(f *asoHistory) { f.untrack(keywords, countries) }
 	case "report":
 		out.Days = days
 		for _, p := range selectPairs(h.pairs(), keywords, countries) {
@@ -197,6 +201,7 @@ func ranks(ctx context.Context, env *tool.Env, in ranksIn) (*tool.Result, error)
 			return nil, err
 		}
 		h.track(pairs)
+		apply = func(f *asoHistory) { f.track(pairs) }
 		out.Days = days
 		pts, rows, note, err := measure(ctx, env, trackID, pairs, depth)
 		if err != nil {
@@ -207,7 +212,10 @@ func ranks(ctx context.Context, env *tool.Env, in ranksIn) (*tool.Result, error)
 		}
 		out.Measured, out.Remaining = len(pts), len(pairs)-len(rows)
 		out.Throttled = strings.HasPrefix(note, "throttled")
-		h.add(env.Clock.Now(), pts)
+		at := env.Clock.Now()
+		h.add(at, pts)
+		prevApply := apply
+		apply = func(f *asoHistory) { prevApply(f); f.add(at, pts) }
 		now = env.Clock.Now()
 		for _, r := range rows {
 			s := summarize(&h, asoPair{r.Keyword, r.Country}, now, days)
@@ -218,11 +226,14 @@ func ranks(ctx context.Context, env *tool.Env, in ranksIn) (*tool.Result, error)
 			res.Then(tool.NextStep{Tool: "store_ranks_report", Args: map[string]any{"action": "track", "app": key}})
 		}
 	}
-	if persist && action != "report" {
-		if err := env.State.Save(asoKind, key, &h); err != nil {
-			if action != "track" {
-				return nil, fmt.Errorf("save rank history: %w", err)
-			}
+	if persist && apply != nil {
+		saved, err := saveMerged(env, key, apply)
+		switch {
+		case err == nil:
+			h = saved
+		case action != "track":
+			return nil, fmt.Errorf("save rank history: %w", err)
+		default:
 			res.Warn("rank history not saved: " + err.Error())
 		}
 	}
@@ -241,6 +252,28 @@ func ranks(ctx context.Context, env *tool.Env, in ranksIn) (*tool.Result, error)
 		}
 	}
 	return res, nil
+}
+
+// historyLocks serializes reload→merge→save of one app's rank history within
+// this process.
+var historyLocks sync.Map // key → *sync.Mutex
+
+// saveMerged re-reads the stored history just before saving and applies only
+// this call's changes, so an overlapping call (in this or another process)
+// keeps the keywords and points it saved meanwhile. It returns what was saved.
+func saveMerged(env *tool.Env, key string, apply func(*asoHistory)) (asoHistory, error) {
+	mu, _ := historyLocks.LoadOrStore(key, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
+	var fresh asoHistory
+	if _, err := env.State.Load(asoKind, key, &fresh); err != nil {
+		return asoHistory{}, err
+	}
+	apply(&fresh)
+	if err := env.State.Save(asoKind, key, &fresh); err != nil {
+		return asoHistory{}, err
+	}
+	return fresh, nil
 }
 
 func capLookups(n int) error {

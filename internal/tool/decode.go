@@ -42,7 +42,9 @@ func decodeArgs(raw json.RawMessage, s *jsonschema.Schema, rs *jsonschema.Resolv
 // coerce replaces string values with their parsed JSON where the schema
 // expects an object, array, integer, number or boolean, recursively. Only
 // exact spellings convert ("3", "2.5", "true"); anything else stays a string
-// and fails validation. String-typed properties are never touched.
+// and fails validation. String-typed properties are never touched. A null
+// property the schema does not accept is dropped, so it behaves as omitted
+// (clients in strict mode send null for unset optionals).
 func coerce(s *jsonschema.Schema, v any) any {
 	if s == nil {
 		return v
@@ -55,11 +57,18 @@ func coerce(s *jsonschema.Schema, v any) any {
 	switch x := v.(type) {
 	case map[string]any:
 		for k, el := range x {
-			if ps := s.Properties[k]; ps != nil {
-				x[k] = coerce(ps, el)
-			} else if s.AdditionalProperties != nil {
-				x[k] = coerce(s.AdditionalProperties, el)
+			ps := s.Properties[k]
+			if ps == nil {
+				ps = s.AdditionalProperties
 			}
+			if ps == nil {
+				continue
+			}
+			if el == nil && !acceptsNull(ps) {
+				delete(x, k)
+				continue
+			}
+			x[k] = coerce(ps, el)
 		}
 	case []any:
 		for i, el := range x {
@@ -67,6 +76,11 @@ func coerce(s *jsonschema.Schema, v any) any {
 		}
 	}
 	return v
+}
+
+// acceptsNull reports whether s explicitly allows JSON null.
+func acceptsNull(s *jsonschema.Schema) bool {
+	return s.Type == "null" || slices.Contains(s.Types, "null")
 }
 
 // maxExactInt is the largest integer a float64 (how JSON numbers decode)

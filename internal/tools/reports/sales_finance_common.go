@@ -44,11 +44,43 @@ func requireVendor(env *tool.Env) (string, error) {
 	return v, nil
 }
 
-// isPending reports whether err is Apple's 404 "report not available yet".
-// Only 404 maps to pending; any other status is a real error.
-func isPending(err error) bool {
+// notFoundErr returns err as Apple's 404 (report not published, or no sales
+// for the date), or nil for any other error.
+func notFoundErr(err error) *tool.APIError {
 	var api *tool.APIError
-	return errors.As(err, &api) && api.Status == http.StatusNotFound
+	if errors.As(err, &api) && api.Status == http.StatusNotFound {
+		return api
+	}
+	return nil
+}
+
+// isNoSales reports whether a sales 404 for date means a zero-sales day
+// rather than an unpublished report: Apple says so in the detail, or the
+// daily report is older than yesterday (Pacific) and so must have been
+// published already.
+func isNoSales(api *tool.APIError, freq applemeta.Frequency, date string, now time.Time) bool {
+	if strings.Contains(strings.ToLower(api.Detail+" "+api.Title), "no sales") {
+		return true
+	}
+	yesterday := applemeta.PacificDay(now).AddDate(0, 0, -1).Format(time.DateOnly)
+	return freq == applemeta.Daily && date < yesterday
+}
+
+// vendorCause adds the wrong-vendor-number cause to a sales/finance 403 or
+// 5xx hint, keeping the existing cause: Apple answers a vendor number that
+// is not this account's with exactly those statuses.
+func vendorCause(err error, vendor string) error {
+	var api *tool.APIError
+	if !errors.As(err, &api) || (api.Status != http.StatusForbidden && api.Status < 500) {
+		return err
+	}
+	cause := "or the vendor number " + vendor + " is not this account's: check App Store Connect → Payments and Financial Reports"
+	if api.Hint == "" {
+		api.Hint = cause
+	} else {
+		api.Hint += "; " + cause
+	}
+	return err
 }
 
 // salesQuery builds the /v1/salesReports filters for one report.
@@ -74,40 +106,45 @@ func financeQuery(vendor string, rt applemeta.ReportType, region, month string) 
 }
 
 // download fetches one gzip report and decodes it. A 404 returns
-// (nil, true, nil): the report is not published yet.
-func download(ctx context.Context, env *tool.Env, path string, q url.Values) (*reports.Table, bool, error) {
+// (nil, apiErr, nil): the report is not published (or has no sales).
+func download(ctx context.Context, env *tool.Env, path string, q url.Values) (*reports.Table, *tool.APIError, error) {
 	body, _, err := env.ASC.Download(ctx, tool.Request{Method: http.MethodGet, Path: path, Query: q, Accept: gzipAccept})
 	if err != nil {
-		if isPending(err) {
-			return nil, true, nil
+		if nf := notFoundErr(err); nf != nil {
+			return nil, nf, nil
 		}
-		return nil, false, fmt.Errorf("download %s %s: %w", path, q.Get("filter[reportDate]"), err)
+		err = vendorCause(err, q.Get("filter[vendorNumber]"))
+		return nil, nil, fmt.Errorf("download %s %s: %w", path, q.Get("filter[reportDate]"), err)
 	}
 	t, err := reports.Decode(bytes.NewReader(body), reports.DefaultLimits())
 	if err != nil {
-		return nil, false, fmt.Errorf("decode %s %s: %w", path, q.Get("filter[reportDate]"), err)
+		return nil, nil, fmt.Errorf("decode %s %s: %w", path, q.Get("filter[reportDate]"), err)
 	}
-	return t, false, nil
+	return t, nil, nil
 }
 
-// dayTable is the outcome of one report date in a fan-out.
+// dayTable is the outcome of one report date in a fan-out. Pending means
+// not published yet; NoSales means a published day without sales (no table).
 type dayTable struct {
 	Date    string
 	Table   *reports.Table
 	Pending bool
+	NoSales bool
 }
 
 // fetchSalesDates downloads one sales report per date with bounded
-// concurrency. Results keep the order of dates; 404s are marked pending. The
-// first real error cancels the rest.
+// concurrency. Results keep the order of dates; 404s are marked no-sales
+// (see isNoSales) or pending. The first real error cancels the rest.
 func fetchSalesDates(ctx context.Context, env *tool.Env, vendor string, rs applemeta.ReportSpec, subType string, freq applemeta.Frequency, dates []string) ([]dayTable, error) {
 	out := make([]dayTable, len(dates))
+	now := env.Clock.Now()
 	err := tool.Parallel(ctx, reportFetchConcurrency, dates, func(ctx context.Context, i int, d string) error {
-		t, pending, err := download(ctx, env, "/v1/salesReports", salesQuery(vendor, rs, subType, freq, d))
+		t, nf, err := download(ctx, env, "/v1/salesReports", salesQuery(vendor, rs, subType, freq, d))
 		if err != nil {
 			return err
 		}
-		out[i] = dayTable{Date: d, Table: t, Pending: pending}
+		noSales := nf != nil && isNoSales(nf, freq, d, now)
+		out[i] = dayTable{Date: d, Table: t, Pending: nf != nil && !noSales, NoSales: noSales}
 		return nil
 	})
 	if err != nil {

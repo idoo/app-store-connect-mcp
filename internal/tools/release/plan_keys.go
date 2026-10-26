@@ -133,6 +133,20 @@ type releaseState struct {
 // fingerprint hashes the state.
 func (s releaseState) fingerprint() (string, error) { return tool.Fingerprint(s) }
 
+// submitFingerprint is the state a release_submit plan is bound to: the
+// release state plus the first-time products the submit attaches
+// automatically (readyProducts), so a product turning ready after the
+// preview makes the plan stale instead of joining the submission unseen.
+func submitFingerprint(s releaseState, autoAttached []string) (string, error) {
+	if len(autoAttached) == 0 {
+		return s.fingerprint()
+	}
+	return tool.Fingerprint(struct {
+		State    releaseState `json:"state"`
+		Products []string     `json:"auto_attached"`
+	}{s, autoAttached})
+}
+
 // versionDetail is one App Store version with its included resources.
 type versionDetail struct {
 	Version  tool.Resource

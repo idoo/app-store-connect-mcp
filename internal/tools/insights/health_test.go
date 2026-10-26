@@ -208,6 +208,39 @@ func TestReleaseHealthVerdicts(t *testing.T) {
 	}
 }
 
+// A macOS-only app and a multi-platform app whose only live version is on the
+// Mac are measured on MAC_OS, and the pause step targets MAC_OS.
+func TestReleaseHealthInfersPlatform(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		platforms []tool.Platform
+	}{
+		{"mac_only", []tool.Platform{tool.MacOS}},
+		{"mac_live_only", []tool.Platform{tool.IOS, tool.MacOS}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			k := tooltest.New(t).ReadOnly()
+			k.Env.Artifacts = &funnelArtifacts{puts: map[string][]byte{}}
+			k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions?filter[platform]=IOS", http.StatusOK, jsonDoc(t, []any{}))
+			installHealthFixture(t, k, breachFixture)
+			k.Resolve.Apps[0].Platforms = c.platforms
+			res, out := healthCall(t, k, `{"app":"Sail"}`)
+			if out.Platform != tool.MacOS || out.Version != "1.1" || out.Verdict != VerdictBreach {
+				t.Fatalf("platform %s version %q verdict %s; reasons %v", out.Platform, out.Version, out.Verdict, out.Reasons)
+			}
+			found := false
+			for _, n := range res.Next {
+				if n.Tool == "release_phased" {
+					found = n.Args["platform"] == "MAC_OS"
+				}
+			}
+			if !found {
+				t.Errorf("pause step not on MAC_OS: %+v", res.Next)
+			}
+		})
+	}
+}
+
 func TestReleaseHealthUnknownWithoutProductionData(t *testing.T) {
 	k := tooltest.New(t).ReadOnly()
 	installHealthFixture(t, k, healthFixture{EmptyPerf: true, Crashes: 1, Phased: "ACTIVE"})

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/reports"
@@ -54,12 +55,13 @@ type section struct {
 
 // HealthReport is the output of release_health_report.
 type HealthReport struct {
-	App       tool.App `json:"app"`
-	Version   string   `json:"version"`
-	VersionID string   `json:"version_id"`
-	Previous  string   `json:"previous_version,omitempty"`
-	Verdict   string   `json:"verdict"`
-	Reasons   []Reason `json:"reasons,omitempty"`
+	App       tool.App      `json:"app"`
+	Platform  tool.Platform `json:"platform"`
+	Version   string        `json:"version"`
+	VersionID string        `json:"version_id"`
+	Previous  string        `json:"previous_version,omitempty"`
+	Verdict   string        `json:"verdict"`
+	Reasons   []Reason      `json:"reasons,omitempty"`
 	// WindowStart is the release instant every source is measured from;
 	// WindowStartSource names where it came from and WindowApproximate is
 	// true when it is not the real release instant.
@@ -129,7 +131,7 @@ func healthReport(ctx context.Context, env *tool.Env, in HealthIn) (*tool.Result
 	}
 	if rep.Verdict == VerdictBreach && AnyPausing(rep.Reasons) && rep.Phased != nil && rep.Phased.State == "ACTIVE" {
 		res.Then(tool.NextStep{Tool: "release_phased", Args: map[string]any{
-			"app": rep.App.ID, "platform": string(platformOr(in.Platform)), "version": rep.Version, "action": "pause",
+			"app": rep.App.ID, "platform": string(rep.Platform), "version": rep.Version, "action": "pause",
 		}})
 	}
 	if err := linkSignatures(ctx, env, res, rep); err != nil {
@@ -138,11 +140,29 @@ func healthReport(ctx context.Context, env *tool.Env, in HealthIn) (*tool.Result
 	return res, nil
 }
 
-func platformOr(p tool.Platform) tool.Platform {
-	if p == "" {
-		return tool.IOS
+// healthPlatforms lists the platforms to try: the given one only, otherwise
+// the app's default platform first and then its other platforms, so a
+// macOS-only (or Mac-live) app is not reported as "no live version on IOS".
+func healthPlatforms(app tool.App, want tool.Platform) []tool.Platform {
+	first := app.Platform(want)
+	out := []tool.Platform{first}
+	if want != "" {
+		return out
 	}
-	return p
+	for _, p := range app.Platforms {
+		if p != first {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func platformList(ps []tool.Platform) string {
+	s := make([]string, len(ps))
+	for i, p := range ps {
+		s[i] = string(p)
+	}
+	return strings.Join(s, "/")
 }
 
 // errNoLiveVersion means the platform has no version on the store.
@@ -155,15 +175,27 @@ func RunHealth(ctx context.Context, env *tool.Env, in HealthIn) (*HealthReport, 
 	if err != nil {
 		return nil, err
 	}
-	platform := platformOr(in.Platform)
+	platforms := healthPlatforms(app, in.Platform)
+	platform := platforms[0]
 	rep := &HealthReport{
 		App: app, Thresholds: in.Thresholds.withDefaults(),
 		ProductionSources: productionSources, InformationalSources: informationalSources,
 	}
 	cur, prev, inc, err := healthVersions(ctx, env, app.ID, platform, in.Version)
+	for _, p := range platforms[1:] {
+		if !errors.Is(err, errNoLiveVersion) {
+			break
+		}
+		platform = p
+		cur, prev, inc, err = healthVersions(ctx, env, app.ID, platform, in.Version)
+	}
+	if errors.Is(err, errNoLiveVersion) {
+		platform = platforms[0]
+	}
+	rep.Platform = platform
 	if errors.Is(err, errNoLiveVersion) {
 		rep.Verdict = VerdictUnknown
-		rep.Reasons = []Reason{{Level: VerdictUnknown, Source: SourceVersion, Message: "no live version on " + string(platform)}}
+		rep.Reasons = []Reason{{Level: VerdictUnknown, Source: SourceVersion, Message: "no live version on " + platformList(platforms)}}
 		rep.Coverage = coverageOf(rep)
 		return rep, nil
 	}

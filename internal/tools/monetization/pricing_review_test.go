@@ -175,6 +175,46 @@ func TestPricingAppResetManualPrices(t *testing.T) {
 		`{"kind":"subscription","product_id":"x","price":"1","reset_manual_prices":true}`), "invalid_arguments")
 }
 
+// A schedule rewrite re-posts manual prices of untouched territories with
+// their dates (a temporary SWE price keeps its end, a future DNK price
+// survives) and names a future row it cannot carry (the base's own).
+func TestPricingAppCarriesManualDatesAndNamesDropped(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appPriceSchedule", http.StatusOK,
+		`{"data":{"type":"appPriceSchedules","id":"sched1","relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}},"included":[`+prcTerr("USA", "USD")+`]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/automaticPrices", http.StatusOK, jsonapiDoc(
+		`[`+prcAppRow("ap1", "pGBR099", "GBR", false)+`]`, prcPt("appPricePoints", "pGBR099", "GBR", "0.99"), prcTerr("GBR", "GBP")))
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appPricePoints", http.StatusOK, jsonapiDoc(
+		`[`+prcPt("appPricePoints", "pUSA499", "USA", "4.99")+`]`, prcTerr("USA", "USD")))
+	k.ASC.Handle(http.MethodGet, "/v3/appPricePoints/{id}/equalizations", http.StatusOK, jsonapiDoc(
+		`[`+prcPt("appPricePoints", "pGBR499", "GBR", "4.99")+`]`, prcTerr("GBR", "GBP")))
+	swe := strings.Replace(prcAppRow("mp2", "pSWE10", "SWE", true), `"endDate":null`, `"endDate":"2099-11-30"`, 1)
+	k.ASC.Handle(http.MethodGet, "/v1/appPriceSchedules/{id}/manualPrices", http.StatusOK, jsonapiDoc(
+		`[`+prcAppRow("mp1", "pUSA099", "USA", true)+`,`+swe+`,`+
+			prcRow("appPrices", "mp3", "appPricePoint", "appPricePoints", "pDNK70", "DNK", "2099-01-01", true)+`,`+
+			prcRow("appPrices", "mp4", "appPricePoint", "appPricePoints", "pUSA599", "USA", "2099-06-01", true)+`]`,
+		prcPt("appPricePoints", "pUSA099", "USA", "0.99"), prcPt("appPricePoints", "pSWE10", "SWE", "10.00"),
+		prcPt("appPricePoints", "pDNK70", "DNK", "70.00"), prcPt("appPricePoints", "pUSA599", "USA", "5.99"),
+		prcTerr("USA", "USD"), prcTerr("SWE", "SEK"), prcTerr("DNK", "DKK")))
+	k.ASC.Handle(http.MethodPost, "/v1/appPriceSchedules", http.StatusCreated, `{"data":{"type":"appPriceSchedules","id":"sched2"}}`)
+	_, res := prcPlanThenApply(t, k, `{"price":"4.99"}`)
+	tooltest.MustOK(t, res)
+	var rows []string
+	for _, inc := range prcIncluded(t, k.ASC.Mutations()[0]) {
+		a := inc["attributes"].(map[string]any)
+		rows = append(rows, prcRelOf(inc, "appPricePoint")+" "+tooltest.JSON(t, a["startDate"])+"→"+tooltest.JSON(t, a["endDate"]))
+	}
+	equalLines(t, rows, []string{
+		`appPricePoints/pUSA499 null→null`,
+		`appPricePoints/pDNK70 "2099-01-01"→null`,
+		`appPricePoints/pSWE10 null→"2099-11-30"`,
+	})
+	irr := strings.Join(k.Plans.Proposed[0].Irreversible, "\n")
+	if !strings.Contains(irr, "USA 5.99 USD from 2099-06-01") || strings.Contains(irr, "DNK") {
+		t.Fatalf("irreversible = %s", irr)
+	}
+}
+
 // AgentUX#7a: products mode returns each product's price in every
 // requested territory, and says where there is none.
 func TestPricingGetProductsAllRequestedTerritories(t *testing.T) {

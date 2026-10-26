@@ -247,3 +247,44 @@ func TestRanksMeta(t *testing.T) {
 		t.Fatalf("meta = %+v (%d chars)", m, len(m.Description))
 	}
 }
+
+// racingStore lets another writer save right after this call's first Load,
+// as an overlapping store_ranks_report call (or process) would.
+type racingStore struct {
+	tool.StateStore
+	once func()
+}
+
+func (s *racingStore) Load(kind, key string, v any) (bool, error) {
+	ok, err := s.StateStore.Load(kind, key, v)
+	if s.once != nil {
+		f := s.once
+		s.once = nil
+		f()
+	}
+	return ok, err
+}
+
+func TestRanksTrackKeepsConcurrentWrites(t *testing.T) {
+	k, _ := ranksKit(t)
+	k.Fetch.Handle(http.MethodGet, "https://itunes.apple.com/lookup?bundleId=se.jvcr.hjul&country=us&entity=software", http.StatusOK, results(hjul))
+	k.Fetch.Handle(http.MethodGet, searchURL("alpha", "us", 100), http.StatusOK, results(hjul))
+	inner := k.Env.State
+	k.Env.State = &racingStore{StateStore: inner, once: func() {
+		other := asoHistory{
+			Tracked: []asoPair{{"beta", "us"}},
+			Points:  []asoPoint{{T: k.Clock.Now().Unix(), K: "beta", C: "us", R: 7, D: 100}},
+		}
+		if err := inner.Save(asoKind, "1234567890", &other); err != nil {
+			t.Error(err)
+		}
+	}}
+	tooltest.MustOK(t, tooltest.Call(t, ranksTool(t), k.Env, `{"app":"se.jvcr.hjul","keywords":["alpha"],"countries":["us"]}`))
+	var h asoHistory
+	if _, err := inner.Load(asoKind, "1234567890", &h); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Tracked) != 2 || len(h.Points) != 2 {
+		t.Fatalf("concurrent keyword lost: %+v", h)
+	}
+}

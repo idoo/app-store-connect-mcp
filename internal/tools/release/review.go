@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -56,6 +57,78 @@ type reviewStatusOut struct {
 	ResolutionCenter string                `json:"resolution_center"`
 	Polls            int                   `json:"polls,omitempty"`
 	WaitedSeconds    int                   `json:"waited_seconds,omitempty"`
+	// OtherPlatforms lists open or rejected submissions on the app's other
+	// platforms when the platform was inferred, so a Mac rejection is not
+	// hidden behind an empty iOS history.
+	OtherPlatforms []otherSubmission `json:"other_platforms,omitempty"`
+}
+
+// otherSubmission is the newest open or rejected review submission on a
+// platform release_review_status did not inspect.
+type otherSubmission struct {
+	Platform     string `json:"platform"`
+	Submission   string `json:"submission"`
+	State        string `json:"state"`
+	Version      string `json:"version,omitempty"`
+	VersionState string `json:"version_state,omitempty"`
+}
+
+// closedSubmissionStates are review submission states with nothing left to act on.
+var closedSubmissionStates = []string{"COMPLETE", "COMPLETING", "CANCELING"}
+
+// otherPlatformSubmissions returns, per other platform of app, its newest
+// review submission when it is still open or its version was rejected.
+func otherPlatformSubmissions(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform) ([]otherSubmission, error) {
+	var others []string
+	for _, p := range app.Platforms {
+		if p != platform {
+			others = append(others, string(p))
+		}
+	}
+	if len(others) == 0 {
+		return nil, nil
+	}
+	resp, err := env.ASC.Get(ctx, "/v1/reviewSubmissions", url.Values{
+		"filter[app]":               {app.ID},
+		"filter[platform]":          {strings.Join(others, ",")},
+		"include":                   {"appStoreVersionForReview"},
+		"fields[reviewSubmissions]": {"platform,state,submittedDate,appStoreVersionForReview"},
+		"fields[appStoreVersions]":  {"versionString,appVersionState"},
+		"limit":                     {"50"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list other platforms' review submissions: %w", err)
+	}
+	versions := map[string]tool.Resource{}
+	for _, r := range resp.Included {
+		if r.Type == "appStoreVersions" {
+			versions[r.ID] = r
+		}
+	}
+	newest := map[string]tool.Resource{}
+	for _, s := range resp.Data {
+		p := s.Str("platform")
+		cur, ok := newest[p]
+		// Unsent drafts (no submittedDate) are the newest.
+		if !ok || (s.Str("submittedDate") == "" && cur.Str("submittedDate") != "") ||
+			(cur.Str("submittedDate") != "" && s.Str("submittedDate") > cur.Str("submittedDate")) {
+			newest[p] = s
+		}
+	}
+	var out []otherSubmission
+	for _, p := range others {
+		s, ok := newest[p]
+		if !ok {
+			continue
+		}
+		v := versions[s.RelID("appStoreVersionForReview")]
+		o := otherSubmission{Platform: p, Submission: s.ID, State: s.Str("state"), Version: v.Str("versionString"), VersionState: v.Str("appVersionState")}
+		if slices.Contains(closedSubmissionStates, o.State) && !slices.Contains(rejectedVersionStates, o.VersionState) {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out, nil
 }
 
 // Review wait bounds.
@@ -125,10 +198,23 @@ func releaseReviewStatus(ctx context.Context, env *tool.Env, in reviewStatusIn) 
 			}
 		}
 	}
-	if out.Current == nil {
-		return tool.OK(out).Then(statusNext(app, platform, "", nil)), nil
+	var otherErr error
+	if in.Platform == "" && len(app.Platforms) > 1 {
+		out.OtherPlatforms, otherErr = otherPlatformSubmissions(ctx, env, app, platform)
 	}
-	return tool.OK(out).Then(reviewNext(app, platform, out.Current)...), nil
+	var res *tool.Result
+	if out.Current == nil {
+		res = tool.OK(out).Then(statusNext(app, platform, "", nil))
+	} else {
+		res = tool.OK(out).Then(reviewNext(app, platform, out.Current)...)
+	}
+	if otherErr != nil {
+		res.Warn("other platforms not checked: " + otherErr.Error())
+	}
+	for _, o := range out.OtherPlatforms {
+		res.Then(tool.NextStep{Tool: "release_review_status", Args: map[string]any{"app": app.ID, "platform": o.Platform}})
+	}
+	return res, nil
 }
 
 // loadReviewStatus reads the newest limit submissions; the newest is

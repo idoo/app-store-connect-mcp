@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -80,7 +81,16 @@ type previewBody struct {
 // A confirm the human did not approve is refused with [ErrPreviewRequired]
 // unless a preview of the same arguments came first (single use).
 func RequireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) (context.Context, *Result) {
-	return requireConfirm(ctx, env, confirm, p, false)
+	return requireConfirm(ctx, env, confirm, nil, p, false)
+}
+
+// RequireConfirmTarget is [RequireConfirm] for tools whose arguments resolve
+// to a target that can change between preview and confirm (refs like
+// "latest", the open submission and its state). target is bound into the
+// confirmation with the args, so a confirm whose target resolves differently
+// from the previewed one is refused and needs a new preview.
+func RequireConfirmTarget(ctx context.Context, env *Env, confirm bool, target any, p PlanPreview) (context.Context, *Result) {
+	return requireConfirm(ctx, env, confirm, target, p, false)
 }
 
 // RequireHumanConfirm is [RequireConfirm] with human approval forced for this
@@ -89,19 +99,30 @@ func RequireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) 
 // other branches proceed via [Unconfirmed]. Without elicitation it is refused
 // unless the profile sets AllowNoElicit.
 func RequireHumanConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview) (context.Context, *Result) {
-	return requireConfirm(ctx, env, confirm, p, true)
+	return requireConfirm(ctx, env, confirm, nil, p, true)
 }
 
-func requireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview, human bool) (context.Context, *Result) {
+func requireConfirm(ctx context.Context, env *Env, confirm bool, target any, p PlanPreview, human bool) (context.Context, *Result) {
 	c, res := gateCall(ctx, env, ConfirmByFlag)
 	if res != nil {
 		return nil, res
 	}
 	human = human || c.meta.RequireHuman
+	bound := any(c.args)
+	if target != nil {
+		fp, err := Fingerprint(target)
+		if err != nil {
+			return nil, Fail(err)
+		}
+		m := make(map[string]any, len(c.args)+1)
+		maps.Copy(m, c.args)
+		m["_target"] = fp
+		bound = m
+	}
 	if !confirm && !env.NoConfirm {
 		// Without a plan store the preview is still returned; the confirm
 		// then fails closed in Claim unless a human approves.
-		_, _ = env.Plans.Propose(ctx, c.meta.Name, c.args, FlagFingerprint, p)
+		_, _ = env.Plans.Propose(ctx, c.meta.Name, bound, FlagFingerprint, p)
 		return nil, OK(previewBody{
 			Status:  ErrNeedsConfirm.Code,
 			Preview: p,
@@ -112,8 +133,11 @@ func requireConfirm(ctx context.Context, env *Env, confirm bool, p PlanPreview, 
 		return nil, res
 	}
 	if c.approvedBy == ApprovedAgent && !env.NoConfirm {
-		if err := env.Plans.Claim(ctx, c.meta.Name, c.args); err != nil {
+		if err := env.Plans.Claim(ctx, c.meta.Name, bound); err != nil {
 			c.approvedBy = ""
+			if target != nil {
+				err = fmt.Errorf("%w; or the target changed since the preview, now: %s", err, SanitizeLine(p.Summary, 200))
+			}
 			return nil, Fail(fmt.Errorf("%s: %w", c.meta.Name, err))
 		}
 	}

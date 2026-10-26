@@ -61,22 +61,28 @@ func TestReleaseStatusLibraryBlockerAndWarning(t *testing.T) {
 }
 
 // A set screenshot and the placement of the same asset are one record:
-// counted and reported once (via the set), and library_plan is suggested.
+// counted and reported once (via the set). library_plan is suggested only
+// when the screenshots check needs work, with a hint that it needs dir.
 func TestReleaseStatusDedupesSetAndPlacement(t *testing.T) {
+	isLibraryPlan := func(n tool.NextStep) bool { return n.Tool == "library_plan" }
 	f := readyFixture()
 	f.library = placementOf(t, "s-loc0", "ASSET_PROCESSING") // mirrors set screenshot s-loc0 (COMPLETE)
 	out, res := call(t, setup(t, f), `{"app":"Hjul"}`)
 	if c := checkByID(t, out, "screenshots"); c.Status != statusOK || len(c.Items) != 0 {
 		t.Errorf("same-id placement reported again: %+v", c)
 	}
-	if !slices.ContainsFunc(res.Next, func(n tool.NextStep) bool { return n.Tool == "library_plan" }) {
-		t.Errorf("next = %+v, want library_plan", res.Next)
+	if slices.ContainsFunc(res.Next, isLibraryPlan) {
+		t.Errorf("library_plan suggested with screenshots ok: %+v", res.Next)
 	}
 
 	f.library = placementOf(t, "img-other", "ASSET_PROCESSING") // a distinct asset still counts
-	out, _ = call(t, setup(t, f), `{"app":"Hjul"}`)
+	out, res = call(t, setup(t, f), `{"app":"Hjul"}`)
 	if c := checkByID(t, out, "screenshots"); c.Status != statusWarn {
 		t.Errorf("distinct processing placement: %+v", c)
+	}
+	if !slices.ContainsFunc(res.Next, isLibraryPlan) ||
+		!slices.ContainsFunc(res.Meta.Warnings, func(w string) bool { return strings.Contains(w, "library_plan with dir") }) {
+		t.Errorf("next = %+v warnings = %v, want library_plan with a dir hint", res.Next, res.Meta.Warnings)
 	}
 
 	f.library = nil

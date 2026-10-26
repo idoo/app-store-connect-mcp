@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -75,6 +76,32 @@ type wantedItem struct {
 	// when Target is empty.
 	Create string `json:"-"`
 	Action string `json:"action"`
+	// Outcome is set when a submit stops part-way: done, outcome_unknown,
+	// error or not_attempted.
+	Outcome string `json:"outcome,omitempty"`
+}
+
+// submitStep is the step a partial release_submit stopped at; the error
+// itself is the result's top-level error body.
+type submitStep struct {
+	Step    string `json:"step"`
+	Outcome string `json:"outcome"` // outcome_unknown|error
+}
+
+// stepOutcome is "outcome_unknown" when a failed write may have been applied
+// (timeout, 5xx) and "error" otherwise.
+func stepOutcome(err error) string {
+	if errors.Is(err, tool.ErrOutcomeUnknown) {
+		return "outcome_unknown"
+	}
+	return "error"
+}
+
+// submitPartial is the error data of a release_submit that failed after it
+// may have changed something: the error plus what was already applied.
+type submitPartial struct {
+	tool.ErrorBody
+	Partial submitOut `json:"partial"`
 }
 
 type submitOut struct {
@@ -86,6 +113,7 @@ type submitOut struct {
 	Resolved   []string       `json:"resolved_items,omitempty"`
 	Created    bool           `json:"created_submission,omitempty"`
 	Notes      []string       `json:"notes,omitempty"`
+	FailedStep *submitStep    `json:"failed_step,omitempty"`
 }
 
 func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Result, error) {
@@ -175,7 +203,11 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	intended = append(intended, "submit for App Review")
 
 	key := submitKey{submitPlanKey: submitArgsKey(app, platform, out.Version.String), IAPs: in.IncludeIAPs, Subscriptions: in.IncludeSubscriptions, NoAutoAttach: !attach}
-	fp, err := snap.State.fingerprint()
+	var autoAttached []string
+	if attach {
+		autoAttached = readyProducts(ss)
+	}
+	fp, err := submitFingerprint(snap.State, autoAttached)
 	if err != nil {
 		return nil, err
 	}
@@ -192,22 +224,41 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	}
 
 	subID := out.Submission.ID
+	// fail reports a failed step with everything applied before it, so the
+	// agent knows the draft submission id and which items exist. Steps after
+	// the failure are not_attempted; nothing is retried.
+	fail := func(step string, err error) (*tool.Result, error) {
+		out.FailedStep = &submitStep{Step: step, Outcome: stepOutcome(err)}
+		for i := range wanted {
+			switch {
+			case wanted[i].Action == "added":
+				wanted[i].Outcome = "done"
+			case wanted[i].Outcome == "" && wanted[i].Action != "kept":
+				wanted[i].Outcome = "not_attempted"
+			}
+		}
+		out.Items = wanted
+		out.Submission.ID = subID
+		b := tool.BodyFor(err)
+		next := append(append([]tool.NextStep(nil), b.Next...), reviewStatusNext(app, platform))
+		return &tool.Result{Data: submitPartial{ErrorBody: b, Partial: out}, IsError: true, Next: next}, nil
+	}
 	if subID == "" {
 		resp, err := doWrite(wctx, env, http.MethodPost, "/v1/reviewSubmissions",
 			jsonapiBody("reviewSubmissions", "", map[string]any{"platform": string(platform)}, map[string]string{"app": "apps:" + app.ID}))
 		if err != nil {
-			return nil, err
+			return fail("create review submission", err)
 		}
 		s, ok := resp.First()
 		if !ok {
-			return nil, fmt.Errorf("create review submission: empty response: %w", tool.ErrInternal)
+			return fail("create review submission", fmt.Errorf("create review submission: empty response: %w", tool.ErrOutcomeUnknown))
 		}
 		subID, out.Created = s.ID, true
 	}
 	for _, id := range rejected {
 		if _, err := doWrite(wctx, env, http.MethodPatch, "/v1/reviewSubmissionItems/"+id,
 			jsonapiBody("reviewSubmissionItems", id, map[string]any{"resolved": true}, nil)); err != nil {
-			return nil, err
+			return fail("mark rejected item "+id+" resolved", err)
 		}
 		out.Resolved = append(out.Resolved, id)
 	}
@@ -222,11 +273,14 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 			resp, err := doWrite(wctx, env, http.MethodPost, "/v1/"+w.Kind+"s",
 				jsonapiBody(w.Kind+"s", "", nil, map[string]string{rel: w.Create}))
 			if err != nil {
-				return nil, err
+				w.Outcome = stepOutcome(err)
+				return fail("create "+w.Kind+" for "+w.Label, err)
 			}
 			v, ok := resp.First()
 			if !ok {
-				return nil, fmt.Errorf("create %s: empty response: %w", w.Kind, tool.ErrInternal)
+				err := fmt.Errorf("create %s: empty response: %w", w.Kind, tool.ErrOutcomeUnknown)
+				w.Outcome = "outcome_unknown"
+				return fail("create "+w.Kind+" for "+w.Label, err)
 			}
 			w.Target = v.ID
 		}
@@ -235,7 +289,8 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 				"reviewSubmission": "reviewSubmissions:" + subID,
 				w.Kind:             w.Kind + "s:" + w.Target,
 			})); err != nil {
-			return nil, err
+			w.Outcome = stepOutcome(err)
+			return fail("add "+w.Label, err)
 		}
 		w.Action = "added"
 	}
@@ -243,7 +298,7 @@ func releaseSubmit(ctx context.Context, env *tool.Env, in submitIn) (*tool.Resul
 	resp, err := doWrite(wctx, env, http.MethodPatch, "/v1/reviewSubmissions/"+subID,
 		jsonapiBody("reviewSubmissions", subID, map[string]any{"submitted": true}, nil))
 	if err != nil {
-		return nil, err
+		return fail("submit for App Review", err)
 	}
 	state := ""
 	if s, ok := resp.First(); ok {
@@ -568,7 +623,15 @@ func releaseCancel(ctx context.Context, env *tool.Env, in cancelIn) (*tool.Resul
 		preview.Intended = []string{"canceled:true (state becomes CANCELING)"}
 		preview.Irreversible = []string{"the place in the App Review queue is lost; resubmitting starts over"}
 	}
-	wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, preview)
+	// Bind the previewed submission, its state and the items to remove: a
+	// confirm after the submission changed (another one opened, it entered
+	// review) is refused instead of acting on something not previewed.
+	removeIDs := make([]string, 0, len(remove))
+	for _, it := range remove {
+		removeIDs = append(removeIDs, it.ID)
+	}
+	target := map[string]any{"submission": sub.ID, "state": out.Submission.State, "remove": removeIDs}
+	wctx, res := tool.RequireConfirmTarget(ctx, env, in.Confirm, target, preview)
 	if res != nil {
 		return res, nil
 	}

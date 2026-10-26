@@ -286,12 +286,16 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 }
 
 // salesTotals sums SALES rows of the app (all apps when nil); pending
-// (unpublished) days are appended to pending.
+// (unpublished) days are appended to pending. No-sales days count as covered
+// days with zero units, so they never shrink the compared window.
 func salesTotals(days []dayTable, app *tool.App, pending *[]string) (reports.SalesGroup, error) {
 	var rows []reports.SalesRow
 	for _, d := range days {
 		if d.Pending {
 			*pending = append(*pending, d.Date)
+			continue
+		}
+		if d.NoSales {
 			continue
 		}
 		rs, err := reports.SalesRows(d.Table)

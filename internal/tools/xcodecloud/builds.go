@@ -2,6 +2,7 @@ package xcodecloud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -129,12 +130,21 @@ func buildStart(ctx context.Context, env *tool.Env, in buildStartIn) (*tool.Resu
 		data["attributes"] = map[string]any{"clean": *in.Clean}
 	}
 	resp, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodPost, Path: "/v1/ciBuildRuns", Body: map[string]any{"data": data}, Write: true})
+	runs := tool.NextStep{Tool: "xcc_build_status", Args: map[string]any{"workflow": wf.ID}}
 	if err != nil {
-		return nil, fmt.Errorf("start build of workflow %s: %w", wf.Name, err)
+		err = fmt.Errorf("start build of workflow %s: %w", wf.Name, err)
+		if errors.Is(err, tool.ErrOutcomeUnknown) {
+			// The run may have started: a blind retry starts a second CI build.
+			err = tool.WithNext(err, runs)
+		}
+		return nil, err
 	}
 	r, ok := resp.First()
 	if !ok {
-		return nil, fmt.Errorf("start build of workflow %s: %w: empty response", wf.Name, tool.ErrInternal)
+		// Apple accepted the POST but returned no run: it was started.
+		return tool.OK(buildStartOut{Workflow: workflowRef{ID: wf.ID, Name: wf.Name}, Source: src}).
+			Warn("Apple accepted the build but returned no run; read the workflow's latest run with xcc_build_status instead of starting another").
+			Then(runs), nil
 	}
 	run := flattenRun(r)
 	return tool.OK(buildStartOut{Run: run, Workflow: workflowRef{ID: wf.ID, Name: wf.Name}, Source: src}).

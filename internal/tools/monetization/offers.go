@@ -401,6 +401,9 @@ type offersCreateOut struct {
 type offerSpec struct {
 	path, typ, priceType string
 	match                func(tool.Resource) bool
+	// differs lists the terms of a matching offer that differ from the
+	// request; nil means name identity is enough.
+	differs func(tool.Resource) []string
 }
 
 func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.Result, error) {
@@ -423,8 +426,11 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	if in.Kind == offerKindIntro {
 		return offerCreateIntros(ctx, env, in, attrs, out)
 	}
-	if r, ok, err := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); err != nil || ok {
+	if r, raw, ok, err := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); err != nil || ok {
 		if err != nil {
+			return nil, err
+		}
+		if err := offerSameTerms(in, sp, raw); err != nil {
 			return nil, err
 		}
 		out.Offer = &r
@@ -446,7 +452,10 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	created, err := offerPostDoc(wctx, env, sp.path, sp.typ, doc)
 	if err != nil {
 		if tool.IsConflict(err) {
-			if r, ok, rerr := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); rerr == nil && ok {
+			if r, raw, ok, rerr := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); rerr == nil && ok {
+				if derr := offerSameTerms(in, sp, raw); derr != nil {
+					return nil, derr
+				}
 				out.Offer = &r
 				out.Territories = r.Territories
 				return tool.Already(out), nil
@@ -515,18 +524,56 @@ func offerConfirmIntros(ctx context.Context, env *tool.Env, in offersCreateIn, s
 	})
 }
 
-// offerExisting finds an existing offer of kind matching an identity.
-func offerExisting(ctx context.Context, env *tool.Env, subID, kind string, match func(tool.Resource) bool) (offerOut, bool, error) {
+// offerExisting finds an existing offer of kind matching an identity and
+// returns it summarized and raw.
+func offerExisting(ctx context.Context, env *tool.Env, subID, kind string, match func(tool.Resource) bool) (offerOut, tool.Resource, bool, error) {
 	rs, inc, err := offerFetch(ctx, env, subID, kind)
 	if err != nil {
-		return offerOut{}, false, err
+		return offerOut{}, tool.Resource{}, false, err
 	}
 	for _, r := range rs {
 		if match(r) {
-			return offerRow(kind, r, inc), true, nil
+			return offerRow(kind, r, inc), r, true, nil
 		}
 	}
-	return offerOut{}, false, nil
+	return offerOut{}, tool.Resource{}, false, nil
+}
+
+// offerSameTerms accepts an existing offer that matched by name or
+// identifier only when its terms equal the request; otherwise the clash is
+// an error naming the existing offer.
+func offerSameTerms(in offersCreateIn, sp offerSpec, r tool.Resource) error {
+	if sp.differs == nil {
+		return nil
+	}
+	diff := sp.differs(r)
+	if len(diff) == 0 {
+		return nil
+	}
+	name := r.Text("name")
+	if name == "" {
+		name = r.Text("referenceName")
+	}
+	return tool.WithNext(tool.InvalidArgs("a %s offer %q (id %s) already uses this name or identifier with different terms (%s); "+
+		"use a new name and identifier, or keep the existing offer", in.Kind, tool.SanitizeText(string(name)), r.ID, strings.Join(diff, "; ")),
+		tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
+}
+
+// offerDiff lists keys whose existing value differs from the requested
+// attribute; keys absent from attrs are not compared.
+func offerDiff(r tool.Resource, attrs map[string]any, keys ...string) []string {
+	var out []string
+	for _, k := range keys {
+		want, ok := attrs[k]
+		if !ok {
+			continue
+		}
+		have := r.Attributes[k]
+		if fmt.Sprint(have) != fmt.Sprint(want) {
+			out = append(out, fmt.Sprintf("%s is %v, requested %v", k, have, want))
+		}
+	}
+	return out
 }
 
 // offerValidate checks the arguments for the kind and returns the create
@@ -577,6 +624,9 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		sp = offerSpec{
 			path: "/v1/subscriptionPromotionalOffers", typ: "subscriptionPromotionalOffers", priceType: "subscriptionPromotionalOfferPrices",
 			match: func(r tool.Resource) bool { return r.Str("offerCode") == in.ID || r.Str("name") == in.Name }, // trusted: comparison only
+			differs: func(r tool.Resource) []string {
+				return offerDiff(r, attrs, "name", "offerCode", "offerMode", "duration", "numberOfPeriods")
+			},
 		}
 	case offerKindWinBack:
 		if err := offerFirstErr(need("name", in.Name), need("identifier", in.ID), need("start_date", in.StartDate)); err != nil {
@@ -598,6 +648,11 @@ func offerValidate(in offersCreateIn) (map[string]any, offerSpec, error) {
 		sp = offerSpec{
 			path: "/v1/winBackOffers", typ: "winBackOffers", priceType: "winBackOfferPrices",
 			match: func(r tool.Resource) bool { return r.Str("offerId") == in.ID || r.Str("referenceName") == in.Name }, // trusted: comparison only
+			differs: func(r tool.Resource) []string {
+				return offerDiff(r, attrs, "referenceName", "offerId", "offerMode", "duration", "periodCount", "priority",
+					"customerEligibilityPaidSubscriptionDurationInMonths", "customerEligibilityTimeSinceLastSubscribedInMonths",
+					"customerEligibilityWaitBetweenOffersInMonths", "startDate", "endDate")
+			},
 		}
 	case offerKindCode:
 		if err := offerFirstErr(need("name", in.Name), need("offer_eligibility", in.OfferEligibility)); err != nil {
@@ -776,11 +831,28 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		r, err := offerPostDoc(wctx, env, "/v1/subscriptionIntroductoryOffers", "subscriptionIntroductoryOffers",
 			offerDoc("subscriptionIntroductoryOffers", attrs, rels, nil))
 		if err != nil {
-			if _, replaced := replace[p.Territory]; tool.IsConflict(err) && !replaced {
-				out.Skipped = append(out.Skipped, p.Territory)
-				continue
+			old, replaced := replace[p.Territory]
+			if tool.IsConflict(err) && !replaced {
+				// Skip only when a read-back shows an identical offer;
+				// a 409 can also be an overlapping offer with other terms.
+				same, desc, rerr := offerIntroRecheck(ctx, env, out.Subscription.ID, p, attrs, in, today)
+				if rerr == nil && same {
+					out.Skipped = append(out.Skipped, p.Territory)
+					continue
+				}
+				if rerr == nil && desc != "" {
+					err = fmt.Errorf("%w; the existing %s intro offer has different terms (%s)", err, p.Territory, desc)
+				}
 			}
-			return nil, tool.WithNext(fmt.Errorf("created %d of %d intro offers, then %s failed: %w", out.Created, len(todo), p.Territory, err),
+			msg := fmt.Sprintf("created %d of %d intro offers, then %s failed", out.Created, len(todo), p.Territory)
+			if replaced {
+				msg += fmt.Sprintf(". The old %s intro offer %s (%s) was already set to end on %s and now has no replacement: "+
+					"re-run offers_create with the same arguments to create it, or check offers_list", p.Territory, old.ID, offerIntroDesc(old), in.StartDate)
+			}
+			if len(out.Ended) > 0 {
+				msg += fmt.Sprintf(" (old offers ended on %s in %s)", in.StartDate, strings.Join(out.Ended, ", "))
+			}
+			return nil, tool.WithNext(fmt.Errorf("%s: %w", msg, err),
 				tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
 		}
 		out.Created++
@@ -792,4 +864,27 @@ func offerCreateIntros(ctx context.Context, env *tool.Env, in offersCreateIn, at
 		out.Prices = prices
 	}
 	return tool.OK(out), nil
+}
+
+// offerIntroRecheck reads one territory's intro offers back after a 409 and
+// reports whether an identical offer exists, or the overlapping one's terms.
+func offerIntroRecheck(ctx context.Context, env *tool.Env, subID string, p offerPrice, attrs map[string]any, in offersCreateIn, today string) (bool, string, error) {
+	rows, _, err := offerFetch(ctx, env, subID, offerKindIntro)
+	if err != nil {
+		return false, "", err
+	}
+	var mine []tool.Resource
+	for _, r := range rows {
+		if r.RelID("territory") == p.Territory {
+			mine = append(mine, r)
+		}
+	}
+	m, r := offerIntroClassify(mine, attrs, p.PricePoint, in.StartDate, in.EndDate, today)
+	switch m {
+	case introSame:
+		return true, "", nil
+	case introNone:
+		return false, "", nil
+	}
+	return false, offerIntroDesc(r) + ", id " + r.ID, nil
 }

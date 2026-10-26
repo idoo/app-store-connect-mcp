@@ -4,6 +4,51 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-26
+
+### Fixed
+
+**Writes that could leave a listing worse than before**
+
+- `library_apply` in replace mode no longer deletes a group's old screenshots when a new placement fails, is skipped or is still processing. Those deletes are reported as not attempted, with a hint to run `library_plan` again.
+- Replacing a full Asset Library group frees one slot just before each new placement instead of emptying the group first, and stops deleting after a failed placement.
+- `screenshots_sync` in replace mode deletes old screenshots only after their replacements finish processing. If processing fails or is still running, the old ones stay and you're asked to plan again.
+- When a screenshot set is full, `screenshots_sync` first deletes only as many screenshots as it needs to stay within 10, and the preview shows that order.
+- `screenshots_sync` keeps its result when checking processing hits an error or is cancelled: you see what was applied, uploads marked state unknown, and `screenshots_list` as the next step. A brief 404 right after an upload counts as still processing.
+- `pricing_apply` keeps the start and end dates of manual prices in territories it doesn't change, so a temporary sale price no longer becomes permanent.
+- `pricing_apply` carries over future scheduled manual prices in territories it doesn't change. Any it has to drop are named in the preview with territory, price and date.
+- `offers_create` says a promotional or win-back offer already exists only when its terms match. A name or identifier clash with different terms is an error naming the existing offer.
+- `offers_create` no longer files a rejected intro offer as skipped unless an identical offer exists. If replacing an intro offer fails after the old one was ended, the error says which offer ended, where, on what date, and how to recover.
+
+**Confirms and partial failures**
+
+- `builds_expire` and `release_cancel` confirms apply only to the builds or submission state the preview showed. If `latest` moved or the submission changed, the confirm is refused and a new preview is needed.
+- A `release_submit` plan goes stale if another first-time in-app purchase or subscription becomes ready after the preview, so nothing the plan didn't list goes to App Review.
+- When `release_submit` fails part-way, the result reports the submission id, whether it was created, resolved items and each item's outcome, instead of a bare error.
+- `xcc_build_start` reports a started build when Apple's reply is empty. After a timeout or server error it points at the run list instead of inviting a retry that would start a second build.
+- `signing_devices_register` counts a device as registered when Apple's reply is empty but the device exists. Re-running a confirmed `signing_revoke` whose delete already went through reports `already`.
+- The `signing_revoke` preview counts every profile that uses a certificate, including profiles with more than 50 certificates.
+
+**Multi-platform apps**
+
+- `release_review_status` without a platform lists open or rejected submissions on the app's other platforms (a rejected macOS version was invisible from the iOS view).
+- `builds_wait` without a platform finds the build on the app's other platforms, like `builds_list` does.
+- `release_health_report` and the `guard` command check the platform the app is live on, for example macOS for Mac-only apps, instead of always iOS.
+- `release_status` and `screenshots_list` no longer suggest a `library_plan` call that always failed; they explain it needs `dir`, `remove` or `archive`.
+
+**Reports and state**
+
+- Days with no sales are reported as zero-sales days (`no_sales_days`) instead of "not published yet", and `insights_summary` no longer shortens its comparison because of them.
+- Sales and finance errors (403 or Apple server error) mention that the vendor number may be wrong.
+- `subscriptions_list` shows each group localization's state, so a live name and a pending edit in the same locale can be told apart.
+- Overlapping `store_ranks_report` track/untrack calls and overlapping `library_apply` runs no longer lose each other's saved data.
+
+**Setup and protocol**
+
+- `auth add` and `auth import` accept key paths pasted in quotes (Windows "Copy as path") or with backslash-escaped spaces (dragged into macOS Terminal).
+- Optional arguments sent as `null` are treated as omitted instead of failing with an internal type error.
+- The `daily_digest` and `post_release_check` prompts tell the agent to turn on the `insights` toolset first when it is off.
+
 ## [0.12.0] - 2026-10-26
 
 ### Added
@@ -279,7 +324,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.9.0...v0.10.0

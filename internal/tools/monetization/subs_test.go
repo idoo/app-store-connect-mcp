@@ -39,6 +39,25 @@ func TestSubscriptionsListCounts(t *testing.T) {
 	}
 }
 
+// Two en-US group names (live and pending edit) carry their states.
+func TestSubscriptionsListGroupLocalizationState(t *testing.T) {
+	k := newKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, jsonapiDoc(
+		`[{"type":"subscriptionGroups","id":"g1","attributes":{"referenceName":"Pro"},"relationships":{"subscriptionGroupLocalizations":{"data":[
+		  {"type":"subscriptionGroupLocalizations","id":"l1"},{"type":"subscriptionGroupLocalizations","id":"l2"}]}}}]`,
+		`{"type":"subscriptionGroupLocalizations","id":"l1","attributes":{"locale":"en-US","name":"Lesoma Pro","state":"PREPARE_FOR_SUBMISSION"}}`,
+		`{"type":"subscriptionGroupLocalizations","id":"l2","attributes":{"locale":"en-US","name":"Storify Pro","state":"APPROVED"}}`))
+	k.ASC.Handle(http.MethodGet, "/v1/subscriptionGroups/{id}/subscriptions", http.StatusOK, jsonapiDoc(`[]`))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "subscriptions_list"), k.Env, `{}`))
+	if fields := k.ASC.Requests()[0].Query.Get("fields[subscriptionGroupLocalizations]"); !strings.Contains(fields, "state") {
+		t.Fatalf("fields = %q", fields)
+	}
+	locs := tooltest.Decode[subsListOut](t, res).Groups[0].Localizations
+	if len(locs) != 2 || locs[0].State != "APPROVED" || locs[1].State != "PREPARE_FOR_SUBMISSION" {
+		t.Fatalf("localizations = %+v", locs)
+	}
+}
+
 func TestSubscriptionsUpsertCreatesGroupAndSubscription(t *testing.T) {
 	k := newKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/subscriptionGroups", http.StatusOK, jsonapiDoc(`[]`))
