@@ -169,7 +169,7 @@ func TestChaosGetHTML200Retried(t *testing.T) {
 // A GET that keeps returning HTML 200 ends as upstream_invalid, never
 // outcome_unknown.
 func TestChaosGetHTML200Exhausted(t *testing.T) {
-	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = io.WriteString(w, "<html>maintenance</html>")
 	}, nil)
@@ -205,7 +205,7 @@ func TestChaosPut200GarbageNotReplayed(t *testing.T) {
 // PATCH 401 refreshes once, then a 500 is outcome_unknown without replay.
 func TestChaosPatch401Then500(t *testing.T) {
 	var n atomic.Int32
-	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		if n.Add(1) == 1 {
 			writeAPIError(w, http.StatusUnauthorized, "NOT_AUTHORIZED", "expired", "")
 			return
