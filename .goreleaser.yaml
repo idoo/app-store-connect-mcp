@@ -118,7 +118,7 @@ changelog:
 release:
   github:
     owner: idoo
-    name: asc-mcp
+    name: app-store-connect-mcp
   prerelease: auto
   # Immutable releases: goreleaser only creates a draft; release.yml adds the
   # .mcpb, tools.json and attestations, then publishes it as the last step.
