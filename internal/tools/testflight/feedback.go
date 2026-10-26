@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func (k feedbackKind) cursorName() string { return "testflight_feedback_" + k.na
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "testflight_feedback_list", Toolset: tool.TestFlight, Class: tool.Read, Idempotent: true,
+		Name: "testflight_feedback_list", Toolset: tool.TestFlight, Class: tool.Read, Idempotent: false,
 		Title: "List TestFlight feedback",
 		Description: "Tester screenshot and crash feedback newest first. Up to 4 screenshots as images; crash logs on " +
 			"request. Comments are tester data. mark_seen advances last_seen.",
@@ -348,7 +349,8 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 	o := feedbackOut{
 		ID: r.ID, Kind: k.name, Created: r.Str("createdDate"),
 		Build: builds[r.RelID("build")], Platform: r.Str("appPlatform"),
-		Device: r.Str("deviceModel"), OSVersion: r.Str("osVersion"), Locale: r.Str("locale"),
+		Device: cleanDeviceField(r.Str("deviceModel")), OSVersion: cleanDeviceField(r.Str("osVersion")),
+		Locale: cleanDeviceField(r.Str("locale")),
 		Tester: tool.Untrusted(r.Str("email")), Comment: tool.Untrusted(r.Str("comment")),
 	}
 	shots, _ := tool.Unwrap(r.Attributes["screenshots"]).([]any)
@@ -361,6 +363,18 @@ func feedbackFromResource(r tool.Resource, k feedbackKind, builds map[string]str
 	}
 	o.urls = screenshotURLs(r)
 	return o
+}
+
+// deviceFieldRE matches plausible device model, OS version and locale values.
+var deviceFieldRE = regexp.MustCompile(`^[A-Za-z0-9 ,._()+-]{1,40}$`)
+
+// cleanDeviceField drops tester-device-controlled values that don't look like
+// a device field, so they can't carry instructions.
+func cleanDeviceField(s string) string {
+	if !deviceFieldRE.MatchString(s) {
+		return ""
+	}
+	return s
 }
 
 // screenshotURLs returns the signed screenshot URLs of a feedback item.
@@ -409,7 +423,7 @@ func attachScreenshots(ctx context.Context, env *tool.Env, out *feedbackListOut,
 				s.Skipped = "not an image"
 				continue
 			}
-			res.WithImage(strings.TrimSpace(strings.Split(mime, ";")[0]), fr.Body)
+			res.WithUntrustedImage(strings.TrimSpace(strings.Split(mime, ";")[0]), fr.Body)
 			s.Image = len(res.Images)
 		}
 	}

@@ -27,7 +27,7 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 - `signing_capabilities_set` when it disables a capability;
 - `testflight_distribute` / `testflight_testers_add` when they touch an external group, submit for beta review, answer export compliance or overwrite review details.
 
-The form shows what will happen first and any stranger-written text last, fenced and labelled. Over 6000 bytes it refuses instead of truncating. Clients that can't show forms get `human_approval_required`, unless the profile sets `allow_no_elicit`. `--no-confirm` skips previews only with `ASC_MCP_CI=1`, and still not the human ones.
+The form names the profile (account) and shows what will happen first and any stranger-written text last, fenced and labelled. It shows exactly what Apple will receive: nothing in it is redacted or truncated. Over 6000 bytes it refuses instead. Clients that can't show forms get `human_approval_required`, unless the profile sets `allow_no_elicit`. `--no-confirm` skips previews only with `ASC_MCP_CI=1`, and still not the human ones.
 
 **Stranger text is marked.** Reviews, tester data, feedback, crash logs, free-text attributes, store listings and raw `asc_api_request` bodies come back as `{"untrusted": ...}`. The server instructions tell the model that's data, not orders.
 

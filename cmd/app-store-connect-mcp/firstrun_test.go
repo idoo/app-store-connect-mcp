@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -394,6 +395,109 @@ func TestInstallClaudeCodeFallback(t *testing.T) {
 	err := install("claude-code", fakeBin, "", t.TempDir(), &out)
 	if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(out.String(), "claude mcp add") {
 		t.Fatalf("err = %v out = %q", err, out.String())
+	}
+}
+
+func TestInstallClaudeCodeAlreadyRegistered(t *testing.T) {
+	orig := runClaude
+	t.Cleanup(func() { runClaude = orig })
+	for _, tc := range []struct {
+		name    string
+		getErr  error
+		wantAdd bool
+	}{
+		{"registered", nil, false},
+		{"absent", errors.New("exit status 1"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls [][]string
+			runClaude = func(_ context.Context, args []string, _, _ io.Writer) error {
+				calls = append(calls, args)
+				if args[2] == "get" {
+					return tc.getErr
+				}
+				return nil
+			}
+			if err := install("claude-code", fakeBin, "", t.TempDir(), io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			added := slices.ContainsFunc(calls, func(a []string) bool { return a[2] == "add" })
+			if added != tc.wantAdd || calls[0][2] != "get" {
+				t.Fatalf("calls = %v", calls)
+			}
+		})
+	}
+}
+
+func TestAuthImportChecksDefaultApp(t *testing.T) {
+	for _, tc := range []struct {
+		name, app string
+		ok        bool
+	}{
+		{"unknown value refused", "0f1e-uuid", false},
+		{"bundle id saved", "com.x.a", true},
+		{"exact name any case saved", "app a", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home, cfgPath := sandbox(t)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":[{"type":"apps","id":"111","attributes":{"name":"App A","bundleId":"com.x.a"}}]}`))
+			}))
+			defer srv.Close()
+			t.Setenv(config.EnvBaseURL, srv.URL)
+			t.Setenv(config.EnvKeyID, "K1")
+			t.Setenv(config.EnvKeyPath, writeKey(t, home, "K1"))
+			// Answers: candidate, name, keychain=n, team, issuer, vendor, default app, writes=n.
+			_, _, err := runCLI(t, "1\ndefault\nn\n\n"+testIssuer+"\n9\n"+tc.app+"\nn\n", "auth", "import")
+			if !tc.ok {
+				if err == nil || !strings.Contains(err.Error(), tc.app) {
+					t.Fatalf("err = %v", err)
+				}
+				if _, err := os.Stat(cfgPath); !errors.Is(err, fs.ErrNotExist) {
+					t.Fatalf("config written: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, _, err := config.Load(cfgPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.Profiles["default"].DefaultApp; got != tc.app {
+				t.Fatalf("default_app = %q", got)
+			}
+		})
+	}
+}
+
+func TestAuthImportDefaultAppKeepsExistingConfig(t *testing.T) {
+	home, cfgPath := sandbox(t)
+	before := &config.Config{DefaultProfile: "me", Profiles: map[string]config.Profile{
+		"me": {KeyID: "K0", KeyKind: tool.KeyIndividual, KeyPath: "/k.p8"},
+	}}
+	if err := config.Save(cfgPath, before); err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"type":"apps","id":"111","attributes":{"name":"App A","bundleId":"com.x.a"}}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv(config.EnvBaseURL, srv.URL)
+	t.Setenv(config.EnvKeyID, "K1")
+	t.Setenv(config.EnvKeyPath, writeKey(t, home, "K1"))
+	if _, _, err := runCLI(t, "1\nnew\nn\n\n"+testIssuer+"\n9\nnope\nn\n", "auth", "import"); err == nil {
+		t.Fatal("bad default_app accepted")
+	}
+	if got, _ := os.ReadFile(cfgPath); string(got) != string(want) {
+		t.Fatalf("config changed:\n%s", got)
 	}
 }
 

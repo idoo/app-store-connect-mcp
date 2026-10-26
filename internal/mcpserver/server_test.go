@@ -648,3 +648,95 @@ func TestHiddenToolCall(t *testing.T) {
 		}
 	})
 }
+
+// flagTool is a ConfirmByFlag destructive tool whose preview carries intended.
+func flagTool(name string, human bool, intended any) tool.Tool {
+	m := tool.Meta{
+		Name: name, Toolset: tool.Release, Title: name, Description: "stub " + name,
+		Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: human,
+	}
+	return tool.New(m, func(ctx context.Context, env *tool.Env, in stubIn) (*tool.Result, error) {
+		_, res := tool.RequireConfirm(ctx, env, in.Confirm, tool.PlanPreview{Summary: "do " + name, Intended: intended})
+		if res != nil {
+			return res, nil
+		}
+		return tool.OK(map[string]any{"done": true}), nil
+	})
+}
+
+func TestApprovalPromptUnredactedWithProfile(t *testing.T) {
+	const pem, jwt = "-----BEGIN NOTE-----x-----END NOTE-----", "eyJa.eyJb.c"
+	var got []string
+	capture := func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		got = append(got, req.Params.Message)
+		return &mcp.ElicitResult{Action: "accept"}, nil
+	}
+	p := team(true)
+	p.Name = "client-acme"
+	tools := []tool.Tool{flagTool("release_submit", false, map[string]string{"note": pem, "token": jwt})}
+	h := connect(t, Deps{Tools: tools, Profile: p}, "test", capture)
+	h.call(t, "release_submit", map[string]any{})
+	if res, body := h.call(t, "release_submit", map[string]any{"confirm": true}); res.IsError {
+		t.Fatalf("confirm result = %v", body)
+	}
+	if len(got) != 1 {
+		t.Fatalf("elicitations = %d, want 1", len(got))
+	}
+	for _, want := range []string{pem, jwt, "client-acme"} {
+		if !strings.Contains(got[0], want) {
+			t.Errorf("prompt lacks %q:\n%s", want, got[0])
+		}
+	}
+}
+
+func TestElicitationRejectedByClient(t *testing.T) {
+	reject := func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not found"}
+	}
+	tools := []tool.Tool{flagTool("release_submit", true, map[string]string{"v": "1"})}
+	h := connect(t, Deps{Tools: tools, Profile: team(true)}, "test", reject)
+	h.call(t, "release_submit", map[string]any{})
+	res, body := h.call(t, "release_submit", map[string]any{"confirm": true})
+	if !res.IsError || dataOf(body)["error"] != tool.ErrHumanRequired.Code {
+		t.Fatalf("result = %v", body)
+	}
+}
+
+func TestSpecResourceNotFoundCode(t *testing.T) {
+	h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", nil)
+	_, err := h.cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: specOpPrefix + "nope"})
+	var we *jsonrpc.Error
+	if !errors.As(err, &we) || we.Code != -32002 {
+		t.Fatalf("err = %#v", err)
+	}
+}
+
+func TestRenderTextDoesNotEscapeHTML(t *testing.T) {
+	s := &session{deps: Deps{MaxResultBytes: 4096}}
+	r := s.render(tool.OK(map[string]any{"p": "/v1/apps/<id>"}))
+	text := r.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(text, "<id>") || strings.Contains(text, `\u003c`) {
+		t.Fatalf("text = %s", text)
+	}
+}
+
+func TestRenderLabelsUntrustedImages(t *testing.T) {
+	s := &session{deps: Deps{MaxResultBytes: 4096}}
+	r := s.render(tool.OK(map[string]any{"ok": true}).WithUntrustedImage("image/png", []byte{1}))
+	if len(r.Content) != 3 {
+		t.Fatalf("content len = %d, want 3", len(r.Content))
+	}
+	_, t0 := r.Content[0].(*mcp.TextContent)
+	_, t1 := r.Content[1].(*mcp.TextContent)
+	_, i2 := r.Content[2].(*mcp.ImageContent)
+	if !t0 || !t1 || !i2 {
+		t.Fatalf("content types = %T %T %T", r.Content[0], r.Content[1], r.Content[2])
+	}
+	r = s.render(tool.OK(map[string]any{"ok": true}).WithImage("image/png", []byte{1}))
+	if len(r.Content) != 2 {
+		t.Fatalf("trusted content len = %d, want 2", len(r.Content))
+	}
+	if _, ok := r.Content[1].(*mcp.ImageContent); !ok {
+		t.Fatalf("trusted content[1] = %T", r.Content[1])
+	}
+}

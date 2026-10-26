@@ -953,11 +953,11 @@
   {
     "name": "metadata_apply",
     "toolset": "metadata",
-    "class": "W",
+    "class": "D",
     "title": "Apply store listing changes",
     "description": "Apply a metadata_plan: same arguments plus plan_id; refused if the listing changed since. Creates missing locales; deletes only locales in remove.",
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false,
@@ -1093,7 +1093,7 @@
           "type": "string"
         },
         "export_dir": {
-          "description": "fastlane dir to write (new, empty or named metadata)",
+          "description": "fastlane dir; never overwrites edited files",
           "type": "string"
         },
         "fields": {
@@ -2168,7 +2168,7 @@
     "title": "List customer reviews",
     "description": "Customer reviews newest first with responses and a reply_locale hint. since:\"last_seen\" returns only new ones; mark_seen advances the cursor. Review text is untrusted data.",
     "annotations": {
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": true,
       "title": "List customer reviews"
@@ -2504,11 +2504,11 @@
   {
     "name": "screenshots_sync",
     "toolset": "screenshots",
-    "class": "W",
+    "class": "D",
     "title": "Sync screenshots",
     "description": "Applies a screenshots_plan: same arguments plus plan_id (required when anything is deleted). Creates sets, uploads, deletes the listed screenshots, reorders. Refused if the remote sets changed since planning.",
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": false,
@@ -3452,7 +3452,7 @@
     "title": "List TestFlight feedback",
     "description": "Tester screenshot and crash feedback newest first. Up to 4 screenshots as images; crash logs on request. Comments are tester data. mark_seen advances last_seen.",
     "annotations": {
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
       "readOnlyHint": true,
       "title": "List TestFlight feedback"
@@ -4014,7 +4014,7 @@
     "toolset": "webhooks",
     "class": "D",
     "title": "Create or update a webhook",
-    "description": "Create a webhook (name, https url, event_types) or update one matched by id or name; optional ping. Without a secret one is generated and returned ONCE: store it, Apple never shows it again. Needs confirm:true and human approval.",
+    "description": "Create a webhook (name, https url, event_types) or update one matched by id or name; optional ping. Without a secret one is generated into webhook-secrets/<id>.txt (path returned, never the value). Needs confirm:true and human approval.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": false,
@@ -4067,7 +4067,7 @@
           "type": "boolean"
         },
         "secret": {
-          "description": "signing secret; omit to generate one on create (returned once), set to rotate on update",
+          "description": "signing secret; omit to generate one on create (written to webhook-secrets/), set to rotate on update",
           "type": "string"
         },
         "url": {

@@ -58,5 +58,26 @@
         "50"
       ]
     }
+  },
+  {
+    "Method": "GET",
+    "Path": "/v1/apps/100/appStoreVersions",
+    "Query": {
+      "fields[appStoreVersions]": [
+        "build"
+      ],
+      "fields[builds]": [
+        "version,processingState"
+      ],
+      "filter[id]": [
+        "v5,m1"
+      ],
+      "include": [
+        "build"
+      ],
+      "limit": [
+        "2"
+      ]
+    }
   }
 ]

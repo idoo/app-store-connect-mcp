@@ -156,14 +156,15 @@ func FromFastlane(files tool.Files, dir string) (*Listing, error) {
 	return l.Normalize()
 }
 
-// ToFastlane writes l in deliver layout under dir and returns the written
-// paths. Fields without a deliver file (privacyChoicesUrl) are skipped;
+// ToFastlane writes l in deliver layout under dir. It never overwrites: a
+// missing file is written (returned in written), an identical one is
+// skipped, and one with different content is kept and returned in
+// conflicts. Fields without a deliver file (privacyChoicesUrl) are skipped;
 // existing files of other fields are left untouched.
-func ToFastlane(files tool.Files, dir string, l *Listing) ([]string, error) {
-	var written []string
+func ToFastlane(files tool.Files, dir string, l *Listing) (written, conflicts []string, err error) {
 	for _, code := range l.SortedLocales() {
 		if !applemeta.IsLocale(code) {
-			return written, fmt.Errorf("metadata: %q is not an ASC locale code", code)
+			return written, conflicts, fmt.Errorf("metadata: %q is not an ASC locale code", code)
 		}
 		lf := l.Locales[code]
 		for _, f := range Fields {
@@ -172,13 +173,24 @@ func ToFastlane(files tool.Files, dir string, l *Listing) ([]string, error) {
 				continue
 			}
 			p := filepath.Join(dir, code, f.Fastlane+".txt")
-			if err := files.WriteFile(p, []byte(v+"\n"), 0o600); err != nil {
-				return written, fmt.Errorf("metadata: write %s: %w", p, err)
+			want := []byte(v + "\n")
+			cur, rerr := files.ReadFile(p)
+			switch {
+			case rerr == nil && bytes.Equal(cur, want):
+				continue
+			case rerr == nil:
+				conflicts = append(conflicts, p)
+				continue
+			case !errors.Is(rerr, fs.ErrNotExist):
+				return written, conflicts, fmt.Errorf("metadata: read %s: %w", p, rerr)
+			}
+			if err := files.WriteFile(p, want, 0o600); err != nil {
+				return written, conflicts, fmt.Errorf("metadata: write %s: %w", p, err)
 			}
 			written = append(written, p)
 		}
 	}
-	return written, nil
+	return written, conflicts, nil
 }
 
 // FromExpo reads EAS Metadata's store.config.json at path:

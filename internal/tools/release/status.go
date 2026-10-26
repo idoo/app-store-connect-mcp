@@ -118,6 +118,44 @@ type statusOut struct {
 	Summary      statusSummary   `json:"summary"`
 	Plan         *statusPlan     `json:"plan,omitempty"`
 	AppStoreLink string          `json:"app_store_connect"`
+	// PlatformInferred is set when no platform was passed; OtherPlatforms
+	// then lists the app's active versions on the platforms not inspected.
+	PlatformInferred bool            `json:"platform_inferred,omitempty"`
+	OtherPlatforms   []otherPlatform `json:"other_platforms,omitempty"`
+}
+
+// otherPlatform is an editable or in-flight version on a platform that
+// release_status did not inspect.
+type otherPlatform struct {
+	Platform string `json:"platform"`
+	Version  string `json:"version"`
+	State    string `json:"state"`
+}
+
+// activeVersionStates are the editable and in-flight AppVersionState values.
+var activeVersionStates = append([]string{
+	"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED",
+	"INVALID_BINARY", "READY_FOR_REVIEW", "WAITING_FOR_EXPORT_COMPLIANCE",
+}, lockedStates...)
+
+// otherPlatforms lists the app's active versions on platforms other than
+// the inspected one, so an inferred platform never hides a ready release.
+func otherPlatforms(ctx context.Context, env *tool.Env, appID string, platform tool.Platform) ([]otherPlatform, error) {
+	resp, err := env.ASC.Get(ctx, "/v1/apps/"+appID+"/appStoreVersions", url.Values{
+		"filter[appVersionState]":  {strings.Join(activeVersionStates, ",")},
+		"fields[appStoreVersions]": {"platform,versionString,appVersionState"},
+		"limit":                    {"10"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list other platforms' versions: %w", err)
+	}
+	var out []otherPlatform
+	for _, v := range resp.Data {
+		if p := v.Str("platform"); p != string(platform) {
+			out = append(out, otherPlatform{Platform: p, Version: v.Str("versionString"), State: v.Str("appVersionState")})
+		}
+	}
+	return out, nil
 }
 
 func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Result, error) {
@@ -172,7 +210,22 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 		ready := out.Summary.Block == 0
 		out.Summary.Ready = &ready
 	}
+	var otherErr error
+	if in.Platform == "" {
+		out.PlatformInferred = true
+		out.OtherPlatforms, otherErr = otherPlatforms(ctx, env, app.ID, platform)
+	}
 	res := tool.OK(&out)
+	if otherErr != nil {
+		res.Warn("other platforms not checked: " + otherErr.Error())
+	}
+	seen := map[string]bool{}
+	for _, o := range out.OtherPlatforms {
+		if !seen[o.Platform] {
+			seen[o.Platform] = true
+			res.Then(tool.NextStep{Tool: "release_status", Args: map[string]any{"app": app.ID, "platform": o.Platform}})
+		}
+	}
 	reviewNext := tool.NextStep{Tool: "release_review_status", Args: map[string]any{"app": app.ID, "platform": string(platform)}}
 	if s.Version == nil && !concreteVersion(ref) && s.InFlight != nil {
 		f := s.InFlight

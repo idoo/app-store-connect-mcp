@@ -40,6 +40,9 @@ type ItemResult struct {
 	ID      string   `json:"id,omitempty"`
 	Outcome Outcome  `json:"outcome"`
 	Error   string   `json:"error,omitempty"`
+	// Code is the typed error class of a failed change (tool.BodyFor's
+	// Error, e.g. "outcome_unknown" or "api_error").
+	Code string `json:"code,omitempty"`
 	// Err is the typed error behind Error, for callers that classify it.
 	Err error `json:"-"`
 }
@@ -92,7 +95,7 @@ func Apply(ctx context.Context, client tool.ASC, plan *Plan, ids Targets, progre
 		for i, c := range plan.Changes {
 			if results[i].Outcome == "" {
 				err := fmt.Errorf("not sent: %w", perr)
-				results[i] = ItemResult{Locale: c.Locale, Level: c.Level, Op: c.Op, ID: c.ID, Outcome: OutcomeError, Error: err.Error(), Err: err}
+				results[i] = ItemResult{Locale: c.Locale, Level: c.Level, Op: c.Op, ID: c.ID, Outcome: OutcomeError, Error: err.Error(), Code: tool.BodyFor(err).Error, Err: err}
 			}
 		}
 	}
@@ -134,7 +137,7 @@ func applyOne(ctx context.Context, client tool.ASC, c Change, ids Targets) ItemR
 		err = fmt.Errorf("%w: unknown op %q", tool.ErrInternal, c.Op)
 	}
 	if err != nil {
-		r.Outcome, r.Error, r.Err = OutcomeError, err.Error(), err
+		r.Outcome, r.Error, r.Code, r.Err = OutcomeError, err.Error(), tool.BodyFor(err).Error, err
 	}
 	return r
 }

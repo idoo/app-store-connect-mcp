@@ -102,15 +102,19 @@ var (
 		"delete", "remove", "expire", "submit", "cancel", "release", "publish", "reply", "revoke", "phased",
 	}
 	classExceptions = map[string]tool.Class{
-		"doctor":          tool.Read,
-		"asc_api_request": tool.Destructive, // generic mutation, any method
-		"metadata_apply":  tool.Write,       // applies a metadata_plan; deletes only listed locales
-		"pricing_apply":   tool.Destructive, // apply-pricing (§4.2)
-		"users_invite":    tool.Destructive, // Apple emails the invitee immediately
+		"doctor":           tool.Read,
+		"asc_api_request":  tool.Destructive, // generic mutation, any method
+		"metadata_apply":   tool.Destructive, // overwrites listed locales and deletes those in remove
+		"screenshots_sync": tool.Destructive, // mode:replace deletes screenshots
+		"pricing_apply":    tool.Destructive, // apply-pricing (§4.2)
+		"users_invite":     tool.Destructive, // Apple emails the invitee immediately
 		// W verbs declared D in their packages; reported to Main, kept as shipped.
 		"signing_capabilities_set": tool.Destructive, // can disable capabilities
 		"webhooks_upsert":          tool.Destructive, // sends App Store events to an external URL
 	}
+	// nonIdempotentReads are the Read tools whose mark_seen writes a cursor,
+	// so a repeat call returns different data.
+	nonIdempotentReads = []string{"reviews_list", "testflight_feedback_list"}
 )
 
 // expectedClass returns the class the name's verb implies, or false when the
@@ -143,8 +147,8 @@ func TestRegistryNamingAndMeta(t *testing.T) {
 		if len(m.Description) > tool.MaxDescription {
 			t.Errorf("%s: description %d bytes > %d", m.Name, len(m.Description), tool.MaxDescription)
 		}
-		if m.Class == tool.Read && !m.Idempotent {
-			t.Errorf("read tool %s is not Idempotent", m.Name)
+		if m.Class == tool.Read && m.Idempotent == slices.Contains(nonIdempotentReads, m.Name) {
+			t.Errorf("read tool %s: Idempotent %v; only %v may be non-idempotent", m.Name, m.Idempotent, nonIdempotentReads)
 		}
 		if strings.HasPrefix(m.Name, "toolsets") {
 			continue // server-local session control, classed in mcpserver

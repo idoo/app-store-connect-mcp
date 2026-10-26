@@ -127,7 +127,7 @@ func TestDiffRemoveDeletesOnlyListed(t *testing.T) {
 func TestDiffValidation(t *testing.T) {
 	_, remote := newRemote(t)
 	desired := &Listing{Locales: map[string]*LocaleFields{
-		"en-US": {Name: ptr(strings.Repeat("n", 31)), Keywords: ptr(strings.Repeat("ü", 51)), SupportURL: ptr("ftp://x"), WhatsNew: ptr("hi")},
+		"en-US": {Name: ptr(strings.Repeat("n", 31)), Keywords: ptr(strings.Repeat("ü", 101)), SupportURL: ptr("ftp://x"), WhatsNew: ptr("hi")},
 		"xx-YY": {Description: ptr("d")},
 	}}
 	p, err := Diff(remote, desired, DiffOptions{FirstVersion: true})

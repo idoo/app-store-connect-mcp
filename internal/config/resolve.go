@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -124,6 +125,9 @@ func Resolve(opts Options) (*Resolved, error) {
 	if err != nil {
 		return nil, err
 	}
+	if opts.ConfigPath == "" && !exists(path) {
+		warnings = append(warnings, legacyConfigWarnings(path)...)
+	}
 	pin, err := FindPin(cwd, home)
 	if err != nil {
 		return nil, err
@@ -153,6 +157,40 @@ func dirs(opts Options, getenv func(string) string) (home, cwd string, err error
 		}
 	}
 	return home, cwd, nil
+}
+
+// legacyConfigDirs are config directory names of earlier releases, siblings
+// of the current one.
+var legacyConfigDirs = []string{"asc-mcp", "hamn"}
+
+// legacyConfigWarnings names an earlier release's config file next to the
+// missing default at path when it holds at least one profile with a key_id.
+// Files in another schema (other servers use asc-mcp names) are ignored.
+func legacyConfigWarnings(path string) []string {
+	newDir := filepath.Dir(path)
+	var out []string
+	for _, name := range legacyConfigDirs {
+		old := filepath.Join(filepath.Dir(newDir), name, "config.toml")
+		data, err := os.ReadFile(old) //nolint:gosec // fixed sibling of the user's own config location
+		if err != nil {
+			continue
+		}
+		cfg, err := Parse(data)
+		if err != nil || !hasKeyedProfile(cfg) {
+			continue
+		}
+		out = append(out, fmt.Sprintf("config %s is no longer read; move it: mkdir -p %q && mv %q %q", old, newDir, old, path))
+	}
+	return out
+}
+
+func hasKeyedProfile(cfg *Config) bool {
+	for _, p := range cfg.Profiles {
+		if p.KeyID != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Resolved) resolveProfile(f Flags, getenv func(string) string, cfg *Config, pin *Pin) error {

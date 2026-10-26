@@ -3,6 +3,7 @@ package monetization
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -563,6 +564,7 @@ func prcArgs(in pricingPlanIn) map[string]any {
 type prcFailed struct {
 	Territory string `json:"territory"`
 	Error     string `json:"error"`
+	Code      string `json:"code,omitempty"`
 }
 
 type pricingApplyOut struct {
@@ -604,6 +606,9 @@ func pricingApply(ctx context.Context, env *tool.Env, in pricingApplyIn) (*tool.
 		out.Schedule = "replaced"
 		out.Applied = changedTerritories(p.Changes)
 	}
+	// Known (not outcome_unknown) per-territory failures; an unknown outcome
+	// interrupts the loop.
+	var errs []error
 	if p.k == prcSub {
 		for i, c := range p.Changes {
 			env.Progress(float64(i), float64(len(p.Changes)), "subscription prices")
@@ -615,7 +620,8 @@ func pricingApply(ctx context.Context, env *tool.Env, in pricingApplyIn) (*tool.
 				out.Pending = changedTerritories(p.Changes[i:])
 				return prcInterrupted(err, out, replan), nil
 			default:
-				out.Failed = append(out.Failed, prcFailed{Territory: c.Territory, Error: err.Error()})
+				out.Failed = append(out.Failed, prcFailed{Territory: c.Territory, Error: err.Error(), Code: tool.BodyFor(err).Error})
+				errs = append(errs, err)
 			}
 		}
 		env.Progress(float64(len(p.Changes)), float64(len(p.Changes)), "subscription prices")
@@ -624,6 +630,9 @@ func pricingApply(ctx context.Context, env *tool.Env, in pricingApplyIn) (*tool.
 	out.AvailabilityCalls = n
 	if err != nil {
 		return prcInterrupted(err, out, replan), nil
+	}
+	if len(out.Failed) > 0 && len(out.Applied) == 0 && n == 0 {
+		return nil, tool.WithNext(errors.Join(errs...), replan)
 	}
 	r := tool.OK(out)
 	if len(out.Failed) > 0 {

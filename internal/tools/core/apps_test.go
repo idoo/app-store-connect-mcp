@@ -111,12 +111,22 @@ const appInfosDoc = `{
  "links": {"self":"https://api.appstoreconnect.apple.com/v1/apps/100/appInfos"}
 }`
 
+const inFlightBuildsDoc = `{
+ "data": [
+  {"type":"appStoreVersions","id":"v5","attributes":{},"relationships":{"build":{"data":{"type":"builds","id":"b2"}}}},
+  {"type":"appStoreVersions","id":"m1","attributes":{},"relationships":{"build":{"data":null}}}
+ ],
+ "included": [{"type":"builds","id":"b2","attributes":{"version":"42","processingState":"VALID"}}],
+ "links": {"self":"https://api.appstoreconnect.apple.com/v1/apps/100/appStoreVersions"}
+}`
+
 func TestAppsGet(t *testing.T) {
 	k := kit(t)
 	k.Resolve.Apps = []tool.App{{ID: "100", Name: "Hjul", BundleID: "com.idoo.hjul", SKU: "HJUL"}}
 	k.ASC.Handle("GET", "/v1/apps/{id}", 200, appDoc)
 	k.ASC.Handle("GET", "/v1/builds", 200, buildsDoc)
 	k.ASC.Handle("GET", "/v1/apps/{id}/appInfos", 200, appInfosDoc)
+	k.ASC.Handle("GET", "/v1/apps/{id}/appStoreVersions", 200, inFlightBuildsDoc)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "apps_get"), k.Env, `{"app":"Hjul"}`))
 
 	if n := len(k.ASC.Requests()); n > 4 {
@@ -132,6 +142,12 @@ func TestAppsGet(t *testing.T) {
 	}
 	if want := []string{"IOS 3.0 WAITING_FOR_REVIEW", "MAC_OS 1.0 PREPARE_FOR_SUBMISSION"}; !slices.Equal(inFlight, want) {
 		t.Errorf("in flight = %v, want %v", inFlight, want)
+	}
+	if b := out.InFlight[0].Build; b == nil || b.Number != "42" || b.ProcessingState != "VALID" {
+		t.Errorf("in_flight[0].build = %+v, want number 42 VALID", b)
+	}
+	if out.InFlight[1].Build != nil {
+		t.Errorf("in_flight[1].build = %+v, want none", out.InFlight[1].Build)
 	}
 	if len(out.Builds) != 2 || out.Builds[0].Number != "42" || out.Builds[0].Version != "3.0" {
 		t.Errorf("builds = %+v", out.Builds)

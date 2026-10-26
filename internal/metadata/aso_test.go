@@ -89,7 +89,7 @@ func TestDiffKeywordHygiene(t *testing.T) {
 			t.Errorf("missing %s in %+v", code, p.Warnings)
 		}
 	}
-	if m := issue(p.Warnings, IssueKeywordsSpaces).Message; !strings.Contains(m, `"hamn,release,store,ship"`) || !strings.Contains(m, "saves 10 bytes") {
+	if m := issue(p.Warnings, IssueKeywordsSpaces).Message; !strings.Contains(m, `"hamn,release,store,ship"`) || !strings.Contains(m, "saves 10") {
 		t.Errorf("spaces message = %q", m)
 	}
 	if m := issue(p.Warnings, IssueKeywordsInName).Message; !strings.Contains(m, "hamn, ship") {

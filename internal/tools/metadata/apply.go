@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/idoo/app-store-connect-mcp/internal/metadata"
@@ -26,7 +27,7 @@ type applyOut struct {
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "metadata_apply", Toolset: tool.Metadata, Class: tool.Write, Confirm: tool.ConfirmByPlan,
+		Name: "metadata_apply", Toolset: tool.Metadata, Class: tool.Destructive, Confirm: tool.ConfirmByPlan,
 		Title: "Apply store listing changes",
 		Description: "Apply a metadata_plan: same arguments plus plan_id; refused if the listing changed since. Creates " +
 			"missing locales; deletes only locales in remove.",
@@ -65,6 +66,7 @@ func metadataApply(ctx context.Context, env *tool.Env, in applyIn) (*tool.Result
 		return nil, err
 	}
 	ao := applyOut{App: p.t.appOut(), Platform: p.t.Platform, Version: p.t.versionOut(), Items: items}
+	var unknown, failed []error
 	for _, it := range items {
 		switch it.Outcome {
 		case metadata.OutcomeOK:
@@ -73,15 +75,26 @@ func metadataApply(ctx context.Context, env *tool.Env, in applyIn) (*tool.Result
 			ao.Already++
 		default:
 			ao.Failed++
+			e := fmt.Errorf("%s %s: %w", it.Level, it.Locale, it.Err)
+			if errors.Is(it.Err, tool.ErrOutcomeUnknown) {
+				unknown = append(unknown, e)
+			} else {
+				failed = append(failed, e)
+			}
 		}
 	}
-	ao.Status = "applied"
-	r := tool.OK(ao)
+	replan := tool.NextStep{Tool: "metadata_plan", Args: p.nextArgs(in.sourceIn)}
+	if ao.Failed > 0 && ao.Applied+ao.Already == 0 {
+		// Outcome-unknown items first, so the result reports outcome_unknown
+		// whenever any change may have been applied.
+		return nil, tool.WithNext(errors.Join(append(unknown, failed...)...), replan)
+	}
 	if ao.Failed > 0 {
 		ao.Status = "partial"
-		r = tool.OK(ao).Warn(fmt.Sprintf("%d change(s) failed; re-run metadata_plan to see what remains", ao.Failed))
+		return tool.OK(ao).Warn(fmt.Sprintf("%d change(s) failed; re-run metadata_plan to see what remains", ao.Failed)).Then(replan), nil
 	}
-	return r.Then(tool.NextStep{Tool: "release_status", Args: map[string]any{
+	ao.Status = "applied"
+	return tool.OK(ao).Then(tool.NextStep{Tool: "release_status", Args: map[string]any{
 		"app": p.t.App.ID, "platform": string(p.t.Platform), "version": p.t.Version.String,
 	}}), nil
 }

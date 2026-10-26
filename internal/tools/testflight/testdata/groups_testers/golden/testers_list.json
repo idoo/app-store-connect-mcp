@@ -10,6 +10,8 @@
       "internal": false
     },
     "returned": 2,
+    "scanned": 2,
+    "state_filtered": true,
     "testers": [
       {
         "id": "t1",
@@ -39,8 +41,7 @@
           "External Testers"
         ]
       }
-    ],
-    "total": 2
+    ]
   },
   "requests": [
     {

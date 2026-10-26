@@ -36,6 +36,8 @@ type fixture struct {
 	iapState string
 	// subtitle overrides the appInfo subtitle of the last locale.
 	subtitle string
+	// macOS adds an editable MAC_OS 3.6 version next to the iOS one.
+	macOS bool
 }
 
 func readyFixture() fixture { return fixture{locales: []string{"en-US", "de-DE"}} }
@@ -134,6 +136,13 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		Attrs: map[string]any{"primaryLocale": "en-US", "contentRightsDeclaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT"},
 		Rels:  map[string]any{"appStoreVersions": verIDs},
 	}, appInc...))
+
+	// Active versions on every platform (release_status without a platform).
+	active := []jres{{Type: "appStoreVersions", ID: "v1", Attrs: map[string]any{"platform": "IOS", "versionString": "1.4", "appVersionState": state}}}
+	if f.macOS {
+		active = append(active, jres{Type: "appStoreVersions", ID: "m1", Attrs: map[string]any{"platform": "MAC_OS", "versionString": "3.6", "appVersionState": "PREPARE_FOR_SUBMISSION"}})
+	}
+	k.ASC.Handle("GET", "/v1/apps/{id}/appStoreVersions", 200, doc(t, active))
 
 	// Version with localizations, build, review detail.
 	var locRels, infoLocRels []string
@@ -292,7 +301,7 @@ func TestReleaseStatusBlocked(t *testing.T) {
 	k := setup(t, f)
 	out, _ := call(t, k, `{"app":"Hjul"}`)
 	want := map[string]string{
-		"build": statusBlock, "export_compliance": statusBlock, "listing": statusWarn,
+		"build": statusBlock, "export_compliance": statusBlock, "listing": statusBlock,
 		"screenshots": statusBlock, "pricing_availability": statusBlock, "whats_new": statusOK,
 	}
 	for id, st := range want {
@@ -303,10 +312,10 @@ func TestReleaseStatusBlocked(t *testing.T) {
 	if c := checkByID(t, out, "screenshots"); len(c.Items) != 1 || !strings.Contains(c.Items[0], "en-US: no screenshots for APP_IPHONE_67 or APP_IPHONE_65") {
 		t.Errorf("screenshot items = %v", c.Items)
 	}
-	if c := checkByID(t, out, "listing"); len(c.Items) != 1 || !strings.HasPrefix(c.Items[0], "de-DE: keywords is 101 bytes") || !strings.Contains(c.Items[0], "accepted by Apple") {
+	if c := checkByID(t, out, "listing"); len(c.Items) != 1 || !strings.HasPrefix(c.Items[0], "de-DE: keywords is 101 characters") {
 		t.Errorf("listing items = %v", c.Items)
 	}
-	if ready(out) || out.Summary.Block != 4 {
+	if ready(out) || out.Summary.Block != 5 {
 		t.Errorf("summary = %+v", out.Summary)
 	}
 }
@@ -350,6 +359,35 @@ func TestReleaseStatusRequestBudget(t *testing.T) {
 	}
 	if got := k.ASC.RequestsTo("GET", "/v1/appStoreVersions/{id}"); len(got) != 1 || got[0].Query.Get("include") != "appStoreVersionLocalizations,build,appStoreReviewDetail,appStoreVersionPhasedRelease" {
 		t.Errorf("version request = %+v", got)
+	}
+}
+
+// Without a platform, release_status names the app's other active platforms;
+// an explicit platform costs no extra request.
+func TestReleaseStatusOtherPlatforms(t *testing.T) {
+	f := readyFixture()
+	f.macOS = true
+	k := setup(t, f)
+	out, res := call(t, k, `{"app":"Hjul"}`)
+	if !out.PlatformInferred || len(out.OtherPlatforms) != 1 || out.OtherPlatforms[0].Platform != "MAC_OS" || out.OtherPlatforms[0].Version != "3.6" {
+		t.Fatalf("other platforms = %+v (inferred %v)", out.OtherPlatforms, out.PlatformInferred)
+	}
+	found := false
+	for _, n := range res.Next {
+		found = found || (n.Tool == "release_status" && n.Args["platform"] == "MAC_OS")
+	}
+	if !found {
+		t.Fatalf("next = %+v", res.Next)
+	}
+	inferred := len(k.ASC.Requests())
+
+	k2 := setup(t, f)
+	out, _ = call(t, k2, `{"app":"Hjul","platform":"IOS"}`)
+	if out.PlatformInferred || len(out.OtherPlatforms) != 0 || len(k2.ASC.RequestsTo("GET", "/v1/apps/{id}/appStoreVersions")) != 0 {
+		t.Fatalf("explicit platform: %+v", out.OtherPlatforms)
+	}
+	if got := len(k2.ASC.Requests()); got != inferred-1 {
+		t.Fatalf("explicit platform made %d requests, inferred %d", got, inferred)
 	}
 }
 

@@ -95,6 +95,8 @@ allow_writes = false    # only false does anything
 
 A pin can only narrow things. `allow_writes = true` is ignored with a warning. Outside `trusted_pins`, a pin may only pick a read-only profile, so a cloned repo can't aim your agent at production.
 
+Earlier releases read `.asc-mcp.toml` and `.hamn.toml`. If one of those is in a walked directory without an `.app-store-connect-mcp.toml` next to it, and it holds pin keys, the server and `doctor` refuse to start and print the `mv` that renames it. A read-only pin is never silently dropped. A file with those names that holds another server's settings is ignored. Likewise, when `~/.config/app-store-connect-mcp/config.toml` is missing but `~/.config/asc-mcp/config.toml` or `~/.config/hamn/config.toml` has profiles, startup and `doctor` warn and print the `mv`.
+
 ## Toolsets
 
 `core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin` and `store` are opt-in.

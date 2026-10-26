@@ -46,8 +46,8 @@ func (x *Index) describe(op *Op) *tool.OpDescription {
 	if op.Method == http.MethodGet {
 		// asc_api_get arguments: concrete fields/include/limit, not only the template.
 		delete(example, "method")
-		if f := d.Fields[targetType(op.ID)]; len(f) > 0 {
-			example["fields"] = map[string]string{targetType(op.ID): strings.Join(f[:min(len(f), exampleFields)], ",")}
+		if f := preferredFields(d.Fields[targetType(op.ID)]); len(f) > 0 {
+			example["fields"] = map[string]string{targetType(op.ID): strings.Join(f, ",")}
 		}
 		if len(d.Includes) > 0 {
 			example["include"] = d.Includes[:1]
@@ -70,6 +70,35 @@ func (x *Index) describe(op *Op) *tool.OpDescription {
 
 // exampleFields caps the sparse fieldset shown in a GET example.
 const exampleFields = 3
+
+// preferredFields picks up to exampleFields names an agent most likely wants,
+// in priority order: name, referenceName, title, then *State/*Status, then
+// versionString, then *Date. It returns nil when none match, so the example
+// never suggests an arbitrary (alphabetical) fieldset.
+func preferredFields(names []string) []string {
+	tiers := []func(string) bool{
+		func(n string) bool { return n == "name" },
+		func(n string) bool { return n == "referenceName" },
+		func(n string) bool { return n == "title" },
+		func(n string) bool {
+			return strings.HasSuffix(n, "State") || strings.HasSuffix(n, "state") || strings.HasSuffix(n, "Status")
+		},
+		func(n string) bool { return n == "versionString" },
+		func(n string) bool { return strings.HasSuffix(n, "Date") },
+	}
+	var out []string
+	for _, match := range tiers {
+		for _, n := range names {
+			if len(out) == exampleFields {
+				return out
+			}
+			if match(n) && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
+}
 
 // examplePath fills each {param} of a template with a visible placeholder
 // ("/v1/apps/{id}/builds" → "/v1/apps/<id>/builds").

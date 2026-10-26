@@ -709,3 +709,86 @@ func TestUnauthorizedWithClockSkewSkipsRefresh(t *testing.T) {
 		t.Fatalf("body = %+v, want doctor next step", b)
 	}
 }
+
+// errTokens fails like a real token source does once its ctx is cancelled.
+type errTokens struct{}
+
+func (errTokens) Token(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("load key: %w", err)
+	}
+	return "", errors.New("load key: no key")
+}
+
+func (errTokens) Invalidate(string) {}
+
+func TestSendCancelledWhileWaitingForSlotIsNotSent(t *testing.T) {
+	release := make(chan struct{})
+	getStarted := make(chan struct{})
+	var posts atomic.Int32
+	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts.Add(1)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"data":{"type":"inAppPurchases","id":"1"}}`)
+			return
+		}
+		close(getStarted)
+		<-release
+		_, _ = io.WriteString(w, `{"data":[]}`)
+	}, func(o *Options) { o.MaxConcurrent = 1 })
+
+	getDone := make(chan error, 1)
+	go func() {
+		_, err := hs.c.Get(context.Background(), "/v1/apps", nil)
+		getDone <- err
+	}()
+	<-getStarted
+
+	ctx, cancel := context.WithCancel(writeCtx(t))
+	timer := time.AfterFunc(20*time.Millisecond, cancel)
+	defer timer.Stop()
+	_, err := hs.c.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/inAppPurchases", Body: map[string]any{}, Write: true})
+	close(release)
+	if gerr := <-getDone; gerr != nil {
+		t.Fatalf("blocking GET: %v", gerr)
+	}
+	if errors.Is(err, tool.ErrOutcomeUnknown) {
+		t.Fatalf("err = %v, want not outcome_unknown (request never sent)", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled in chain", err)
+	}
+	if n := posts.Load(); n != 0 {
+		t.Fatalf("server saw %d POSTs, want 0", n)
+	}
+}
+
+func TestSendTokenErrorOnCancelledPostIsNotOutcomeUnknown(t *testing.T) {
+	hs := newHarness(t, func(http.ResponseWriter, *http.Request) {}, func(o *Options) { o.Tokens = errTokens{} })
+	ctx, cancel := context.WithCancel(writeCtx(t))
+	cancel()
+	_, err := hs.c.Do(ctx, tool.Request{Method: http.MethodPost, Path: "/v1/inAppPurchases", Body: map[string]any{}, Write: true})
+	if err == nil || errors.Is(err, tool.ErrOutcomeUnknown) {
+		t.Fatalf("err = %v, want a not-sent error, not outcome_unknown", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled in chain", err)
+	}
+	if n := hs.hits.Load(); n != 0 {
+		t.Fatalf("server saw %d requests, want 0", n)
+	}
+}
+
+func TestSendPostReaching500IsOutcomeUnknown(t *testing.T) {
+	hs := newHarness(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL", "boom", "")
+	}, nil)
+	_, err := hs.c.Do(writeCtx(t), tool.Request{Method: http.MethodPost, Path: "/v1/inAppPurchases", Body: map[string]any{}, Write: true})
+	if !errors.Is(err, tool.ErrOutcomeUnknown) {
+		t.Fatalf("err = %v, want outcome_unknown", err)
+	}
+	if n := hs.hits.Load(); n != 1 {
+		t.Fatalf("server saw %d requests, want 1", n)
+	}
+}

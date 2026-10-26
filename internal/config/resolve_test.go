@@ -310,3 +310,30 @@ func TestResolveModes(t *testing.T) {
 }
 
 func strp(s string) *string { return &s }
+
+func TestResolveLegacyConfigWarning(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		warn       bool
+	}{
+		{"profiles", "[profiles.a]\nkey_id = \"K\"\nissuer_id = \"iss\"\nkey_path = \"/k.p8\"\n", true},
+		{"no profiles", "default_profile = \"a\"\n", false},
+	} {
+		for _, dir := range legacyConfigDirs {
+			t.Run(tc.name+"/"+dir, func(t *testing.T) {
+				home := t.TempDir()
+				xdg := filepath.Join(home, ".config")
+				writeFile(t, filepath.Join(xdg, dir, "config.toml"), tc.body, 0o600)
+				env := envMap(map[string]string{"XDG_CONFIG_HOME": xdg, "HOME": home, "AppData": xdg})
+				r, err := Resolve(Options{Getenv: env, Cwd: home, Home: home})
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := slices.ContainsFunc(r.Warnings, func(w string) bool { return strings.Contains(w, "mv") })
+				if got != tc.warn {
+					t.Fatalf("warnings = %v, want mv warning %v", r.Warnings, tc.warn)
+				}
+			})
+		}
+	}
+}

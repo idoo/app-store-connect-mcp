@@ -20,7 +20,7 @@ type pullIn struct {
 	Platform  tool.Platform   `json:"platform,omitempty"`
 	Version   tool.VersionRef `json:"version,omitempty" jsonschema:"editable (default, else live), live or a version string"`
 	Locales   tool.LocaleSet  `json:"locales,omitempty" jsonschema:"locales or aliases; default all"`
-	ExportDir string          `json:"export_dir,omitempty" jsonschema:"fastlane dir to write (new, empty or named metadata)"`
+	ExportDir string          `json:"export_dir,omitempty" jsonschema:"fastlane dir; never overwrites edited files"`
 	Fields    []string        `json:"fields,omitempty" jsonschema:"only these fields, e.g. [\"subtitle\",\"keywords\"]; default all"`
 }
 
@@ -38,6 +38,7 @@ type pullOut struct {
 	AvailableLocales []string                          `json:"available_locales,omitempty"`
 	ExportDir        string                            `json:"export_dir,omitempty"`
 	Written          []string                          `json:"written,omitempty"`
+	Conflicts        []string                          `json:"conflicts,omitempty"`
 }
 
 func init() {
@@ -148,13 +149,16 @@ func metadataPull(ctx context.Context, env *tool.Env, in pullIn) (*tool.Result, 
 		if err := checkExportDir(env.Files, in.ExportDir); err != nil {
 			return nil, err
 		}
-		written, err := metadata.ToFastlane(env.Files, in.ExportDir, &metadata.Listing{Locales: listing.Locales})
+		written, conflicts, err := metadata.ToFastlane(env.Files, in.ExportDir, &metadata.Listing{Locales: listing.Locales})
 		out.ExportDir = in.ExportDir
-		out.Written = written
+		out.Written, out.Conflicts = written, conflicts
 		if err != nil {
 			return nil, err
 		}
 		res.Warn("wrote local files only; nothing changed in App Store Connect")
+		if len(conflicts) > 0 {
+			res.Warn(fmt.Sprintf("%d local file(s) differ from App Store Connect and were kept; delete them or use a new export_dir to take the remote text", len(conflicts)))
+		}
 	}
 	if out.InFlight != nil || out.Source == "in_flight" {
 		return res.Then(tool.NextStep{Tool: "release_review_status", Args: map[string]any{"app": t.App.ID, "platform": string(t.Platform)}}), nil

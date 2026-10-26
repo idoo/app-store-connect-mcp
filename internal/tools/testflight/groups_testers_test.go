@@ -138,6 +138,23 @@ func TestTestersListByGroupName(t *testing.T) {
 	}
 }
 
+// A client-side state filter can't use Apple's unfiltered total.
+func TestTestersListStateFilterScanned(t *testing.T) {
+	k := newKit(t)
+	var items []string
+	for i, st := range []string{"INVITED", "INSTALLED", "INVITED", "ACCEPTED", "INVITED"} {
+		items = append(items, `{"type":"betaTesters","id":"t`+jsonInt(i)+`","attributes":{"email":"x`+jsonInt(i)+
+			`@example.com","state":"`+st+`","inviteType":"EMAIL"}}`)
+	}
+	k.ASC.Handle(http.MethodGet, "/v1/betaTesters", http.StatusOK,
+		`{"data":[`+strings.Join(items, ",")+`],"links":{},"meta":{"paging":{"total":40,"limit":200}}}`)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "testflight_testers_list"), k.Env, `{"state":"INVITED"}`))
+	d := tooltest.Decode[map[string]any](t, res)
+	if _, ok := d["total"]; ok || d["scanned"] != float64(5) || d["state_filtered"] != true || d["returned"] != float64(3) {
+		t.Fatalf("out = %s", tooltest.JSON(t, d))
+	}
+}
+
 func TestTestersAddIdempotent(t *testing.T) {
 	k := newKit(t)
 	// Lookup: members of the group, then team-wide testers.

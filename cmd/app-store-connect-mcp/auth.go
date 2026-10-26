@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -75,6 +76,10 @@ func runAuth(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		if err != nil {
 			return err
 		}
+		snap, err := snapshotConfig()
+		if err != nil {
+			return err
+		}
 		var name string
 		if args[0] == "add" {
 			name, err = authAdd(p, o, stdout, stderr)
@@ -84,7 +89,7 @@ func runAuth(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		if err != nil {
 			return err
 		}
-		return afterSave(ctx, name, o.noVerify, stdout)
+		return afterSave(ctx, saveCheck{p: p, tty: isTerminal(stdin), snap: snap}, name, o.noVerify, stdout)
 	case "list":
 		return authList(stdout, stderr)
 	case "test":
@@ -129,24 +134,163 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
-// afterSave checks the new profile against Apple (unless noVerify) and
-// prints the next step.
-func afterSave(ctx context.Context, name string, noVerify bool, stdout io.Writer) error {
+// saveCheck carries what afterSave needs to re-prompt for or roll back a
+// rejected default_app.
+type saveCheck struct {
+	p    *prompter
+	tty  bool
+	snap configSnapshot
+}
+
+// afterSave checks the new profile against Apple (unless noVerify), checks
+// its default_app against the apps the key can see, and prints the next step.
+func afterSave(ctx context.Context, sc saveCheck, name string, noVerify bool, stdout io.Writer) error {
 	r, err := config.Resolve(config.Options{Flags: config.Flags{Profile: name}})
 	if err != nil {
 		return err
 	}
 	if !noVerify {
-		if _, _, err := probeApple(ctx, r); err != nil {
+		c, _, err := probeApple(ctx, r)
+		if err != nil {
 			return fmt.Errorf("profile %q is saved, but the check against Apple failed: %w%s", name, err, authChecklist(err, r.Profile))
 		}
 		fmt.Fprintln(stdout, "Apple accepted the key (GET /v1/apps)")
+		if err := checkDefaultApp(ctx, c, sc, name, stdout); err != nil {
+			if rerr := sc.snap.restore(); rerr != nil {
+				return errors.Join(err, rerr)
+			}
+			return err
+		}
 	}
 	if r.Profile.VendorNumber == "" && r.Profile.KeyKind == tool.KeyTeam {
 		fmt.Fprintf(stdout, "for sales and finance reports: app-store-connect-mcp auth set %s vendor_number=<number> (Payments and Financial Reports, top left)\n", name)
 	}
 	fmt.Fprintf(stdout, "next: app-store-connect-mcp config install <%s>\n", strings.Join(clients, "|"))
 	return nil
+}
+
+// configSnapshot is the config file as it was before auth add/import, so a
+// rejected profile leaves the file unchanged.
+type configSnapshot struct {
+	path    string
+	data    []byte
+	existed bool
+}
+
+func snapshotConfig() (configSnapshot, error) {
+	path, err := config.DefaultPath(os.Getenv)
+	if err != nil {
+		return configSnapshot{}, fmt.Errorf("config path: %w", err)
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // path is the user's own config location
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return configSnapshot{path: path}, nil
+	case err != nil:
+		return configSnapshot{}, fmt.Errorf("read config: %w", err)
+	}
+	return configSnapshot{path: path, data: data, existed: true}, nil
+}
+
+func (s configSnapshot) restore() error {
+	if !s.existed {
+		if err := os.Remove(s.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("roll back %s: %w", s.path, err)
+		}
+		return nil
+	}
+	if err := os.WriteFile(s.path, s.data, 0o600); err != nil {
+		return fmt.Errorf("roll back %s: %w", s.path, err)
+	}
+	return nil
+}
+
+// isTerminal reports whether r is an interactive terminal.
+func isTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	fi, err := f.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// checkDefaultApp matches the saved profile's default_app against the apps
+// the key can see (id, bundle id or case-insensitive exact name). On a miss
+// it re-prompts on a terminal and fails otherwise. An empty default_app is
+// allowed.
+func checkDefaultApp(ctx context.Context, c *asc.Client, sc saveCheck, name string, stdout io.Writer) error {
+	path := sc.snap.path
+	cfg, _, err := config.Load(path)
+	if err != nil {
+		return err
+	}
+	prof, ok := cfg.Profiles[name]
+	if !ok || prof.DefaultApp == "" {
+		return nil
+	}
+	apps, err := c.List(ctx, "/v1/apps", tool.ListOptions{
+		Fields:   map[string][]string{"apps": {"name", "bundleId"}},
+		MaxItems: 5000,
+	})
+	if err != nil {
+		return fmt.Errorf("default_app %q: list apps: %w", prof.DefaultApp, err)
+	}
+	want := prof.DefaultApp
+	for !matchesApp(apps.Data, want) {
+		if !sc.tty {
+			return fmt.Errorf("default_app %q matches no app this key can see (use an app id, bundle id or exact name); nothing was saved", want)
+		}
+		fmt.Fprintf(sc.p.out, "default_app %q matches no app. Apps: %s\n", want, appNames(apps.Data, 5))
+		if want, err = sc.p.ask("Default app id or bundle id (optional)", ""); err != nil {
+			return err
+		}
+		if want == "" {
+			break
+		}
+	}
+	if want == prof.DefaultApp {
+		return nil
+	}
+	prof.DefaultApp = want
+	cfg.Profiles[name] = prof
+	if err := config.Save(path, cfg); err != nil {
+		return fmt.Errorf("save %s: %w", path, err)
+	}
+	fmt.Fprintf(stdout, "saved default_app %q for profile %q\n", want, name)
+	return nil
+}
+
+func matchesApp(apps []tool.Resource, v string) bool {
+	for _, a := range apps {
+		if a.ID == v || attr(a, "bundleId") == v || strings.EqualFold(attr(a, "name"), v) {
+			return true
+		}
+	}
+	return false
+}
+
+func appNames(apps []tool.Resource, n int) string {
+	names := make([]string, 0, n)
+	for _, a := range apps {
+		if len(names) == n {
+			break
+		}
+		names = append(names, fmt.Sprintf("%s (%s)", attr(a, "name"), attr(a, "bundleId")))
+	}
+	return strings.Join(names, ", ")
+}
+
+// attr returns a string attribute, unwrapping third-party text such as app
+// names.
+func attr(r tool.Resource, k string) string {
+	switch v := r.Attributes[k].(type) {
+	case string:
+		return v
+	case tool.Untrusted:
+		return string(v)
+	}
+	return ""
 }
 
 // authChecklist explains a 401 from Apple: the three inputs that can be wrong.
