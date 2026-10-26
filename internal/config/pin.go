@@ -90,7 +90,7 @@ func checkLegacyPins(dir string) error {
 		if decodeStrict(data, &pin) != nil {
 			continue
 		}
-		return fmt.Errorf("pin %s: this file name is no longer read; rename it: mv %q %q", old, old, newPath)
+		return fmt.Errorf(`pin %s: this file name is no longer read; rename it: mv "%s" "%s"`, old, old, newPath)
 	}
 	return nil
 }
