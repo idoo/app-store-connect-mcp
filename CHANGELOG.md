@@ -4,6 +4,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-26
+
+### Added
+
+- **Asset Library writes**, in the new opt-in `library` toolset.
+  - `library_plan` diffs a fastlane-style folder against the library placements of a version, custom product page, experiment treatment or in-app event.
+  - Folders can also hold `header.*`, `search.*`, `header-search.*`, `event-card.*` and `event-details.*` creatives.
+  - `library_apply` runs the plan: upload, place, reorder, then delete or archive.
+  - Files are checked locally against Apple's own spec data (size, alpha, type, per-group limits) and filtered to the target's platform.
+  - An asset already in the library is reused instead of uploaded again.
+  - Removing, archiving or replacing needs your approval.
+- `release_status` reads the attached build's device list: a build with a watch app needs Watch screenshots, and watch-only or iMessage-only apps aren't asked for iPhone screenshots.
+- `builds_upload` reads the platform from the `.ipa`'s Info.plist and refuses an explicit `platform` that disagrees.
+- `asc_api_get` returns a summary and a resource link for a single resource too big to inline, such as `appAssetLibraryRefData`.
+
+### Fixed
+
+- Library images that are rejected, archived, still uploading or missing no longer count as filling a screenshot slot. `release_status` says why each one doesn't count, and warns on unknown placement states.
+- A screenshot that appears both in a set and as a library placement is counted once.
+- `screenshots_plan` accepted no alpha anywhere; Mac screenshots may have it.
+- `screenshots_plan` now accepts 8 legacy 3.5", 4" and 9.7" iPad sizes that Apple still takes.
+- Money keeps every digit Apple sends: JPY `255.5` stays `255.5`, and totals are no longer rounded.
+- `ParseAmount` no longer reads `0x10` as 16.
+- `asc_api_get` rejects `query.limit` above 200 and a negative `limit` before calling Apple.
+- `asc_api_get` keeps all text from reviews, testers and feedback marked untrusted, including all-caps words and dates.
+
 ## [0.11.0] - 2026-10-26
 
 ### Added
@@ -253,7 +279,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.8.0...v0.9.0

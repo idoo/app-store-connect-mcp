@@ -66,9 +66,13 @@ func TestPrcMoney(t *testing.T) {
 		{"SEK", "29.0", "29.00"},
 		{"KWD", "1.2", "1.200"},
 		{"HUF", "1290.5", "1290.50"},
-		{"", "1.4", "1.4"},    // unknown currency: as Apple sent it
-		{"USD", "", ""},       // absent stays absent
-		{"USD", "n/a", "n/a"}, // not a decimal: as Apple sent it
+		{"JPY", "255.5", "255.5"},     // B6: zero-fill only, never round away digits
+		{"KRW", "1234.56", "1234.56"}, // B6
+		{"USD", "0.005", "0.005"},     // B6
+		{"USD", "0x10", "0x10"},       // B7: hex is not a decimal
+		{"", "1.4", "1.4"},            // unknown currency: as Apple sent it
+		{"USD", "", ""},               // absent stays absent
+		{"USD", "n/a", "n/a"},         // not a decimal: as Apple sent it
 	} {
 		if got := prcMoney(tc.cur, tc.in); got != tc.want {
 			t.Errorf("prcMoney(%q, %q) = %q, want %q", tc.cur, tc.in, got, tc.want)

@@ -272,7 +272,7 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 			ch = pctChange(cur, p)
 		}
 		out.Proceeds = append(out.Proceeds, proceedsChange{
-			Currency: c, Amount: reports.FormatAmount(c, cur), Previous: reports.FormatAmount(c, p), Change: ch,
+			Currency: c, Amount: reports.FormatExact(c, cur), Previous: reports.FormatExact(c, p), Change: ch,
 		})
 	}
 	if len(prevPending) > 0 {

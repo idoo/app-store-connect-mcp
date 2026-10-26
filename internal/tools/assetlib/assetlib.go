@@ -205,11 +205,57 @@ func UnknownGroups(ps []Placement) []string {
 	return out
 }
 
-// Covers reports whether a usable APP_SCREENSHOT placement in ps fills
-// display d per Apple's group table.
+// Placement states (AppAssetLibraryPlacement state). Live, Apple also
+// returns ACTIVE, which the spec does not list.
+const (
+	PlacementActive     = "ACTIVE"
+	PlacementProcessing = "ASSET_PROCESSING"
+	PlacementFailed     = "FAILED"
+	parentStatePrefix   = "PARENT_"
+)
+
+// knownPlacementState reports a placement state from the spec enum or ACTIVE.
+func knownPlacementState(s string) bool {
+	switch s {
+	case PlacementActive, PlacementProcessing, PlacementFailed,
+		"PARENT_PREPARE_FOR_SUBMISSION", "PARENT_READY_FOR_REVIEW", "PARENT_WAITING_FOR_REVIEW", "PARENT_IN_REVIEW", "PARENT_APPROVED":
+		return true
+	}
+	return false
+}
+
+// Blocker returns why p cannot fill a slot ("" when it can): a failed or
+// processing placement, a placement without its asset, or an asset whose
+// state is not [Usable] (AWAITING_UPLOAD, UPLOAD_COMPLETE, FAILED, REJECTED,
+// ARCHIVED, …). Callers report the reason as an item.
+func (p Placement) Blocker() string {
+	switch {
+	case p.State == PlacementFailed:
+		return "placement " + p.ID + " FAILED"
+	case p.State == PlacementProcessing:
+		return "placement " + p.ID + " asset still processing"
+	case p.AssetID == "" || p.AssetState == "":
+		return "placement " + p.ID + " has no readable asset"
+	case !Usable(p.AssetState):
+		return fmt.Sprintf("placement %s asset %s is %s", p.ID, p.AssetID, p.AssetState)
+	}
+	return ""
+}
+
+// Warning returns a note for a placement state hamn does not know (it still
+// covers when its asset is usable), else "".
+func (p Placement) Warning() string {
+	if p.State == "" || knownPlacementState(p.State) || strings.HasPrefix(p.State, parentStatePrefix) {
+		return ""
+	}
+	return fmt.Sprintf("placement %s has unknown state %s", p.ID, p.State)
+}
+
+// Covers reports whether an APP_SCREENSHOT placement in ps whose asset is
+// usable ([Placement.Blocker] empty) fills display d per Apple's group table.
 func Covers(ps []Placement, d applemeta.DisplayType) bool {
 	return slices.ContainsFunc(ps, func(p Placement) bool {
 		ds, _ := Displays(p.Group)
-		return p.Type == TypeScreenshot && !p.Failed() && slices.Contains(ds, d)
+		return p.Type == TypeScreenshot && p.Blocker() == "" && slices.Contains(ds, d)
 	})
 }

@@ -95,7 +95,7 @@ func TestMoneyExact(t *testing.T) {
 	m.Add("JPY", big.NewRat(4205, 10))
 	m.Add("KWD", big.NewRat(12345, 10000))
 	m.Add("", big.NewRat(1, 1))
-	if got, want := m.String(), "JPY 421, KWD 1.235, UNKNOWN 1.00, USD 0.30"; got != want {
+	if got, want := m.String(), "JPY 420.5, KWD 1.2345, UNKNOWN 1.00, USD 0.30"; got != want { // B6: never rounded
 		t.Fatalf("String() = %q, want %q", got, want)
 	}
 	b, err := json.Marshal(m)

@@ -6,11 +6,12 @@ import (
 	"testing"
 )
 
-// MA1: ISO 4217 minor units; HUF, TWD and IDR keep 2 decimals.
-func TestFormatAmountMinorUnits(t *testing.T) {
+// MA1 + B6: ISO 4217 minor units are zero-filled (HUF, TWD and IDR keep 2
+// decimals) and extra digits are never rounded away.
+func TestFormatExactMinorUnits(t *testing.T) {
 	for _, tc := range []struct{ cur, in, want string }{
 		{"JPY", "420", "420"},
-		{"JPY", "204.5", "205"},
+		{"JPY", "204.5", "204.5"},
 		{"KWD", "1.166", "1.166"},
 		{"KWD", "0.5", "0.500"},
 		{"HUF", "12.34", "12.34"},
@@ -24,8 +25,8 @@ func TestFormatAmountMinorUnits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := FormatAmount(tc.cur, v); got != tc.want {
-			t.Errorf("FormatAmount(%s, %s) = %q, want %q", tc.cur, tc.in, got, tc.want)
+		if got := FormatExact(tc.cur, v); got != tc.want {
+			t.Errorf("FormatExact(%s, %s) = %q, want %q", tc.cur, tc.in, got, tc.want)
 		}
 	}
 }
@@ -49,6 +50,45 @@ func TestParseAmountThousands(t *testing.T) {
 		if v, err := ParseAmount(in); !errors.Is(err, ErrCorrupt) {
 			t.Errorf("ParseAmount(%q) = %v, %v; want ErrCorrupt", in, v, err)
 		}
+	}
+}
+
+// B7: only [-]digits[,ddd]*[.digits] (or its parenthesised negative) parses;
+// big.Rat's wider syntax is corrupt.
+func TestParseAmountStrictGrammar(t *testing.T) {
+	for _, in := range []string{"0x10", "0X1F", "0b101", "0o17", "1/2", "+1", "+1,234.5", "1e3", ".5", "1.", "--1", "1.2.3", "１２", "NaN", "Inf", "1_000"} {
+		if v, err := ParseAmount(in); !errors.Is(err, ErrCorrupt) {
+			t.Errorf("ParseAmount(%q) = %v, %v; want ErrCorrupt", in, v, err)
+		}
+	}
+	for _, in := range []string{"0", "-0.70", "(3.10)", "007", "1,234,567.891"} {
+		if _, err := ParseAmount(in); err != nil {
+			t.Errorf("ParseAmount(%q): %v", in, err)
+		}
+	}
+}
+
+// B6: FormatExact zero-fills to the currency's decimals and never drops digits.
+func TestFormatExact(t *testing.T) {
+	for _, tc := range []struct{ cur, in, want string }{
+		{"JPY", "255.5", "255.5"},
+		{"JPY", "300.0", "300"},
+		{"USD", "1.4", "1.40"},
+		{"USD", "0.005", "0.005"},
+		{"KRW", "1234.56", "1234.56"},
+		{"KWD", "1.2", "1.200"},
+		{"USD", "-2.7", "-2.70"},
+	} {
+		v, err := ParseAmount(tc.in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := FormatExact(tc.cur, v); got != tc.want {
+			t.Errorf("FormatExact(%s, %s) = %q, want %q", tc.cur, tc.in, got, tc.want)
+		}
+	}
+	if got := FormatExact("USD", big.NewRat(1, 3)); got != "0.33" {
+		t.Errorf("FormatExact(USD, 1/3) = %q, want 0.33", got)
 	}
 }
 

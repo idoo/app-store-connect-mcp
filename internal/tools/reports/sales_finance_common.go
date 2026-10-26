@@ -137,7 +137,7 @@ func currencyAmounts(m reports.Money) []amountOut {
 	curs := m.Currencies()
 	out := make([]amountOut, 0, len(curs))
 	for _, c := range curs {
-		out = append(out, amountOut{Currency: c, Amount: reports.FormatAmount(c, m[c])})
+		out = append(out, amountOut{Currency: c, Amount: reports.FormatExact(c, m[c])})
 	}
 	return out
 }

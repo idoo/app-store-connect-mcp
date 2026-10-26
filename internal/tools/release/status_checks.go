@@ -52,6 +52,7 @@ type check struct {
 type screenshotSet struct {
 	Display applemeta.DisplayType
 	States  []string // assetDeliveryState.state per screenshot
+	IDs     []string // appScreenshot ids, parallel to States
 }
 
 // statusSnapshot is everything the preflight reads.
@@ -64,7 +65,9 @@ type statusSnapshot struct {
 	// is required only then).
 	PriorReleased bool
 	// Version is nil when the requested version does not exist.
-	Version    *versionDetail
+	Version *versionDetail
+	// Devices is what the attached iOS build ships to; nil when unknown.
+	Devices    *buildDevices
 	VersionRef tool.VersionRef
 	// InFlight is the newest locked (submitted, unreleased) version of the
 	// platform, from the app's included versions; nil when none.
@@ -347,12 +350,24 @@ func checkScreenshots(s *statusSnapshot) check {
 		}
 	}
 	required := applemeta.RequiredDisplays(s.Platform, supportsIPad)
-	// The API does not say whether a build runs on iPad, so an iOS version
-	// with no iPad screenshots anywhere is never reported as covered.
-	ipadUnknown := s.Platform == tool.IOS && !supportsIPad
+	watchOnly := s.Devices != nil && s.Devices.Watch && !s.Devices.IPhone && !s.Devices.IPad
+	imessageOnly := s.Platform == tool.IOS && imessageOnlySets(s)
+	switch {
+	case watchOnly:
+		required = [][]applemeta.DisplayType{watchDisplays}
+	case imessageOnly:
+		// Only iMessage sets exist: the iMessage slots stand in for iPhone.
+		required = [][]applemeta.DisplayType{{applemeta.IMessageIPhone67, applemeta.IMessageIPhone65}}
+	case s.Devices != nil && s.Devices.Watch:
+		required = append(required, watchDisplays) // the build bundles a watch app
+	}
+	// The API does not say whether a build runs on iPad (thinning lists iPad
+	// models for iPhone-only apps too), so an iOS version with no iPad
+	// screenshots anywhere is never reported as covered.
+	ipadUnknown := s.Platform == tool.IOS && !supportsIPad && !watchOnly && !imessageOnly
 	if ipadUnknown {
 		ipad := applemeta.RequiredDisplays(s.Platform, true)
-		if len(ipad) > len(required) {
+		if len(ipad) > len(applemeta.RequiredDisplays(s.Platform, false)) {
 			c.Items = append(c.Items, fmt.Sprintf("%s: no iPad screenshots; if the build supports iPad, %s is required", s.AppAttrs.Str("primaryLocale"), joinDisplays(ipad[len(ipad)-1])))
 		}
 	}
@@ -377,19 +392,24 @@ func checkScreenshots(s *statusSnapshot) check {
 				}
 			}
 		}
-		lib := s.Library[loc]
+		lib := dedupeLibrary(s.Library[loc], s.Screenshots[loc])
 		libShots := 0
 		for _, p := range lib {
 			if p.Type != assetlib.TypeScreenshot {
 				continue
 			}
 			libShots++
-			switch {
+			switch b := p.Blocker(); {
 			case p.Failed():
-				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s FAILED", loc, p.Group, p.ID))
+				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s", loc, p.Group, b))
 				c.Status = statusBlock
-			case p.Processing():
-				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s still processing", loc, p.Group, p.ID))
+			case b != "":
+				// Not usable, so it fills no slot; a slot left empty blocks below.
+				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s", loc, p.Group, b))
+				warn = true
+			}
+			if w := p.Warning(); w != "" {
+				c.Items = append(c.Items, fmt.Sprintf("%s: %s library screenshot %s", loc, p.Group, w))
 				warn = true
 			}
 		}
@@ -419,6 +439,53 @@ func checkScreenshots(s *statusSnapshot) check {
 		c.Detail, c.FixVia = "required display types covered", nil
 	}
 	return c
+}
+
+// buildDevices is which device kinds a build's App bundle ships to.
+type buildDevices struct{ IPhone, IPad, Watch bool }
+
+// watchDisplays is "at least one Apple Watch slot".
+var watchDisplays = []applemeta.DisplayType{applemeta.WatchUltra, applemeta.WatchSeries10, applemeta.WatchSeries7, applemeta.WatchSeries4, applemeta.WatchSeries3}
+
+// imessageOnlySets reports a version whose only screenshots are iMessage
+// sets (no app sets, no library screenshots): an iMessage-only app.
+func imessageOnlySets(s *statusSnapshot) bool {
+	imessage := false
+	for _, sets := range s.Screenshots {
+		for _, set := range sets {
+			if len(set.States) == 0 {
+				continue
+			}
+			if !strings.HasPrefix(string(set.Display), "IMESSAGE_") {
+				return false
+			}
+			imessage = true
+		}
+	}
+	for _, ps := range s.Library {
+		if slices.ContainsFunc(ps, func(p assetlib.Placement) bool { return p.Type == assetlib.TypeScreenshot }) {
+			return false
+		}
+	}
+	return imessage
+}
+
+// dedupeLibrary drops placements that mirror a set screenshot: Apple shows
+// one record through both paths, so it is counted (and reported) once, via
+// its set.
+func dedupeLibrary(ps []assetlib.Placement, sets []screenshotSet) []assetlib.Placement {
+	ids := map[string]bool{}
+	for _, set := range sets {
+		for _, id := range set.IDs {
+			ids[id] = true
+		}
+	}
+	if len(ids) == 0 {
+		return ps
+	}
+	return slices.DeleteFunc(slices.Clone(ps), func(p assetlib.Placement) bool {
+		return p.Type == assetlib.TypeScreenshot && (ids[p.AssetID] || ids[p.ID])
+	})
 }
 
 func joinDisplays(g []applemeta.DisplayType) string {

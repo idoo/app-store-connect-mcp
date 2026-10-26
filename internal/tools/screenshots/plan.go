@@ -14,9 +14,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tools/assetlib"
 	"github.com/idoo/app-store-connect-mcp/internal/upload"
 )
 
@@ -234,7 +236,7 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn) (*planned, err
 		slices.Sort(only)
 		only = slices.Compact(only)
 	}
-	files, problems, warnings, err := scanDir(env, root, t.Platform, only)
+	files, problems, warnings, err := scanDir(ctx, env, root, t.Platform, only)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +332,16 @@ func fingerprintSets(sets []remoteSet) []remoteSet {
 // in natural order (2.png before 10.png); warnings name locale directories
 // folded into another listing (de-CH → de-DE). A second directory mapping to
 // an already-seen locale is a duplicate_locale problem and is skipped.
-func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) ([]localFile, []problem, []string, error) {
+func scanDir(ctx context.Context, env *tool.Env, root string, platform tool.Platform, only []string) ([]localFile, []problem, []string, error) {
+	// Apple's ref data says which groups take alpha (Mac does). It is read
+	// only when a file has alpha; nil (unreadable) keeps the opaque rule.
+	refData := sync.OnceValue(func() *assetlib.RefData {
+		r, err := assetlib.LoadRefData(ctx, env)
+		if err != nil {
+			return nil
+		}
+		return r
+	})
 	var files []localFile
 	var problems []problem
 	var warnings []string
@@ -404,7 +415,7 @@ func scanDir(env *tool.Env, root string, platform tool.Platform, only []string) 
 				return nil
 			}
 		}
-		f, prob, err := inspect(env, path, rel, locale, display, platform)
+		f, prob, err := inspect(env, path, rel, locale, display, platform, refData)
 		if err != nil {
 			return err
 		}
@@ -463,8 +474,9 @@ func digitRun(s string) (string, string) {
 }
 
 // inspect reads one image: pixel size → display (unless given), validation
-// (format, alpha, exact size) and MD5.
-func inspect(env *tool.Env, path, rel, locale string, display applemeta.DisplayType, platform tool.Platform) (*localFile, *problem, error) {
+// (format, alpha, exact size) and MD5. refData lazily supplies Apple's ref
+// data, which may allow alpha for the display's groups.
+func inspect(env *tool.Env, path, rel, locale string, display applemeta.DisplayType, platform tool.Platform, refData func() *assetlib.RefData) (*localFile, *problem, error) {
 	fh, err := env.Files.Open(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %s: %w", rel, err)
@@ -496,7 +508,7 @@ func inspect(env *tool.Env, path, rel, locale string, display applemeta.DisplayT
 	if _, err := fh.Seek(0, io.SeekStart); err != nil {
 		return nil, nil, fmt.Errorf("rewind %s: %w", rel, err)
 	}
-	if err := upload.ValidateImage(fh, display); err != nil {
+	if err := upload.ValidateImage(fh, display); err != nil && !alphaAllowed(refData, err, display, rel, cfg.Width, cfg.Height) {
 		return nil, &problem{File: rel, Kind: problemInvalidImage, Message: strings.TrimPrefix(err.Error(), tool.ErrInvalidArgs.Message+": ")}, nil
 	}
 	if _, err := fh.Seek(0, io.SeekStart); err != nil {
@@ -514,6 +526,30 @@ func inspect(env *tool.Env, path, rel, locale string, display applemeta.DisplayT
 		path: path, Rel: rel, Locale: locale, Display: display,
 		Width: cfg.Width, Height: cfg.Height, Size: st.Size(), Checksum: sum,
 	}, nil, nil
+}
+
+// alphaAllowed reports whether a ValidateImage failure is only the opaque
+// rule and Apple's ref data lets an APP_SCREENSHOT group of display take an
+// image with alpha at this exact size.
+func alphaAllowed(refData func() *assetlib.RefData, verr error, display applemeta.DisplayType, rel string, w, h int) bool {
+	msg := verr.Error()
+	if !strings.Contains(msg, "alpha channel") && !strings.Contains(msg, "tRNS") {
+		return false
+	}
+	if !applemeta.ValidPixels(display, w, h) {
+		return false
+	}
+	r := refData()
+	if r == nil {
+		return false
+	}
+	ext := strings.ToLower(filepath.Ext(rel))
+	for _, g := range r.Groups("APP_SCREENSHOT", assetlib.FileInfo{Name: filepath.Base(rel), Width: w, Height: h, Alpha: true, Ext: ext}) {
+		if ds, _ := assetlib.Displays(g); slices.Contains(ds, display) && r.AlphaAllowed(g) {
+			return true
+		}
+	}
+	return false
 }
 
 // diffSet plans one set. Local files are already in file-name order.

@@ -106,7 +106,7 @@ Earlier releases read `.asc-mcp.toml` and `.hamn.toml`. If one of those is in a 
 
 ## Toolsets
 
-`core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store` and `insights` are opt-in.
+`core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store`, `insights` and `library` (Asset Library writes) are opt-in.
 
 Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (defaults with edits), `all,-admin`. `core` can't be removed. The `toolsets` tool changes them mid-session and the client gets `tools/list_changed`. Discovery mode starts with core only, for clients with a tool cap.
 
