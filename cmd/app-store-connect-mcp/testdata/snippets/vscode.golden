@@ -1,0 +1,10 @@
+// VS Code: run "MCP: Open User Configuration" (mcp.json)
+{
+  "servers": {
+    "app-store-connect-mcp": {
+      "args": [],
+      "command": "/ABS/PATH/app-store-connect-mcp",
+      "type": "stdio"
+    }
+  }
+}

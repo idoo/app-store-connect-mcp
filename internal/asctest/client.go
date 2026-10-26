@@ -33,7 +33,7 @@ func (s *Server) NewClient(t testing.TB) *asc.Client {
 		Spec:      idx,
 		FreeText:  idx.FreeTextAttributes,
 		Clock:     instantClock{},
-		UserAgent: "asc-mcp/asctest",
+		UserAgent: "app-store-connect-mcp/asctest",
 		Jitter:    func() float64 { return 0 },
 	}
 	c, err := asc.New(o)

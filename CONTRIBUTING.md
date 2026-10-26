@@ -1,13 +1,13 @@
 # Contributing
 
-asc-mcp is small on purpose. Open a short issue before a big PR.
+app-store-connect-mcp is small on purpose. Open a short issue before a big PR.
 
 ## Setup
 
 Go 1.25+, plus golangci-lint v2 for linting.
 
 ```sh
-make build      # bin/asc-mcp
+make build      # bin/app-store-connect-mcp
 make test       # go test -race ./...
 make vet
 make lint
@@ -26,7 +26,7 @@ Tests never write to a real App Store Connect account. Everything runs against f
 Hand-write fixtures from the spec's examples, or record them:
 
 ```sh
-go run -tags dev ./cmd/asc-mcp-record -app 1234567890 -out testdata/fixtures
+go run -tags dev ./cmd/app-store-connect-mcp-record -app 1234567890 -out testdata/fixtures
 ```
 
 The recorder is GET-only and swaps out ids, names and emails. Read what it wrote anyway. `go test ./... -update` rewrites goldens. Review the diff, because goldens are the contract. A redaction scan fails if anything secret-looking lands in one.

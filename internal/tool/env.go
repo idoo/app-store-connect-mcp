@@ -26,7 +26,7 @@ type ProfileInfo struct {
 	// DefaultApp is an app id or bundle id from the profile or project pin.
 	DefaultApp  string `json:"default_app,omitempty"`
 	AllowWrites bool   `json:"allow_writes"`
-	// PinSource is the path of the .asc-mcp.toml pin that selected the profile, if any.
+	// PinSource is the path of the .app-store-connect-mcp.toml pin that selected the profile, if any.
 	PinSource string `json:"pin_source,omitempty"`
 	// AllowNoElicit lets RequireHuman tools proceed on an agent confirmation
 	// when the client cannot elicit (config opt-in).
@@ -159,7 +159,7 @@ type Env struct {
 	Files    Files
 	Clock    Clock
 	Profile  ProfileInfo
-	// Version is the asc-mcp build version.
+	// Version is the app-store-connect-mcp build version.
 	Version string
 	// NoConfirm skips the preview step (CI only: --no-confirm with ASC_MCP_CI=1).
 	// RequireHuman tools still require approval.

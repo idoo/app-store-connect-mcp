@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "asc-mcp": {
-      "command": "asc-mcp",
+    "app-store-connect-mcp": {
+      "command": "app-store-connect-mcp",
       "args": []
     }
   }

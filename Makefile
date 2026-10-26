@@ -5,7 +5,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 .PHONY: build test vet lint spec smoke tidy tidy-check vuln docs snapshot mcpb
 
 build:
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/asc-mcp ./cmd/asc-mcp
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/app-store-connect-mcp ./cmd/app-store-connect-mcp
 
 test:
 	$(GO) test -race ./...

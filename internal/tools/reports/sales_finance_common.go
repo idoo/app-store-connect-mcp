@@ -32,7 +32,7 @@ func vendorNumberMissing(profile string) error {
 		Code: "vendor_number_missing",
 		Message: "sales and finance reports need the vendor number of the account, which the API does not expose; " +
 			"find it in App Store Connect → Payments and Financial Reports (top-left, under the account name)",
-		Hint: fmt.Sprintf("run `asc-mcp auth set %s vendor_number=<number>` (or set ASC_VENDOR_NUMBER) and restart asc-mcp", profile),
+		Hint: fmt.Sprintf("run `app-store-connect-mcp auth set %s vendor_number=<number>` (or set ASC_VENDOR_NUMBER) and restart app-store-connect-mcp", profile),
 	}
 }
 

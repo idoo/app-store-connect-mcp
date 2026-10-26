@@ -1,4 +1,4 @@
-// Package applemeta pins Apple domain tables shared across asc-mcp: screenshot
+// Package applemeta pins Apple domain tables shared across app-store-connect-mcp: screenshot
 // display types and pixel sizes, App Store locales, field length limits, and
 // Sales and Trends report parameters and date rules.
 package applemeta

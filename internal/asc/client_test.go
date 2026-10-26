@@ -237,7 +237,7 @@ func TestParseRateLimit(t *testing.T) {
 func TestGetRetriesThenRecordsRateLimitAndSkew(t *testing.T) {
 	var n atomic.Int32
 	hs := newHarness(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+testJWT || r.Header.Get("User-Agent") != "asc-mcp/test" {
+		if r.Header.Get("Authorization") != "Bearer "+testJWT || r.Header.Get("User-Agent") != "app-store-connect-mcp/test" {
 			t.Errorf("headers = %v", r.Header)
 		}
 		if n.Add(1) == 1 {
@@ -247,7 +247,7 @@ func TestGetRetriesThenRecordsRateLimitAndSkew(t *testing.T) {
 		w.Header().Set("X-Rate-Limit", "user-hour-lim:3600;user-hour-rem:3500")
 		w.Header().Set("Date", time.Date(2026, 10, 25, 11, 59, 50, 0, time.UTC).Format(http.TimeFormat))
 		_, _ = io.WriteString(w, `{"data":{"type":"apps","id":"1","attributes":{"name":"Hjul"}}}`)
-	}, func(o *Options) { o.UserAgent = "asc-mcp/test" })
+	}, func(o *Options) { o.UserAgent = "app-store-connect-mcp/test" })
 	res, err := hs.c.Get(context.Background(), "/v1/apps/1", nil)
 	if err != nil {
 		t.Fatal(err)

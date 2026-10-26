@@ -14,7 +14,7 @@ import (
 type ServeOptions struct {
 	// Resolved is the effective configuration.
 	Resolved *config.Resolved
-	// Version is the asc-mcp build version.
+	// Version is the app-store-connect-mcp build version.
 	Version string
 	// HTTPAddr serves Streamable HTTP when set; empty serves stdio.
 	HTTPAddr string

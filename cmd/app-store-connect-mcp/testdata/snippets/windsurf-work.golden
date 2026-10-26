@@ -1,0 +1,12 @@
+// ~/.codeium/windsurf/mcp_config.json
+{
+  "mcpServers": {
+    "app-store-connect-mcp": {
+      "args": [],
+      "command": "/ABS/PATH/app-store-connect-mcp",
+      "env": {
+        "ASC_MCP_PROFILE": "work"
+      }
+    }
+  }
+}

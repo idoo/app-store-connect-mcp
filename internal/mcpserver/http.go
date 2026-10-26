@@ -168,7 +168,7 @@ func HTTPHandler(opts HTTPOptions) (http.Handler, error) {
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		sum := sha256.Sum256([]byte(got))
 		if !ok || subtle.ConstantTimeCompare(sum[:], want[:]) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="asc-mcp"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="app-store-connect-mcp"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -295,7 +295,7 @@ func SessionFactory(deps Deps) func(*http.Request) *mcp.Server {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	probe := mcp.NewServer(&mcp.Implementation{Name: "asc-mcp", Version: deps.Version}, &mcp.ServerOptions{
+	probe := mcp.NewServer(&mcp.Implementation{Name: "app-store-connect-mcp", Version: deps.Version}, &mcp.ServerOptions{
 		Logger:                    logger,
 		SupportedProtocolVersions: legacyProtocolVersions(),
 	})
@@ -377,7 +377,7 @@ func generateToken(opts HTTPOptions) (string, error) {
 	if w == nil {
 		w = os.Stderr
 	}
-	if _, err := fmt.Fprintf(w, "asc-mcp: HTTP bearer token (set %s to reuse): %s\n", EnvHTTPToken, tok); err != nil {
+	if _, err := fmt.Fprintf(w, "app-store-connect-mcp: HTTP bearer token (set %s to reuse): %s\n", EnvHTTPToken, tok); err != nil {
 		return "", fmt.Errorf("mcpserver: http: print token: %w", err)
 	}
 	return tok, nil

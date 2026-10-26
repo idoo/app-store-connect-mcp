@@ -141,9 +141,9 @@ func TestDefaultPath(t *testing.T) {
 		env  map[string]string
 		want string
 	}{
-		{map[string]string{"HOME": "/h"}, "/h/.config/asc-mcp/config.toml"},
-		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "/x"}, "/x/asc-mcp/config.toml"},
-		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "rel"}, "/h/.config/asc-mcp/config.toml"},
+		{map[string]string{"HOME": "/h"}, "/h/.config/app-store-connect-mcp/config.toml"},
+		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "/x"}, "/x/app-store-connect-mcp/config.toml"},
+		{map[string]string{"HOME": "/h", "XDG_CONFIG_HOME": "rel"}, "/h/.config/app-store-connect-mcp/config.toml"},
 	}
 	for _, tt := range tests {
 		got, err := DefaultPath(envMap(tt.env))

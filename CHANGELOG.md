@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-26
+
+The binary is now `app-store-connect-mcp`. `asc-mcp` collided with two other App Store Connect servers: the npm package `asc-mcp` and zelentsov's Swift server, which also uses `~/.config/asc-mcp` and the client-config key `asc-mcp`. Update your setup:
+
+- **Homebrew:** `brew uninstall asc-mcp && brew install idoo/tap/app-store-connect-mcp`.
+- **Client config:** run `app-store-connect-mcp config install <client>`. The server key is now `app-store-connect-mcp`, so Claude Code permissions read `mcp__app-store-connect-mcp__<tool>`. Remove the old `asc-mcp` entry yourself; another server may own it.
+- **Renamed:** `~/.config/asc-mcp/config.toml` → `~/.config/app-store-connect-mcp/config.toml`, `.asc-mcp.toml` → `.app-store-connect-mcp.toml`, keychain service `asc-mcp` → `app-store-connect-mcp` (run `app-store-connect-mcp auth import` again), skills `asc-mcp-*` → `app-store-connect-mcp-*`, result metadata `_meta.asc-mcp` → `_meta.app-store-connect-mcp`.
+- **Unchanged:** `ASC_MCP_*` and `ASC_*` env vars.
+
 ## [0.2.0] - 2026-10-26
 
 Hamn is now **app-store-connect-mcp**, and the binary is `asc-mcp`. Update your setup:
@@ -41,7 +50,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/idoo/app-store-connect-mcp/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/idoo/app-store-connect-mcp/releases/tag/v0.1.2

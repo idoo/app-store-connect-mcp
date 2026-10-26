@@ -41,7 +41,7 @@ type lookupIn struct {
 	Limit   int    `json:"limit,omitempty" jsonschema:"search depth 1-200; default 50"`
 }
 
-// itunesApp is the subset of an iTunes result asc-mcp reads.
+// itunesApp is the subset of an iTunes result app-store-connect-mcp reads.
 type itunesApp struct {
 	TrackID           int64    `json:"trackId"`
 	TrackName         string   `json:"trackName"`

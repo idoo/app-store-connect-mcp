@@ -64,7 +64,7 @@ type ResolvedProfile struct {
 	DefaultApp    string
 	AllowWrites   bool
 	AllowNoElicit bool
-	// PinSource is the .asc-mcp.toml path when a pin was applied.
+	// PinSource is the .app-store-connect-mcp.toml path when a pin was applied.
 	PinSource string
 	// Problems are user-fixable issues doctor reports; the server still starts.
 	Problems []string
@@ -224,7 +224,7 @@ func (r *Resolved) loadProfile(name string, cfg *Config, env envCreds, hasEnv bo
 	p := &r.Profile
 	switch name {
 	case "":
-		p.Problems = append(p.Problems, "no credentials: set "+EnvKeyID+", "+EnvIssuerID+" and "+EnvKeyPath+", or run `asc-mcp auth import`")
+		p.Problems = append(p.Problems, "no credentials: set "+EnvKeyID+", "+EnvIssuerID+" and "+EnvKeyPath+", or run `app-store-connect-mcp auth import`")
 	case EnvProfileName:
 		if !hasEnv {
 			return fmt.Errorf("profile %q selected but %s is not set", EnvProfileName, EnvKeyID)

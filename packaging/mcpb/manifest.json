@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-latest.schema.json",
   "manifest_version": "0.3",
-  "name": "asc-mcp",
+  "name": "app-store-connect-mcp",
   "display_name": "App Store Connect MCP",
   "version": "0.0.0",
   "description": "MCP server for App Store Connect. Ask Claude about releases, TestFlight, reviews and sales. Read-only by default.",
@@ -22,9 +22,9 @@
   "keywords": ["app-store-connect", "ios", "macos", "testflight", "release", "apple"],
   "server": {
     "type": "binary",
-    "entry_point": "server/asc-mcp-darwin",
+    "entry_point": "server/app-store-connect-mcp-darwin",
     "mcp_config": {
-      "command": "${__dirname}/server/asc-mcp-darwin",
+      "command": "${__dirname}/server/app-store-connect-mcp-darwin",
       "args": ["serve"],
       "env": {
         "ASC_KEY_ID": "${user_config.asc_key_id}",
@@ -36,10 +36,10 @@
       },
       "platform_overrides": {
         "win32": {
-          "command": "${__dirname}/server/asc-mcp-windows-amd64.exe"
+          "command": "${__dirname}/server/app-store-connect-mcp-windows-amd64.exe"
         },
         "linux": {
-          "command": "${__dirname}/server/asc-mcp-linux"
+          "command": "${__dirname}/server/app-store-connect-mcp-linux"
         }
       }
     }

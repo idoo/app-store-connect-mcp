@@ -1,0 +1,6 @@
+# ~/.codex/config.toml
+[mcp_servers.app-store-connect-mcp]
+command = "/ABS/PATH/app-store-connect-mcp"
+args = []
+startup_timeout_sec = 20
+tool_timeout_sec = 330

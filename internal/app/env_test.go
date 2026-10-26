@@ -180,7 +180,7 @@ func TestNewClientKeyKindIssuer(t *testing.T) {
 
 // TestNewEnvNoCredentialsErrorExplainsSetup: with no key configured every
 // App Store Connect call (and app resolution) fails with the setup steps in
-// the tool error itself, since GUI clients never show asc-mcp's stderr.
+// the tool error itself, since GUI clients never show app-store-connect-mcp's stderr.
 func TestNewEnvNoCredentialsErrorExplainsSetup(t *testing.T) {
 	r := testResolved(t, nil, tool.KeyTeam)
 	r.Profile = config.ResolvedProfile{}
@@ -192,7 +192,7 @@ func TestNewEnvNoCredentialsErrorExplainsSetup(t *testing.T) {
 		if jerr != nil {
 			t.Fatal(jerr)
 		}
-		for _, want := range []string{"no_credentials", "asc-mcp auth add", "ASC_KEY_ID", "ASC_PRIVATE_KEY_PATH"} {
+		for _, want := range []string{"no_credentials", "app-store-connect-mcp auth add", "ASC_KEY_ID", "ASC_PRIVATE_KEY_PATH"} {
 			if !strings.Contains(string(b), want) {
 				t.Errorf("error body %s lacks %q", b, want)
 			}

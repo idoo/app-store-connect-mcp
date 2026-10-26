@@ -6,8 +6,8 @@ One Go binary on the official MCP Go SDK and a pinned index of Apple's OpenAPI s
 
 | Package | Job |
 |---|---|
-| `cmd/asc-mcp` | CLI: `serve`, `auth`, `doctor`, `config`, `skills`, `version` |
-| `cmd/asc-mcp-record` | Dev-only fixture recorder (`-tags dev`), GET-only |
+| `cmd/app-store-connect-mcp` | CLI: `serve`, `auth`, `doctor`, `config`, `skills`, `version` |
+| `cmd/app-store-connect-mcp-record` | Dev-only fixture recorder (`-tags dev`), GET-only |
 | `internal/tool` | The contract: tool meta, classes, toolsets, confirm gate, registry. `tooltest` is its test kit |
 | `internal/tools/*` | One package per toolset. `docsgen` writes `docs/TOOLS.md` and `docs/tools.json` |
 | `internal/mcpserver` | Registry to MCP: toolsets, read-only hiding, plans, approvals, resources, prompts, stdio and HTTP |
@@ -42,7 +42,7 @@ sequenceDiagram
     A->>Apple: spec-checked, signed request
     Apple-->>A: JSON:API
     A-->>H: flattened, untrusted text wrapped, redacted, capped
-    H-->>C: structuredContent + text, _meta.asc-mcp
+    H-->>C: structuredContent + text, _meta.app-store-connect-mcp
 ```
 
 ## Spec index

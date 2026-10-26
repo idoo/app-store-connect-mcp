@@ -23,7 +23,7 @@ const (
 	// MaxBodyBytes caps any response body read by the client.
 	MaxBodyBytes = 64 << 20
 	// DefaultUserAgent is sent when Options.UserAgent is empty.
-	DefaultUserAgent = "asc-mcp"
+	DefaultUserAgent = "app-store-connect-mcp"
 )
 
 // TokenSource mints bearer JWTs. *auth.TokenSource satisfies it.
@@ -70,7 +70,7 @@ type Options struct {
 	FreeText func(resourceType string) []string
 	// Clock defaults to the system clock.
 	Clock tool.Clock
-	// UserAgent defaults to [DefaultUserAgent]; use "asc-mcp/<version>".
+	// UserAgent defaults to [DefaultUserAgent]; use "app-store-connect-mcp/<version>".
 	UserAgent string
 	// Jitter returns a value in [0,1) scaling the backoff jitter; defaults
 	// to math/rand/v2.

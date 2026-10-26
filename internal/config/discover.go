@@ -9,7 +9,7 @@ import (
 )
 
 // Candidate is a credentials profile found on disk or in the environment for
-// `asc-mcp auth import`. Missing lists the fields still to ask the user for.
+// `app-store-connect-mcp auth import`. Missing lists the fields still to ask the user for.
 type Candidate struct {
 	// Sources describes where the fields came from, e.g. "fastlane/api_key.json".
 	Sources []string

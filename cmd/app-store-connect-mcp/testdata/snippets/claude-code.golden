@@ -1,0 +1,12 @@
+# Register app-store-connect-mcp for every project:
+claude mcp add app-store-connect-mcp -s user -- /ABS/PATH/app-store-connect-mcp
+
+# Optional: pre-approve read-only tools in ~/.claude/settings.json:
+{
+  "permissions": {
+    "allow": [
+      "mcp__app-store-connect-mcp__apps_list",
+      "mcp__app-store-connect-mcp__doctor"
+    ]
+  }
+}

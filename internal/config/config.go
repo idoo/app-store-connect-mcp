@@ -19,18 +19,18 @@ import (
 // KeySourceKeychain is the only accepted non-empty value of Profile.KeySource.
 const KeySourceKeychain = "keychain"
 
-// Config is the user's config file (~/.config/asc-mcp/config.toml).
+// Config is the user's config file (~/.config/app-store-connect-mcp/config.toml).
 type Config struct {
 	// DefaultProfile names the profile used when nothing else selects one.
 	DefaultProfile string `toml:"default_profile,omitempty"`
-	// TrustedPins lists absolute directories whose .asc-mcp.toml may select any profile.
+	// TrustedPins lists absolute directories whose .app-store-connect-mcp.toml may select any profile.
 	TrustedPins []string `toml:"trusted_pins,omitempty"`
 	// AllowProfileSwitch exposes a per-call profile argument on tools.
 	AllowProfileSwitch bool `toml:"allow_profile_switch,omitempty"`
 	// Profiles maps profile names to credentials references.
 	Profiles map[string]Profile `toml:"profiles,omitempty"`
 	// Env holds settings for the "env" profile built from ASC_* variables,
-	// used when the matching variable is unset (`asc-mcp auth set env ...`).
+	// used when the matching variable is unset (`app-store-connect-mcp auth set env ...`).
 	Env *EnvSettings `toml:"env,omitempty"`
 }
 
@@ -96,16 +96,16 @@ func (p Profile) ResolvedKind() (tool.KeyKind, bool) {
 	}
 }
 
-// DefaultPath returns the config file path: $XDG_CONFIG_HOME/asc-mcp/config.toml,
-// ~/.config/asc-mcp/config.toml, or %AppData%\asc-mcp\config.toml on Windows.
+// DefaultPath returns the config file path: $XDG_CONFIG_HOME/app-store-connect-mcp/config.toml,
+// ~/.config/app-store-connect-mcp/config.toml, or %AppData%\app-store-connect-mcp\config.toml on Windows.
 func DefaultPath(getenv func(string) string) (string, error) {
 	if runtime.GOOS == "windows" {
 		if d := getenv("AppData"); d != "" {
-			return filepath.Join(d, "asc-mcp", "config.toml"), nil
+			return filepath.Join(d, "app-store-connect-mcp", "config.toml"), nil
 		}
 	}
 	if d := getenv("XDG_CONFIG_HOME"); d != "" && filepath.IsAbs(d) {
-		return filepath.Join(d, "asc-mcp", "config.toml"), nil
+		return filepath.Join(d, "app-store-connect-mcp", "config.toml"), nil
 	}
 	home := getenv("HOME")
 	if home == "" {
@@ -115,7 +115,7 @@ func DefaultPath(getenv func(string) string) (string, error) {
 		}
 		home = h
 	}
-	return filepath.Join(home, ".config", "asc-mcp", "config.toml"), nil
+	return filepath.Join(home, ".config", "app-store-connect-mcp", "config.toml"), nil
 }
 
 // Load reads the config at path. A missing file yields an empty Config.
