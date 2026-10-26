@@ -835,6 +835,10 @@
           "description": "advance each source to the last item returned",
           "type": "boolean"
         },
+        "since_days": {
+          "description": "days back for first-seen sources (default 7)",
+          "type": "integer"
+        },
         "sources": {
           "description": "sources to read (default all)",
           "items": {
@@ -881,7 +885,7 @@
     "toolset": "reports",
     "class": "R",
     "title": "Payments and financial report",
-    "description": "Decoded Payments & Financial report for one fiscal month: proceeds per currency and top products. No FX rates or USD totals: Apple shows those only on the web Payments page. Unpublished months: pending.",
+    "description": "Payments & Financial report for one fiscal month: proceeds per currency, top products; include_rows: CSV link of all rows. No FX/USD totals (web Payments only). Unpublished months: pending.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -891,6 +895,9 @@
     "input_schema": {
       "additionalProperties": false,
       "properties": {
+        "include_rows": {
+          "type": "boolean"
+        },
         "month": {
           "description": "fiscal YYYY-MM; default newest closed",
           "type": "string"
@@ -1977,7 +1984,7 @@
     "toolset": "insights",
     "class": "R",
     "title": "Release health vs previous version",
-    "description": "Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach; breach with an active phased release suggests pause.",
+    "description": "Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach|unknown (no production data); breach with an active phased release suggests pause.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2527,7 +2534,7 @@
     "toolset": "reports",
     "class": "R",
     "title": "Sales and Trends report",
-    "description": "Decoded Sales & Trends rows and aggregates (units by category, proceeds per currency, top-N) for a period, from/to or frequency+report_date. Overviews: insights_summary. Unpublished days: pending.",
+    "description": "Sales & Trends aggregates (units by category, proceeds per currency, top-N) for a period, from/to or frequency+report_date; include_rows: CSV link of all rows. Unpublished: pending.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -2568,6 +2575,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "include_rows": {
+          "type": "boolean"
         },
         "period": {
           "description": "Pacific time; default yesterday",
@@ -3432,7 +3442,7 @@
           "type": "string"
         },
         "app": {
-          "description": "App Store id (the ASC app id) or bundle id; default: pinned app",
+          "description": "App Store id, bundle id, or name/SKU (needs ASC key); default: pinned app",
           "type": "string"
         },
         "countries": {

@@ -84,7 +84,9 @@ type HealthReport struct {
 		section
 		Crashes *float64 `json:"crashes,omitempty"`
 	} `json:"analytics_crashes"`
-	Thresholds HealthThresholds `json:"thresholds"`
+	// Coverage maps each source to measured, no_data or not_set_up.
+	Coverage   map[string]string `json:"coverage"`
+	Thresholds HealthThresholds  `json:"thresholds"`
 }
 
 // PhasedState is the live version's phased release.
@@ -99,7 +101,7 @@ func init() {
 		Name: "release_health_report", Toolset: tool.Insights, Class: tool.Read, Idempotent: true,
 		Title: "Release health vs previous version",
 		Description: "Live (or given) version vs the previous one: hang/launch/disk-write signature deltas, perf regressions, " +
-			"TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach; breach with an active phased release suggests pause.",
+			"TestFlight crashes, rating delta, analytics crashes. Verdict healthy|watch|breach|unknown (no production data); breach with an active phased release suggests pause.",
 		Enums: map[string][]any{"platform": {"IOS", "MAC_OS", "TV_OS", "VISION_OS"}},
 	}, healthReport))
 }
@@ -210,7 +212,54 @@ func RunHealth(ctx context.Context, env *tool.Env, in HealthIn) (*HealthReport, 
 	analytics(ctx, env, app.ID, since, rep)
 
 	rep.Verdict, rep.Reasons = EvaluateHealth(sig, rep.Thresholds)
+	rep.Coverage = coverageOf(rep)
+	if !productionMeasured(rep.Coverage) {
+		rep.Verdict = VerdictUnknown
+		rep.Reasons = append([]string{"no production data yet"}, rep.Reasons...)
+	}
 	return rep, nil
+}
+
+// Coverage states.
+const (
+	covMeasured = "measured"
+	covNoData   = "no_data"
+	covNotSetUp = "not_set_up"
+)
+
+// productionSources are the sources that can make a release healthy.
+var productionSources = []string{"diagnostics", "perf_power_metrics", "analytics_crashes"}
+
+// coverageOf reports which sources produced data.
+func coverageOf(rep *HealthReport) map[string]string {
+	state := func(ok bool) string {
+		if ok {
+			return covMeasured
+		}
+		return covNoData
+	}
+	d := rep.Diagnostics
+	c := map[string]string{
+		"diagnostics":               state((d.Current != nil && d.Current.Count > 0) || (d.Previous != nil && d.Previous.Count > 0)),
+		"perf_power_metrics":        state(rep.Perf.Status == "ok"),
+		"analytics_crashes":         state(rep.Analytics.Status == "ok"),
+		"testflight_crash_feedback": state(rep.CrashFeedback.Status == "ok"),
+		"ratings":                   state(rep.Ratings.AverageSince != nil || rep.Ratings.AverageBefore != nil),
+	}
+	if rep.Analytics.Status == "not_set_up" {
+		c["analytics_crashes"] = covNotSetUp
+	}
+	return c
+}
+
+// productionMeasured reports whether any production source has data.
+func productionMeasured(c map[string]string) bool {
+	for _, s := range productionSources {
+		if c[s] == covMeasured {
+			return true
+		}
+	}
+	return false
 }
 
 // healthVersions returns the chosen version, the one created before it on the

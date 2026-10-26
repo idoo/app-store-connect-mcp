@@ -15,7 +15,8 @@ Refs: `app` is a name, bundle id, SKU or id. Omit it for the pinned app, or for 
 2. Dig deeper only when asked or when something moved a lot:
    - `sales_report` with `period` (or `from`/`to`) and `group_by` like `["country"]`. `report_type: "SUBSCRIPTION_EVENT"` gives trials, conversions and churn.
    - `finance_report` with `month` for paid-out proceeds.
-   - `analytics_report` with `app` and `category` for impressions, page views, sessions and crashes.
+   - `analytics_funnel_report` with `app` and `period` for impressions → product page views → downloads by source or territory, compared with the previous period. It's in the `insights` toolset: if it's missing, call `toolsets` with `action: "enable"` and `toolsets: ["insights"]`. If it says analytics isn't set up, run `analytics_setup` first.
+   - `analytics_report` with `app` and `category` for the raw report rows.
    - `reviews_list` with `since: "last_seen"` for new ratings (replies: see `app-store-connect-mcp-reviews`).
 3. Write it up: headline numbers and change, top countries and products, notable reviews, version and phased-release state, and what's pending.
 

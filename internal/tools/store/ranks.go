@@ -38,7 +38,7 @@ func init() {
 
 type ranksIn struct {
 	Action    string   `json:"action,omitempty" jsonschema:"default track"`
-	App       string   `json:"app,omitempty" jsonschema:"App Store id (the ASC app id) or bundle id; default: pinned app"`
+	App       string   `json:"app,omitempty" jsonschema:"App Store id, bundle id, or name/SKU (needs ASC key); default: pinned app"`
 	Keywords  []string `json:"keywords,omitempty" jsonschema:"search terms (≤25); track defaults to the tracked set"`
 	Countries []string `json:"countries,omitempty" jsonschema:"two-letter storefronts (≤10); default us, or all tracked"`
 	Depth     int      `json:"depth,omitempty" jsonschema:"search depth 1-200; default 100"`
@@ -296,27 +296,40 @@ func selectPairs(pairs []asoPair, keywords, countries []string) []asoPair {
 	return out
 }
 
-// resolveTrackID turns a numeric App Store id or a bundle id (looked up in
-// the US storefront) into the trackId.
+// resolveTrackID turns an app reference into the App Store trackId: a
+// numeric id as is, a bundle id via iTunes lookup (US storefront), and
+// anything else (name, SKU, an unreleased bundle id, the pinned app) via the
+// ASC resolver, whose app id equals the trackId. Without an ASC key only ids
+// and released bundle ids work.
 func resolveTrackID(ctx context.Context, env *tool.Env, ref string) (int64, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		ref = env.Profile.DefaultApp
 	}
-	switch {
-	case trackRE.MatchString(ref):
+	if trackRE.MatchString(ref) {
 		return strconv.ParseInt(ref, 10, 64)
-	case ref != "" && bundleRE.MatchString(ref):
+	}
+	if ref != "" && bundleRE.MatchString(ref) {
 		doc, err := fetch(ctx, env, "/lookup", url.Values{"bundleId": {ref}, "country": {"us"}, "entity": {"software"}})
 		if err != nil {
 			return 0, err
 		}
-		if len(doc.Results) == 0 {
-			return 0, tool.InvalidArgs("bundle id %s is not on the US App Store; pass the numeric App Store id", ref)
+		if len(doc.Results) > 0 {
+			return doc.Results[0].TrackID, nil
 		}
-		return doc.Results[0].TrackID, nil
 	}
-	return 0, tool.InvalidArgs("app must be a numeric App Store id or a bundle id; use apps_list to find them")
+	app, err := env.Resolve.App(ctx, tool.AppRef(ref))
+	switch {
+	case errors.Is(err, tool.ErrUnavailable):
+		return 0, tool.InvalidArgs("app %q: without an ASC key pass the numeric App Store id or a released bundle id", ref)
+	case err != nil:
+		return 0, err
+	}
+	id, err := strconv.ParseInt(app.ID, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("app %s has non-numeric id %q: %w", app.Name, app.ID, err)
+	}
+	return id, nil
 }
 
 // measured is the outcome of one lookup.

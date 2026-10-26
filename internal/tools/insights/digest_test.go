@@ -380,3 +380,60 @@ func TestDigestGapAcceptAdvancesAndReportsSkipped(t *testing.T) {
 		t.Errorf("after accept = %+v", s)
 	}
 }
+
+// The FakeClock starts at 2026-01-02T03:04:05Z, so the default baseline is
+// 2025-12-26.
+func TestDigestFreshSourceBaseline(t *testing.T) {
+	k, feed := digestKit(t)
+	feed.add("r-old", "2025-12-01T10:00:00Z")
+	feed.add("r-new", "2025-12-31T10:00:00Z")
+	k.ASC.Handle(http.MethodGet, "/v1/builds", 200, digestDoc(t, "builds", []digestRes{
+		{ID: "b-new", Attrs: map[string]any{"version": "9", "uploadedDate": "2026-01-01T10:00:00Z", "processingState": "VALID", "expired": false}},
+		{ID: "b-old", Attrs: map[string]any{"version": "1", "uploadedDate": "2025-12-01T10:00:00Z", "processingState": "VALID", "expired": true}},
+	}))
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appStoreVersions", 200, digestDoc(t, "appStoreVersions", []digestRes{
+		{ID: "v-old", Attrs: map[string]any{"platform": "IOS", "versionString": "1.0", "appVersionState": "READY_FOR_DISTRIBUTION", "createdDate": "2025-11-01T00:00:00Z"}},
+		{ID: "v-new", Attrs: map[string]any{"platform": "IOS", "versionString": "1.1", "appVersionState": "PREPARE_FOR_SUBMISSION", "createdDate": "2025-12-30T00:00:00Z"}},
+	}))
+	k.ASC.Handle(http.MethodGet, "/v1/reviewSubmissions", 200, `{"data":[]}`)
+	const args = `{"app":"Hjul","sources":["reviews","builds","states"]`
+
+	_, res := digestCall(t, k, args+`}`)
+	got := tooltest.Decode[map[string]any](t, res)
+	srcs := got["apps"].([]any)[0].(map[string]any)["sources"].(map[string]any)
+	for _, s := range []string{"reviews", "builds", "states"} {
+		if b := srcs[s].(map[string]any)["baseline"]; b != "2025-12-26" {
+			t.Errorf("%s baseline = %v", s, b)
+		}
+	}
+	out := tooltest.Decode[digestOut](t, res)
+	src := out.Apps[0].Sources
+	if digestIDs(src["reviews"].Items) != "r-new" || digestIDs(src["builds"].Items) != "b-new" {
+		t.Errorf("reviews = %+v builds = %+v", src["reviews"].Items, src["builds"].Items)
+	}
+	if tr := src["states"].Transitions; len(tr) != 1 || tr[0].Object != "appStoreVersions/v-new" {
+		t.Errorf("states = %+v", tr)
+	}
+	if w := strings.Join(res.Meta.Warnings, "\n"); !strings.Contains(w, "started at baseline 2025-12-26 (since_days 7)") {
+		t.Errorf("warnings = %v", res.Meta.Warnings)
+	}
+
+	// A wider window shows older history for a still-fresh source.
+	out, _ = digestCall(t, k, args+`,"since_days":90}`)
+	if src = out.Apps[0].Sources; digestIDs(src["reviews"].Items) != "r-old,r-new" || len(src["states"].Transitions) != 2 {
+		t.Errorf("since_days 90 = %+v", src)
+	}
+
+	// mark_seen stores watermarks as usual; the next call is no longer fresh.
+	digestCall(t, k, args+`,"mark_seen":true}`)
+	_, res = digestCall(t, k, args+`}`)
+	if strings.Contains(strings.Join(res.Meta.Warnings, "\n"), "baseline") {
+		t.Errorf("still fresh after mark_seen: %v", res.Meta.Warnings)
+	}
+	if out = tooltest.Decode[digestOut](t, res); out.Apps[0].Sources["reviews"].Returned != 0 || out.Apps[0].Sources["states"].Returned != 0 {
+		t.Errorf("after mark_seen = %+v", out.Apps[0].Sources)
+	}
+
+	tl, _ := tool.Lookup("digest_summary")
+	tooltest.MustFail(t, tooltest.Call(t, tl, k.Env, `{"app":"Hjul","since_days":91}`), "invalid_arguments")
+}

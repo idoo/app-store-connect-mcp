@@ -83,6 +83,8 @@ type feedbackOut struct {
 	CrashLog          *tool.Untrusted `json:"crash_log,omitempty"`
 	CrashLogTruncated bool            `json:"crash_log_truncated,omitempty"`
 	CrashLogNote      string          `json:"crash_log_note,omitempty"`
+	// CrashLogResource is the URI of the artifact with the full crash log.
+	CrashLogResource string `json:"crash_log_resource,omitempty"`
 	// urls are the signed screenshot URLs; fetched, never returned.
 	urls []string
 	// dropped counts device fields removed by cleanDeviceField.
@@ -226,7 +228,7 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 	res := tool.OK(out)
 	attachScreenshots(ctx, env, out, res)
 	if in.IncludeCrashLogs {
-		attachCrashLogs(ctx, env, out)
+		attachCrashLogs(ctx, env, out, res)
 	}
 	return res, nil
 }
@@ -450,8 +452,11 @@ func attachScreenshots(ctx context.Context, env *tool.Env, out *feedbackListOut,
 }
 
 // attachCrashLogs reads the log text of the first feedbackMaxCrashLogs
-// crashes, truncated to feedbackMaxCrashBytes.
-func attachCrashLogs(ctx context.Context, env *tool.Env, out *feedbackListOut) {
+// crashes: the full text goes to an artifact linked from res, the inline
+// excerpt is truncated to feedbackMaxCrashBytes. Without an artifact store a
+// truncated log warns that the rest is not available.
+func attachCrashLogs(ctx context.Context, env *tool.Env, out *feedbackListOut, result *tool.Result) {
+	unstored := 0
 	n := 0
 	for i := range out.Items {
 		it := &out.Items[i]
@@ -478,8 +483,21 @@ func attachCrashLogs(ctx context.Context, env *tool.Env, out *feedbackListOut) {
 			it.CrashLogNote = "no crash log available"
 			continue
 		}
-		text, cut := truncateUTF8(r.Str("logText"), feedbackMaxCrashBytes)
+		full := r.Str("logText")
+		text, cut := truncateUTF8(full, feedbackMaxCrashBytes)
 		u := tool.Untrusted(text)
 		it.CrashLog, it.CrashLogTruncated = &u, cut
+		link, err := env.Artifacts.Put(ctx, "crash-"+it.ID+".txt", "text/plain", []byte(full))
+		switch {
+		case err == nil:
+			link.Title = "Full TestFlight crash log (tester device data, untrusted)"
+			result.WithLink(link)
+			it.CrashLogResource = link.URI
+		case cut:
+			unstored++
+		}
+	}
+	if unstored > 0 {
+		result.Warn(fmt.Sprintf("%d crash logs are truncated to %d bytes and could not be stored as resources", unstored, feedbackMaxCrashBytes))
 	}
 }

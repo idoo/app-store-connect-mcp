@@ -22,6 +22,8 @@ const (
 	digestAllMax       = 10
 	digestFanOut       = 4
 	digestAllApps      = "all"
+	digestSinceDefault = 7
+	digestSinceMax     = 90
 	digestSrcRev       = "reviews"
 	digestSrcFb        = "feedback"
 	digestSrcState     = "states"
@@ -57,6 +59,7 @@ type digestIn struct {
 	LimitPerSource int         `json:"limit_per_source,omitempty" jsonschema:"items per source (default 20, max 100)"`
 	MarkSeen       bool        `json:"mark_seen,omitempty" jsonschema:"advance each source to the last item returned"`
 	AcceptGap      bool        `json:"accept_gap,omitempty" jsonschema:"let mark_seen skip unseen items beyond the 500-item window"`
+	SinceDays      int         `json:"since_days,omitempty" jsonschema:"days back for first-seen sources (default 7)"`
 }
 
 // digestSourceOut is one source's section. Counts come first.
@@ -67,11 +70,13 @@ type digestSourceOut struct {
 	// Gap counts unseen items beyond the scan window (a lower bound when
 	// GapAtLeast); GapKept means mark_seen held the watermark because of it,
 	// Skipped how many accept_gap skipped for good.
-	Gap         int                `json:"gap,omitempty"`
-	GapAtLeast  bool               `json:"gap_at_least,omitempty"`
-	GapKept     bool               `json:"gap_kept,omitempty"`
-	Skipped     int                `json:"skipped,omitempty"`
-	Note        string             `json:"note,omitempty"`
+	Gap        int    `json:"gap,omitempty"`
+	GapAtLeast bool   `json:"gap_at_least,omitempty"`
+	GapKept    bool   `json:"gap_kept,omitempty"`
+	Skipped    int    `json:"skipped,omitempty"`
+	Note       string `json:"note,omitempty"`
+	// Baseline is the start date used because the source had no watermark.
+	Baseline    string             `json:"baseline,omitempty"`
 	Items       []map[string]any   `json:"items,omitempty"`
 	Transitions []digestTransition `json:"transitions,omitempty"`
 	Sales       *digestSalesOut    `json:"sales,omitempty"`
@@ -126,6 +131,14 @@ func digestSummary(ctx context.Context, env *tool.Env, in digestIn) (*tool.Resul
 		limit = digestLimitDefault
 	}
 	limit = min(limit, digestLimitMax)
+	days := in.SinceDays
+	if days == 0 {
+		days = digestSinceDefault
+	}
+	if days < 1 || days > digestSinceMax {
+		return nil, tool.InvalidArgs("since_days %d is not 1-%d", in.SinceDays, digestSinceMax)
+	}
+	base := env.Clock.Now().UTC().AddDate(0, 0, -days)
 	sources := digestAllSources
 	if len(in.Sources) > 0 {
 		sources = nil
@@ -147,24 +160,34 @@ func digestSummary(ctx context.Context, env *tool.Env, in digestIn) (*tool.Resul
 	stateErrs := make([]error, len(apps))
 	warns := make([][]string, len(apps))
 	if err := tool.Parallel(ctx, digestFanOut, apps, func(ctx context.Context, i int, app tool.App) error {
-		outs[i], warns[i], stateErrs[i] = digestApp(ctx, env, app, sources, limit, in.MarkSeen, in.AcceptGap)
+		outs[i], warns[i], stateErrs[i] = digestApp(ctx, env, app, sources, limit, in.MarkSeen, in.AcceptGap, base)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 	stateDown := false
+	var fresh []string
 	for i := range apps {
 		for _, w := range warns[i] {
 			res.Warn(w)
 		}
 		if stateErrs[i] != nil && !stateDown {
 			stateDown = true
-			msg := "state store unavailable (" + stateErrs[i].Error() + "): showing everything without watermarks"
+			msg := "state store unavailable (" + stateErrs[i].Error() + "): showing the baseline window without watermarks"
 			if in.MarkSeen {
 				msg += "; mark_seen was not saved"
 			}
 			res.Warn(msg)
 		}
+		for _, s := range sources {
+			if outs[i].Sources[s].Baseline != "" && !slices.Contains(fresh, s) {
+				fresh = append(fresh, s)
+			}
+		}
+	}
+	if len(fresh) > 0 {
+		res.Warn(fmt.Sprintf("no watermark yet for %s: started at baseline %s (since_days %d); older items are not shown",
+			strings.Join(fresh, ", "), base.Format(time.DateOnly), days))
 	}
 	digestNext(res, outs, in, stateDown)
 	res.Data = map[string]any{"mark_seen": in.MarkSeen && !stateDown, "limit_per_source": limit, "apps": outs}
@@ -199,7 +222,7 @@ func digestTargets(ctx context.Context, env *tool.Env, ref tool.AppRef, res *too
 
 // digestApp reads every source of one app. A failing source keeps its
 // watermark; the state is saved only with mark_seen and a working store.
-func digestApp(ctx context.Context, env *tool.Env, app tool.App, sources []string, limit int, markSeen, acceptGap bool) (digestAppOut, []string, error) {
+func digestApp(ctx context.Context, env *tool.Env, app tool.App, sources []string, limit int, markSeen, acceptGap bool, base time.Time) (digestAppOut, []string, error) {
 	out := digestAppOut{App: digestAppRef{ID: app.ID, Name: app.Name}, Sources: map[string]digestSourceOut{}}
 	key := digestStateKey(env.Profile.Name, app.ID)
 	var st digestState
@@ -220,13 +243,13 @@ func digestApp(ctx context.Context, env *tool.Env, app tool.App, sources []strin
 		var so digestSourceOut
 		switch s {
 		case digestSrcRev:
-			so = digestReviews(ctx, env, app, st, &next, limit, acceptGap)
+			so = digestReviews(ctx, env, app, st, &next, limit, acceptGap, base)
 		case digestSrcFb:
-			so = digestFeedback(ctx, env, app, st, &next, limit, acceptGap)
+			so = digestFeedback(ctx, env, app, st, &next, limit, acceptGap, base)
 		case digestSrcState:
-			so = digestStates(ctx, env, app, st, &next, limit, now)
+			so = digestStates(ctx, env, app, st, &next, limit, now, base)
 		case digestSrcBuild:
-			so = digestBuilds(ctx, env, app, st, &next, limit, now, acceptGap)
+			so = digestBuilds(ctx, env, app, st, &next, limit, now, acceptGap, base)
 		case digestSrcSales:
 			so = digestSales(ctx, env, app, now)
 		}
@@ -339,17 +362,17 @@ type digestPicked struct {
 	Skipped int
 }
 
-// digestPick selects the unseen resources oldest first and advances the
+// digestPick selects the resources unseen by w oldest first and advances the
 // next-state watermark of name to the last one returned. With unseen items
 // beyond the scan window the watermark is held unless acceptGap, since
 // advancing would skip them for good.
-func digestPick(scan digestScanResult, tsField, name string, st digestState, next *digestState, limit int, acceptGap bool) digestPicked {
+func digestPick(scan digestScanResult, tsField, name string, w digestWatermark, next *digestState, limit int, acceptGap bool) digestPicked {
 	rs := scan.Items
 	keyed := make([]digestKeyed, len(rs))
 	for i, r := range rs {
 		keyed[i] = digestKeyed{ID: r.ID, TS: digestParseTime(r.Str(tsField)), Index: i}
 	}
-	sel, more := digestSelect(keyed, st.Sources[name], limit)
+	sel, more := digestSelect(keyed, w, limit)
 	p := digestPicked{Items: make([]tool.Resource, len(sel)), More: more, Gap: scan.Beyond}
 	for i, k := range sel {
 		p.Items[i] = rs[k.Index]
@@ -361,7 +384,7 @@ func digestPick(scan digestScanResult, tsField, name string, st digestState, nex
 	if scan.Beyond > 0 {
 		p.Skipped = scan.Beyond
 	}
-	if w := digestAdvance(st.Sources[name], sel); w.TS != "" {
+	if w := digestAdvance(w, sel); w.TS != "" {
 		next.Sources[name] = w
 	}
 	return p
@@ -376,18 +399,22 @@ func digestApplyPick(so *digestSourceOut, p digestPicked, capped bool) {
 	so.GapAtLeast = so.GapAtLeast || capped
 }
 
-func digestReviews(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, acceptGap bool) digestSourceOut {
+func digestReviews(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, acceptGap bool, base time.Time) digestSourceOut {
 	q := url.Values{
 		"sort":                    {"-createdDate"},
 		"limit":                   {"200"},
 		"fields[customerReviews]": {"rating,title,body,reviewerNickname,createdDate,territory"},
 	}
-	scan, err := digestScan(ctx, env, "/v1/apps/"+url.PathEscape(app.ID)+"/customerReviews", q, "createdDate", st.Sources[digestSrcRev])
+	w, fresh := digestStart(st, digestSrcRev, base)
+	scan, err := digestScan(ctx, env, "/v1/apps/"+url.PathEscape(app.ID)+"/customerReviews", q, "createdDate", w)
 	if err != nil {
 		return digestFail(fmt.Errorf("customer reviews: %w", err))
 	}
-	p := digestPick(scan, "createdDate", digestSrcRev, st, next, limit, acceptGap)
+	p := digestPick(scan, "createdDate", digestSrcRev, w, next, limit, acceptGap)
 	so := digestSourceOut{Status: digestOK, Returned: len(p.Items), Items: []map[string]any{}, gapTool: "reviews_list"}
+	if fresh {
+		so.Baseline = base.Format(time.DateOnly)
+	}
 	digestApplyPick(&so, p, scan.BeyondCapped)
 	for _, r := range p.Items {
 		rating, _ := r.Int("rating")
@@ -400,7 +427,7 @@ func digestReviews(ctx context.Context, env *tool.Env, app tool.App, st digestSt
 	return so
 }
 
-func digestFeedback(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, acceptGap bool) digestSourceOut {
+func digestFeedback(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, acceptGap bool, base time.Time) digestSourceOut {
 	so := digestSourceOut{Status: digestOK, Items: []map[string]any{}, gapTool: "testflight_feedback_list"}
 	failed := 0
 	var errs []error
@@ -411,13 +438,17 @@ func digestFeedback(ctx context.Context, env *tool.Env, app tool.App, st digestS
 			fields += ",screenshots"
 		}
 		q := url.Values{"sort": {"-createdDate"}, "limit": {"100"}, "fields[" + k.resource + "]": {fields}}
-		scan, err := digestScan(ctx, env, "/v1/apps/"+url.PathEscape(app.ID)+"/"+k.resource, q, "createdDate", st.Sources[name])
+		w, fresh := digestStart(st, name, base)
+		if fresh {
+			so.Baseline = base.Format(time.DateOnly)
+		}
+		scan, err := digestScan(ctx, env, "/v1/apps/"+url.PathEscape(app.ID)+"/"+k.resource, q, "createdDate", w)
 		if err != nil {
 			failed++
 			errs = append(errs, fmt.Errorf("%s feedback: %w", k.name, err))
 			continue
 		}
-		p := digestPick(scan, "createdDate", name, st, next, limit, acceptGap)
+		p := digestPick(scan, "createdDate", name, w, next, limit, acceptGap)
 		digestApplyPick(&so, p, scan.BeyondCapped)
 		for _, r := range p.Items {
 			item := map[string]any{
@@ -465,10 +496,14 @@ func digestDiff(cur []digestTransition, st digestState, next *digestState, limit
 	so.Returned = len(so.Transitions)
 }
 
-func digestStates(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, now time.Time) digestSourceOut {
+// digestStates diffs version and review-submission states against the
+// snapshot. On a first digest (no "states" marker) objects dated before base
+// are recorded silently instead of being reported as new.
+func digestStates(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, now, base time.Time) digestSourceOut {
 	at := now.Format(time.RFC3339)
+	_, fresh := digestStart(st, digestSrcState, base)
 	vs, err := env.ASC.Get(ctx, "/v1/apps/"+url.PathEscape(app.ID)+"/appStoreVersions", url.Values{
-		"fields[appStoreVersions]": {"platform,versionString,appVersionState"},
+		"fields[appStoreVersions]": {"platform,versionString,appVersionState,createdDate"},
 		"limit":                    {"20"},
 	})
 	if err != nil {
@@ -483,36 +518,57 @@ func digestStates(ctx context.Context, env *tool.Env, app tool.App, st digestSta
 		return digestFail(fmt.Errorf("review submissions: %w", err))
 	}
 	var cur []digestTransition
+	// old reports whether a dated object predates the baseline of a first
+	// digest; undated objects are always reported.
+	old := func(date string) bool {
+		t := digestParseTime(date)
+		return fresh && !t.IsZero() && t.Before(base)
+	}
+	add := func(t digestTransition, date string) {
+		if old(date) {
+			next.Snapshot[t.key] = t.To
+			return
+		}
+		cur = append(cur, t)
+	}
 	for _, v := range vs.Data {
-		cur = append(cur, digestTransition{
+		add(digestTransition{
 			key: "appStoreVersions/" + v.ID, Object: "appStoreVersions/" + v.ID,
 			Label: strings.TrimSpace(v.Str("platform") + " " + v.Str("versionString")), To: v.Str("appVersionState"), ObservedAt: at,
-		})
+		}, v.Str("createdDate"))
 	}
 	for _, s := range subs.Data {
-		cur = append(cur, digestTransition{
+		add(digestTransition{
 			key: "reviewSubmissions/" + s.ID, Object: "reviewSubmissions/" + s.ID,
 			Label: strings.TrimSpace(s.Str("platform") + " " + s.Str("submittedDate")), To: s.Str("state"), ObservedAt: at,
-		})
+		}, s.Str("submittedDate"))
 	}
 	so := digestSourceOut{Status: digestOK}
+	if fresh {
+		so.Baseline = base.Format(time.DateOnly)
+		next.Sources[digestSrcState] = digestWatermark{TS: now.Format(time.RFC3339Nano)}
+	}
 	digestDiff(cur, st, next, limit, &so)
 	return so
 }
 
-func digestBuilds(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, now time.Time, acceptGap bool) digestSourceOut {
+func digestBuilds(ctx context.Context, env *tool.Env, app tool.App, st digestState, next *digestState, limit int, now time.Time, acceptGap bool, base time.Time) digestSourceOut {
 	q := url.Values{
 		"filter[app]":    {app.ID},
 		"sort":           {"-uploadedDate"},
 		"limit":          {"200"},
 		"fields[builds]": {"version,uploadedDate,processingState,expired"},
 	}
-	scan, err := digestScan(ctx, env, "/v1/builds", q, "uploadedDate", st.Sources[digestSrcBuild])
+	w, fresh := digestStart(st, digestSrcBuild, base)
+	scan, err := digestScan(ctx, env, "/v1/builds", q, "uploadedDate", w)
 	if err != nil {
 		return digestFail(fmt.Errorf("builds: %w", err))
 	}
-	p := digestPick(scan, "uploadedDate", digestSrcBuild, st, next, limit, acceptGap)
+	p := digestPick(scan, "uploadedDate", digestSrcBuild, w, next, limit, acceptGap)
 	so := digestSourceOut{Status: digestOK, Items: []map[string]any{}, gapTool: "builds_list"}
+	if fresh {
+		so.Baseline = base.Format(time.DateOnly)
+	}
 	digestApplyPick(&so, p, scan.BeyondCapped)
 	isNew := map[string]bool{}
 	for _, r := range p.Items {

@@ -42,8 +42,8 @@ func rel(typ, id string) map[string]any {
 	return map[string]any{"data": map[string]any{"type": typ, "id": id}}
 }
 
-// installhealthFixture registers every endpoint release_health_report reads.
-func installhealthFixture(t testing.TB, k *tooltest.Kit, f healthFixture) {
+// installHealthFixture registers every endpoint release_health_report reads.
+func installHealthFixture(t testing.TB, k *tooltest.Kit, f healthFixture) {
 	t.Helper()
 	k.Clock.Set(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
 	k.Resolve.Apps = []tool.App{{ID: healthAppID, BundleID: "com.example.sail", Name: "Sail", SKU: "sail"}}
@@ -150,7 +150,7 @@ func TestReleaseHealthVerdicts(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			k := tooltest.New(t).ReadOnly()
 			k.Env.Artifacts = &funnelArtifacts{puts: map[string][]byte{}}
-			installhealthFixture(t, k, c.f)
+			installHealthFixture(t, k, c.f)
 			res, out := healthCall(t, k, `{"app":"Sail"}`)
 			if out.Verdict != c.verdict {
 				t.Fatalf("verdict %s, want %s; reasons %v", out.Verdict, c.verdict, out.Reasons)
@@ -177,11 +177,42 @@ func TestReleaseHealthVerdicts(t *testing.T) {
 	}
 }
 
+func TestReleaseHealthUnknownWithoutProductionData(t *testing.T) {
+	k := tooltest.New(t).ReadOnly()
+	installHealthFixture(t, k, healthFixture{EmptyPerf: true, Crashes: 1, Phased: "ACTIVE"})
+	res, out := healthCall(t, k, `{"app":"Sail"}`)
+	if out.Verdict != VerdictUnknown || len(out.Reasons) == 0 || out.Reasons[0] != "no production data yet" {
+		t.Fatalf("verdict %s reasons %v", out.Verdict, out.Reasons)
+	}
+	want := map[string]string{
+		"diagnostics": covNoData, "perf_power_metrics": covNoData, "analytics_crashes": covNotSetUp,
+		"testflight_crash_feedback": covMeasured, "ratings": covNoData,
+	}
+	for src, st := range want {
+		if out.Coverage[src] != st {
+			t.Errorf("coverage[%s] = %q, want %q (all %v)", src, out.Coverage[src], st, out.Coverage)
+		}
+	}
+	setup := false
+	for _, n := range res.Next {
+		setup = setup || n.Tool == "analytics_setup"
+		if n.Tool == "release_phased" {
+			t.Errorf("pause suggested on unknown: %+v", n)
+		}
+	}
+	if !setup {
+		t.Errorf("no analytics_setup next: %+v", res.Next)
+	}
+	if len(k.ASC.Mutations()) != 0 {
+		t.Errorf("mutations: %+v", k.ASC.Mutations())
+	}
+}
+
 func TestReleaseHealthBreachPausedPhasedNoPauseNext(t *testing.T) {
 	k := tooltest.New(t).ReadOnly()
 	f := breachFixture
 	f.Phased = "PAUSED"
-	installhealthFixture(t, k, f)
+	installHealthFixture(t, k, f)
 	res, out := healthCall(t, k, `{"app":"Sail"}`)
 	if out.Verdict != VerdictBreach {
 		t.Fatalf("verdict %s", out.Verdict)
@@ -195,7 +226,7 @@ func TestReleaseHealthBreachPausedPhasedNoPauseNext(t *testing.T) {
 
 func TestReleaseHealthAnalyticsNotSetUpAndAccept(t *testing.T) {
 	k := tooltest.New(t).ReadOnly()
-	installhealthFixture(t, k, healthyFixture)
+	installHealthFixture(t, k, healthyFixture)
 	res, out := healthCall(t, k, `{"app":"Sail"}`)
 	if out.Analytics.Status != "not_set_up" {
 		t.Errorf("analytics status %q", out.Analytics.Status)
@@ -217,7 +248,7 @@ func TestReleaseHealthEmptyPerfInsufficient(t *testing.T) {
 	k := tooltest.New(t).ReadOnly()
 	f := healthyFixture
 	f.EmptyPerf = true
-	installhealthFixture(t, k, f)
+	installHealthFixture(t, k, f)
 	_, out := healthCall(t, k, `{"app":"Sail"}`)
 	if out.Perf.Status != "insufficient_data" || out.Verdict != VerdictHealthy {
 		t.Errorf("perf %+v verdict %s", out.Perf, out.Verdict)
@@ -230,7 +261,7 @@ func TestReleaseHealthLargeSignaturesLinked(t *testing.T) {
 	k.Env.Artifacts = art
 	f := healthyFixture
 	f.ExtraSignatures = 20
-	installhealthFixture(t, k, f)
+	installHealthFixture(t, k, f)
 	res, out := healthCall(t, k, `{"app":"Sail"}`)
 	if len(res.Links) != 1 || len(art.puts) != 1 {
 		t.Fatalf("links %+v puts %d", res.Links, len(art.puts))

@@ -13,18 +13,19 @@ import (
 )
 
 type financeIn struct {
-	Month      string `json:"month,omitempty" jsonschema:"fiscal YYYY-MM; default newest closed"`
-	ReportType string `json:"report_type,omitempty" jsonschema:"default FINANCIAL"`
-	Region     string `json:"region,omitempty" jsonschema:"default ZZ, or Z1 for detail"`
-	TopN       int    `json:"top_n,omitempty" jsonschema:"products kept, default 10, max 100"`
+	Month       string `json:"month,omitempty" jsonschema:"fiscal YYYY-MM; default newest closed"`
+	ReportType  string `json:"report_type,omitempty" jsonschema:"default FINANCIAL"`
+	Region      string `json:"region,omitempty" jsonschema:"default ZZ, or Z1 for detail"`
+	TopN        int    `json:"top_n,omitempty" jsonschema:"products kept, default 10, max 100"`
+	IncludeRows bool   `json:"include_rows,omitempty"`
 }
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "finance_report", Toolset: tool.Reports, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
 		Title: "Payments and financial report",
-		Description: "Decoded Payments & Financial report for one fiscal month: proceeds per currency and top products. " +
-			"No FX rates or USD totals: Apple shows those only on the web Payments page. Unpublished months: pending.",
+		Description: "Payments & Financial report for one fiscal month: proceeds per currency, top products; " +
+			"include_rows: CSV link of all rows. No FX/USD totals (web Payments only). Unpublished months: pending.",
 		Enums: map[string][]any{"report_type": {string(applemeta.ReportFinancial), string(applemeta.ReportFinanceDetail)}},
 	}, financeReport))
 }
@@ -50,6 +51,8 @@ type financeOut struct {
 	Products    []financeProduct `json:"top_products,omitempty"`
 	Omitted     int              `json:"products_omitted,omitempty"`
 	Note        string           `json:"note,omitempty"`
+	// RowsResource is the URI of the CSV artifact with every decoded row.
+	RowsResource string `json:"rows_resource,omitempty"`
 }
 
 // financeFXNote explains why proceeds are never converted.
@@ -134,6 +137,11 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 	out.Proceeds = sortedAmounts(sum.Proceeds)
 	out.Note = financeFXNote
 	out.Products, out.Omitted = financeProducts(rows, topN)
+	// Rows behind omitted products are only reachable through the artifact.
+	if in.IncludeRows || out.Omitted > 0 {
+		linkRows(ctx, env, res, fmt.Sprintf("finance-%s-%s-%s.csv", strings.ToLower(string(rt)), region, month),
+			salesCSV([]dayTable{{Date: month, Table: t}}, nil), func(uri string) { out.RowsResource = uri })
+	}
 	return res, nil
 }
 

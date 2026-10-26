@@ -183,10 +183,11 @@ func TestRanksArgumentErrors(t *testing.T) {
 		`{"app":"1234567890","keywords":["x"],"countries":["usa"]}`,
 		`{"app":"1234567890","keywords":[" "]}`,
 		`{"app":"1234567890","action":"untrack"}`,
-		`{"app":"Hjul","keywords":["x"]}`,
-		`{"keywords":["x"]}`,
+		`{"app":"Hjul","keywords":["x"]}`, // a name needs an ASC key
+		`{"keywords":["x"]}`,              // so does the pinned app
 	} {
 		k, _ := ranksKit(t)
+		k.Env.Resolve = nil // no ASC key
 		res := tooltest.MustFail(t, tooltest.Call(t, ranksTool(t), k.Env, args), tool.ErrInvalidArgs.Code)
 		if len(k.Fetch.Calls) != 0 {
 			t.Fatalf("%s: fetched", args)
@@ -195,6 +196,27 @@ func TestRanksArgumentErrors(t *testing.T) {
 			t.Fatalf("cap error = %s", tooltest.JSON(t, res))
 		}
 	}
+}
+
+func TestRanksResolvesNameViaASC(t *testing.T) {
+	k, _ := ranksKit(t)
+	k.Resolve.Apps = []tool.App{{ID: "1234567890", Name: "Hjul", BundleID: "se.jvcr.hjul.unreleased"}}
+	k.Fetch.Handle(http.MethodGet, searchURL("bike", "us", 100), http.StatusOK, results(other, hjul))
+	out := tooltest.Decode[ranksRes](t, tooltest.MustOK(t, tooltest.Call(t, ranksTool(t), k.Env, `{"app":"hjul","keywords":["bike"]}`)))
+	if out.App != 1234567890 || len(out.Ranks) != 1 || out.Ranks[0].Rank == nil || *out.Ranks[0].Rank != 2 {
+		t.Fatalf("out = %+v", out)
+	}
+	// A bundle id iTunes does not know (unreleased) falls back to the resolver.
+	k.Fetch.Handle(http.MethodGet, "https://itunes.apple.com/lookup?bundleId=se.jvcr.hjul.unreleased&country=us&entity=software",
+		http.StatusOK, results())
+	out = tooltest.Decode[ranksRes](t, tooltest.MustOK(t, tooltest.Call(t, ranksTool(t), k.Env, `{"app":"se.jvcr.hjul.unreleased","action":"report"}`)))
+	if out.App != 1234567890 || out.Points != 1 {
+		t.Fatalf("report out = %+v", out)
+	}
+	if len(k.ASC.Requests()) != 0 {
+		t.Fatal("called App Store Connect directly")
+	}
+	tooltest.MustFail(t, tooltest.Call(t, ranksTool(t), k.Env, `{"app":"Nope","keywords":["bike"]}`), "not_found")
 }
 
 func TestRanksPacer(t *testing.T) {

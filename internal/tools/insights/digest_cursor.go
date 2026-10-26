@@ -46,6 +46,15 @@ func digestParseTime(s string) time.Time {
 	return t
 }
 
+// digestStart returns the stored watermark of name, or (fresh) one at base
+// so a first digest never presents older history as new.
+func digestStart(st digestState, name string, base time.Time) (digestWatermark, bool) {
+	if w, ok := st.Sources[name]; ok && w.TS != "" {
+		return w, false
+	}
+	return digestWatermark{TS: base.UTC().Format(time.RFC3339Nano)}, true
+}
+
 // time returns the watermark instant and whether one is set.
 func (w digestWatermark) time() (time.Time, bool) {
 	if w.TS == "" {

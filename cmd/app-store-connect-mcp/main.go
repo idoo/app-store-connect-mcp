@@ -21,7 +21,8 @@ Usage:
   app-store-connect-mcp [serve] [flags]          serve MCP over stdio (or --http ADDR); app-store-connect-mcp serve --help lists flags
   app-store-connect-mcp auth <add|import|list|test|remove|set>
   app-store-connect-mcp doctor [--profile NAME] [--json]  check config, key, Apple reachability
-  app-store-connect-mcp guard --app X [--platform P] [--pause-on-breach] [thresholds]  release health for cron/CI (exit 0/3/4)
+  app-store-connect-mcp guard --app X [--platform P] [--pause-on-breach] [thresholds]  release health for cron/CI (exit 0/3/4/5)
+  app-store-connect-mcp aso <track|report> --app X [--keywords a,b] [--storefronts us,se] [--depth N]  keyword ranks for cron
   app-store-connect-mcp config snippet <client>  print client config (claude-code, claude-desktop, codex, cursor, vscode, windsurf)
   app-store-connect-mcp config install <client>  write it into the client's config (with backup)
   app-store-connect-mcp skills <list|install>    install agent skills (--client claude-code|codex|cursor|omp, --dir, --force)
@@ -36,6 +37,7 @@ var subUsage = map[string]string{
 	"config":  configUsage,
 	"skills":  skillsUsage,
 	"guard":   guardUsage,
+	"aso":     asoUsage,
 	"doctor":  "usage: app-store-connect-mcp doctor [--profile NAME] [--json]\n  checks the config, key, JWT, Apple reachability, clock skew and rate limit",
 	"version": "usage: app-store-connect-mcp version",
 }
@@ -94,6 +96,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runDoctor(ctx, rest, stdout, stderr)
 	case "guard":
 		return runGuard(ctx, rest, stdout, stderr)
+	case "aso":
+		return runAso(ctx, rest, stdout, stderr)
 	case "config":
 		return runConfig(rest, stdout, stderr)
 	case "skills":

@@ -29,7 +29,7 @@ func TestReleaseStatusAccessibilityLabels(t *testing.T) {
 				}
 				return
 			}
-			if c.Items[0] != tc.item || c.FixVia == nil || c.FixVia.Tool != "appinfo_update" || !strings.HasSuffix(c.FixVia.Manual, "/distribution/accessibility") {
+			if c.Items[0] != tc.item || c.FixVia == nil || c.FixVia.Tool != "appinfo_update" || !strings.HasSuffix(c.FixVia.Manual, "/apps/100") {
 				t.Errorf("check = %+v", c)
 			}
 			if len(c.Items) != 2 || c.Items[1] != "IPAD: no accessibility declaration" {
