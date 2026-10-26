@@ -122,6 +122,8 @@ func newSession(deps Deps) (*session, error) {
 	})
 	s.srv.AddReceivingMiddleware(s.hiddenToolMiddleware)
 	s.addResources()
+	s.addUIResources()
+	s.srv.AddReceivingMiddleware(s.uiMiddleware)
 	s.addPrompts()
 	s.sync()
 	return s, nil

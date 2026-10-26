@@ -71,6 +71,13 @@ type statusSnapshot struct {
 	// AppInfoLocs are the editable appInfo localizations (name, subtitle, privacy URL).
 	AppInfoLocs []tool.Resource
 	AgeRating   *tool.Resource
+	// AgeTier / LiveAgeTier are appStoreAgeRating of the editable and the
+	// live appInfo ("" when unknown).
+	AgeTier, LiveAgeTier string
+	// A11y are the app's accessibilityDeclarations; A11yErr is set when
+	// they could not be read.
+	A11y    []tool.Resource
+	A11yErr string
 	// Screenshots maps locale to its screenshot sets.
 	Screenshots map[string][]screenshotSet
 	// PriceSet / AvailabilitySet report whether a schedule/availability exists.
@@ -100,7 +107,7 @@ func runChecks(s *statusSnapshot) []check {
 	if s.Version != nil {
 		out = append(out, checkBuild(s), checkExportCompliance(s), checkWhatsNew(s), checkListing(s), checkScreenshots(s), checkReviewDetail(s))
 	}
-	out = append(out, checkAgeRating(s), checkContentRights(s), checkPricing(s), checkProducts(s), checkPrivacy(s), checkSubmission(s))
+	out = append(out, checkAgeRating(s), checkAccessibility(s), checkContentRights(s), checkPricing(s), checkProducts(s), checkPrivacy(s), checkSubmission(s))
 	if s.Version != nil {
 		out = append(out, checkPhased(s))
 	}
@@ -439,9 +446,12 @@ func checkAgeRating(s *statusSnapshot) check {
 	}
 	slices.Sort(c.Items)
 	korea := len(c.Items) - general
+	semantic := ageRatingSemantics(s.AgeRating)
 	switch {
 	case general > 0:
 		c.Status, c.Detail = statusBlock, fmt.Sprintf("%d age rating question(s) unanswered; Apple refuses the submission until they are answered", general)
+	case len(semantic) > 0:
+		c.Status, c.Detail = statusWarn, "age rating answers are inconsistent with the 2025 questionnaire"
 	case korea > 0 && s.KoreaAvailable != nil && *s.KoreaAvailable:
 		c.Status, c.Detail = statusWarn, fmt.Sprintf("%d Korea (GRAC) age rating question(s) unanswered; required because the app is available in South Korea", korea)
 	case korea > 0:
@@ -453,7 +463,27 @@ func checkAgeRating(s *statusSnapshot) check {
 	default:
 		c.Status, c.Detail, c.FixVia = statusOK, "age rating declaration complete", nil
 	}
+	c.Items = append(c.Items, semantic...)
+	if s.AgeTier != "" && s.LiveAgeTier != "" && s.AgeTier != s.LiveAgeTier {
+		c.Detail += fmt.Sprintf("; note: rating changes from %s (live) to %s", s.LiveAgeTier, s.AgeTier)
+	}
 	return c
+}
+
+// ageRatingSemantics lists 2025 questionnaire answers that contradict each
+// other (the null check catches unanswered ones).
+func ageRatingSemantics(decl *tool.Resource) []string {
+	var out []string
+	noURL := decl.Str("developerAgeRatingInfoUrl") == ""
+	for _, k := range []string{"ageAssurance", "socialMediaAgeRestricted"} {
+		if v, _ := decl.Bool(k); v && noURL {
+			out = append(out, k+" is true but developerAgeRatingInfoUrl is empty")
+		}
+	}
+	if decl.Str("ageRatingOverride") != "" && decl.Attributes["ageRatingOverrideV2"] == nil {
+		out = append(out, "legacy ageRatingOverride set but ageRatingOverrideV2 empty: re-answer the 2025 questionnaire")
+	}
+	return out
 }
 
 func checkContentRights(s *statusSnapshot) check {

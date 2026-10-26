@@ -64,6 +64,11 @@
         "detail": "age rating declaration complete"
       },
       {
+        "id": "accessibility_labels",
+        "status": "ok",
+        "detail": "Accessibility Nutrition Labels published"
+      },
+      {
         "id": "content_rights",
         "status": "ok",
         "detail": "DOES_NOT_USE_THIRD_PARTY_CONTENT"
@@ -101,7 +106,7 @@
       }
     ],
     "summary": {
-      "ok": 13,
+      "ok": 14,
       "warn": 0,
       "block": 0,
       "manual": 1,
