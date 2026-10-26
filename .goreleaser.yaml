@@ -20,7 +20,8 @@ builds:
     flags:
       - -trimpath
     # No build date: two builds of the same tag must be byte-identical so the
-    # provenance attestation can be reproduced.
+    # provenance attestation can be reproduced. darwin binaries are the
+    # exception: their Developer ID signature carries a timestamp.
     ldflags:
       - -s -w -X main.version={{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -33,6 +34,24 @@ universal_binaries:
     name_template: app-store-connect-mcp
     replace: false
     mod_timestamp: "{{ .CommitTimestamp }}"
+
+# Developer ID signature + Apple notarization (quill, runs on Linux) for the
+# per-arch darwin binaries and the universal one in the .mcpb. Plain Mach-O
+# can't be stapled: Gatekeeper checks the ticket online on first run.
+# release.yml refuses to tag without these secrets; local snapshots stay unsigned.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids: [app-store-connect-mcp, app-store-connect-mcp-universal]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
 
 archives:
   - id: app-store-connect-mcp
