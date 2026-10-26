@@ -192,7 +192,7 @@ var errDigestState = errors.New("state dir not writable")
 
 func (*digestBrokenStore) Cursor(string, string, string) (string, error)  { return "", errDigestState }
 func (*digestBrokenStore) SetCursor(string, string, string, string) error { return errDigestState }
-func (*digestBrokenStore) Load(string, string, any) (bool, error) { return false, errDigestState }
+func (*digestBrokenStore) Load(string, string, any) (bool, error)         { return false, errDigestState }
 
 func (s *digestBrokenStore) Save(string, string, any) error {
 	s.saves++
