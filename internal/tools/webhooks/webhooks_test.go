@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -122,7 +123,7 @@ func TestWebhooksCreateGeneratesSecretOnce(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(saved)) != secret {
 		t.Fatalf("secret file = %q, %v", saved, err)
 	}
-	if fi, err := os.Stat(filepath.Join(k.Files.Root, "webhook-secrets", "W9.txt")); err != nil || fi.Mode().Perm() != 0o600 || out.SecretFile == "" {
+	if fi, err := os.Stat(filepath.Join(k.Files.Root, "webhook-secrets", "W9.txt")); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) || out.SecretFile == "" { // Windows reports 0666.
 		t.Fatalf("secret file mode = %v, %v; secret_file = %q", fi, err, out.SecretFile)
 	}
 	if len(*asked) != 1 || strings.Contains((*asked)[0], secret) || !strings.Contains((*asked)[0], "https://hooks.example.org/x") {
