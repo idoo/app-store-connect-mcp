@@ -101,7 +101,7 @@ func buildsUpload(ctx context.Context, env *tool.Env, in buildUploadIn) (*tool.R
 		return tool.NextStep{Tool: "builds_list", Args: args}
 	}
 	if err != nil {
-		if errors.Is(err, upload.ErrDuplicateBuild) {
+		if errors.Is(err, upload.ErrDuplicateBuild) || errors.Is(err, upload.ErrStaleBuildUpload) {
 			return nil, tool.WithNext(err, listNext(in.Platform, in.Version))
 		}
 		if res != nil { // Apple finished processing with FAILED.

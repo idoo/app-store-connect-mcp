@@ -3,6 +3,7 @@ package reviews
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -86,9 +87,17 @@ func responsesByID(included []tool.Resource) map[string]tool.Resource {
 	return m
 }
 
+// cursorLocks serialise load→compare→save of one profile+app cursor within
+// the process, so concurrent calls never store an older value.
+var cursorLocks sync.Map // key → *sync.Mutex
+
 // advanceCursor stores value as the app's reviews cursor unless the stored
 // cursor is already at or past it. It returns the cursor now stored.
 func advanceCursor(env *tool.Env, appID string, newest time.Time, value string) (string, error) {
+	m, _ := cursorLocks.LoadOrStore(env.Profile.Name+"\x00"+appID, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
 	stored, err := env.State.Cursor(env.Profile.Name, appID, cursorName)
 	if err != nil {
 		return "", fmt.Errorf("read reviews cursor: %w", err)

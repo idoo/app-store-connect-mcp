@@ -426,20 +426,20 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	if in.Kind == offerKindIntro {
 		return offerCreateIntros(ctx, env, in, attrs, out)
 	}
+	prices, err := offerResolvePrices(ctx, env, sub.ID, in.Mode, in.Prices, in.Equalize)
+	if err != nil {
+		return nil, err
+	}
 	if r, raw, ok, err := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); err != nil || ok {
 		if err != nil {
 			return nil, err
 		}
-		if err := offerSameTerms(in, sp, raw); err != nil {
+		if err := offerSameTerms(ctx, env, in, sp, raw, prices); err != nil {
 			return nil, err
 		}
 		out.Offer = &r
 		out.Territories = r.Territories
 		return tool.Already(out), nil
-	}
-	prices, err := offerResolvePrices(ctx, env, sub.ID, in.Mode, in.Prices, in.Equalize)
-	if err != nil {
-		return nil, err
 	}
 	wctx, gres := offerConfirm(ctx, env, in, out.Subscription, attrs, prices)
 	if gres != nil {
@@ -453,7 +453,7 @@ func offersCreate(ctx context.Context, env *tool.Env, in offersCreateIn) (*tool.
 	if err != nil {
 		if tool.IsConflict(err) {
 			if r, raw, ok, rerr := offerExisting(ctx, env, sub.ID, in.Kind, sp.match); rerr == nil && ok {
-				if derr := offerSameTerms(in, sp, raw); derr != nil {
+				if derr := offerSameTerms(ctx, env, in, sp, raw, prices); derr != nil {
 					return nil, derr
 				}
 				out.Offer = &r
@@ -540,13 +540,18 @@ func offerExisting(ctx context.Context, env *tool.Env, subID, kind string, match
 }
 
 // offerSameTerms accepts an existing offer that matched by name or
-// identifier only when its terms equal the request; otherwise the clash is
-// an error naming the existing offer.
-func offerSameTerms(in offersCreateIn, sp offerSpec, r tool.Resource) error {
+// identifier only when its terms and territory prices equal the request;
+// otherwise the clash is an error naming the existing offer.
+func offerSameTerms(ctx context.Context, env *tool.Env, in offersCreateIn, sp offerSpec, r tool.Resource, prices []offerPrice) error {
 	if sp.differs == nil {
 		return nil
 	}
 	diff := sp.differs(r)
+	have, err := offerExistingPrices(ctx, env, sp, r.ID)
+	if err != nil {
+		return err
+	}
+	diff = append(diff, offerPriceDiff(have, prices)...)
 	if len(diff) == 0 {
 		return nil
 	}
@@ -557,6 +562,74 @@ func offerSameTerms(in offersCreateIn, sp offerSpec, r tool.Resource) error {
 	return tool.WithNext(tool.InvalidArgs("a %s offer %q (id %s) already uses this name or identifier with different terms (%s); "+
 		"use a new name and identifier, or keep the existing offer", in.Kind, tool.SanitizeText(string(name)), r.ID, strings.Join(diff, "; ")),
 		tool.NextStep{Tool: "offers_list", Args: map[string]any{"product_id": in.ProductID}})
+}
+
+// offerExistingPrices reads every territory price of an existing promo or
+// win-back offer (sp.typ), keyed by territory.
+func offerExistingPrices(ctx context.Context, env *tool.Env, sp offerSpec, offerID string) (map[string]offerPrice, error) {
+	res, err := env.ASC.List(ctx, "/v1/"+sp.typ+"/"+url.PathEscape(offerID)+"/prices", tool.ListOptions{
+		Include: []string{"territory", "subscriptionPricePoint"},
+		Fields: map[string][]string{
+			sp.priceType:              {"territory", "subscriptionPricePoint"},
+			"subscriptionPricePoints": {"customerPrice"},
+		},
+		MaxItems: 1000,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read prices of offer %s: %w", offerID, err)
+	}
+	inc := tool.IndexIncluded(res.Included)
+	out := make(map[string]offerPrice, len(res.Data))
+	for _, p := range res.Data {
+		t := p.RelID("territory")
+		if t == "" {
+			continue
+		}
+		pp := p.RelID("subscriptionPricePoint")
+		out[t] = offerPrice{Territory: t, PricePoint: pp, CustomerPrice: inc["subscriptionPricePoints/"+pp].Str("customerPrice")}
+	}
+	return out, nil
+}
+
+// offerPriceDiff names the territories whose existing price differs from
+// the requested one, and territories only one side covers.
+func offerPriceDiff(have map[string]offerPrice, want []offerPrice) []string {
+	var diff, missing []string
+	wanted := make(map[string]bool, len(want))
+	label := func(p offerPrice) string {
+		switch {
+		case p.CustomerPrice != "":
+			return p.CustomerPrice
+		case p.PricePoint != "":
+			return "price point " + p.PricePoint
+		}
+		return "free"
+	}
+	for _, w := range want {
+		wanted[w.Territory] = true
+		h, ok := have[w.Territory]
+		switch {
+		case !ok:
+			missing = append(missing, w.Territory)
+		case w.PricePoint != "" && h.PricePoint != w.PricePoint:
+			diff = append(diff, fmt.Sprintf("%s price is %s, requested %s", w.Territory, label(h), label(w)))
+		}
+	}
+	if len(missing) > 0 {
+		slices.Sort(missing)
+		diff = append(diff, "existing offer has no price in "+prcList(missing))
+	}
+	var extra []string
+	for t := range have {
+		if !wanted[t] {
+			extra = append(extra, t)
+		}
+	}
+	if len(extra) > 0 {
+		slices.Sort(extra)
+		diff = append(diff, "existing offer is also priced in "+prcList(extra))
+	}
+	return diff
 }
 
 // offerDiff lists keys whose existing value differs from the requested

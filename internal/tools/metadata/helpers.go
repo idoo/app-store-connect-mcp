@@ -326,7 +326,9 @@ func computePlan(ctx context.Context, env *tool.Env, in sourceIn, preview bool) 
 		opts.Blocker = lockBlocker(versions, t.Platform)
 		pullInfo = infos.Locked.ID
 	case infos.Live != nil:
+		// Read-only like Locked: unchanged app-info fields pass.
 		opts.AppInfoState = infos.Live.Str("state")
+		pullInfo = infos.Live.ID
 	}
 	opts.PromoOnly = !t.FellBack && (t.Version.State == versionStateLive || slices.Contains(inFlightLocked, t.Version.State))
 	remote, err := metadata.Pull(ctx, env.ASC, t.Version.ID, pullInfo)

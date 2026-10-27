@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
@@ -54,7 +55,7 @@ type feedbackListIn struct {
 	Platform         tool.Platform `json:"platform,omitempty"`
 	DeviceModel      string        `json:"device_model,omitempty" jsonschema:"e.g. iPhone15,2"`
 	Limit            int           `json:"limit,omitempty" jsonschema:"items per kind, 1-50 (default 20)"`
-	MarkSeen         bool          `json:"mark_seen,omitempty" jsonschema:"advance last_seen past these items"`
+	MarkSeen         bool          `json:"mark_seen,omitempty" jsonschema:"advance last_seen past these items (kept when filtered)"`
 	IncludeCrashLogs bool          `json:"include_crash_logs,omitempty" jsonschema:"fetch log text of up to 3 crashes (8 KB each)"`
 }
 
@@ -168,6 +169,9 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 	if in.DeviceModel != "" {
 		filters.Set("filter[deviceModel]", in.DeviceModel)
 	}
+	// A build/platform/device filter hides other feedback, so advancing the
+	// app-wide cursor past it would skip that feedback for good.
+	filtered := in.Build != "" || in.Platform != "" || in.DeviceModel != ""
 
 	for _, k := range kinds {
 		kSince, sinceLabel := since, in.Since
@@ -200,11 +204,12 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 				newest = c
 			}
 		}
-		if in.MarkSeen && newest != "" {
-			if err := env.State.SetCursor(env.Profile.Name, app.ID, k.cursorName(), newest); err != nil {
-				return nil, fmt.Errorf("store %s cursor: %w", k.name, err)
+		if in.MarkSeen && !filtered && newest != "" {
+			stored, err := advanceFeedbackCursor(env, app.ID, k, newest)
+			if err != nil {
+				return nil, err
 			}
-			cur.AdvancedTo = newest
+			cur.AdvancedTo = stored
 		}
 		out.Cursors[k.name] = cur
 	}
@@ -225,6 +230,9 @@ func feedbackList(ctx context.Context, env *tool.Env, in feedbackListIn) (*tool.
 	}
 
 	res := tool.OK(out)
+	if in.MarkSeen && filtered {
+		res.Warn("mark_seen ignored: build/platform/device_model filters hide feedback, so last_seen was kept; rerun without filters to mark seen")
+	}
 	attachScreenshots(ctx, env, out, res)
 	if in.IncludeCrashLogs {
 		attachCrashLogs(ctx, env, out, res)
@@ -286,6 +294,31 @@ func laterThan(a, b string) bool {
 		return errA == nil && errB != nil
 	}
 	return ta.After(tb)
+}
+
+// cursorLocks serialise load→compare→save of one profile+app+kind cursor
+// within the process.
+var cursorLocks sync.Map // key → *sync.Mutex
+
+// advanceFeedbackCursor stores newest as k's cursor unless the stored one is
+// already at or past it, so the cursor never moves backwards. It returns the
+// cursor now stored.
+func advanceFeedbackCursor(env *tool.Env, appID string, k feedbackKind, newest string) (string, error) {
+	m, _ := cursorLocks.LoadOrStore(env.Profile.Name+"\x00"+appID+"\x00"+k.cursorName(), &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+	stored, err := env.State.Cursor(env.Profile.Name, appID, k.cursorName())
+	if err != nil {
+		return "", fmt.Errorf("read %s cursor: %w", k.name, err)
+	}
+	if !laterThan(newest, stored) {
+		return stored, nil
+	}
+	if err := env.State.SetCursor(env.Profile.Name, appID, k.cursorName(), newest); err != nil {
+		return "", fmt.Errorf("store %s cursor: %w", k.name, err)
+	}
+	return newest, nil
 }
 
 // scanFeedback pages newest-first and stops at the first item not after

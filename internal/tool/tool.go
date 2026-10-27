@@ -313,7 +313,7 @@ func (t Tool) call(ctx context.Context, env *Env, raw json.RawMessage) *Result {
 	}
 	res, err := t.invoke(ctx, env, args)
 	if err != nil {
-		return Fail(err)
+		return Fail(offerAllApps(m.Name, err))
 	}
 	return res
 }

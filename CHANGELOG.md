@@ -4,6 +4,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-27
+
+### Fixed
+
+**Writes**
+
+- `screenshots_plan` treats only COMPLETE screenshots as already uploaded. FAILED ones are uploaded again, and old screenshots are kept while a replacement is still processing, so following the suggested replan can no longer delete the good one.
+- `screenshots_sync` reports a replace that is still processing as still processing, not as a partial failure. Deletes held for that reason are counted in `held`.
+- `library_plan` reports `display_mismatch` when a folder names a display or group (such as `APP_IPHONE_DUO`) that the image doesn't fit, instead of placing it in another public set that happens to match the size.
+- A `null` inside a free-form object argument, such as `appinfo_update` `age_rating:{kidsAgeBand:null}`, reaches Apple again and clears the value. 0.13.0 dropped it silently.
+- `offers_create` no longer reports a promotional or win-back offer as already existing when its territory prices differ from the request.
+- `signing_revoke` with `confirm:true` on a missing id returns not found again, instead of reporting a successful revoke.
+- `metadata_plan` no longer proposes a change when a field is empty locally and unset in App Store Connect (fastlane's empty `marketing_url.txt`), so applying twice ends in `no_changes`.
+- On an app with only a live version, `metadata_plan` compares app-info fields with the live app info. An unmodified `metadata_pull` export is no longer `invalid`, and promo-text-only edits can be planned.
+- `builds_upload` resumes an upload whose file reservation was interrupted, instead of blocking that build number for good with "wait for the existing upload". An upload held by another file gets a new `stale_build_upload` error that says to re-run with the original file or bump the build number.
+
+**Numbers and state**
+
+- `pricing_get` with `products` shows each territory's next scheduled price and its start date. A price rise starting tomorrow was only a count before.
+- A sales day counts as zero sales only when Apple says there were no sales. Days Apple publishes late stay pending instead of showing as a −100% drop.
+- SUBSCRIPTION reports warn when the active-subscription counts come from an earlier day.
+- `testflight_feedback_list` with a build, platform or device filter no longer moves the app-wide last-seen mark. Review and feedback last-seen marks never move backwards.
+- `release_status`: iPhone Duo screenshots can be added through the Asset Library (`library_plan`, folder `<locale>/APP_IPHONE_DUO/`, 1398x2034 PNG). A missing Duo slot warns before 2027-04-01 and blocks after.
+- `screenshots_list` says when it shows the live version because no editable one exists, and points to `release_prepare`.
+
+**Agent and client experience**
+
+- Next steps and fix buttons that point at a tool in a disabled toolset are marked `toolset_disabled` with the call that turns it on. On stateless HTTP they are marked `stateless_fixed` with a restart hint and never point at `toolsets` calls the server refuses.
+- Array arguments accept a single value, so `reviews_list rating:1` works the first time.
+- The "which app?" error of `reviews_list`, `digest_summary` and `insights_summary` offers `app:"all"`.
+- Prompt completion suggests App Store locale codes for `from_locale` and `to_locales`.
+- Claude Desktop views: the release view shows the app's other platforms (including a rejected macOS version), next steps and App Review attachment names; its Fix buttons keep the version and platform you were checking and unlock switched-off tools first. The metadata view no longer shows a green "ok" for a plan that can't be applied.
+
 ## [0.13.0] - 2026-10-26
 
 ### Fixed
@@ -324,7 +357,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.10.0...v0.11.0

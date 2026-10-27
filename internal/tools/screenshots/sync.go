@@ -78,8 +78,11 @@ type syncOut struct {
 	Skipped  int           `json:"skipped"`
 	Deleted  int           `json:"deleted"`
 	Failed   int           `json:"failed"`
-	Pending  int           `json:"pending"`
-	Items    []itemOut     `json:"items"`
+	// Held counts deletes (and reorders) kept back because their set's
+	// replacements have not reached COMPLETE; they are not failures.
+	Held    int       `json:"held,omitempty"`
+	Pending int       `json:"pending"`
+	Items   []itemOut `json:"items"`
 }
 
 func init() {
@@ -176,7 +179,7 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 			res.Then(listNext)
 		}
 		res.Then(replan)
-	case out.Pending > 0:
+	case out.Pending > 0 || out.Held > 0:
 		out.Status = "uploaded"
 		res = tool.StillProcessing(out, "Apple is still processing the uploads; check delivery states with screenshots_list").Then(listNext)
 	default:
@@ -198,16 +201,18 @@ func screenshotsSync(ctx context.Context, env *tool.Env, in syncIn) (*tool.Resul
 // tally recounts out's per-action totals and returns how many steps changed
 // remote state plus the typed errors of failed steps (outcome-unknown apart).
 func tally(out *syncOut) (applied int, unknown, failed []error) {
-	out.Uploaded, out.Skipped, out.Deleted, out.Failed = 0, 0, 0, 0
+	out.Uploaded, out.Skipped, out.Deleted, out.Failed, out.Held = 0, 0, 0, 0, 0
 	for _, it := range out.Items {
-		switch it.Action {
-		case actionUploaded:
+		switch {
+		case it.Action == actionUploaded:
 			out.Uploaded++
-		case actionSkipped:
+		case it.Action == actionSkipped:
 			out.Skipped++
-		case actionDeleted:
+		case it.Action == actionDeleted:
 			out.Deleted++
-		case actionFailed, actionNotAttempted:
+		case it.Action == actionNotAttempted && it.State == stateAwaitingReplacement:
+			out.Held++
+		case it.Action == actionFailed || it.Action == actionNotAttempted:
 			out.Failed++
 		}
 		switch {

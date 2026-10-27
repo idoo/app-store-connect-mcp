@@ -34,6 +34,7 @@ func TestPlanLiveVersionPromoOnly(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appInfos", http.StatusOK,
 		`{"data":[{"type":"appInfos","id":"info1","attributes":{"state":"READY_FOR_DISTRIBUTION"}}],"links":{}}`)
 	k.ASC.Handle(http.MethodGet, "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", http.StatusOK, versionLocs("Ride"))
+	k.ASC.Handle(http.MethodGet, "/v1/appInfos/{id}/appInfoLocalizations", http.StatusOK, infoLocs)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_plan"), k.Env,
 		`{"version":"live","listing":{"locales":{"en-US":{"name":"Hjul","subtitle":"New","description":"Changed","promotionalText":"Summer sale"}}}}`))
 	out := decode(t, res)
@@ -60,6 +61,7 @@ func TestApplyLivePromoNeedsHuman(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appInfos", http.StatusOK,
 		`{"data":[{"type":"appInfos","id":"info1","attributes":{"state":"READY_FOR_DISTRIBUTION"}}],"links":{}}`)
 	k.ASC.Handle(http.MethodGet, "/v1/appStoreVersions/{id}/appStoreVersionLocalizations", http.StatusOK, versionLocs("Ride"))
+	k.ASC.Handle(http.MethodGet, "/v1/appInfos/{id}/appInfoLocalizations", http.StatusOK, infoLocs)
 	args := `{"version":"live","listing":{"locales":{"en-US":{"promotionalText":"Summer sale"}}}}`
 	plan := decode(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "metadata_plan"), k.Env, args)))
 	id, _ := plan["plan_id"].(string)

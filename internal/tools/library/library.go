@@ -20,7 +20,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 	"github.com/idoo/app-store-connect-mcp/internal/tools/assetlib"
 )
@@ -565,9 +567,9 @@ func computePlan(ctx context.Context, env *tool.Env, in planIn) (*planOut, error
 			continue
 		}
 		for _, typ := range f.Types {
-			group, msg := pickGroup(ref, par.Platform, typ, f)
+			group, kind, msg := pickGroup(ref, par.Platform, typ, f)
 			if msg != "" {
-				out.Problems = append(out.Problems, problem{File: f.Rel, Kind: "no_group", Message: msg})
+				out.Problems = append(out.Problems, problem{File: f.Rel, Kind: kind, Message: msg})
 				continue
 			}
 			if _, probs := ref.Check(typ, group, f.info); len(probs) > 0 {
@@ -689,9 +691,12 @@ func computePlan(ctx context.Context, env *tool.Env, in planIn) (*planOut, error
 }
 
 // pickGroup chooses the placement group of f among the accepting groups of
-// the target platform: the display directory name when it names one, else
-// the only one.
-func pickGroup(ref *assetlib.RefData, platform tool.Platform, typ string, f localFile) (string, string) {
+// the target platform. A display directory that names a group or display
+// type must match one of them (else a display_mismatch problem: never
+// another group that merely fits the pixels); any other directory name falls
+// back to the only accepting group. It returns the group, or a problem kind
+// and message.
+func pickGroup(ref *assetlib.RefData, platform tool.Platform, typ string, f localFile) (group, kind, msg string) {
 	stores := storesFor(platform, typ)
 	var groups []string
 	for _, g := range ref.Groups(typ, f.info) {
@@ -700,19 +705,51 @@ func pickGroup(ref *assetlib.RefData, platform tool.Platform, typ string, f loca
 		}
 	}
 	if len(groups) == 0 {
-		return "", fmt.Sprintf("%s %dx%d fits no %s group for %s", f.Rel, f.info.Width, f.info.Height, typ, platform)
+		return "", "no_group", fmt.Sprintf("%s %dx%d fits no %s group for %s", f.Rel, f.info.Width, f.info.Height, typ, platform)
 	}
-	if f.dir != "" {
+	if named, ok := dirGroups(ref, f.dir); ok {
+		var match []string
 		for _, g := range groups {
-			if strings.EqualFold(g, f.dir) || strings.EqualFold(g, f.dir+"_PROFILE") {
-				return g, ""
+			if slices.Contains(named, g) {
+				match = append(match, g)
 			}
 		}
+		switch {
+		case len(match) == 1:
+			return match[0], "", ""
+		case len(match) > 1:
+			return "", "no_group", fmt.Sprintf("%dx%d fits several %s groups (%s); name the display directory after one", f.info.Width, f.info.Height, typ, strings.Join(match, ", "))
+		}
+		return "", "display_mismatch", fmt.Sprintf("folder %s names %s, but %s %dx%d fits only %s for %s; move it to a matching folder or fix its size", f.dir, strings.Join(named, "/"), f.Rel, f.info.Width, f.info.Height, strings.Join(groups, ", "), platform)
 	}
 	if len(groups) == 1 {
-		return groups[0], ""
+		return groups[0], "", ""
 	}
-	return "", fmt.Sprintf("%dx%d fits several %s groups (%s); name the display directory after one", f.info.Width, f.info.Height, typ, strings.Join(groups, ", "))
+	return "", "no_group", fmt.Sprintf("%dx%d fits several %s groups (%s); name the display directory after one", f.info.Width, f.info.Height, typ, strings.Join(groups, ", "))
+}
+
+// dirGroups returns the placement groups a display directory name names: a
+// group (with or without _PROFILE) or a display type (enum, including the
+// pending APP_IPHONE_DUO, or a friendly name). ok is false for a name that
+// names no display, which keeps the pixel-size fallback.
+func dirGroups(ref *assetlib.RefData, dir string) ([]string, bool) {
+	if dir == "" {
+		return nil, false
+	}
+	up := strings.ToUpper(dir)
+	for _, g := range []string{up, up + "_PROFILE"} {
+		if ref.GroupPlatform(g) != "" {
+			return []string{g}, true
+		}
+	}
+	d := applemeta.DisplayType(up)
+	if pd, err := applemeta.ParseDisplay(dir); err == nil {
+		d = pd
+	}
+	if gs := assetlib.GroupsForDisplay(d); len(gs) > 0 {
+		return gs, true
+	}
+	return nil, false
 }
 
 // storesFor lists the refData group platforms a target platform accepts.
@@ -979,10 +1016,17 @@ func (a *applier) run(ctx context.Context) {
 	}
 }
 
-// rememberAsset records md5 → asset id in the reuse index. It reloads the
-// index right before saving and sets only this entry, so entries saved by an
-// overlapping apply survive.
+// assetLocks serializes rememberAsset's load→save per state key within this
+// process (a concurrent apply in another process can still race).
+var assetLocks sync.Map // key → *sync.Mutex
+
+// rememberAsset records md5 → asset id in the reuse index. Under the key's
+// in-process lock it reloads the index right before saving and sets only
+// this entry, so entries saved by an overlapping apply survive.
 func rememberAsset(env *tool.Env, key, sum, id string) {
+	mu, _ := assetLocks.LoadOrStore(key, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	var index map[string]string
 	if _, err := env.State.Load(stateKind, key, &index); err != nil || index == nil {
 		index = map[string]string{}

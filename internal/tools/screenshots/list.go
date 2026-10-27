@@ -69,6 +69,10 @@ type listOut struct {
 	Locales  []localeOut   `json:"locales"`
 	// LibraryError is set when the Asset Library could not be read.
 	LibraryError string `json:"library_error,omitempty"`
+	// VersionSource is "live_fallback" when no version is editable and the
+	// live one is shown instead; Note says what that means for changes.
+	VersionSource string `json:"version_source,omitempty"`
+	Note          string `json:"note,omitempty"`
 }
 
 // missingDisplay is a locale lacking every slot of one required group.
@@ -127,6 +131,11 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 		return nil, err
 	}
 	out := listOut{App: t.appOut(), Platform: t.Platform, Version: t.versionOut(), Locales: []localeOut{}}
+	if t.FellBack {
+		out.VersionSource = "live_fallback"
+		out.Note = fmt.Sprintf("no editable version: showing the live version %s (%s), which cannot be changed; "+
+			"screenshots_plan and library_plan need an editable version, which release_prepare creates", t.Version.String, t.Version.State)
+	}
 	var placed []string
 	for _, code := range codes {
 		loc := locs[code]
@@ -154,10 +163,17 @@ func screenshotsList(ctx context.Context, env *tool.Env, in listIn) (*tool.Resul
 		}
 	}
 	res := tool.OK(out)
+	if t.FellBack {
+		res.Warn(out.Note).Then(tool.NextStep{Tool: "release_prepare", Args: map[string]any{"app": t.App.ID, "platform": string(t.Platform)}})
+	}
 	if usesLibrary(out.Locales) {
 		// library_plan needs dir, remove or archive, none of which a listing
 		// knows, so point at it in prose instead of a next step that fails.
-		res.Warn("some screenshots here are Asset Library placements; change them with library_plan (pass dir, remove or archive), not screenshots_sync")
+		msg := "some screenshots here are Asset Library placements; change them with library_plan (pass dir, remove or archive), not screenshots_sync"
+		if t.FellBack {
+			msg += ", once release_prepare has created an editable version"
+		}
+		res.Warn(msg)
 	}
 	if in.Thumbnails {
 		addThumbnails(ctx, env, res, out.Locales)

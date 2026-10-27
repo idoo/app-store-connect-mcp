@@ -54,16 +54,12 @@ func notFoundErr(err error) *tool.APIError {
 	return nil
 }
 
-// isNoSales reports whether a sales 404 for date means a zero-sales day
-// rather than an unpublished report: Apple says so in the detail, or the
-// daily report is older than yesterday (Pacific) and so must have been
-// published already.
-func isNoSales(api *tool.APIError, freq applemeta.Frequency, date string, now time.Time) bool {
-	if strings.Contains(strings.ToLower(api.Detail+" "+api.Title), "no sales") {
-		return true
-	}
-	yesterday := applemeta.PacificDay(now).AddDate(0, 0, -1).Format(time.DateOnly)
-	return freq == applemeta.Daily && date < yesterday
+// isNoSales reports whether a sales 404 means a zero-sales day rather than
+// an unpublished report: only when Apple's message says there were no sales.
+// Any other 404 stays pending whatever the date, since Apple sometimes
+// publishes days late.
+func isNoSales(api *tool.APIError) bool {
+	return strings.Contains(strings.ToLower(api.Detail+" "+api.Title), "no sales")
 }
 
 // vendorCause adds the wrong-vendor-number cause to a sales/finance 403 or
@@ -137,13 +133,12 @@ type dayTable struct {
 // (see isNoSales) or pending. The first real error cancels the rest.
 func fetchSalesDates(ctx context.Context, env *tool.Env, vendor string, rs applemeta.ReportSpec, subType string, freq applemeta.Frequency, dates []string) ([]dayTable, error) {
 	out := make([]dayTable, len(dates))
-	now := env.Clock.Now()
 	err := tool.Parallel(ctx, reportFetchConcurrency, dates, func(ctx context.Context, i int, d string) error {
 		t, nf, err := download(ctx, env, "/v1/salesReports", salesQuery(vendor, rs, subType, freq, d))
 		if err != nil {
 			return err
 		}
-		noSales := nf != nil && isNoSales(nf, freq, d, now)
+		noSales := nf != nil && isNoSales(nf)
 		out[i] = dayTable{Date: d, Table: t, Pending: nf != nil && !noSales, NoSales: noSales}
 		return nil
 	})

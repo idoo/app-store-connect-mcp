@@ -251,9 +251,16 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 		App: app, CoveredDays: []string{}, PendingDays: w.Pending,
 	}
 	var tables []dayTable
+	// late are past days before yesterday whose 404 did not say "no sales":
+	// Apple publishes them late, so they stay pending (never zero sales).
+	var late []string
+	yesterday := applemeta.PacificDay(env.Clock.Now()).AddDate(0, 0, -1).Format(time.DateOnly)
 	for _, d := range days {
 		if d.Pending {
 			out.PendingDays = append(out.PendingDays, d.Date)
+			if d.Date < yesterday {
+				late = append(late, d.Date)
+			}
 			continue
 		}
 		out.CoveredDays = append(out.CoveredDays, d.Date)
@@ -274,6 +281,9 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 	case applemeta.ReportSubscription:
 		if err := subscriptionSnapshot(&out, tables, app); err != nil {
 			return nil, err
+		}
+		if warn := snapshotDayWarning(&out); warn != "" {
+			res.Warn(warn)
 		}
 	case applemeta.ReportSubscriptionEvent:
 		if err := subscriptionEvents(&out, tables, app); err != nil {
@@ -296,6 +306,9 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 	}
 	if len(out.CoveredDays) == 0 && len(out.PendingDays) > 0 {
 		res.Warn("no report published yet for this range; Apple publishes daily reports the next day (Pacific time)")
+	} else if len(late) > 0 {
+		res.Warn(fmt.Sprintf("Apple hasn't published the report for %s yet (its 404 doesn't say \"no sales\"), so those days are pending, not zero sales; retry later",
+			strings.Join(late, ", ")))
 	}
 	return res, nil
 }
@@ -356,6 +369,27 @@ func subscriptionSnapshot(out *salesOut, tables []dayTable, app *tool.App) error
 	s := reports.SubscriptionSummary(rows)
 	out.Rows, out.Subscriptions, out.SnapshotDay = len(rows), &s, last.Date
 	return nil
+}
+
+// snapshotDayWarning says when the SUBSCRIPTION active counts come from an
+// earlier day than the end of the window, because the later days had no
+// report (no sales or not published yet).
+func snapshotDayWarning(out *salesOut) string {
+	if out.SnapshotDay == "" {
+		return ""
+	}
+	var later []string
+	for _, d := range slices.Concat(out.NoSalesDays, out.PendingDays) {
+		if d > out.SnapshotDay {
+			later = append(later, d)
+		}
+	}
+	if len(later) == 0 {
+		return ""
+	}
+	slices.Sort(later)
+	return fmt.Sprintf("active-subscription counts are from %s, the latest day with a SUBSCRIPTION report; %s had none (no sales or not published yet)",
+		out.SnapshotDay, strings.Join(later, ", "))
 }
 
 func subscriptionEvents(out *salesOut, tables []dayTable, app *tool.App) error {

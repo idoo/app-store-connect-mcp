@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -106,6 +107,14 @@ func TestHTTPStatelessRefusesRuntimeToggles(t *testing.T) {
 	}
 	if got := h.names(t); slices.Contains(got, "release_submit") {
 		t.Fatalf("write tools listed in read-only stateless mode: %v", got)
+	}
+	// Calling a hidden tool never steers to toolsets: it can't help here.
+	for name, code := range map[string]string{"release_submit": "writes_disabled", "signing_bundle_ids_list": "toolset_disabled"} {
+		res, body := h.call(t, name, map[string]any{})
+		d := dataOf(body)
+		if !res.IsError || d["error"] != code || !strings.Contains(d["hint"].(string), "restart") || strings.Contains(fmt.Sprint(body), "tool:toolsets") {
+			t.Fatalf("%s = %v", name, body)
+		}
 	}
 }
 

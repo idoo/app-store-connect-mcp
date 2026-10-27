@@ -42,9 +42,12 @@ func decodeArgs(raw json.RawMessage, s *jsonschema.Schema, rs *jsonschema.Resolv
 // coerce replaces string values with their parsed JSON where the schema
 // expects an object, array, integer, number or boolean, recursively. Only
 // exact spellings convert ("3", "2.5", "true"); anything else stays a string
-// and fails validation. String-typed properties are never touched. A null
-// property the schema does not accept is dropped, so it behaves as omitted
-// (clients in strict mode send null for unset optionals).
+// and fails validation. String-typed properties are never touched. A scalar
+// or object sent where the schema expects only an array becomes a
+// one-element array (rating:1 → rating:[1]). A null declared property the
+// schema does not accept is dropped, so it behaves as omitted (clients in
+// strict mode send null for unset optionals); a null inside a free-form map
+// is data (age_rating:{kidsAgeBand:null} clears a value) and is kept.
 func coerce(s *jsonschema.Schema, v any) any {
 	if s == nil {
 		return v
@@ -54,18 +57,23 @@ func coerce(s *jsonschema.Schema, v any) any {
 			v = parsed
 		}
 	}
+	if v != nil && wantsArrayOnly(s, v) {
+		v = []any{v}
+	}
 	switch x := v.(type) {
 	case map[string]any:
 		for k, el := range x {
-			ps := s.Properties[k]
+			ps, declared := s.Properties[k]
 			if ps == nil {
-				ps = s.AdditionalProperties
+				ps, declared = s.AdditionalProperties, false
 			}
 			if ps == nil {
 				continue
 			}
-			if el == nil && !acceptsNull(ps) {
-				delete(x, k)
+			if el == nil {
+				if declared && !acceptsNull(ps) {
+					delete(x, k)
+				}
 				continue
 			}
 			x[k] = coerce(ps, el)
@@ -76,6 +84,40 @@ func coerce(s *jsonschema.Schema, v any) any {
 		}
 	}
 	return v
+}
+
+// schemaTypes returns every type s names.
+func schemaTypes(s *jsonschema.Schema) []string {
+	if s.Type != "" {
+		return append(slices.Clip(s.Types), s.Type)
+	}
+	return s.Types
+}
+
+// wantsArrayOnly reports whether s accepts an array but not the JSON type of
+// the non-array value v, so v should be wrapped into a one-element array.
+func wantsArrayOnly(s *jsonschema.Schema, v any) bool {
+	if _, ok := v.([]any); ok {
+		return false
+	}
+	types := schemaTypes(s)
+	if !slices.Contains(types, "array") {
+		return false
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		return !slices.Contains(types, "object")
+	case string:
+		return !slices.Contains(types, "string")
+	case bool:
+		return !slices.Contains(types, "boolean")
+	case float64:
+		if slices.Contains(types, "number") {
+			return false
+		}
+		return !slices.Contains(types, "integer") || x != float64(int64(x))
+	}
+	return false
 }
 
 // acceptsNull reports whether s explicitly allows JSON null.
@@ -91,10 +133,7 @@ const maxExactInt = 1 << 53
 // the schema accepts strings, has no non-string type, or str is not an exact
 // spelling of that type.
 func coerceString(s *jsonschema.Schema, str string) (any, bool) {
-	types := s.Types
-	if s.Type != "" {
-		types = append(slices.Clip(types), s.Type)
-	}
+	types := schemaTypes(s)
 	if slices.Contains(types, "string") {
 		return nil, false
 	}

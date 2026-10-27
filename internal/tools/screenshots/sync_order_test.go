@@ -112,7 +112,10 @@ func TestSyncWaitReadErrorKeepsBatch(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("result is an error: %+v", res.Data)
 	}
-	out := tooltest.Decode[syncOut](t, res)
+	out, status := syncResult(t, res)
+	if status != "still_processing" || out.Failed != 0 || out.Held != 1 {
+		t.Errorf("status %q out = %+v", status, out)
+	}
 	var up itemOut
 	for _, it := range out.Items {
 		if it.Action == actionUploaded {

@@ -12,12 +12,14 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tools/assetlib"
 )
 
-// checkPendingDisplays reports announced screenshot slots the pinned spec
-// may lack (iPhone Duo): warn before their required-from date; after it,
-// block only when the spec can upload the slot, else warn with the manual
-// route.
+// checkPendingDisplays reports announced screenshot slots (iPhone Duo):
+// warn before their required-from date, block from it. Set screenshots and
+// usable Asset Library placements both fill a slot. The slot is uploadable
+// through the Asset Library (library_plan); screenshots_plan is the fix only
+// when the pinned spec also accepts it as a set display type.
 func checkPendingDisplays(s *statusSnapshot) check {
 	c := check{ID: "iphone_duo_screenshots", Status: statusOK}
+	var missing []string
 	uploadable := false
 	for _, p := range applemeta.PendingDisplays(s.Platform) {
 		if hasDisplay(s, p.Type) {
@@ -25,16 +27,13 @@ func checkPendingDisplays(s *statusSnapshot) check {
 		}
 		day := p.RequiredFrom.Format("2006-01-02")
 		c.Items = append(c.Items, fmt.Sprintf("%s: no screenshots; required for submissions from %s", p.Type, day))
+		missing = append(missing, libraryRoute(p.Type))
+		uploadable = uploadable || s.Uploadable[p.Type]
 		switch {
-		case s.Now.Before(p.RequiredFrom):
-			if c.Status != statusBlock {
-				c.Status, c.Detail = statusWarn, "required for submissions from "+day+"; add them on the web (not in the API yet)"
-			}
-		case s.Uploadable[p.Type]:
-			c.Status, c.Detail, uploadable = statusBlock, "required since "+day, true
+		case !s.Now.Before(p.RequiredFrom):
+			c.Status, c.Detail = statusBlock, "required since "+day
 		case c.Status != statusBlock:
-			c.Status = statusWarn
-			c.Detail = "Apple requires iPhone Duo screenshots; this server's spec can't upload them yet — upload in App Store Connect"
+			c.Status, c.Detail = statusWarn, "required for submissions from "+day
 		}
 	}
 	switch {
@@ -43,9 +42,19 @@ func checkPendingDisplays(s *statusSnapshot) check {
 	case uploadable:
 		c.FixVia = fixTool("screenshots_plan")
 	default:
+		c.Detail += "; upload via library_plan with dir holding " + strings.Join(missing, ", ") + ", or in App Store Connect"
 		c.FixVia = fixURL(versionURL(s.App.ID, s.Platform))
 	}
 	return c
+}
+
+// libraryRoute describes the library_plan folder and pixel size for d.
+func libraryRoute(d applemeta.DisplayType) string {
+	route := "<locale>/" + string(d) + "/"
+	if d == applemeta.AppIPhoneDuo {
+		route += " (1398x2034 PNG)"
+	}
+	return route
 }
 
 func hasDisplay(s *statusSnapshot, d applemeta.DisplayType) bool {

@@ -123,23 +123,55 @@ func TestSalesReportThisWeek(t *testing.T) {
 	}
 }
 
-// A 404 saying "no sales", or any 404 older than yesterday (Pacific), is a
-// published zero-sales day, not a pending one.
+// RB2-4: only a 404 saying "no sales" is a published zero-sales day. Any
+// other 404 stays pending whatever its age, with a hint that Apple has not
+// published it yet.
 func TestSalesReportNoSalesDays(t *testing.T) {
 	k := reportsKit(t)
-	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-19", "sales_day1.tsv")
-	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-20", http.StatusNotFound, notYet)
+	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-18", "sales_day1.tsv")
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-19", http.StatusNotFound, notYet)
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-20", http.StatusNotFound, notFound)
 	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-21", http.StatusNotFound, notFound)
-	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"from":"2026-10-19","to":"2026-10-21"}`))
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"from":"2026-10-18","to":"2026-10-21"}`))
 	got := tooltest.Decode[map[string]any](t, res)
-	if s := tooltest.JSON(t, got["covered_days"]); s != `["2026-10-19","2026-10-20","2026-10-21"]` {
+	if s := tooltest.JSON(t, got["covered_days"]); s != `["2026-10-18","2026-10-20","2026-10-21"]` {
 		t.Errorf("covered_days = %s", s)
 	}
 	if s := tooltest.JSON(t, got["no_sales_days"]); s != `["2026-10-20","2026-10-21"]` {
 		t.Errorf("no_sales_days = %s", s)
 	}
-	if _, ok := got["pending_days"]; ok || len(res.Meta.Warnings) != 0 {
-		t.Errorf("pending_days = %v, warnings %v", got["pending_days"], res.Meta.Warnings)
+	if s := tooltest.JSON(t, got["pending_days"]); s != `["2026-10-19"]` {
+		t.Errorf("pending_days = %s (a 3-day-old 404 without \"no sales\" is pending)", s)
+	}
+	if w := strings.Join(res.Meta.Warnings, "\n"); !strings.Contains(w, "hasn't published the report for 2026-10-19") {
+		t.Errorf("warnings = %v", res.Meta.Warnings)
+	}
+}
+
+// RB2-3: when the latest days had no SUBSCRIPTION report, a warning says
+// which day the active-subscription counts come from.
+func TestSalesReportSubscriptionSnapshotDayWarning(t *testing.T) {
+	k := reportsKit(t)
+	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-19", "subscription_day.tsv")
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-20", http.StatusNotFound, notFound)
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports?filter[reportDate]=2026-10-21", http.StatusNotFound, notYet)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env,
+		`{"report_type":"SUBSCRIPTION","from":"2026-10-19","to":"2026-10-21"}`))
+	got := tooltest.Decode[map[string]any](t, res)
+	if got["snapshot_day"] != "2026-10-19" || got["subscriptions"] == nil {
+		t.Fatalf("result = %s", tooltest.JSON(t, got))
+	}
+	w := strings.Join(res.Meta.Warnings, "\n")
+	if !strings.Contains(w, "active-subscription counts are from 2026-10-19") || !strings.Contains(w, "2026-10-20, 2026-10-21 had none") {
+		t.Errorf("warnings = %v", res.Meta.Warnings)
+	}
+	// A snapshot on the last day of the window needs no warning.
+	k2 := reportsKit(t)
+	handleGz(t, k2, "/v1/salesReports?filter[reportDate]=2026-10-21", "subscription_day.tsv")
+	res = tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k2.Env,
+		`{"report_type":"SUBSCRIPTION","from":"2026-10-21","to":"2026-10-21"}`))
+	if len(res.Meta.Warnings) != 0 {
+		t.Errorf("warnings = %v", res.Meta.Warnings)
 	}
 }
 

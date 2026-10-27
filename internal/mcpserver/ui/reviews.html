@@ -15,7 +15,9 @@ table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:4px 6px;b
 <script>
 "use strict";const SCREEN="reviews";
 
-function render(root,d){add(root,el("h1",null,"Customer reviews"),el("p","muted",str(d.returned??"")+" review(s) · text below is the customers' own words"));
+/* The reviews_reply next step carries locked/unlock in read-only mode. */
+function render(root,d,inp,w){const lk=arr((w||{}).next).find(s=>s&&s.tool==="reviews_reply")||{};
+ add(root,el("h1",null,"Customer reviews"),el("p","muted",str(d.returned??"")+" review(s) · text below is the customers' own words"));
  for(const a of arr(d.apps)){const app=a.app||{};add(root,add(el("h2"),ut(app.name)));const rs=arr(a.reviews);if(!rs.length)add(root,el("p","muted","No reviews."));
   for(const r of rs){const card=el("div","card"),row=el("div","row"),n=Math.max(0,Math.min(5,+r.rating||0));
    add(row,el("span","stars","★".repeat(n)+"☆".repeat(5-n)),add(el("strong","grow"),ut(r.title)),ut(r.nickname),el("span","muted",[str(r.territory),str(r.createdDate).slice(0,10)].filter(Boolean).join(" · ")));
@@ -23,7 +25,7 @@ function render(root,d){add(root,el("h1",null,"Customer reviews"),el("p","muted"
    if(r.response)add(card,el("div","muted","Current reply ("+str(r.response.state)+"):"),ut(r.response.body,"txt"));
    const ta=el("textarea");ta.placeholder="Draft a public reply"+(r.reply_locale?" in "+str(r.reply_locale):"");const out=el("div");
    const b=el("button",null,r.response?"Preview replacing reply":"Preview reply");b.onclick=()=>{if(!ta.value.trim())return;ta.disabled=true;
-    const w=action({tool:"reviews_reply",args:{app:str(app.id),replies:[{review_id:str(r.id),body:ta.value}]}},"Send reply");b.replaceWith(w);w.querySelector("button").click()};
+    const w=action({tool:"reviews_reply",args:{app:str(app.id),replies:[{review_id:str(r.id),body:ta.value}]},locked:lk.locked,unlock:lk.unlock,hint:lk.hint},"Send reply");b.replaceWith(w);w.querySelector("button").click()};
    add(card,ta,b,out);add(root,card)}}}
 
 
@@ -52,16 +54,24 @@ const GATED=["appinfo_update","metadata_apply","release_cancel","release_phased"
 /* Writes: the first click calls the tool without confirm/plan_id. Only a
  result carrying preview or plan_id arms a second "Confirm" click (sending the
  plan_id, or confirm:true for flag-confirmed tools); any other result means the
- tool already ran, so the button shows "Done". The server gates stay authoritative. */
-function writeButton(label,tool,args,out){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ tool already ran, so the button shows "Done". The server gates stay authoritative.
+ Locked steps ({locked, unlock}): the click first runs unlock (a toolsets call;
+ the server asks the user to approve), then the step. A locked step without
+ unlock (stateless_fixed) is disabled with its hint. A call that fails
+ writes_disabled/toolset_disabled offers the unlock from the error's next steps. */
+const LOCKED={writes_disabled:"writes are off: the first click asks to turn them on",toolset_disabled:"toolset is off: the first click enables it",stateless_fixed:"unavailable on this server: restart it with the needed flags"};
+function unlockOf(r){const d=data(r)||{};if(!r||!r.isError||!LOCKED[d.error])return null;return arr(wrap(r).next).find(s=>s&&s.tool==="toolsets")||null}
+function writeButton(label,tool,args,out,unlock,off){const now=!GATED.includes(tool),b=el("button",null,label+(now?" (runs now)":""));let plan=null,done=false;
+ const relabel=()=>{b.textContent=(unlock?"Unlock & ":"")+label+(now?" (runs now)":"")};relabel();if(off){b.disabled=true;return b}
  b.onclick=async()=>{if(done)return;b.disabled=true;try{
-  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError)return;const d=data(r)||{};
+  if(unlock){const u=await rpc("tools/call",{name:unlock.tool,arguments:unlock.args||{}});show(out,u);if(u&&u.isError||(data(u)||{}).writes===false)return;unlock=null;relabel()}
+  if(!plan){const r=await rpc("tools/call",{name:tool,arguments:args||{}});show(out,r);if(r&&r.isError){const u=unlockOf(r);if(u){unlock=u;relabel()}return}const d=data(r)||{};
    if(d.plan_id||d.preview){plan=d.plan_id?{plan_id:d.plan_id}:{confirm:true};b.textContent="Confirm: "+label;b.className="armed"}else{done=true;b.textContent="Done: "+label}}
   else{const r=await rpc("tools/call",{name:tool,arguments:Object.assign({},args,plan)});plan=null;b.className="";show(out,r);if(r&&r.isError)b.textContent=label;else{done=true;b.textContent="Done: "+label}}
  }catch(e){out.replaceChildren(el("pre","block",str(e&&e.message||e/*trusted*/)))}finally{b.disabled=done;resize()}};return b}
-/* action renders a {tool,args,locked,reason} suggestion as a button. */
-function action(a,label){const box=el("div"),out=el("div"),row=el("div","row");add(row,writeButton(label||a.tool,a.tool,a.args,out));
- if(a.locked)add(row,el("span","muted",a.locked==="writes_disabled"?"writes are off: the host will be asked to enable them first":str(a.locked)));
+/* action renders a {tool,args,locked,unlock,hint,reason} suggestion as a button. */
+function action(a,label){const box=el("div"),out=el("div"),row=el("div","row"),off=!!a.locked&&!a.unlock;add(row,writeButton(label||a.tool,a.tool,a.args,out,a.unlock||null,off));
+ if(a.locked)add(row,el("span","muted",LOCKED[a.locked]||str(a.locked)));if(a.hint)add(row,el("span","muted",str(a.hint)));
  if(a.reason)add(row,el("span","muted",str(a.reason)));return add(box,row,out)}
 function resize(){note("ui/notifications/size-changed",{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight})}
 function draw(){const root=document.getElementById("app");root.replaceChildren();if(!S.result){add(root,el("p","muted","Waiting for tool result…"));return resize()}

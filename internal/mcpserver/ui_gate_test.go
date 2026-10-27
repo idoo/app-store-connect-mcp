@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -175,6 +176,32 @@ func TestCompletionUnwrapsUntrustedNames(t *testing.T) {
 	}
 	if got := res.Completion.Values; len(got) != 1 || got[0] != "Sikt" {
 		t.Errorf("app si = %v, want [Sikt]", got)
+	}
+}
+
+// translate_metadata locale arguments complete App Store locale codes; for
+// to_locales the last comma segment is completed and listed codes skipped.
+func TestCompletionLocales(t *testing.T) {
+	h := connect(t, Deps{Tools: (&fixture{}).tools(), Profile: team(false)}, "test", nil)
+	complete := func(name, value string) []string {
+		t.Helper()
+		res, err := h.cs.Complete(context.Background(), &mcp.CompleteParams{
+			Ref:      &mcp.CompleteReference{Type: "ref/prompt", Name: "translate_metadata"},
+			Argument: mcp.CompleteParamsArgument{Name: name, Value: value},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Completion.Values
+	}
+	if got := complete("from_locale", "en"); !slices.Equal(got, []string{"en-AU", "en-CA", "en-GB", "en-US"}) {
+		t.Errorf("from_locale en = %v", got)
+	}
+	if got := complete("to_locales", "de-DE,en-GB, en"); !slices.Equal(got, []string{"de-DE,en-GB, en-AU", "de-DE,en-GB, en-CA", "de-DE,en-GB, en-US"}) {
+		t.Errorf("to_locales = %v", got)
+	}
+	if got := complete("to_locales", "zh-hant,"); slices.Contains(got, "zh-hant,zh-Hant") || len(got) == 0 {
+		t.Errorf("to_locales after comma = %v", got)
 	}
 }
 

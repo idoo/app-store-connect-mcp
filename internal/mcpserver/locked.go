@@ -3,6 +3,8 @@ package mcpserver
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+	"slices"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
@@ -10,12 +12,20 @@ import (
 // toolsetsName is the name of the session-built toolsets tool.
 const toolsetsName = "toolsets"
 
-// lockedWrites is the Locked reason of a step naming a tool hidden because
-// writes are disabled.
-const lockedWrites = "writes_disabled"
+// Locked reasons of a step naming a tool hidden in this session.
+const (
+	lockedWrites    = "writes_disabled"
+	lockedToolset   = "toolset_disabled"
+	lockedStateless = "stateless_fixed"
+)
 
 // unlockWrites is the call that makes write tools available.
 var unlockWrites = tool.NextStep{Tool: toolsetsName, Args: map[string]any{"action": "enable_writes"}}
+
+// unlockToolset is the call that turns toolset ts on.
+func unlockToolset(ts tool.Toolset) tool.NextStep {
+	return tool.NextStep{Tool: toolsetsName, Args: map[string]any{"action": "enable", "toolsets": []string{string(ts)}}}
+}
 
 // writeLocked returns the tools of this session hidden only because writes
 // are disabled (nil in write mode).
@@ -35,19 +45,53 @@ func (s *session) writeLocked() map[string]bool {
 	return out
 }
 
+// lockedTools returns, for every tool hidden in this session but available
+// after enabling its toolset and/or writes, the marker its steps carry:
+// toolset_disabled (unlock: enable the toolset) before writes_disabled
+// (unlock: enable_writes). On stateless HTTP neither can change at runtime,
+// so the marker is stateless_fixed with a restart hint and no unlock.
+func (s *session) lockedTools() map[string]tool.NextStep {
+	p := s.profile()
+	w := p
+	w.AllowWrites = true
+	s.mu.Lock()
+	on := maps.Clone(s.on)
+	s.mu.Unlock()
+	out := map[string]tool.NextStep{}
+	for _, t := range s.tools {
+		ts := t.Meta().Toolset
+		var m tool.NextStep
+		switch {
+		case !t.ListedIn(w):
+			continue
+		case s.deps.Stateless && (!on[ts] || !t.ListedIn(p)):
+			m = tool.NextStep{Locked: lockedStateless, Hint: errStatelessFixed.Hint}
+		case !on[ts]:
+			u := unlockToolset(ts)
+			m = tool.NextStep{Locked: lockedToolset, Unlock: &u}
+		case !t.ListedIn(p):
+			u := unlockWrites
+			m = tool.NextStep{Locked: lockedWrites, Unlock: &u}
+		default:
+			continue
+		}
+		out[t.Name()] = m
+	}
+	return out
+}
+
 // markLocked rewrites follow-up steps (Result.Next, "next" arrays and
-// "fix_via" objects in the data) that name a tool hidden by read-only mode:
-// they gain locked:"writes_disabled" and the enable_writes unlock call.
+// "fix_via" objects in the data) that name a tool hidden in this session:
+// they gain locked plus the unlock call (or, on stateless HTTP, a hint).
 func (s *session) markLocked(r *tool.Result) {
 	s.unifyWritesHint(r)
-	locked := s.writeLocked()
+	locked := s.lockedTools()
 	if len(locked) == 0 {
 		return
 	}
 	for i := range r.Next {
-		if locked[r.Next[i].Tool] && r.Next[i].Locked == "" {
-			u := unlockWrites
-			r.Next[i].Locked, r.Next[i].Unlock = lockedWrites, &u
+		if m, ok := locked[r.Next[i].Tool]; ok && r.Next[i].Locked == "" {
+			r.Next[i].Locked, r.Next[i].Unlock, r.Next[i].Hint = m.Locked, m.Unlock, m.Hint
 		}
 	}
 	if r.Data == nil {
@@ -73,8 +117,8 @@ const writesHint = `call toolsets with action "enable_writes"; it asks the user 
 
 // unifyWritesHint rewrites a writes_disabled error, whatever tool raised it,
 // to the single unlock path: the toolsets enable_writes call (or, when writes
-// are pinned off, how to unpin them). Clients without elicitation get restart
-// steps from enable_writes itself.
+// are pinned off, how to unpin them; on stateless HTTP, how to restart).
+// Clients without elicitation get restart steps from enable_writes itself.
 func (s *session) unifyWritesHint(r *tool.Result) {
 	if !r.IsError {
 		return
@@ -88,6 +132,11 @@ func (s *session) unifyWritesHint(r *tool.Result) {
 		b = v
 	}
 	if b == nil || b.Error != tool.ErrWritesDisabled.Code {
+		return
+	}
+	if s.deps.Stateless {
+		b.Hint = errStatelessFixed.Hint
+		r.Next = slices.DeleteFunc(r.Next, func(n tool.NextStep) bool { return n.Tool == toolsetsName })
 		return
 	}
 	if s.deps.WritesLocked {
@@ -105,7 +154,7 @@ func (s *session) unifyWritesHint(r *tool.Result) {
 
 // markValue walks v and marks steps under "fix_via" keys and in "next"
 // arrays; it reports whether anything changed.
-func markValue(v any, locked map[string]bool) bool {
+func markValue(v any, locked map[string]tool.NextStep) bool {
 	changed := false
 	switch x := v.(type) {
 	case map[string]any:
@@ -130,16 +179,22 @@ func markValue(v any, locked map[string]bool) bool {
 	return changed
 }
 
-func markStep(v any, locked map[string]bool) bool {
+func markStep(v any, locked map[string]tool.NextStep) bool {
 	m, ok := v.(map[string]any)
 	if !ok {
 		return false
 	}
 	name, _ := m["tool"].(string)
-	if !locked[name] || m["locked"] != nil {
+	l, hidden := locked[name]
+	if !hidden || m["locked"] != nil {
 		return false
 	}
-	m["locked"] = lockedWrites
-	m["unlock"] = map[string]any{"tool": unlockWrites.Tool, "args": map[string]any{"action": "enable_writes"}}
+	m["locked"] = l.Locked
+	if l.Unlock != nil {
+		m["unlock"] = map[string]any{"tool": l.Unlock.Tool, "args": l.Unlock.Args}
+	}
+	if l.Hint != "" {
+		m["hint"] = l.Hint
+	}
 	return true
 }

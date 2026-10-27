@@ -63,7 +63,7 @@
       {
         "id": "iphone_duo_screenshots",
         "status": "warn",
-        "detail": "required for submissions from 2027-04-01; add them on the web (not in the API yet)",
+        "detail": "required for submissions from 2027-04-01; upload via library_plan with dir holding \u003clocale\u003e/APP_IPHONE_DUO/ (1398x2034 PNG), or in App Store Connect",
         "items": [
           "APP_IPHONE_DUO: no screenshots; required for submissions from 2027-04-01"
         ],

@@ -35,6 +35,15 @@ var ErrDuplicateBuild = &tool.Error{
 	Hint:    "increase CFBundleVersion and rebuild, or wait for the existing upload to finish",
 }
 
+// ErrStaleBuildUpload reports an AWAITING_UPLOAD buildUpload of the same
+// version/build whose file was reserved by another file (an interrupted
+// earlier run or a re-exported archive). It never finishes on its own.
+var ErrStaleBuildUpload = &tool.Error{
+	Code:    "stale_build_upload",
+	Message: "an earlier upload of this version and build stopped after Apple reserved its file",
+	Hint:    "re-run with the original file to resume it, or increase CFBundleVersion and rebuild",
+}
+
 // BuildSpec describes an IPA or PKG upload via the BuildUpload API. The
 // caller opens File through the confined filesystem.
 type BuildSpec struct {
@@ -67,7 +76,8 @@ type BuildResult struct {
 	Errors        []StateDetail `json:"errors,omitempty"`
 	Warnings      []StateDetail `json:"warnings,omitempty"`
 	Infos         []StateDetail `json:"infos,omitempty"`
-	// Resumed is true when an interrupted upload of the same file continued.
+	// Resumed is true when an interrupted upload of the same file continued,
+	// or an AWAITING_UPLOAD buildUpload with no file reserved was taken over.
 	Resumed bool `json:"resumed,omitempty"`
 	// PartsSkipped counts parts already uploaded by an earlier attempt.
 	PartsSkipped int `json:"parts_skipped,omitempty"`
@@ -136,11 +146,25 @@ func Build(ctx context.Context, d Deps, s BuildSpec) (*BuildResult, error) {
 		return nil, err
 	} else if ok {
 		rec = prev
-		if !rec.Committed {
+		fresh := resumeRecord{AppID: s.AppID, Platform: s.Platform, Version: s.Version, BuildNumber: s.BuildNumber, MD5: sum}
+		switch {
+		case rec.Committed:
+		case rec.FileID == "":
+			// The buildUpload was created but its file was never reserved.
+			st, err := uploadState(ctx, d, rec.BuildUploadID)
+			switch {
+			case tool.IsNotFound(err):
+				rec = fresh
+			case err != nil:
+				return nil, fmt.Errorf("resume buildUploads %s: %w", rec.BuildUploadID, err)
+			case st != BuildStateAwaitingUpload:
+				rec = fresh
+			}
+		default:
 			file, err := d.ASC.Get(ctx, "/v1/buildUploadFiles/"+url.PathEscape(rec.FileID), nil)
 			switch {
 			case tool.IsNotFound(err):
-				rec = resumeRecord{AppID: s.AppID, Platform: s.Platform, Version: s.Version, BuildNumber: s.BuildNumber, MD5: sum}
+				rec = fresh
 			case err != nil:
 				return nil, fmt.Errorf("resume buildUploadFiles %s: %w", rec.FileID, err)
 			default:
@@ -154,11 +178,24 @@ func Build(ctx context.Context, d Deps, s BuildSpec) (*BuildResult, error) {
 	}
 
 	if rec.BuildUploadID == "" {
-		if err := checkDuplicate(ctx, d, s); err != nil {
+		adopt, err := checkDuplicate(ctx, d, s)
+		if err != nil {
 			return nil, err
 		}
-		if rec.BuildUploadID, rec.FileID, ops, err = reserveBuild(ctx, d, s, uti); err != nil {
+		if adopt != "" {
+			rec.BuildUploadID, out.Resumed = adopt, true
+		} else if rec.BuildUploadID, err = createBuildUpload(ctx, d, s); err != nil {
 			return nil, err
+		}
+		// Persist the id before reserving the file so an interrupted
+		// reservation is resumed instead of blocking the version/build.
+		if err := save(); err != nil {
+			return nil, err
+		}
+	}
+	if rec.FileID == "" {
+		if rec.FileID, ops, err = reserveFile(ctx, d, s, uti, rec.BuildUploadID); err != nil {
+			return nil, fmt.Errorf("buildUpload %s: reserve file (call again with the same file to resume): %w", rec.BuildUploadID, err)
 		}
 		if err := save(); err != nil {
 			return nil, err
@@ -383,37 +420,71 @@ func loadResume(d Deps, key string, want resumeRecord) (resumeRecord, bool, erro
 	if err != nil {
 		return resumeRecord{}, false, fmt.Errorf("load upload state: %w", err)
 	}
-	if !ok || rec.BuildUploadID == "" || rec.FileID == "" || rec.AppID != want.AppID || rec.Platform != want.Platform ||
+	if !ok || rec.BuildUploadID == "" || rec.AppID != want.AppID || rec.Platform != want.Platform ||
 		rec.Version != want.Version || rec.BuildNumber != want.BuildNumber || rec.MD5 != want.MD5 {
 		return resumeRecord{}, false, nil
 	}
 	return rec, true, nil
 }
 
-// checkDuplicate refuses a version/build already uploaded and not FAILED.
-func checkDuplicate(ctx context.Context, d Deps, s BuildSpec) error {
+// checkDuplicate refuses a version/build already uploaded and not FAILED. An
+// AWAITING_UPLOAD buildUpload with no file reserved (an interrupted earlier
+// reservation) is returned for takeover; one whose file is already reserved
+// yields ErrStaleBuildUpload, since a different file cannot complete it.
+func checkDuplicate(ctx context.Context, d Deps, s BuildSpec) (adopt string, err error) {
 	q := url.Values{}
 	q.Set("filter[cfBundleVersion]", s.BuildNumber)
 	q.Set("filter[cfBundleShortVersionString]", s.Version)
 	q.Set("filter[platform]", string(s.Platform))
 	list, err := d.ASC.List(ctx, "/v1/apps/"+url.PathEscape(s.AppID)+"/buildUploads", tool.ListOptions{Query: q, MaxItems: 50})
 	if err != nil {
-		return fmt.Errorf("check existing build uploads: %w", err)
+		return "", fmt.Errorf("check existing build uploads: %w", err)
 	}
+	var awaiting []string
 	for _, r := range list.Data {
 		var st buildState
 		if err := decodeAttr(r, "state", &st); err != nil {
-			return err
+			return "", err
 		}
-		if st.State != BuildStateFailed {
-			return fmt.Errorf("%w: %s (%s) is buildUpload %s in state %s", ErrDuplicateBuild, s.Version, s.BuildNumber, r.ID, st.State)
+		switch st.State {
+		case BuildStateFailed:
+		case BuildStateAwaitingUpload:
+			awaiting = append(awaiting, r.ID)
+		default:
+			return "", fmt.Errorf("%w: %s (%s) is buildUpload %s in state %s", ErrDuplicateBuild, s.Version, s.BuildNumber, r.ID, st.State)
 		}
 	}
-	return nil
+	for _, id := range awaiting {
+		files, err := d.ASC.List(ctx, "/v1/buildUploads/"+url.PathEscape(id)+"/buildUploadFiles", tool.ListOptions{MaxItems: 1})
+		if err != nil {
+			return "", fmt.Errorf("check files of buildUpload %s: %w", id, err)
+		}
+		if len(files.Data) == 0 {
+			return id, nil
+		}
+	}
+	if len(awaiting) > 0 {
+		return "", fmt.Errorf("%w: %s (%s) is buildUpload %s in state AWAITING_UPLOAD with a file from another run", ErrStaleBuildUpload, s.Version, s.BuildNumber, awaiting[0])
+	}
+	return "", nil
 }
 
-// reserveBuild creates the buildUpload and its buildUploadFile.
-func reserveBuild(ctx context.Context, d Deps, s BuildSpec, uti string) (uploadID, fileID string, ops []Operation, err error) {
+// uploadState reads a buildUpload's state.
+func uploadState(ctx context.Context, d Deps, id string) (string, error) {
+	resp, err := d.ASC.Get(ctx, "/v1/buildUploads/"+url.PathEscape(id), nil)
+	if err != nil {
+		return "", err
+	}
+	res, _ := resp.First()
+	var st buildState
+	if err := decodeAttr(res, "state", &st); err != nil {
+		return "", err
+	}
+	return st.State, nil
+}
+
+// createBuildUpload creates the buildUpload.
+func createBuildUpload(ctx context.Context, d Deps, s BuildSpec) (string, error) {
 	resp, err := d.ASC.Do(ctx, tool.Request{
 		Method: http.MethodPost, Path: "/v1/buildUploads", Write: true,
 		Body: resourceBody("buildUploads", "", map[string]any{
@@ -423,27 +494,32 @@ func reserveBuild(ctx context.Context, d Deps, s BuildSpec, uti string) (uploadI
 		}, map[string]Relationship{"app": {Type: "apps", ID: s.AppID}}),
 	})
 	if err != nil {
-		return "", "", nil, fmt.Errorf("create buildUpload: %w", err)
+		return "", fmt.Errorf("create buildUpload: %w", err)
 	}
 	up, ok := resp.First()
 	if !ok || up.ID == "" {
-		return "", "", nil, fmt.Errorf("create buildUpload: response has no resource")
+		return "", fmt.Errorf("create buildUpload: response has no resource")
 	}
-	resp, err = d.ASC.Do(ctx, tool.Request{
+	return up.ID, nil
+}
+
+// reserveFile reserves the buildUploadFile of buildUpload uploadID.
+func reserveFile(ctx context.Context, d Deps, s BuildSpec, uti, uploadID string) (fileID string, ops []Operation, err error) {
+	resp, err := d.ASC.Do(ctx, tool.Request{
 		Method: http.MethodPost, Path: "/v1/buildUploadFiles", Write: true,
 		Body: resourceBody("buildUploadFiles", "", map[string]any{
 			"fileName": s.FileName, "fileSize": s.FileSize, "uti": uti, "assetType": "ASSET",
-		}, map[string]Relationship{"buildUpload": {Type: "buildUploads", ID: up.ID}}),
+		}, map[string]Relationship{"buildUpload": {Type: "buildUploads", ID: uploadID}}),
 	})
 	if err != nil {
-		return "", "", nil, fmt.Errorf("buildUpload %s created; reserve file: %w", up.ID, err)
+		return "", nil, err
 	}
 	file, ok := resp.First()
 	if !ok || file.ID == "" {
-		return "", "", nil, fmt.Errorf("buildUpload %s created; reserve file: response has no resource", up.ID)
+		return "", nil, fmt.Errorf("response has no resource")
 	}
 	if ops, err = ParseOperations(file); err != nil {
-		return "", "", nil, fmt.Errorf("buildUpload %s: %w", up.ID, err)
+		return "", nil, err
 	}
-	return up.ID, file.ID, ops, nil
+	return file.ID, ops, nil
 }

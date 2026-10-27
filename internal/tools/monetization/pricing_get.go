@@ -72,6 +72,7 @@ type prcProductPrice struct {
 	Territory      string          `json:"territory,omitempty"`
 	Currency       string          `json:"currency,omitempty"`
 	Price          string          `json:"customer_price,omitempty"`
+	NextPrice      *prcNextPrice   `json:"next_price,omitempty"`
 	Prices         []prcProductRow `json:"prices,omitempty"`
 	Missing        []string        `json:"no_price_in,omitempty"`
 	TerritoryCount int             `json:"territory_count"`
@@ -80,10 +81,20 @@ type prcProductPrice struct {
 }
 
 // prcProductRow is one requested territory's price in products mode.
+// NextPrice is the earliest scheduled change after today; Preserved says
+// existing subscribers keep the current price.
 type prcProductRow struct {
-	Territory string `json:"territory"`
-	Currency  string `json:"currency,omitempty"`
+	Territory string        `json:"territory"`
+	Currency  string        `json:"currency,omitempty"`
+	Price     string        `json:"customer_price"`
+	Preserved bool          `json:"preserved_existing,omitempty"`
+	NextPrice *prcNextPrice `json:"next_price,omitempty"`
+}
+
+// prcNextPrice is a territory's next scheduled price and its start date.
+type prcNextPrice struct {
 	Price     string `json:"customer_price"`
+	StartDate string `json:"start_date"`
 }
 
 type pricingGetProductsOut struct {
@@ -187,7 +198,13 @@ func pricingGetProducts(ctx context.Context, env *tool.Env, in pricingGetIn, k *
 	if len(terrs) == 0 {
 		out.Note = "territory is the base territory (subscriptions: USA or the top storefront); pass territories or product_id for other prices"
 	}
-	return tool.OK(out), nil
+	res := tool.OK(out)
+	for _, p := range out.Products {
+		if p.Scheduled > 0 {
+			res.Then(tool.NextStep{Tool: "pricing_get", Args: map[string]any{"app": app.ID, "kind": k.name, "product_id": p.ID}})
+		}
+	}
+	return res, nil
 }
 
 // prcGetSummarize fills row with the base-territory price, or the price in
@@ -200,10 +217,22 @@ func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []str
 	}
 	eff := prcEffective(rows, today)
 	row.TerritoryCount = len(eff)
+	next := map[string]prcPrice{}
 	for _, r := range rows {
-		if r.StartDate > today {
-			row.Scheduled++
+		if r.StartDate <= today || r.Territory == "" {
+			continue
 		}
+		row.Scheduled++
+		if old, ok := next[r.Territory]; !ok || r.StartDate < old.StartDate || (r.StartDate == old.StartDate && r.Manual && !old.Manual) {
+			next[r.Territory] = r
+		}
+	}
+	nextOf := func(t string) *prcNextPrice {
+		n, ok := next[t]
+		if !ok {
+			return nil
+		}
+		return &prcNextPrice{Price: prcMoney(n.Currency, n.CustomerPrice), StartDate: n.StartDate}
 	}
 	if len(terrs) > 0 {
 		row.Prices = []prcProductRow{}
@@ -213,7 +242,10 @@ func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []str
 				row.Missing = append(row.Missing, t)
 				continue
 			}
-			row.Prices = append(row.Prices, prcProductRow{Territory: t, Currency: p.Currency, Price: prcMoney(p.Currency, p.CustomerPrice)})
+			row.Prices = append(row.Prices, prcProductRow{
+				Territory: t, Currency: p.Currency, Price: prcMoney(p.Currency, p.CustomerPrice),
+				Preserved: p.Preserved, NextPrice: nextOf(t),
+			})
 		}
 		return
 	}
@@ -226,6 +258,7 @@ func prcGetSummarize(ctx context.Context, env *tool.Env, k *prcKind, terrs []str
 		p = top[0]
 	}
 	row.Territory, row.Currency, row.Price = p.Territory, p.Currency, prcMoney(p.Currency, p.CustomerPrice)
+	row.NextPrice = nextOf(p.Territory)
 }
 
 // prcGetRows reads all price rows of one product (schedule id and base
