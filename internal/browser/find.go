@@ -185,7 +185,7 @@ func candidates(goos, home string, getenv func(string) string) []string {
 		}
 		roots := []string{"/Applications"}
 		if home != "" {
-			roots = append(roots, filepath.Join(home, "Applications"))
+			roots = append(roots, strings.TrimRight(home, "/")+"/Applications")
 		}
 		var out []string
 		for _, a := range apps {
