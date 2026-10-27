@@ -5,9 +5,14 @@
 MCP server for App Store Connect. MCP is the plug-in format AI clients like Claude, Cursor and Codex use, so with this one your agent can read and manage your App Store Connect account. Read-only by default, and it asks before anything goes public. The binary is `app-store-connect-mcp`.
 
 [![CI](https://github.com/idoo/app-store-connect-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/idoo/app-store-connect-mcp/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/idoo/app-store-connect-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/idoo/app-store-connect-mcp/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/idoo/app-store-connect-mcp)](https://github.com/idoo/app-store-connect-mcp/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/idoo/app-store-connect-mcp.svg)](https://pkg.go.dev/github.com/idoo/app-store-connect-mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-black)](https://modelcontextprotocol.io)
+[![Glama score](https://glama.ai/mcp/servers/idoo/app-store-connect-mcp/badges/score.svg)](https://glama.ai/mcp/servers/idoo/app-store-connect-mcp)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/idoo/app-store-connect-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/idoo/app-store-connect-mcp)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15998/badge)](https://www.bestpractices.dev/projects/15998)
 
 ## Install
 
