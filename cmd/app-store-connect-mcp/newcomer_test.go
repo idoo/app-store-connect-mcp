@@ -56,8 +56,8 @@ func TestDoctorEnvOverrideAndMissingKey(t *testing.T) {
 // has no answers instead of "read answer: EOF".
 func TestAuthImportNonInteractive(t *testing.T) {
 	sandbox(t)
-	t.Setenv(config.EnvKeyID, "98LMBZKZCN")
-	t.Setenv("ASC_KEY_PATH", "/nowhere/AuthKey_98LMBZKZCN.p8")
+	t.Setenv(config.EnvKeyID, "ABCDE12345")
+	t.Setenv("ASC_KEY_PATH", "/nowhere/AuthKey_ABCDE12345.p8")
 	_, errOut, err := runCLI(t, "", "auth", "import", "--no-verify")
 	if err == nil {
 		t.Fatal("import succeeded without answers")
