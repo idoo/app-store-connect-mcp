@@ -116,6 +116,7 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: provenance
         with:
           subject-path: |
             dist/*.tar.gz
@@ -132,12 +133,17 @@ jobs:
 
       # The unsigned .mcpb.sha256 sidecar is not uploaded: checksums-extra.txt
       # (cosign-signed) covers the .mcpb, and registry.yml hashes it itself.
-      - name: Upload .mcpb, tools.json and the signed checksums-extra.txt to the draft
+      # The provenance bundle is also attached as a release asset
+      # (`*.intoto.jsonl`) so offline verifiers and OpenSSF Scorecard find it.
+      - name: Upload .mcpb, tools.json, the signed checksums-extra.txt and provenance to the draft
         env:
           GH_TOKEN: ${{ github.token }}
           MCPB: ${{ steps.mcpb.outputs.path }}
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" "$MCPB" docs/tools.json \
+          provenance="dist/app-store-connect-mcp_${GITHUB_REF_NAME#v}.intoto.jsonl"
+          jq -c . "$BUNDLE" > "$provenance"
+          gh release upload "$GITHUB_REF_NAME" "$MCPB" docs/tools.json "$provenance" \
             dist/checksums-extra.txt dist/checksums-extra.txt.sigstore.json --repo "$GITHUB_REPOSITORY"
 
       # Last release step: after this the release is immutable.
