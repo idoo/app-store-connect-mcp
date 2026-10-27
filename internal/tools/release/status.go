@@ -411,6 +411,7 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 	}
 	fetchAccessibility(ctx, env, s)
 	fetchCPPKeywords(ctx, env, s)
+	fetchPrivacy(ctx, env, s)
 	if err := loadProducts(ctx, env, s); err != nil {
 		return nil, err
 	}

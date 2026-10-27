@@ -359,6 +359,78 @@
     "confirm": "flag"
   },
   {
+    "name": "apps_create",
+    "toolset": "web",
+    "class": "D",
+    "title": "Create an app record",
+    "description": "Create a new App Store Connect app record (web session). Optionally registers the bundle id first. Irreversible: the name is reserved and the record cannot be deleted. Without confirm:true previews.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Create an app record"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {
+          "description": "explicit bundle identifier",
+          "type": "string"
+        },
+        "company_name": {
+          "description": "seller name; needed only for the account's first app",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "App Store name, at most 30 characters",
+          "type": "string"
+        },
+        "platforms": {
+          "description": "default [IOS]",
+          "items": {
+            "enum": [
+              "IOS",
+              "MAC_OS",
+              "TV_OS",
+              "VISION_OS"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "primary_locale": {
+          "description": "default en-US",
+          "type": "string"
+        },
+        "register_bundle_id": {
+          "description": "register the bundle id first when it is missing",
+          "type": "boolean"
+        },
+        "sku": {
+          "description": "default: the bundle id",
+          "type": "string"
+        },
+        "version_string": {
+          "description": "first version string, default 1.0",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bundle_id"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "human"
+  },
+  {
     "name": "apps_get",
     "toolset": "core",
     "class": "R",
@@ -2127,6 +2199,165 @@
             "type": "string"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "privacy_apply",
+    "toolset": "web",
+    "class": "D",
+    "title": "Apply and publish App Privacy",
+    "description": "Apply a privacy_plan: same arguments plus plan_id; refused if the answers changed since. Creates, updates and deletes data usages, then publishes (public on the product page). Needs human approval.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Apply and publish App Privacy"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "data": {
+          "description": "every collected category; omitted categories are removed",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "description": "catalog token, e.g. EMAIL_ADDRESS",
+                "type": "string"
+              },
+              "linked": {
+                "description": "the data is linked to the user's identity",
+                "type": "boolean"
+              },
+              "purposes": {
+                "description": "catalog tokens, e.g. APP_FUNCTIONALITY; required unless tracking only",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "tracking": {
+                "description": "the data is used to track the user",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "category"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "not_collected": {
+          "description": "the app collects no data",
+          "type": "boolean"
+        },
+        "plan_id": {
+          "description": "from the preview call",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "human"
+  },
+  {
+    "name": "privacy_get",
+    "toolset": "web",
+    "class": "R",
+    "title": "Read the App Privacy declaration",
+    "description": "The app's App Privacy answers (web session): per data category its purposes, linked / not linked, tracking, or data not collected; whether they are published. catalog:true lists valid tokens.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Read the App Privacy declaration"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "catalog": {
+          "description": "also list valid category, purpose and data protection tokens",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "privacy_plan",
+    "toolset": "web",
+    "class": "R",
+    "title": "Plan App Privacy changes",
+    "description": "Diff a FULL App Privacy declaration (not_collected or data[]) against the app's: anything not listed is removed. Validates tokens against Apple's catalog; returns ordered steps and a plan_id for privacy_apply.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Plan App Privacy changes"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "data": {
+          "description": "every collected category; omitted categories are removed",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "description": "catalog token, e.g. EMAIL_ADDRESS",
+                "type": "string"
+              },
+              "linked": {
+                "description": "the data is linked to the user's identity",
+                "type": "boolean"
+              },
+              "purposes": {
+                "description": "catalog tokens, e.g. APP_FUNCTIONALITY; required unless tracking only",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "tracking": {
+                "description": "the data is used to track the user",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "category"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "not_collected": {
+          "description": "the app collects no data",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -4350,7 +4581,8 @@
               "admin",
               "store",
               "insights",
-              "library"
+              "library",
+              "web"
             ],
             "type": "string"
           },
@@ -4525,6 +4757,26 @@
     "default_toolset": false,
     "needs_team_key": false,
     "confirm": "human"
+  },
+  {
+    "name": "web_login",
+    "toolset": "web",
+    "class": "R",
+    "title": "Sign in to the App Store Connect web session",
+    "description": "Open a browser window on the user's machine so they sign in to App Store Connect on Apple's own page (password, 2FA, passkey). You never see credentials. Reuses a valid session without a window. Call when a tool fails with web_session_required.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Sign in to the App Store Connect web session"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
   },
   {
     "name": "webhooks_delete",

@@ -16,6 +16,7 @@ app-store-connect-mcp config snippet|install CLIENT [--profile NAME] [--allow-wr
 app-store-connect-mcp skills list|install [--client claude-code|codex|cursor|omp] [--dir DIR] [--force]
 app-store-connect-mcp guard --app APP [thresholds]  release health for cron; exit 0 ok, 3 watch, 4 breach, 5 unknown
 app-store-connect-mcp aso track|report --app APP    keyword ranks for cron (public search, no key needed)
+app-store-connect-mcp web login|import|status|team|logout   Apple ID web session for the web toolset
 ```
 
 `guard` thresholds, defaults in brackets: `--signature-watch-pct` (25) and `--signature-breach-pct` (100) for crash-signature weight growth in percent, `--crash-watch` (3) and `--crash-breach` (10) TestFlight crash reports, `--rating-drop-watch` (0.3) and `--rating-drop-breach` (0.8) average-rating drop, `--regressions-breach` (2) perf regressions. `guard --help` prints the same list. Only a diagnostics breach can pause, with `--pause-on-breach` and writes on.
@@ -54,6 +55,8 @@ app-store-connect-mcp aso track|report --app APP    keyword ranks for cron (publ
 | `ASC_MCP_ALLOW_NO_ELICIT` | Agent approves human gates; honoured only with `ASC_MCP_CI=1` (see [CI](#ci-github-actions)) |
 | `ASC_MCP_HTTP_TOKEN`, `ASC_MCP_HTTP_SESSION_TIMEOUT`, `ASC_MCP_HTTP_MAX_SESSIONS`, `ASC_MCP_HTTP_MAX_CONNS` | HTTP mode |
 | `ASC_MCP_HTTP_ALLOWED_ORIGINS` | Comma-separated `--allow-origin` values, only with `--allow-remote` |
+| `ASC_MCP_WEB_STORE` | `file` keeps the web session in a 0600 file under the state dir instead of the OS keychain (headless or CI) |
+| `ASC_MCP_BROWSER` | Browser for the `web login` window: a path to a Chromium-based browser, or `bundled` for the downloaded Chrome for Testing. Unset picks your default browser if it's Chromium-based, then any installed Brave, Chrome, Edge or Arc |
 | `ASC_MCP_BASE_URL` | Loopback-only API override, for tests |
 
 fastlane's `APP_STORE_CONNECT_API_KEY_*` names work as fallbacks. `install.sh` reads `ASC_MCP_VERSION`, `ASC_MCP_INSTALL_DIR` and `ASC_MCP_REQUIRE_SIGNATURE=1` (refuse to install unless cosign or `gh attestation verify` checks the release).
@@ -106,7 +109,9 @@ Earlier releases read `.asc-mcp.toml` and `.hamn.toml`. If one of those is in a 
 
 ## Toolsets
 
-`core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store`, `insights` and `library` (Asset Library writes) are opt-in.
+`core`, `release`, `testflight`, `metadata`, `reviews`, `reports` and `screenshots` are on by default. `uploads`, `monetization`, `signing`, `xcodecloud`, `webhooks`, `admin`, `store`, `insights`, `library` (Asset Library writes) and `web` are opt-in.
+
+`web` holds what Apple's API can't do: `apps_create` (new app records) and `privacy_get`, `privacy_plan`, `privacy_apply` (App Privacy). They use your Apple ID web session instead of the API key, so a human signs in first. `app-store-connect-mcp web login` opens a browser window on Apple's sign-in page; agents can open the same window with the `web_login` tool. `web login --password` is the terminal flow (Apple ID, password, 2FA code) for machines without a screen, and `web import` takes cookies from a browser's "Copy as cURL" or `FASTLANE_SESSION`. One session per profile. It's kept in the OS keychain (service `app-store-connect-mcp-web`), or in `<state dir>/web/<profile>.json` (mode 0600) when the keychain can't hold it or `ASC_MCP_WEB_STORE=file`. The password is never stored. Apple ends web sessions after about a month, sometimes sooner. The browser window uses its own profile in `<state dir>/web/browser/<profile>`, and when the session expires that profile renews it headless, without a window, as long as Apple still trusts it; otherwise tools answer `web_session_required` until you sign in again. `web logout` deletes the session and the browser profile. `release_status` reads the App Privacy publish state through the session when there is one.
 
 Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (defaults with edits), `all,-admin`. `core` can't be removed. The `toolsets` tool changes them mid-session and the client gets `tools/list_changed`. Discovery mode starts with core only, for clients with a tool cap.
 

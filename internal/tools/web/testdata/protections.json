@@ -1,0 +1,6 @@
+{"data":[
+{"type":"appDataUsageDataProtections","id":"DATA_NOT_COLLECTED","attributes":{"deleted":false}},
+{"type":"appDataUsageDataProtections","id":"DATA_LINKED_TO_YOU","attributes":{"deleted":false}},
+{"type":"appDataUsageDataProtections","id":"DATA_NOT_LINKED_TO_YOU","attributes":{"deleted":false}},
+{"type":"appDataUsageDataProtections","id":"DATA_USED_TO_TRACK_YOU","attributes":{"deleted":false}}
+],"links":{"self":"https://appstoreconnect.apple.com/iris/v1/appDataUsageDataProtections"}}

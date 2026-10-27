@@ -32,6 +32,36 @@ app-store-connect-mcp config install claude-code  # or claude-desktop, cursor, c
 
 Details in [docs/INSTALL.md](docs/INSTALL.md). Upgrading, key rotation and fixes for common errors: [docs/FAQ.md](docs/FAQ.md).
 
+## Why you can trust it
+
+You're handing it an App Store Connect key, so here's what you can check yourself instead of taking my word for it:
+
+- **All of it is here.** MIT, no closed parts. Build it yourself with `go install github.com/idoo/app-store-connect-mcp/cmd/app-store-connect-mcp@latest`.
+- **Read-only until you say otherwise.** Write tools aren't even listed until you turn writes on, and anything public or hard to undo shows a preview and waits for your yes. [docs/SAFETY.md](docs/SAFETY.md)
+- **No telemetry.** It talks to `api.appstoreconnect.apple.com`, the presigned upload and report URLs Apple hands back (sent without your token), and the public iTunes Search API for `store_lookup`. The `web` toolset adds Apple's own sign-in pages. The JWT is signed on your machine and only ever goes to the API. [SECURITY.md](SECURITY.md#keys)
+- **Your key stays where you put it.** It's read from a file, an env var or the OS keychain. The config holds only a path or keychain reference, is written `0600`, and is refused if anyone else can write to it. Apple ID cookies live in the Keychain. No MCP tool can add or change credentials.
+- **Releases are signed and traceable to their source.** Every release is built by [release.yml](.github/workflows/release.yml) from a tag, published as an [immutable release](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases), and ships an SPDX SBOM per archive, a cosign keyless signature on `checksums.txt`, and [build provenance attestations](https://github.com/idoo/app-store-connect-mcp/attestations). The macOS binaries are also signed with my Developer ID and notarized by Apple, so Gatekeeper opens them without a warning.
+- **CI scans every push** with CodeQL and `govulncheck`, and a tag can't ship with a known reachable vulnerability.
+
+Check a download with the GitHub CLI:
+
+```sh
+gh attestation verify app-store-connect-mcp_<version>_<os>_<arch>.tar.gz --repo idoo/app-store-connect-mcp
+```
+
+or with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
+
+```sh
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/idoo/app-store-connect-mcp/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+shasum -a 256 -c checksums.txt --ignore-missing
+```
+
+On a Mac, `spctl -a -vv -t install app-store-connect-mcp` should say `source=Notarized Developer ID`.
+
+The `.mcpb` and `tools.json` are listed in `checksums-extra.txt` with their own `checksums-extra.txt.sigstore.json`. Both checks above work on them the same way.
+
 ## Compared
 
 | | **this one** | [forgeops](https://github.com/forgeopslabs/appstore-mcp) | [zelentsov](https://github.com/zelentsov-dev/asc-mcp) | [Joshua (archived)](https://github.com/JoshuaRileyDev/app-store-connect-mcp-server) | [`asc`](https://github.com/rorkai/App-Store-Connect-CLI) |
@@ -57,6 +87,20 @@ Everything you'd click in App Store Connect: releases, TestFlight, listings, scr
 After launch it keeps watching, if you turn on the `insights` toolset: post-release health with a guard that pauses a phased rollout from cron, a "what's new since yesterday" digest, the analytics funnel, and keyword rank tracking. In Claude Desktop, claude.ai, ChatGPT and VS Code the release checklist, metadata diffs, screenshots, reviews and funnel show up as small interactive views.
 
 A toolset is a group of tools you switch on or off, so your agent only sees what you use. The release, TestFlight, metadata, reviews, reports and screenshots ones are on out of the box. Add others with `--toolsets +insights,+signing` or `ASC_MCP_TOOLSETS=+insights`, or ask the agent to turn one on mid-chat. The list is in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
+
+### Creating apps and App Privacy
+
+Apple's API can't create an app record or fill in App Privacy. The opt-in `web` toolset can, through your Apple ID instead of the API key. You sign in once:
+
+```sh
+app-store-connect-mcp web login
+```
+
+A browser window opens on Apple's own sign-in page. Type your password, approve 2FA or use a passkey, and the window closes by itself. It's a separate browser profile just for this: your default browser if it's Brave, Chrome, Edge or Arc, another one of those if it isn't, or a downloaded Chrome for Testing when you have none. When the session runs out later, the same profile renews it headless, so mostly you won't see a window again. An agent can open the window too, with the `web_login` tool, when a tool says `web_session_required`.
+
+No screen? `web login --password` keeps the old terminal flow (Apple ID, password, 2FA code), though Apple often refuses it with error -20209. On an SSH box, use `web import` with the cookies from a browser's "Copy as cURL" or a `FASTLANE_SESSION`.
+
+Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan` and `privacy_apply`. The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app and publishing App Privacy each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
 
 ## License
 

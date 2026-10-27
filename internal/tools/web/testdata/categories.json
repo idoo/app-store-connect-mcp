@@ -1,0 +1,8 @@
+{"data":[
+{"type":"appDataUsageCategories","id":"EMAIL_ADDRESS","attributes":{"deleted":false},"relationships":{"grouping":{"data":{"type":"appDataUsageGroupings","id":"CONTACT_INFO"}}}},
+{"type":"appDataUsageCategories","id":"NAME","attributes":{"deleted":false},"relationships":{"grouping":{"data":{"type":"appDataUsageGroupings","id":"CONTACT_INFO"}}}},
+{"type":"appDataUsageCategories","id":"CRASH_DATA","attributes":{"deleted":false},"relationships":{"grouping":{"data":{"type":"appDataUsageGroupings","id":"DIAGNOSTICS"}}}},
+{"type":"appDataUsageCategories","id":"OLD_CATEGORY","attributes":{"deleted":true}}
+],"included":[
+{"type":"appDataUsageGroupings","id":"CONTACT_INFO"},{"type":"appDataUsageGroupings","id":"DIAGNOSTICS"}
+],"links":{"self":"https://appstoreconnect.apple.com/iris/v1/appDataUsageCategories"}}

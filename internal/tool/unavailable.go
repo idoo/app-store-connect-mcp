@@ -24,7 +24,23 @@ type (
 	noFetcher   struct{}
 	noFiles     struct{}
 	noArtifacts struct{}
+	noWeb       struct{}
 )
+
+func (noWeb) Do(context.Context, Request) (*Response, error) { return nil, ErrWebSessionRequired }
+func (noWeb) Get(context.Context, string, url.Values) (*Response, error) {
+	return nil, ErrWebSessionRequired
+}
+
+func (noWeb) List(context.Context, string, ListOptions) (*ListResult, error) {
+	return nil, ErrWebSessionRequired
+}
+
+func (noWeb) Download(context.Context, Request) ([]byte, http.Header, error) {
+	return nil, nil, ErrWebSessionRequired
+}
+func (noWeb) RateLimit() RateLimit             { return RateLimit{} }
+func (noWeb) ClockSkew() (time.Duration, bool) { return 0, false }
 
 func (noASC) Do(context.Context, Request) (*Response, error) {
 	return nil, unavail("App Store Connect client")

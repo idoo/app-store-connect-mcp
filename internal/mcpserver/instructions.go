@@ -3,7 +3,7 @@ package mcpserver
 // Instructions is the MCP server instructions text (kept ≤ 1.5 KB by a test).
 const Instructions = `This server manages App Store Connect (ASC) through Apple's official API.
 
-Apple limits: the API cannot create app records, edit App Privacy labels or read web dashboard analytics; you get deep links for those manual steps. Analytics reports appear 24–48 h after analytics_setup. Sales reports lag about a day.
+Apple limits: creating app records and App Privacy need the web toolset and an Apple ID sign-in (web_login opens a browser for the user); dashboard analytics stay manual. Analytics reports appear 24–48 h after analytics_setup. Sales reports lag a day.
 
 Safety:
 - Writes are off by default; write tools are hidden. To turn them on, call toolsets with action enable_writes: it asks the user (or returns setup steps). Steps marked locked:"writes_disabled" carry that call.

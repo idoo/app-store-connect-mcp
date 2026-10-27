@@ -106,6 +106,14 @@ var (
 		Message: "App Store Connect returned a response that is not valid JSON:API",
 		Hint:    "a proxy or Apple outage may be in the way; check https://developer.apple.com/system-status/ and retry later",
 	}
+	// ErrWebSessionRequired means an App Store Connect web-session (Apple ID)
+	// feature was called without a valid session, or the session expired.
+	// Only a human can sign in: tools never receive Apple ID credentials.
+	ErrWebSessionRequired = &Error{
+		Code:    "web_session_required",
+		Message: "this needs an App Store Connect web session (Apple ID sign-in); none is active or it expired",
+		Hint:    "call web_login (it opens a browser window where the user signs in; web toolset), or ask the user to run `app-store-connect-mcp web login` in a terminal, then call again",
+	}
 )
 
 // APIError is a decoded App Store Connect error (JSON:API errors[] entry plus

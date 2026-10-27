@@ -17,6 +17,7 @@ import (
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/store"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/testflight"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/uploads"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/web"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/webhooks"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/xcodecloud"
 )

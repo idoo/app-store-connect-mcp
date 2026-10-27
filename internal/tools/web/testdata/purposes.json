@@ -1,0 +1,5 @@
+{"data":[
+{"type":"appDataUsagePurposes","id":"APP_FUNCTIONALITY","attributes":{"deleted":false}},
+{"type":"appDataUsagePurposes","id":"ANALYTICS","attributes":{"deleted":false}},
+{"type":"appDataUsagePurposes","id":"THIRD_PARTY_ADVERTISING","attributes":{"deleted":false}}
+],"links":{"self":"https://appstoreconnect.apple.com/iris/v1/appDataUsagePurposes"}}
