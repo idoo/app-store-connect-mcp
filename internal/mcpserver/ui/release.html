@@ -20,7 +20,7 @@ const ORDER={block:0,warn:1,manual:2,info:3,ok:4};
 /* Tools whose schemas take version / platform (schemas reject unknown args;
  TestReleaseViewArgLists keeps these in step with docs/tools.json). */
 const VER=["appinfo_update","builds_list","builds_upload","metadata_apply","metadata_plan","metadata_pull","previews_upload","release_health_report","release_phased","release_prepare","release_publish","release_status","release_submit","screenshots_list","screenshots_plan","screenshots_sync"];
-const PLAT=["apps_list","builds_expire","builds_wait","library_apply","library_plan","release_cancel","release_review_status","signing_bundle_id_create","signing_bundle_ids_list","testflight_distribute","testflight_feedback_list"].concat(VER);
+const PLAT=["apps_list","builds_expire","builds_wait","library_apply","library_plan","release_cancel","release_review_messages","release_review_status","signing_bundle_id_create","signing_bundle_ids_list","testflight_distribute","testflight_feedback_list"].concat(VER);
 /* fixArgs: the app, platform and version the user asked about (when the tool takes them), under the step's own args. */
 function fixArgs(tool,inp,app,v,extra){const a={app:inp.app||(app.id)},pl=inp.platform||v.platform;if(pl&&PLAT.includes(tool))a.platform=pl;
  const ver=inp.version;if(ver&&ver!=="live"&&ver!=="editable"&&VER.includes(tool))a.version=ver;return Object.assign(a,extra||{})}

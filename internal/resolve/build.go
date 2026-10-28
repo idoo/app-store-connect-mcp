@@ -73,7 +73,7 @@ func (r *Resolver) Build(ctx context.Context, appID string, platform tool.Platfo
 			q.Set("filter[processingState]", "VALID")
 		}
 		if marketing != "" {
-			q.Set("filter[preReleaseVersion.version]", marketing)
+			q.Set("filter[preReleaseVersion.version]", strings.Join(tool.MarketingVersionAliases(marketing), ","))
 		}
 	}
 	res, err := r.asc.Get(ctx, "/v1/builds", q)

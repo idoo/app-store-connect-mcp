@@ -4,6 +4,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-28
+
+### Added
+
+- `release_review_messages` (`web` toolset) reads what App Review wrote in the Resolution Center about a review submission. It defaults to the newest submitted one for the app and platform. You get each message's date, sender and text (HTML turned into plain text, marked untrusted), plus the rejected guidelines with their codes and reasons. It needs a web session; the public API doesn't expose reviewer messages.
+- `release_review_status` links a rejected submission to `release_review_messages` in `next`, and its rejection note names the tool.
+
+### Changed
+
+- `web_login` answers within about 5 seconds. A valid stored session is reused straight away. Otherwise it opens the sign-in window and returns `status: "pending"` with the latest progress lines. Calling it again reports pending, `ok` or the failure, and never opens a second window. Previously the call blocked until the human finished, which overran MCP clients' 30-second request timeout. Results now carry `status` (`ok` or `pending`).
+
+### Fixed
+
+- `release_status` no longer blocks on a 1.0.0 build attached to version 1.0. Like Apple, it ignores trailing `.0` components when comparing versions. `build: "latest"` (and `latest:<version>`, `latest-valid:<version>`) finds builds under any of those spellings.
+
 ## [0.17.0] - 2026-10-28
 
 ### Added
@@ -406,7 +421,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.14.0...v0.15.0

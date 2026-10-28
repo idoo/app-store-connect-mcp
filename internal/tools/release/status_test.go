@@ -668,6 +668,17 @@ func TestReleaseStatusBuildVersionMismatch(t *testing.T) {
 	}
 }
 
+// A 1.0.0 build on version 1.0 is the same version for Apple: no block.
+func TestReleaseStatusBuildVersionTrailingZero(t *testing.T) {
+	f := readyFixture()
+	f.buildVersion = "1.4.0"
+	k := setup(t, f)
+	out, _ := call(t, k, `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "build"); c.Status != statusOK {
+		t.Errorf("build = %+v", c)
+	}
+}
+
 // ReleaseManager#3: READY_TO_SUBMIT IAPs are ready, WAITING_FOR_UPLOAD and
 // rejected ones are pending; none vanish.
 func TestCheckProductsStates(t *testing.T) {

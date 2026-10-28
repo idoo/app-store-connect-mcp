@@ -55,18 +55,24 @@ func TestBuildRefForms(t *testing.T) {
 		},
 		{
 			name: "latest marketing", ref: "latest:2.1", reply: []res{build("b3", "7", "VALID")},
-			wantQuery: base("filter[expired]", "false", "filter[preReleaseVersion.version]", "2.1"),
+			wantQuery: base("filter[expired]", "false", "filter[preReleaseVersion.version]", "2.1,2.1.0"),
 			want:      tool.Build{ID: "b3", Number: "7", ProcessingState: "VALID"},
 		},
 		{
 			// ReleaseDay-1: release tools pin latest-valid to the version.
 			name: "latest-valid marketing", ref: "latest-valid:2.1", reply: []res{build("b5", "8", "VALID")},
-			wantQuery: base("filter[expired]", "false", "filter[processingState]", "VALID", "filter[preReleaseVersion.version]", "2.1"),
+			wantQuery: base("filter[expired]", "false", "filter[processingState]", "VALID", "filter[preReleaseVersion.version]", "2.1,2.1.0"),
 			want:      tool.Build{ID: "b5", Number: "8", ProcessingState: "VALID"},
 		},
 		{
+			// Apple files a 1.0.0 build under version 1.0: match every spelling.
+			name: "latest marketing trailing zero", ref: "latest:1.0", reply: []res{build("b6", "11", "VALID")},
+			wantQuery: base("filter[expired]", "false", "filter[preReleaseVersion.version]", "1.0,1,1.0.0"),
+			want:      tool.Build{ID: "b6", Number: "11", ProcessingState: "VALID"},
+		},
+		{
 			name: "latest-valid marketing none", ref: "latest-valid:2.1",
-			wantQuery: base("filter[expired]", "false", "filter[processingState]", "VALID", "filter[preReleaseVersion.version]", "2.1"),
+			wantQuery: base("filter[expired]", "false", "filter[processingState]", "VALID", "filter[preReleaseVersion.version]", "2.1,2.1.0"),
 			kind:      "notfound", next: "builds_list",
 		},
 		{

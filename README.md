@@ -104,7 +104,7 @@ A browser window opens on Apple's own sign-in page. Type your password, approve 
 
 No screen? `web login --password` keeps the old terminal flow (Apple ID, password, 2FA code), though Apple often refuses it with error -20209. On an SSH box, use `web import` with the cookies from a browser's "Copy as cURL" or a `FASTLANE_SESSION`.
 
-Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan` and `privacy_apply`. The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app and publishing App Privacy each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
+Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan`, `privacy_apply` and `release_review_messages` (what App Review wrote about a rejection). The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app and publishing App Privacy each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
 
 ## License
 

@@ -74,7 +74,7 @@ func TestReleaseReviewStatusWithItems(t *testing.T) {
 	if out.Rejection == nil || !strings.HasSuffix(out.Rejection.ResolutionCenter, "/apps/100/distribution/reviewsubmissions") || len(out.Rejection.RejectedItems) != 1 {
 		t.Errorf("rejection = %+v", out.Rejection)
 	}
-	if len(res.Next) != 2 || res.Next[1].Tool != "release_submit" {
+	if len(res.Next) != 3 || res.Next[1].Tool != "release_submit" || res.Next[2].Tool != "release_review_messages" || res.Next[2].Args["submission"] != "rs1" {
 		t.Errorf("next = %+v", res.Next)
 	}
 	if n := len(k.ASC.Requests()); n != 2 {

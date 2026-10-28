@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -70,34 +71,51 @@ func TestWebLoginUnavailable(t *testing.T) {
 	}
 }
 
-func TestWebLoginOneAtATime(t *testing.T) {
+// A sign-in that outlasts loginWait answers pending at once; later calls
+// never open a second window and report the result once it is there.
+func TestWebLoginPendingThenResult(t *testing.T) {
 	k := loginKit(t)
-	started, finish := make(chan struct{}), make(chan struct{})
-	k.Env.WebLogin = func(context.Context, func(string)) (tool.WebAccount, error) {
-		close(started)
+	old := loginWait
+	loginWait = 20 * time.Millisecond
+	t.Cleanup(func() { loginWait = old })
+	finish := make(chan struct{})
+	opened := 0
+	k.Env.WebLogin = func(ctx context.Context, log func(string)) (tool.WebAccount, error) {
+		opened++
+		log("opening Brave Browser")
 		<-finish
+		if ctx.Err() != nil {
+			t.Error("the sign-in was cancelled with the call that started it")
+		}
 		return tool.WebAccount{AppleID: "dev@example.com"}, nil
 	}
-	first := make(chan *tool.Result, 1)
-	go func() { first <- mustTool(t, "web_login").Call(context.Background(), k.Env, []byte(`{}`)) }()
-	<-started
-
-	second := *k.Env
-	second.WebLogin = func(context.Context, func(string)) (tool.WebAccount, error) {
-		t.Error("a second window was opened")
-		return tool.WebAccount{}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	start := time.Now()
+	out := tooltest.Decode[webLoginOut](t, tooltest.MustOK(t, mustTool(t, "web_login").Call(ctx, k.Env, []byte(`{}`))))
+	cancel() // the request is over; the window stays open
+	if time.Since(start) > 2*time.Second || out.Status != "pending" || !strings.Contains(out.Next, "again") {
+		t.Fatalf("first = %+v after %v", out, time.Since(start))
 	}
-	b := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "web_login"), &second, `{}`), errLoginBusy.Code)
-	if !strings.Contains(b.Message, "already open") {
-		t.Errorf("busy = %+v", b)
+	if !slices.Equal(out.Log, []string{"opening Brave Browser"}) {
+		t.Errorf("log = %v", out.Log)
+	}
+	second := tooltest.Decode[webLoginOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "web_login"), k.Env, `{}`)))
+	if second.Status != "pending" {
+		t.Errorf("second = %+v", second)
 	}
 	close(finish)
-	tooltest.MustOK(t, <-first)
-	third := *k.Env // the gate is free again once the first call returns
-	third.WebLogin = func(context.Context, func(string)) (tool.WebAccount, error) {
+	loginWait = time.Minute
+	done := tooltest.Decode[webLoginOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "web_login"), k.Env, `{}`)))
+	if done.Status != "ok" || done.Account.AppleID != "dev@example.com" || opened != 1 {
+		t.Errorf("done = %+v, windows opened %d", done, opened)
+	}
+	// The gate is free again: a new call runs a new sign-in.
+	k.Env.WebLogin = func(context.Context, func(string)) (tool.WebAccount, error) {
 		return tool.WebAccount{AppleID: "dev@example.com", Reused: true}, nil
 	}
-	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "web_login"), &third, `{}`))
+	if again := tooltest.Decode[webLoginOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "web_login"), k.Env, `{}`))); !again.Account.Reused {
+		t.Errorf("again = %+v", again)
+	}
 }
 
 func TestWebLoginCooldownAfterFailure(t *testing.T) {

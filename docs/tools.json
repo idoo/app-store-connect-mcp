@@ -2663,11 +2663,50 @@
     "confirm": "human"
   },
   {
+    "name": "release_review_messages",
+    "toolset": "web",
+    "class": "R",
+    "title": "App Review messages (Resolution Center)",
+    "description": "The reviewer's Resolution Center messages for a review submission (web session; default the newest submitted one of the app/platform): date, sender, text, rejected guidelines with reasons. Read-only.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "App Review messages (Resolution Center)"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "IOS",
+            "MAC_OS",
+            "TV_OS",
+            "VISION_OS"
+          ],
+          "type": "string"
+        },
+        "submission": {
+          "description": "review submission id; default the newest submitted one",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
     "name": "release_review_status",
     "toolset": "release",
     "class": "R",
     "title": "App Review submission status",
-    "description": "Current and recent App Review submissions and item states. Reviewer messages aren't in the API: see the Resolution Center.",
+    "description": "Current and recent App Review submissions and item states; reviewer messages via release_review_messages.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -4763,7 +4802,7 @@
     "toolset": "web",
     "class": "R",
     "title": "Sign in to the App Store Connect web session",
-    "description": "Open a browser window on the user's machine so they sign in to App Store Connect on Apple's own page (password, 2FA, passkey). You never see credentials. Reuses a valid session without a window. Call when a tool fails with web_session_required.",
+    "description": "Open a browser window on the user's machine to sign in to App Store Connect on Apple's page (password, 2FA, passkey); you never see credentials. Reuses a valid session. Answers pending within seconds while the user signs in: call again. Use on web_session_required.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
