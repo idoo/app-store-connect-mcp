@@ -4,6 +4,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-28
+
+### Added
+
+- Stats work without an Admin key or a vendor number, once you've signed in with `app-store-connect-mcp web login`:
+  - Sales and finance tools, the digest and `doctor` read the vendor number from Payments and Financial Reports when the profile has none, and remember it in the state dir. Results then say `vendor_number_source: "web_session"`. Several vendor numbers are listed in a `vendor_number_ambiguous` error instead of picking one.
+  - `analytics_funnel_report` reads the App Analytics dashboard when the Analytics Reports API isn't set up for the app or refuses the key (no Admin role). That covers funnel, sources, territories, sessions, crashes and installs vs deletions, plus downloads, redownloads, conversion rate and proceeds. Results say `data_source: "web_dashboard"`, and normal ones say `data_source: "analytics_reports"`. Periods end on the dashboard's last day with data, and a later `to` is cut back with a note.
+  - `insights_summary` without an app lists every app's impressions, page views, downloads, sessions, crashes, proceeds and conversion rate against the previous period, sorted by downloads, with account totals. Apps that were never on the App Store are listed under `no_data`, and one app's failure doesn't hide the others. With an app, it uses the dashboard when the Reports API can't answer.
+- An app that has never been on the App Store gets `status: "no_data"` from `analytics_funnel_report` instead of an error.
+
+### Changed
+
+- `vendor_number_missing`, `analytics_not_set_up` and the `analytics_setup` 403 now name `web_login` as the quickest fix. The 403 also says Analytics Reports need an Admin key.
+- `finance_report` 403 with a vendor number from the web session says the key needs the Finance or Admin role, instead of doubting the vendor number.
+
+### Security
+
+- Web-session calls outside iris are limited to App Analytics (`/analytics/api/v1/`), the Payments vendor list (`/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/`) and `/olympus/v1/session`, GET and POST only, never following redirects, at most 4 at a time. Cookies stay out of errors and logs.
+
 ## [0.15.0] - 2026-10-27
 
 ### Added
@@ -376,7 +395,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.12.0...v0.13.0

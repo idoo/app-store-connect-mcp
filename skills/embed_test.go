@@ -24,6 +24,7 @@ var vocabulary = map[string]bool{
 	"team_key_required": true, "individual_key_unsupported": true, "human_approval_required": true,
 	"stale_plan": true, "outcome_unknown": true, "rate_limited": true, "already_submitted": true,
 	"vendor_number_missing": true, "analytics_not_set_up": true, "no_editable_version": true,
+	"data_source": true, "web_dashboard": true,
 	"missing_localization": true, "upload_failed": true, "reply_locale": true,
 	"last_7_days": true, "month_to_date": true, "this_week": true,
 	"last_week": true, "last_month": true, "last_seen": true, "review_id": true, // review_id: field of reviews_reply.replies

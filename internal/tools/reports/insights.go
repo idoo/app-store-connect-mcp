@@ -11,6 +11,7 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/reports"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
+	"github.com/idoo/app-store-connect-mcp/internal/tools/insights"
 )
 
 const (
@@ -68,16 +69,17 @@ type insightsOut struct {
 
 type salesInsight struct {
 	section
-	// vendorMissing marks the profile has no vendor number (never serialized).
-	vendorMissing bool
-	ComparedDays  int                         `json:"compared_days,omitempty"`
-	CurrentDays   int                         `json:"current_days,omitempty"`
-	PreviousDays  int                         `json:"previous_days,omitempty"`
-	PendingDays   []string                    `json:"pending_days,omitempty"`
-	Units         reports.Units               `json:"units,omitempty"`
-	PrevUnits     reports.Units               `json:"previous_units,omitempty"`
-	UnitsChange   map[reports.Category]string `json:"units_change,omitempty"`
-	Proceeds      []proceedsChange            `json:"proceeds,omitempty"`
+	// vendorErr is the vendor_number_missing error (never serialized).
+	vendorErr    *tool.Error
+	VendorSource string                      `json:"vendor_number_source,omitempty"`
+	ComparedDays int                         `json:"compared_days,omitempty"`
+	CurrentDays  int                         `json:"current_days,omitempty"`
+	PreviousDays int                         `json:"previous_days,omitempty"`
+	PendingDays  []string                    `json:"pending_days,omitempty"`
+	Units        reports.Units               `json:"units,omitempty"`
+	PrevUnits    reports.Units               `json:"previous_units,omitempty"`
+	UnitsChange  map[reports.Category]string `json:"units_change,omitempty"`
+	Proceeds     []proceedsChange            `json:"proceeds,omitempty"`
 }
 
 type proceedsChange struct {
@@ -128,6 +130,18 @@ type feedbackInsight struct {
 type analyticsInsight struct {
 	section
 	AccessTypes []string `json:"access_types,omitempty"`
+	// Dashboard figures (data_source web_dashboard): one app's totals, or
+	// every app's with account totals.
+	DataSource     string              `json:"data_source,omitempty"`
+	Window         *window             `json:"window,omitempty"`
+	PreviousWindow *window             `json:"previous_window,omitempty"`
+	Totals         *dashboardTotals    `json:"totals,omitempty"`
+	Apps           []dashboardAppStats `json:"apps,omitempty"`
+	NoData         []dashboardAppRef   `json:"no_data,omitempty"`
+	// notSetUp marks an app without an analytics report request (never serialized).
+	notSetUp bool
+	// noSession marks a dashboard read without a web session (never serialized).
+	noSession bool
 }
 
 func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.Result, error) {
@@ -151,7 +165,7 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 	var app *tool.App
 	noApp := ""
 	if in.App.IsAll() {
-		noApp = `needs one app for this section: app "all" covers sales, ratings and releases`
+		noApp = `needs one app for this section: app "all" covers sales, ratings, releases and analytics`
 	} else if a, err := env.Resolve.App(ctx, in.App); err == nil {
 		app = &a
 		out.App = app
@@ -163,25 +177,47 @@ func insightsSummary(ctx context.Context, env *tool.Env, in insightsIn) (*tool.R
 
 	today := applemeta.PacificDay(now)
 	out.Sales = salesSection(ctx, env, app, from, to, pFrom, pTo, today)
-	if out.Sales.vendorMissing {
+	if te := out.Sales.vendorErr; te != nil {
 		// The sales_report suggestion would fail the same way; the next step
-		// is the one-time setup command and where to find the number.
-		te := vendorNumberMissing(env.Profile.Name).(*tool.Error)
+		// is the web sign-in or one-time setup and where to find the number.
 		res.Warn("next step for sales: " + te.Hint + "; " + te.Message)
 	}
 	if app == nil {
 		out.Ratings = allAppsRatings(ctx, env, from, to, pFrom)
-		out.Release = portfolioRelease(ctx, env)
+		ranked, perr := insights.Portfolio(ctx, env)
+		out.Release = portfolioRelease(ranked, perr)
 		out.TestFlight.section = unavailable(noApp)
-		out.Analytics.section = unavailable(noApp)
+		if perr != nil {
+			out.Analytics.section = unavailable(reasonOf(perr))
+		} else {
+			apps := make([]tool.App, len(ranked))
+			for i, p := range ranked {
+				apps[i] = p.App
+			}
+			out.Analytics = dashboardAnalytics(ctx, env, apps, false, preset, from, to)
+		}
 		return res, ctx.Err()
 	}
 	out.Ratings = ratingsSection(ctx, env, app.ID, from, to, pFrom)
 	out.Release = releaseSection(ctx, env, app.ID)
 	out.TestFlight = feedbackSection(ctx, env, app.ID, from)
 	out.Analytics = analyticsSection(ctx, env, app.ID)
+	if out.Analytics.Status != "ok" {
+		// The Analytics Reports API cannot answer (not set up, or the key is
+		// not Admin): the dashboard can, with a web session.
+		d := dashboardAnalytics(ctx, env, []tool.App{*app}, true, preset, from, to)
+		switch {
+		case d.Status == "ok":
+			d.notSetUp = out.Analytics.notSetUp
+			out.Analytics = d
+		case d.noSession:
+			out.Analytics.Reason += "; or " + d.Reason
+		default:
+			out.Analytics.Reason += "; App Analytics dashboard: " + d.Reason
+		}
+	}
 	switch {
-	case out.Analytics.Status != "ok" && out.Analytics.Reason == analyticsMissingReason:
+	case out.Analytics.Status != "ok" && out.Analytics.notSetUp:
 		res.Then(tool.NextStep{Tool: "analytics_setup", Args: appIDArgs(app.ID)})
 	case out.Analytics.Status == "ok":
 		res.Then(tool.NextStep{Tool: "analytics_funnel_report", Args: map[string]any{"app": app.ID}})
@@ -205,14 +241,19 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 	if env.Profile.KeyKind == tool.KeyIndividual {
 		return salesInsight{section: unavailable("sales reports need a Team API key; Individual keys cannot read them")}
 	}
-	vendor, err := requireVendor(env)
+	v, err := resolveVendor(ctx, env)
 	if err != nil {
 		var te *tool.Error
 		if errors.As(err, &te) {
-			return salesInsight{section: unavailable(te.Message + "; " + te.Hint), vendorMissing: true}
+			out := salesInsight{section: unavailable(te.Message + "; " + te.Hint)}
+			if te.Code == "vendor_number_missing" {
+				out.vendorErr = te
+			}
+			return out
 		}
 		return salesInsight{section: unavailable(reasonOf(err))}
 	}
+	vendor := v.Number
 	if to.After(today.AddDate(0, 0, -1)) {
 		to = today.AddDate(0, 0, -1)
 	}
@@ -227,7 +268,7 @@ func salesSection(ctx context.Context, env *tool.Env, app *tool.App, from, to, p
 		return salesInsight{section: unavailable(reasonOf(err))}
 	}
 	curT, prevT := tables[:len(cur)], tables[len(cur):]
-	out := salesInsight{section: sectionOK}
+	out := salesInsight{section: sectionOK, VendorSource: webVendorSource(v)}
 	// Unpublished trailing current days drop the same number of previous days,
 	// so the comparison stays like-for-like.
 	n := len(curT)
@@ -540,7 +581,7 @@ func analyticsSection(ctx context.Context, env *tool.Env, appID string) analytic
 		}
 	}
 	if len(out.AccessTypes) == 0 {
-		return analyticsInsight{section: unavailable(analyticsMissingReason)}
+		return analyticsInsight{section: unavailable(analyticsMissingReason), notSetUp: true}
 	}
 	out.Reason = "use analytics_funnel_report (toolset insights) for impressions → page views → downloads, sessions and crashes"
 	return out

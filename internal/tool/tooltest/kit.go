@@ -26,7 +26,10 @@ type Kit struct {
 	// public spec, so it skips the spec check. Env.Web starts nil (no web
 	// login, every web call fails with tool.ErrWebSessionRequired); call
 	// [Kit.WebSession] to route web calls to this fake.
-	Web      *FakeASC
+	Web *FakeASC
+	// Portal fakes the web-only JSON endpoints (dashboard, Payments). Like
+	// Web, Env.Portal starts nil; [Kit.WebSession] routes it here.
+	Portal   *FakePortal
 	Spec     tool.Spec
 	Plans    *FakePlanner
 	State    *FakeStore
@@ -63,6 +66,7 @@ func New(t testing.TB) *Kit {
 	k := &Kit{
 		ASC:      NewFakeASC(t),
 		Web:      NewFakeASC(t),
+		Portal:   NewFakePortal(t),
 		Spec:     pinnedSpec(t),
 		Plans:    NewFakePlanner(clock.Now),
 		State:    NewFakeStore(),
@@ -107,9 +111,11 @@ func (k *Kit) ReadOnly() *Kit {
 	return k
 }
 
-// WebSession signs the Kit in to the web session: Env.Web becomes k.Web.
+// WebSession signs the Kit in to the web session: Env.Web becomes k.Web and
+// Env.Portal becomes k.Portal.
 func (k *Kit) WebSession() *Kit {
 	k.Env.Web = k.Web
+	k.Env.Portal = k.Portal
 	return k
 }
 

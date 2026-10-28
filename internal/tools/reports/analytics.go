@@ -141,6 +141,9 @@ func createAnalyticsRequest(ctx context.Context, env *tool.Env, appID, access st
 		}
 		return tool.Resource{}, false, fmt.Errorf("create %s analytics request: %w", access, err)
 	}
+	if errors.As(err, &api) && api.Status == http.StatusForbidden {
+		api.Hint = analyticsSetupForbiddenHint
+	}
 	if err != nil {
 		return tool.Resource{}, false, fmt.Errorf("create %s analytics request: %w", access, err)
 	}
@@ -150,6 +153,12 @@ func createAnalyticsRequest(ctx context.Context, env *tool.Env, appID, access st
 	}
 	return r, false, nil
 }
+
+// analyticsSetupForbiddenHint replaces Apple's generic 403 hint when the key
+// may not create analytics report requests.
+const analyticsSetupForbiddenHint = "creating analytics report requests needs an API key with the Admin role " +
+	"(Users and Access › Integrations); without one, analytics_funnel_report and insights_summary read the " +
+	"App Analytics dashboard numbers through the web session instead (call web_login)"
 
 // reportOut is one analytics report in a result.
 type reportOut struct {

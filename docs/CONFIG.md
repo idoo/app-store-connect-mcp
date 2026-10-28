@@ -47,7 +47,7 @@ app-store-connect-mcp web login|import|status|team|logout   Apple ID web session
 | `ASC_KEY_ID`, `ASC_ISSUER_ID` | Key id; issuer id for team keys, empty for individual keys |
 | `ASC_PRIVATE_KEY_PATH` or `ASC_PRIVATE_KEY` | The `.p8` path, or the key as PEM / base64 PEM |
 | `ASC_KEY_KIND` | `team` or `individual`, if it can't be guessed |
-| `ASC_VENDOR_NUMBER` | For sales and finance reports |
+| `ASC_VENDOR_NUMBER` | For sales and finance reports; read from Payments via the web session when unset |
 | `ASC_MCP_PROFILE`, `ASC_MCP_ALLOW_WRITES`, `ASC_MCP_TOOLSETS`, `ASC_MCP_DISCOVERY`, `ASC_MCP_ROOT` | Same as the flags |
 | `ASC_MCP_MAX_RESPONSE_BYTES` | Result cap, default `60000` (4096 to 10 MiB) |
 | `ASC_MCP_MAX_RETRIES` | Default `3` (0 to 10) |
@@ -91,7 +91,9 @@ vendor_number = "81234567"
 
 `allow_no_elicit = true` on a profile lets human-approval tools run on the agent's say-so when the client can't show an approval form. Results then say `approved_by: "agent"`. That removes the human from the loop, so only use it with a client that asks you itself.
 
-Individual keys have no issuer id and get their user's permissions. Some endpoints only take team keys; `docs/tools.json` marks those tools `needs_team_key`. The vendor number lives under *Payments and Financial Reports*. Apple keeps exchange rates off the API, so `finance_report` gives per-currency totals and never guesses USD.
+Individual keys have no issuer id and get their user's permissions. Some endpoints only take team keys; `docs/tools.json` marks those tools `needs_team_key`. The vendor number lives under *Payments and Financial Reports*; with a web session (`web login`) and no `vendor_number` set, it's read from there once and remembered in the state dir. Apple keeps exchange rates off the API, so `finance_report` gives per-currency totals and never guesses USD.
+
+Analytics Reports (`analytics_setup`) need an Admin key. Without one, or before Apple has produced the first reports, `analytics_funnel_report` and `insights_summary` read the same numbers from the App Analytics dashboard through the web session; results say `data_source: "web_dashboard"`.
 
 ## Per-project pin
 

@@ -187,12 +187,21 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 		env.ASC = client
 		env.Resolve = resolve.New(client, resolve.Options{DefaultApp: r.Profile.DefaultApp, Clock: env.Clock})
 	}
-	web, err := NewWebClient(r, version, idx, stateDir)
+	// One session source per env: the iris client and the portal share its
+	// cookies, rotations and renewals.
+	var src *websession.Source
+	if stateDir != "" {
+		src = newWebSource(WebProfile(r), stateDir)
+	}
+	web, err := newWebClient(r, version, idx, src)
 	if err != nil {
 		return nil, err
 	}
 	if web != nil {
 		env.Web = web
+	}
+	if src != nil {
+		env.Portal = newPortalClient(src, portalBaseURL, version)
 	}
 	if transport == tool.TransportStdio && stateDir != "" {
 		env.WebLogin = newWebLogin(stateDir, WebProfile(r))
@@ -218,13 +227,13 @@ func WebProfile(r *config.Resolved) string {
 	return r.Profile.Name
 }
 
-// NewWebClient builds the web-session (iris) client. It loads the stored
-// session lazily on first use, so a `web login` after the server started
-// works without a restart. It returns nil, nil when the state dir is unknown
-// (the session store lives under it); web tools then fail with
+// newWebClient builds the web-session (iris) client over src, which loads
+// the stored session lazily on first use, so a `web login` after the server
+// started works without a restart. It returns nil, nil when src is nil (no
+// state dir, where the session store lives); web tools then fail with
 // tool.ErrWebSessionRequired.
-func NewWebClient(r *config.Resolved, version string, idx *spec.Index, stateDir string) (*asc.Client, error) {
-	if stateDir == "" {
+func newWebClient(r *config.Resolved, version string, idx *spec.Index, src *websession.Source) (*asc.Client, error) {
+	if src == nil {
 		return nil, nil
 	}
 	base, err := url.Parse(websession.IrisBaseURL)
@@ -233,7 +242,7 @@ func NewWebClient(r *config.Resolved, version string, idx *spec.Index, stateDir 
 	}
 	opts := asc.Options{
 		BaseURL:     base,
-		Session:     newWebSource(WebProfile(r), stateDir),
+		Session:     src,
 		HTTP:        webHTTPClient(),
 		MaxRetries:  r.MaxRetries,
 		AllowWrites: r.Profile.AllowWrites,

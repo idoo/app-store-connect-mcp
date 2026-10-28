@@ -100,6 +100,22 @@ func TestAnalyticsSetupCreates(t *testing.T) {
 	}
 }
 
+func TestAnalyticsSetupForbiddenNamesAdminAndWebSession(t *testing.T) {
+	k := reportsKit(t)
+	k.ASC.Handle(http.MethodGet, requestsPath, http.StatusOK, emptyList)
+	k.ASC.Handle(http.MethodPost, "/v1/analyticsReportRequests", http.StatusForbidden,
+		`{"errors":[{"status":"403","code":"FORBIDDEN_ERROR","title":"This request is forbidden for security reasons","detail":"The API key in use does not allow this request"}]}`)
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "analytics_setup"), k.Env, `{"app":"Example Notes"}`), "api_error")
+	for _, want := range []string{"Admin role", "Users and Access › Integrations", "analytics_funnel_report", "insights_summary", "web_login"} {
+		if !strings.Contains(body.Hint, want) {
+			t.Errorf("hint %q lacks %q", body.Hint, want)
+		}
+	}
+	if !strings.Contains(body.Message, "create ONGOING analytics request") || body.API == nil || body.API.Status != http.StatusForbidden {
+		t.Errorf("body = %+v", body)
+	}
+}
+
 func TestAnalyticsSetupWithheldReadOnly(t *testing.T) {
 	k := reportsKit(t).ReadOnly()
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "analytics_setup"), k.Env, ``), "writes_disabled")

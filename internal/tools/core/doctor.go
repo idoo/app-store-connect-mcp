@@ -79,7 +79,7 @@ func doctor(ctx context.Context, env *tool.Env, _ doctorIn) (*tool.Result, error
 	add(rateCheck(env.ASC.RateLimit()))
 	add(specCheck(out.SpecVersion))
 	add(writesCheck(p.AllowWrites))
-	add(vendorCheck(p))
+	add(vendorCheck(ctx, env))
 	for _, msg := range p.Problems {
 		add(check{Name: "config", Status: statusWarn, Detail: msg})
 	}
@@ -113,7 +113,7 @@ func webSessionCheck(ctx context.Context, web tool.ASC) check {
 	_, err := web.Get(ctx, "/v1/apps", url.Values{"limit": {"1"}, "fields[apps]": {"name"}})
 	switch {
 	case err == nil:
-		c.Status, c.Detail = statusOK, "App Store Connect web session is active (apps_create, privacy_* available)"
+		c.Status, c.Detail = statusOK, "App Store Connect web session is active (dashboard analytics, vendor number, apps_create, privacy_*)"
 	case errors.Is(err, tool.ErrWebSessionRequired):
 		c.Status, c.Detail = statusWarn, "no active App Store Connect web session: apps_create and privacy_* will fail"
 		c.Fix = "call web_login, or run `app-store-connect-mcp web login` in a terminal"
@@ -241,17 +241,32 @@ func filesCheck(f tool.Files) (string, check) {
 	return root, check{Name: "files", Status: statusOK, Detail: "file tools are confined to " + root}
 }
 
-func vendorCheck(p tool.ProfileInfo) check {
+// vendorCheck reports the vendor number sales_report and finance_report
+// use: the profile's, else one read from Payments via the web session.
+func vendorCheck(ctx context.Context, env *tool.Env) check {
+	p := env.Profile
 	if p.VendorNumber != "" {
 		return check{Name: "vendor_number", Status: statusOK, Detail: "vendor number set"}
 	}
-	fix := "set ASC_VENDOR_NUMBER or vendor_number in the profile (App Store Connect > Payments and Financial Reports)"
-	if p.Name == "env" {
-		fix = "set ASC_VENDOR_NUMBER (App Store Connect > Payments and Financial Reports)"
+	v, err := tool.ResolveVendorNumber(ctx, env)
+	if err == nil {
+		return check{Name: "vendor_number", Status: statusOK, Detail: "vendor number " + v.Number + " read from Payments via the web session"}
 	}
-	return check{
-		Name: "vendor_number", Status: statusWarn, Detail: "no vendor number: sales_report and finance_report cannot run",
-		Fix: fix,
+	var te *tool.Error
+	switch {
+	case errors.As(err, &te) && te.Code == "vendor_number_missing":
+		fix := "call web_login (or run `app-store-connect-mcp web login`) so it is read from Payments, or set ASC_VENDOR_NUMBER or vendor_number in the profile (`app-store-connect-mcp auth set`; App Store Connect > Payments and Financial Reports)"
+		if p.Name == "env" {
+			fix = "call web_login (or run `app-store-connect-mcp web login`) so it is read from Payments, or set ASC_VENDOR_NUMBER (App Store Connect > Payments and Financial Reports)"
+		}
+		return check{
+			Name: "vendor_number", Status: statusWarn, Detail: "no vendor number: sales_report and finance_report cannot run",
+			Fix: fix,
+		}
+	case errors.As(err, &te) && te.Code == "vendor_number_ambiguous":
+		return check{Name: "vendor_number", Status: statusWarn, Detail: tool.SanitizeText(te.Message), Fix: tool.SanitizeText(te.Hint)}
+	default:
+		return check{Name: "vendor_number", Status: statusWarn, Detail: "vendor number lookup via the web session failed: " + tool.SanitizeText(err.Error())}
 	}
 }
 

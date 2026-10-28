@@ -172,6 +172,10 @@ type Env struct {
 	// human's Apple ID session cookies. Without a valid session every call
 	// fails with [ErrWebSessionRequired]; nil installs that stand-in.
 	Web ASC
+	// Portal reaches the web-only JSON endpoints (App Analytics dashboard,
+	// Payments, olympus session) with the same web session as Web. nil
+	// installs a stand-in failing with [ErrWebSessionRequired].
+	Portal Portal
 	// WebLogin signs the human in to the App Store Connect web session in a
 	// browser window on their machine (they type the Apple ID password and
 	// 2FA code into Apple's own page; the tool never sees them). It reuses
@@ -246,6 +250,9 @@ func (e *Env) complete() *Env {
 	}
 	if c.Web == nil {
 		c.Web = noWeb{}
+	}
+	if c.Portal == nil {
+		c.Portal = noPortal{}
 	}
 	if c.Spec == nil {
 		c.Spec = noSpec{}

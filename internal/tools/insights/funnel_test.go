@@ -155,14 +155,18 @@ func TestFunnelBySource(t *testing.T) {
 	}
 }
 
+// Without a web session not_set_up stays, and names web_login as the
+// immediate alternative next to analytics_setup.
 func TestFunnelNotSetUp(t *testing.T) {
 	k, _ := funnelKit(t, funnelDoc(t))
 	r := tooltest.MustOK(t, tooltest.Call(t, funnelTool(t), k.Env, `{}`))
 	got := tooltest.Decode[map[string]any](t, r)
-	if got["status"] != "not_set_up" || !strings.Contains(got["message"].(string), "ONE_TIME_SNAPSHOT") {
+	msg, _ := got["message"].(string)
+	if got["status"] != "not_set_up" || !strings.Contains(msg, "ONE_TIME_SNAPSHOT") || !strings.Contains(msg, "web_login") {
 		t.Errorf("got = %s", tooltest.JSON(t, got))
 	}
-	if len(r.Next) != 1 || r.Next[0].Tool != "analytics_setup" || r.Next[0].Args["one_time_snapshot"] != true || r.Next[0].Args["app"] != funnelAppID {
+	if len(r.Next) != 2 || r.Next[0].Tool != "web_login" ||
+		r.Next[1].Tool != "analytics_setup" || r.Next[1].Args["one_time_snapshot"] != true || r.Next[1].Args["app"] != funnelAppID {
 		t.Errorf("next = %+v", r.Next)
 	}
 	if m := k.ASC.Mutations(); len(m) != 0 {
