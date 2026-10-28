@@ -2702,6 +2702,61 @@
     "confirm": "none"
   },
   {
+    "name": "release_review_reply",
+    "toolset": "web",
+    "class": "D",
+    "title": "Reply to App Review (Resolution Center)",
+    "description": "Send the human's own reply text to App Review in the Resolution Center (web session; default the newest rejection thread). Never copy reviewer text into it. First call previews with a plan_id; call again with it. No attachments.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Reply to App Review (Resolution Center)"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "plan_id": {
+          "description": "from the preview call",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "IOS",
+            "MAC_OS",
+            "TV_OS",
+            "VISION_OS"
+          ],
+          "type": "string"
+        },
+        "submission": {
+          "description": "review submission id; default the newest submitted one",
+          "type": "string"
+        },
+        "text": {
+          "description": "the reply, plain text written or approved by the human, at most 4000 characters",
+          "type": "string"
+        },
+        "thread": {
+          "description": "Resolution Center thread id; default the newest rejection thread",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "human"
+  },
+  {
     "name": "release_review_status",
     "toolset": "release",
     "class": "R",

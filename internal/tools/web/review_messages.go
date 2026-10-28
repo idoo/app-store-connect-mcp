@@ -45,6 +45,7 @@ type rejectionReason struct {
 }
 
 type reviewMessage struct {
+	ID         string            `json:"id"`
 	Date       string            `json:"date"`
 	From       string            `json:"from,omitempty"`
 	FromName   tool.Untrusted    `json:"from_name,omitempty"`
@@ -75,72 +76,155 @@ const (
 	maxReviewMessages = 200
 )
 
-func releaseReviewMessages(ctx context.Context, env *tool.Env, in reviewMessagesIn) (*tool.Result, error) {
-	var out reviewMessagesOut
-	sub := strings.TrimSpace(in.Submission)
-	if sub == "" || in.App != "" {
-		app, err := env.Resolve.App(ctx, in.App)
+// reviewTarget is the app (when named or needed) and review submission a
+// Resolution Center tool works on.
+type reviewTarget struct {
+	App              *appRef
+	Submission       submissionRef
+	ResolutionCenter string
+}
+
+// resolveReviewTarget resolves app and submission: the given submission id,
+// else the newest submitted one of the app on platform. The app is resolved
+// whenever it is named or the submission must be found.
+func resolveReviewTarget(ctx context.Context, env *tool.Env, appRefIn tool.AppRef, platform tool.Platform, submission string) (reviewTarget, error) {
+	var t reviewTarget
+	sub := strings.TrimSpace(submission)
+	if sub == "" || appRefIn != "" {
+		app, err := env.Resolve.App(ctx, appRefIn)
 		if err != nil {
-			return nil, err
+			return t, err
 		}
 		ref := newAppRef(app)
-		out.App = &ref
-		out.ResolutionCenter = "https://appstoreconnect.apple.com/apps/" + url.PathEscape(app.ID) + "/distribution/reviewsubmissions"
+		t.App = &ref
+		t.ResolutionCenter = "https://appstoreconnect.apple.com/apps/" + url.PathEscape(app.ID) + "/distribution/reviewsubmissions"
 		if sub == "" {
-			s, err := newestSubmission(ctx, env, app, app.Platform(in.Platform))
+			s, err := newestSubmission(ctx, env, app, app.Platform(platform))
 			if err != nil {
-				return nil, err
+				return t, err
 			}
 			if s == nil {
-				return nil, &tool.ErrNotFound{
-					Kind: "review submission", Ref: string(app.Platform(in.Platform)),
+				return t, &tool.ErrNotFound{
+					Kind: "review submission", Ref: string(app.Platform(platform)),
 					Hint: "this app has no submitted review submission on that platform",
 					Next: []tool.NextStep{{Tool: "release_review_status", Args: map[string]any{"app": app.ID}}},
 				}
 			}
-			out.Submission = *s
-			sub = s.ID
+			t.Submission = *s
 		}
 	}
-	if out.Submission.ID == "" {
-		out.Submission.ID = sub
+	if t.Submission.ID == "" {
+		t.Submission.ID = sub
 	}
+	return t, nil
+}
+
+// listReviewThreads lists the Resolution Center threads of a submission.
+func listReviewThreads(ctx context.Context, env *tool.Env, sub string) ([]tool.Resource, error) {
 	threads, err := env.Web.List(ctx, "/v1/resolutionCenterThreads", tool.ListOptions{
 		Query: url.Values{"filter[reviewSubmission]": {sub}}, Limit: -1, MaxItems: maxReviewThreads,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read Resolution Center threads of submission %s: %w", sub, err)
 	}
-	out.Threads = []reviewThread{}
-	guidelines := map[string]bool{}
-	for _, th := range threads.Data {
-		t := reviewThread{ID: th.ID, Type: th.Str("threadType"), State: th.Str("state"), Created: th.Str("createdDate")}
-		msgs, err := env.Web.List(ctx, "/v1/resolutionCenterThreads/"+url.PathEscape(th.ID)+"/resolutionCenterMessages", tool.ListOptions{
-			Include: []string{"rejections", "fromActor"}, Limit: -1, MaxItems: maxReviewMessages,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("read Resolution Center messages of thread %s: %w", th.ID, err)
-		}
-		t.Messages = decodeReviewMessages(msgs)
-		for _, m := range t.Messages {
-			for _, r := range m.Rejections {
-				if r.Guideline != "" {
-					guidelines[r.Guideline] = true
-				}
+	return threads.Data, nil
+}
+
+// readReviewThread reads a thread's messages, oldest first.
+func readReviewThread(ctx context.Context, env *tool.Env, th tool.Resource) (reviewThread, error) {
+	t := reviewThread{ID: th.ID, Type: th.Str("threadType"), State: th.Str("state"), Created: th.Str("createdDate")}
+	msgs, err := env.Web.List(ctx, "/v1/resolutionCenterThreads/"+url.PathEscape(th.ID)+"/resolutionCenterMessages", tool.ListOptions{
+		Include: []string{"rejections", "fromActor"}, Limit: -1, MaxItems: maxReviewMessages,
+	})
+	if err != nil {
+		return t, fmt.Errorf("read Resolution Center messages of thread %s: %w", th.ID, err)
+	}
+	t.Messages = decodeReviewMessages(msgs)
+	return t, nil
+}
+
+// threadGuidelines adds the rejected guidelines of t to set: the reason code
+// when it refines the section (2.3 → 2.3.7), else the section.
+func threadGuidelines(t reviewThread, set map[string]bool) {
+	for _, m := range t.Messages {
+		for _, r := range m.Rejections {
+			switch {
+			case r.Guideline != "" && strings.HasPrefix(r.Code, r.Guideline+"."):
+				set[r.Code] = true
+			case r.Guideline != "":
+				set[r.Guideline] = true
 			}
 		}
-		out.Threads = append(out.Threads, t)
 	}
-	for g := range guidelines {
-		out.Guidelines = append(out.Guidelines, g)
+}
+
+// sortedKeys returns the keys of set in order.
+func sortedKeys(set map[string]bool) []string {
+	var out []string
+	for k := range set {
+		out = append(out, k)
 	}
-	slices.Sort(out.Guidelines)
+	slices.Sort(out)
+	return out
+}
+
+// submissionOpen is the review submission state in which App Review waits
+// for the developer, so the Resolution Center takes replies.
+const submissionOpen = "UNRESOLVED_ISSUES"
+
+// fillSubmission reads the state, platform and date of a submission known
+// only by id (public API); a submission found by newestSubmission has them.
+func fillSubmission(ctx context.Context, env *tool.Env, s *submissionRef) error {
+	if s.State != "" {
+		return nil
+	}
+	resp, err := env.ASC.Get(ctx, "/v1/reviewSubmissions/"+url.PathEscape(s.ID),
+		url.Values{"fields[reviewSubmissions]": {"platform,state,submittedDate"}})
+	if err != nil {
+		return fmt.Errorf("read review submission %s: %w", s.ID, err)
+	}
+	if r, ok := resp.First(); ok {
+		s.State, s.Platform, s.SubmittedDate = r.Str("state"), r.Str("platform"), r.Str("submittedDate")
+	}
+	return nil
+}
+
+func releaseReviewMessages(ctx context.Context, env *tool.Env, in reviewMessagesIn) (*tool.Result, error) {
+	t, err := resolveReviewTarget(ctx, env, in.App, in.Platform, in.Submission)
+	if err != nil {
+		return nil, err
+	}
+	// A named app with an explicit submission: read its state, so the reply
+	// step is offered only when App Review waits for one.
+	if t.App != nil {
+		if err := fillSubmission(ctx, env, &t.Submission); err != nil {
+			return nil, err
+		}
+	}
+	out := reviewMessagesOut{App: t.App, Submission: t.Submission, ResolutionCenter: t.ResolutionCenter, Threads: []reviewThread{}}
+	threads, err := listReviewThreads(ctx, env, t.Submission.ID)
+	if err != nil {
+		return nil, err
+	}
+	guidelines := map[string]bool{}
+	for _, th := range threads {
+		rt, err := readReviewThread(ctx, env, th)
+		if err != nil {
+			return nil, err
+		}
+		threadGuidelines(rt, guidelines)
+		out.Threads = append(out.Threads, rt)
+	}
+	out.Guidelines = sortedKeys(guidelines)
 	if len(out.Threads) == 0 {
 		out.Note = "no Resolution Center thread for this submission: App Review has not written about it"
 	}
 	res := tool.OK(out)
 	if out.App != nil {
 		res.Then(tool.NextStep{Tool: "release_status", Args: map[string]any{"app": out.App.ID}})
+		if out.Submission.State == submissionOpen && len(out.Threads) > 0 {
+			res.Then(tool.NextStep{Tool: "release_review_reply", Args: map[string]any{"app": out.App.ID, "submission": out.Submission.ID}})
+		}
 	}
 	return res, nil
 }
@@ -177,7 +261,7 @@ func decodeReviewMessages(res *tool.ListResult) []reviewMessage {
 	}
 	out := make([]reviewMessage, 0, len(res.Data))
 	for _, m := range res.Data {
-		msg := reviewMessage{Date: m.Str("createdDate"), Text: tool.Untrusted(htmlToText(string(m.Text("messageBody"))))}
+		msg := reviewMessage{ID: m.ID, Date: m.Str("createdDate"), Text: tool.Untrusted(htmlToText(string(m.Text("messageBody"))))}
 		if id := m.RelID("fromActor"); id != "" {
 			for _, typ := range []string{"actors", "reviewActors"} {
 				if a, ok := byID[typ+":"+id]; ok {

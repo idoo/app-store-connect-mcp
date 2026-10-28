@@ -24,13 +24,20 @@ const reviewMessagesBody = `{"data":[
 	{"type":"actors","id":"a2","attributes":{"actorType":"DEVELOPER"}},
 	{"type":"reviewRejections","id":"r1","attributes":{"reasons":[
 		{"reasonSection":"2.1","reasonCode":"PERFORMANCE_APP_COMPLETENESS","reasonDescription":"Performance: <i>App Completeness</i>"},
-		{"reasonSection":"4.0","reasonDescription":"Design"}]}}]}`
+		{"reasonSection":"4.0","reasonDescription":"Design"},
+		{"reasonSection":"2.3","reasonCode":"2.3.7","reasonDescription":"Performance: Accurate Metadata (macOS)"}]}}]}`
 
-func reviewRoutes(k *tooltest.Kit) {
+// submissionRoutes serves the app's review submissions; sub1 is the newest
+// submitted one, UNRESOLVED_ISSUES.
+func submissionRoutes(k *tooltest.Kit) {
 	k.ASC.Handle("GET", "/v1/reviewSubmissions", 200, `{"data":[
 		{"type":"reviewSubmissions","id":"draft","attributes":{"platform":"IOS","state":"READY_FOR_REVIEW"}},
 		{"type":"reviewSubmissions","id":"old","attributes":{"platform":"IOS","state":"COMPLETE","submittedDate":"2025-12-01T00:00:00Z"}},
 		{"type":"reviewSubmissions","id":"sub1","attributes":{"platform":"IOS","state":"UNRESOLVED_ISSUES","submittedDate":"2026-01-01T00:00:00Z"}}]}`)
+}
+
+func reviewRoutes(k *tooltest.Kit) {
+	submissionRoutes(k)
 	k.Web.Handle("GET", "/v1/resolutionCenterThreads", 200, reviewThreadsBody)
 	k.Web.Handle("GET", "/v1/resolutionCenterThreads/{id}/resolutionCenterMessages", 200, reviewMessagesBody)
 }
@@ -58,10 +65,10 @@ func TestReviewMessagesNewestSubmission(t *testing.T) {
 	if string(msgs[0].Text) != want {
 		t.Errorf("text = %q, want %q", msgs[0].Text, want)
 	}
-	if r := msgs[0].Rejections; len(r) != 2 || r[0].Guideline != "2.1" || r[0].Code != "PERFORMANCE_APP_COMPLETENESS" || r[0].Description != "Performance: App Completeness" {
+	if r := msgs[0].Rejections; len(r) != 3 || r[0].Guideline != "2.1" || r[0].Code != "PERFORMANCE_APP_COMPLETENESS" || r[0].Description != "Performance: App Completeness" {
 		t.Errorf("rejections = %+v", r)
 	}
-	if !slices.Equal(out.Guidelines, []string{"2.1", "4.0"}) {
+	if !slices.Equal(out.Guidelines, []string{"2.1", "2.3.7", "4.0"}) {
 		t.Errorf("guidelines = %v", out.Guidelines)
 	}
 	// Reviewer text is third-party: it marshals wrapped.
