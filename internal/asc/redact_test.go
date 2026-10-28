@@ -34,6 +34,14 @@ func TestRedact(t *testing.T) {
 		},
 		{name: "token param", in: "https://x.example/p?id=1&token=s3cret", want: "https://x.example/p?<redacted>"},
 		{name: "loose signature param", in: "X-Amz-Signature=deadbeef&a=1", want: "X-Amz-Signature=<redacted>&a=1"},
+		{name: "cookie header", in: "Cookie: myacinfo=abc; dqsid=def\nnext", want: "Cookie: <redacted>\nnext"},
+		{name: "set-cookie header", in: "Set-Cookie: dqsid=def; Path=/; Secure", want: "Set-Cookie: <redacted>"},
+		{name: "cookie json", in: `{"Cookie":"itctx=x; myacinfo=y","ok":1}`, want: `{"Cookie":"<redacted>","ok":1}`},
+		{name: "session cookie pairs", in: "sent myacinfo=abc; dqsid=def; dslang=US-EN", want: "sent myacinfo=<redacted>; dqsid=<redacted>; dslang=US-EN"},
+		{name: "quoted itctx", in: `itctx="eyJjcCI6IjEifQ=="; x=1`, want: `itctx="<redacted>"; x=1`},
+		{name: "DES cookie", in: "DES58b0eba556d80ed2b98707e15ffafd344=HSA2abc; Max-Age=1", want: "DES58b0eba556d80ed2b98707e15ffafd344=<redacted>; Max-Age=1"},
+		{name: "session cookie json", in: `{"name":"x","dqsid":"secret"}`, want: `{"name":"x","dqsid":"<redacted>"}`},
+		{name: "bare myacinfo token", in: "value: DAWTKNV323952cf8084a204fb2\n", want: "value: <redacted>\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -57,6 +65,8 @@ func TestRedactNoFalsePositives(t *testing.T) {
 		"eyJ alone is not a JWT, nor is eyJa.b.c",
 		"-----BEGIN nothing here",
 		`{"signatureRequired":true,"expiresAt":"2026-10-25"}`,
+		"Describe the DESCRIPTION=field and description=ok",
+		"Accept cookies in the browser, then sign in",
 		"",
 	} {
 		if got := Redact(s); got != s {

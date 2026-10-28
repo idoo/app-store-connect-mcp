@@ -35,6 +35,20 @@ type TokenSource interface {
 	Invalidate(tok string)
 }
 
+// SessionAuth authenticates App Store Connect web-session (iris) requests
+// with the human's Apple ID cookies instead of a bearer JWT.
+// *websession.Source satisfies it.
+type SessionAuth interface {
+	// Authorize adds the session's Cookie header (and nothing secret
+	// elsewhere) to req. It returns an error wrapping
+	// tool.ErrWebSessionRequired when no usable session exists.
+	Authorize(ctx context.Context, req *http.Request) error
+	// Observe sees every response so rotated cookies (Set-Cookie) are kept.
+	Observe(resp *http.Response)
+	// Expired is called after a 401 so the source drops its cached session.
+	Expired()
+}
+
 // SpecHints is the slice of the spec index the client uses to enrich errors.
 // *spec.Index satisfies it.
 type SpecHints interface {
@@ -45,13 +59,19 @@ type SpecHints interface {
 	EnumLookup(opID, pointer string) []string
 }
 
-// Options configures [New]. Only Tokens is required.
+// Options configures [New]. Exactly one of Tokens and Session is required.
 type Options struct {
 	// BaseURL defaults to [DefaultBaseURL]. It must be https, or http on a
-	// loopback host (tests).
+	// loopback host (tests), and may carry a path prefix (/iris) that every
+	// request path, next link and cursor stays under.
 	BaseURL *url.URL
-	// Tokens supplies the bearer JWT.
+	// Tokens supplies the bearer JWT. Exactly one of Tokens and Session is
+	// required.
 	Tokens TokenSource
+	// Session makes this a web-session client: requests carry the session
+	// cookies plus X-Requested-With/X-CSRF-ITC headers and no Authorization;
+	// BaseURL is then normally https://appstoreconnect.apple.com/iris.
+	Session SessionAuth
 	// HTTP defaults to a client with [DefaultRequestTimeout].
 	HTTP *http.Client
 	// MaxRetries is the retry budget per request: 0 means

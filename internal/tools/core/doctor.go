@@ -93,6 +93,9 @@ func doctor(ctx context.Context, env *tool.Env, _ doctorIn) (*tool.Result, error
 	for _, ts := range env.Toolsets.List() {
 		if ts.Enabled {
 			out.Toolsets = append(out.Toolsets, string(ts.Name))
+			if ts.Name == tool.Web {
+				add(webSessionCheck(ctx, env.Web))
+			}
 		}
 	}
 
@@ -101,6 +104,23 @@ func doctor(ctx context.Context, env *tool.Env, _ doctorIn) (*tool.Result, error
 		out.Status = worst(out.Status, c.Status)
 	}
 	return tool.OK(out), nil
+}
+
+// webSessionCheck probes the web-session client with one tiny read. It runs
+// only when the web toolset is enabled.
+func webSessionCheck(ctx context.Context, web tool.ASC) check {
+	c := check{Name: "web_session"}
+	_, err := web.Get(ctx, "/v1/apps", url.Values{"limit": {"1"}, "fields[apps]": {"name"}})
+	switch {
+	case err == nil:
+		c.Status, c.Detail = statusOK, "App Store Connect web session is active (apps_create, privacy_* available)"
+	case errors.Is(err, tool.ErrWebSessionRequired):
+		c.Status, c.Detail = statusWarn, "no active App Store Connect web session: apps_create and privacy_* will fail"
+		c.Fix = "call web_login, or run `app-store-connect-mcp web login` in a terminal"
+	default:
+		c.Status, c.Detail = statusWarn, "web session check failed: "+tool.SanitizeText(err.Error())
+	}
+	return c
 }
 
 func keyKindCheck(k tool.KeyKind) check {

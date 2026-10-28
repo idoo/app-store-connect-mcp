@@ -165,7 +165,20 @@ func (SystemClock) Sleep(ctx context.Context, d time.Duration) error {
 // [Tool.Call] substitutes stand-ins that fail with [ErrUnavailable] (and a
 // no-op Progress, the system clock).
 type Env struct {
-	ASC      ASC
+	ASC ASC
+	// Web is the App Store Connect web-session client: the same JSON:API
+	// contract as ASC, rooted at https://appstoreconnect.apple.com/iris
+	// (paths keep their /v1 or /v2 prefix) and authenticated with the
+	// human's Apple ID session cookies. Without a valid session every call
+	// fails with [ErrWebSessionRequired]; nil installs that stand-in.
+	Web ASC
+	// WebLogin signs the human in to the App Store Connect web session in a
+	// browser window on their machine (they type the Apple ID password and
+	// 2FA code into Apple's own page; the tool never sees them). It reuses
+	// a still-valid session without opening a window. log receives short
+	// progress lines, never secrets. nil means sign-in from a tool is not
+	// available in this server (fail with [ErrUnavailable]).
+	WebLogin func(ctx context.Context, log func(string)) (WebAccount, error)
 	Spec     Spec
 	Resolve  Resolver
 	Plans    Planner
@@ -207,6 +220,16 @@ type Env struct {
 	noProgress bool
 }
 
+// WebAccount describes the web session [Env.WebLogin] left in place.
+type WebAccount struct {
+	AppleID  string `json:"apple_id"`
+	TeamID   int64  `json:"team_id,omitempty"`
+	TeamName string `json:"team_name,omitempty"`
+	// Reused is true when an existing session was still valid and no
+	// window was shown.
+	Reused bool `json:"reused"`
+}
+
 // HasProgress reports whether the client asked for progress notifications
 // (sent a progressToken). Long waits clamp to [NoProgressWaitCap] without it,
 // since such clients typically cancel a request after about 60 s.
@@ -220,6 +243,9 @@ func (e *Env) complete() *Env {
 	c := *e
 	if c.ASC == nil {
 		c.ASC = noASC{}
+	}
+	if c.Web == nil {
+		c.Web = noWeb{}
 	}
 	if c.Spec == nil {
 		c.Spec = noSpec{}

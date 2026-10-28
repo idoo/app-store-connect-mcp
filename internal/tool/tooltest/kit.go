@@ -20,8 +20,13 @@ import (
 
 // Kit bundles a ready [tool.Env] with handles to its fakes.
 type Kit struct {
-	Env      *tool.Env
-	ASC      *FakeASC
+	Env *tool.Env
+	ASC *FakeASC
+	// Web fakes the web-session (iris) client. Iris routes are not in the
+	// public spec, so it skips the spec check. Env.Web starts nil (no web
+	// login, every web call fails with tool.ErrWebSessionRequired); call
+	// [Kit.WebSession] to route web calls to this fake.
+	Web      *FakeASC
 	Spec     tool.Spec
 	Plans    *FakePlanner
 	State    *FakeStore
@@ -57,6 +62,7 @@ func New(t testing.TB) *Kit {
 	clock := NewFakeClock()
 	k := &Kit{
 		ASC:      NewFakeASC(t),
+		Web:      NewFakeASC(t),
 		Spec:     pinnedSpec(t),
 		Plans:    NewFakePlanner(clock.Now),
 		State:    NewFakeStore(),
@@ -67,6 +73,8 @@ func New(t testing.TB) *Kit {
 		Resolve:  &FakeResolver{},
 	}
 	k.ASC.Spec = k.Spec
+	k.Web.SkipSpecCheck = true
+	k.Web.FreeText = pinnedSpec(t).FreeTextAttributes
 	k.ASC.FreeText = pinnedSpec(t).FreeTextAttributes
 	k.Env = &tool.Env{
 		ASC:       k.ASC,
@@ -78,7 +86,7 @@ func New(t testing.TB) *Kit {
 		Fetch:     k.Fetch,
 		Files:     k.Files,
 		Clock:     k.Clock,
-		SetWrites: k.ASC.SetAllowWrites,
+		SetWrites: func(on bool) { k.ASC.SetAllowWrites(on); k.Web.SetAllowWrites(on) },
 		Version:   "test",
 		Profile: tool.ProfileInfo{
 			Name:         "test",
@@ -95,6 +103,13 @@ func New(t testing.TB) *Kit {
 func (k *Kit) ReadOnly() *Kit {
 	k.Env.Profile.AllowWrites = false
 	k.ASC.SetAllowWrites(false)
+	k.Web.SetAllowWrites(false)
+	return k
+}
+
+// WebSession signs the Kit in to the web session: Env.Web becomes k.Web.
+func (k *Kit) WebSession() *Kit {
+	k.Env.Web = k.Web
 	return k
 }
 

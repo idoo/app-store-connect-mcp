@@ -23,12 +23,15 @@ const (
 	Store        Toolset = "store"
 	Insights     Toolset = "insights"
 	Library      Toolset = "library"
+	// Web holds Apple ID web-session tools (create app records, App
+	// Privacy). They need an Apple ID sign-in (`web login` or web_login).
+	Web Toolset = "web"
 )
 
 // AllToolsets lists every toolset in display order.
 var AllToolsets = []Toolset{
 	Core, Release, TestFlight, Metadata, Reviews, Reports,
-	Screenshots, Uploads, Monetization, Signing, XcodeCloud, Webhooks, Admin, Store, Insights, Library,
+	Screenshots, Uploads, Monetization, Signing, XcodeCloud, Webhooks, Admin, Store, Insights, Library, Web,
 }
 
 // DefaultToolsets lists the toolsets enabled when no selection is given.

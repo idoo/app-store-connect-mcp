@@ -107,7 +107,7 @@
       {
         "id": "app_privacy",
         "status": "manual",
-        "detail": "not readable via the API; confirm App Privacy answers are current in App Store Connect",
+        "detail": "not readable via the API; confirm App Privacy answers are current in App Store Connect; or sign the user in (web_login, or `app-store-connect-mcp web login`) so privacy_get/privacy_plan can read and publish it",
         "fix_via": {
           "manual": "https://appstoreconnect.apple.com/apps/100/distribution/privacy"
         }

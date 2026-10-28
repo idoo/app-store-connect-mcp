@@ -43,7 +43,11 @@ func Serve(ctx context.Context, opts ServeOptions) error {
 	if root == "" {
 		root = os.Getenv("ASC_MCP_ROOT")
 	}
-	env, err := newEnv(ctx, r, opts.Version, root)
+	transport := tool.TransportHTTP
+	if opts.HTTPAddr == "" {
+		transport = tool.TransportStdio
+	}
+	env, err := newEnv(ctx, r, opts.Version, root, transport)
 	if err != nil {
 		return err
 	}

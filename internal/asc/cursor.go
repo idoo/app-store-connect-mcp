@@ -28,11 +28,11 @@ func EncodeCursor(nextURL string) string {
 
 // DecodeCursor decodes a cursor produced by [EncodeCursor] and validates the
 // URL it carries against base and wantPath: https (or base's scheme when base
-// is a loopback test server), the same host and port as base, no userinfo or
-// fragment, path exactly wantPath, and only collection query keys (filter[…],
-// fields[…], include, limit, limit[…], sort, exists[…], cursor). It returns
-// the canonical URL; its host is always base.Host. Errors wrap
-// [ErrInvalidCursor].
+// is a loopback test server), the same host and port as base, inside base's
+// path prefix (e.g. /iris), no userinfo or fragment, path exactly wantPath,
+// and only collection query keys (filter[…], fields[…], include, limit,
+// limit[…], sort, exists[…], cursor). It returns the canonical URL; its host
+// is always base.Host. Errors wrap [ErrInvalidCursor].
 func DecodeCursor(cursor string, base *url.URL, wantPath string) (string, error) {
 	if cursor == "" {
 		return "", fmt.Errorf("%w: empty", ErrInvalidCursor)
@@ -78,6 +78,9 @@ func checkPageURL(u, base *url.URL, wantPath string) (string, error) {
 	}
 	if u.Fragment != "" || u.RawFragment != "" {
 		return "", errors.New("fragment not allowed")
+	}
+	if p := strings.Trim(base.Path, "/"); p != "" && !strings.HasPrefix(u.Path, "/"+p+"/") {
+		return "", fmt.Errorf("path %q is outside the base path %q", u.EscapedPath(), "/"+p)
 	}
 	if u.RawPath != "" || u.Path != wantPath {
 		return "", fmt.Errorf("path %q differs from %q", u.EscapedPath(), wantPath)

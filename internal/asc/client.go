@@ -20,13 +20,16 @@ import (
 )
 
 // Client is the App Store Connect HTTP client. It implements [tool.ASC]:
-// JWT auth with one refresh on 401, the retry table of [retryPolicy], a
-// read-only guard, rate-limit and clock-skew tracking, JSON:API decoding
-// with untrusted-text wrapping, and redacted, hinted errors. It is safe for
-// concurrent use.
+// JWT auth with one refresh on 401 (or web-session cookie auth, see
+// [Options.Session]), the retry table of [retryPolicy], a read-only guard,
+// rate-limit and clock-skew tracking, JSON:API decoding with untrusted-text
+// wrapping, and redacted, hinted errors. It is safe for concurrent use.
 type Client struct {
 	base        *url.URL
+	basePath    string // base.Path without its trailing slash ("" or "/iris")
+	baseRawPath string // escaped form of basePath
 	tokens      TokenSource
+	session     SessionAuth
 	http        *http.Client
 	retry       retryPolicy
 	sem         chan struct{}
@@ -45,8 +48,8 @@ var _ tool.ASC = (*Client)(nil)
 
 // New returns a Client configured by opts.
 func New(opts Options) (*Client, error) {
-	if opts.Tokens == nil {
-		return nil, errors.New("asc: new client: nil token source")
+	if (opts.Tokens == nil) == (opts.Session == nil) {
+		return nil, errors.New("asc: new client: exactly one of Tokens and Session is required")
 	}
 	base := opts.BaseURL
 	if base == nil {
@@ -58,15 +61,23 @@ func New(opts Options) (*Client, error) {
 	if err := checkBaseURL(base); err != nil {
 		return nil, fmt.Errorf("asc: new client: %w", err)
 	}
+	if base.Path != "" && !strings.HasPrefix(base.Path, "/") {
+		b := *base
+		b.Path, b.RawPath = "/"+b.Path, ""
+		base = &b
+	}
 	c := &Client{
-		base:      base,
-		tokens:    opts.Tokens,
-		http:      opts.HTTP,
-		spec:      opts.Spec,
-		freeText:  opts.FreeText,
-		clock:     opts.Clock,
-		userAgent: opts.UserAgent,
-		retry:     retryPolicy{max: opts.MaxRetries, jitter: opts.Jitter},
+		base:        base,
+		basePath:    strings.TrimRight(base.Path, "/"),
+		baseRawPath: strings.TrimRight(base.EscapedPath(), "/"),
+		tokens:      opts.Tokens,
+		session:     opts.Session,
+		http:        opts.HTTP,
+		spec:        opts.Spec,
+		freeText:    opts.FreeText,
+		clock:       opts.Clock,
+		userAgent:   opts.UserAgent,
+		retry:       retryPolicy{max: opts.MaxRetries, jitter: opts.Jitter},
 	}
 	if c.http == nil {
 		c.http = &http.Client{Timeout: DefaultRequestTimeout}
@@ -100,9 +111,10 @@ func New(opts Options) (*Client, error) {
 // a write context.
 func (c *Client) SetAllowWrites(on bool) { c.allowWrites.Store(on) }
 
-// checkBaseURL accepts https URLs, or http on a loopback host.
+// checkBaseURL accepts https URLs, or http on a loopback host. The URL may
+// carry a path prefix (e.g. /iris) but no query or fragment.
 func checkBaseURL(u *url.URL) error {
-	if u.Host == "" || u.User != nil {
+	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
 		return fmt.Errorf("invalid base URL %q", u.Redacted())
 	}
 	if u.Scheme == "https" {
@@ -260,8 +272,12 @@ func (c *Client) wrap(doc *tool.Document) {
 	tool.WrapUntrusted(doc.Included, c.freeText)
 }
 
-// resolve joins path (and query) onto the base URL, refusing anything that
-// would leave the base host.
+// rootURL resolves request paths so dot segments cannot climb above the base
+// path prefix.
+var rootURL = &url.URL{Path: "/"}
+
+// resolve appends path (and query) to the base URL, after its path prefix,
+// refusing anything that would leave the base host.
 func (c *Client) resolve(path string, query url.Values) (*url.URL, error) {
 	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
 		return nil, fmt.Errorf("asc: path %q must be absolute, like /v1/apps: %w", path, tool.ErrInvalidArgs)
@@ -270,15 +286,25 @@ func (c *Client) resolve(path string, query url.Values) (*url.URL, error) {
 	if err != nil {
 		return nil, fmt.Errorf("asc: path %q: %w", path, err)
 	}
+	if ref.Scheme != "" || ref.Host != "" || ref.User != nil {
+		return nil, fmt.Errorf("asc: path %q leaves the API host: %w", path, tool.ErrInvalidArgs)
+	}
 	if query != nil {
 		if ref.RawQuery != "" {
 			return nil, fmt.Errorf("asc: path %q has a query string and Query is set: %w", path, tool.ErrInvalidArgs)
 		}
 		ref.RawQuery = query.Encode()
 	}
-	u := c.base.ResolveReference(ref)
-	if u.Host != c.base.Host || u.Scheme != c.base.Scheme {
-		return nil, fmt.Errorf("asc: path %q leaves the API host: %w", path, tool.ErrInvalidArgs)
+	r := rootURL.ResolveReference(ref)
+	u := &url.URL{
+		Scheme:   c.base.Scheme,
+		Host:     c.base.Host,
+		Path:     c.basePath + r.Path,
+		RawQuery: r.RawQuery,
+		Fragment: r.Fragment,
+	}
+	if r.RawPath != "" {
+		u.RawPath = c.baseRawPath + r.RawPath
 	}
 	return u, nil
 }
@@ -347,6 +373,16 @@ func (c *Client) send(ctx context.Context, method string, u *url.URL, body []byt
 			}
 			return nil, c.unknownIf(method, invalid)
 		}
+		if c.session != nil && sessionRejected(status, raw.body) {
+			// The cookies were refused, so nothing was applied: re-authorize
+			// once in case the human signed in again meanwhile.
+			c.session.Expired()
+			if !refreshed {
+				refreshed = true
+				continue
+			}
+			return nil, fmt.Errorf("asc: %s: App Store Connect web session expired: %w", label, tool.ErrWebSessionRequired)
+		}
 		if status == http.StatusUnauthorized && !refreshed {
 			if skew, ok := c.ClockSkew(); ok && (skew > maxAuthSkew || skew < -maxAuthSkew) {
 				return nil, fmt.Errorf("asc: %s: local clock is %s off Apple's, so a fresh token would fail too: %w",
@@ -404,13 +440,16 @@ var errNotSent = errors.New("request not sent")
 
 // exchange performs one HTTP round trip under the concurrency semaphore.
 func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body []byte, ctype, accept string) (*rawResponse, error) {
-	tok, err := c.tokens.Token(ctx)
-	if err != nil {
-		tokErr := fmt.Errorf("%w: %s", errToken, Redact(err.Error()))
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("%w: %w: %w", errNotSent, tokErr, ctxErr)
+	var tok string
+	if c.session == nil {
+		var err error
+		if tok, err = c.tokens.Token(ctx); err != nil {
+			tokErr := fmt.Errorf("%w: %s", errToken, Redact(err.Error()))
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, fmt.Errorf("%w: %w: %w", errNotSent, tokErr, ctxErr)
+			}
+			return nil, fmt.Errorf("%w: %w", errNotSent, tokErr)
 		}
-		return nil, fmt.Errorf("%w: %w", errNotSent, tokErr)
 	}
 	var rd io.Reader
 	if body != nil {
@@ -420,7 +459,16 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 	if err != nil {
 		return nil, fmt.Errorf("%w: build request: %w", errNotSent, err)
 	}
-	req.Header.Set("Authorization", "Bearer "+tok)
+	if c.session != nil {
+		// Authorize errors already wrap tool.ErrWebSessionRequired and
+		// carry no secrets; keep their chain intact.
+		if err := c.session.Authorize(ctx, req); err != nil {
+			return nil, fmt.Errorf("%w: %w", errNotSent, err)
+		}
+		req.Header.Del("Authorization")
+	} else {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
 	req.Header.Set("Accept", accept)
 	req.Header.Set("User-Agent", c.userAgent)
 	if body != nil && ctype != "" {
@@ -437,6 +485,11 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 	if err != nil {
 		return nil, fmt.Errorf("transport: %w", err)
 	}
+	if c.session != nil {
+		c.session.Observe(resp)
+		// Rotated cookies belong to the session store, never to results.
+		resp.Header.Del("Set-Cookie")
+	}
 	defer resp.Body.Close() //nolint:errcheck // read-only body; close errors carry no information
 	b, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxResponseBytes)+1))
 	if err != nil {
@@ -446,6 +499,20 @@ func (c *Client) exchange(ctx context.Context, method string, u *url.URL, body [
 		return nil, fmt.Errorf("response body exceeds %d bytes: %w", maxResponseBytes, tool.ErrResponseTooLarge)
 	}
 	return &rawResponse{status: resp.StatusCode, header: resp.Header, body: b, token: tok}, nil
+}
+
+// sessionRejected reports whether a web-session response means the cookies
+// were refused: any 401, or a 403 whose body is not a JSON:API error
+// document (an HTML sign-in page rather than a permission error).
+func sessionRejected(status int, body []byte) bool {
+	switch status {
+	case http.StatusUnauthorized:
+		return true
+	case http.StatusForbidden:
+		doc, err := tool.ParseDocument(body)
+		return err != nil || doc.Err(status) == nil
+	}
+	return false
 }
 
 // unknownIf wraps err with tool.ErrOutcomeUnknown for every method whose

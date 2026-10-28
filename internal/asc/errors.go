@@ -12,6 +12,8 @@ const (
 	hint401 = "authentication failed: run doctor to check the key id, issuer id, key kind and clock skew"
 	hint403 = "the API key lacks permission: check its role in Users and Access › Integrations, " +
 		"or whether this endpoint needs a Team key instead of an Individual key"
+	hint403Web = "the signed-in Apple ID lacks permission for this: check its role in Users and Access, " +
+		"or whether the web session is on the right team (`app-store-connect-mcp web login`)"
 	hint404 = "not found: check the id belongs to the resource type in the path (e.g. an app id vs. " +
 		"a version id) and that the key can see it"
 	hintState = "the object is in a state that forbids this change: read it back to see its current " +
@@ -56,6 +58,8 @@ func (c *Client) hint(e *tool.APIError, method, path string) string {
 	switch {
 	case e.Status == http.StatusUnauthorized:
 		return hint401
+	case e.Status == http.StatusForbidden && c.session != nil:
+		return hint403Web
 	case e.Status == http.StatusForbidden:
 		return hint403
 	case e.Status == http.StatusNotFound:

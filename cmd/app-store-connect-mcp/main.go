@@ -26,6 +26,7 @@ Usage:
   app-store-connect-mcp config snippet <client>  print client config (claude-code, claude-desktop, codex, cursor, vscode, windsurf)
   app-store-connect-mcp config install <client>  write it into the client's config (with backup)
   app-store-connect-mcp skills <list|install>    install agent skills (--client claude-code|codex|cursor|omp, --dir, --force)
+  app-store-connect-mcp web <login|import|status|team|logout>  Apple ID web session for the opt-in "web" toolset
   app-store-connect-mcp version
 
 Any subcommand with --help prints its usage and does nothing else.
@@ -39,6 +40,7 @@ var subUsage = map[string]string{
 	"guard":   guardUsage,
 	"aso":     asoUsage,
 	"doctor":  "usage: app-store-connect-mcp doctor [--profile NAME] [--json]\n  checks the config, key, JWT, Apple reachability, clock skew and rate limit",
+	"web":     webUsage,
 	"version": "usage: app-store-connect-mcp version",
 }
 
@@ -102,6 +104,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runConfig(rest, stdout, stderr)
 	case "skills":
 		return runSkills(rest, stdout, stderr)
+	case "web":
+		return runWeb(ctx, rest, stdin, stdout, stderr)
 	case "version", "--version":
 		_, err := fmt.Fprintln(stdout, "app-store-connect-mcp", buildVersion())
 		return err

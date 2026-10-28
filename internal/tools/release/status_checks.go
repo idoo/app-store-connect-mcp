@@ -1,6 +1,8 @@
 package release
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -119,6 +121,10 @@ type statusSnapshot struct {
 	// keywords; CPPErr is set when they could not be read.
 	CPPs   []cppLocale
 	CPPErr string
+	// PrivacyPublished is the App Privacy publish state read through the
+	// web session; nil when unknown (PrivacyErr says why).
+	PrivacyPublished *bool
+	PrivacyErr       error
 }
 
 func fixTool(name string) *fixVia { return &fixVia{Tool: name} }
@@ -692,11 +698,48 @@ func checkProducts(s *statusSnapshot) check {
 	return c
 }
 
+// fetchPrivacy reads the App Privacy publish state through the web session
+// (one request). Any failure leaves the check manual; it never fails the
+// status.
+func fetchPrivacy(ctx context.Context, env *tool.Env, s *statusSnapshot) {
+	if env.Web == nil {
+		s.PrivacyErr = tool.ErrWebSessionRequired
+		return
+	}
+	resp, err := env.Web.Get(ctx, "/v1/apps/"+s.App.ID+"/dataUsagePublishState", nil)
+	if err != nil {
+		s.PrivacyErr = err
+		return
+	}
+	if r, ok := resp.First(); ok {
+		if v, ok := r.Bool("published"); ok {
+			s.PrivacyPublished = &v
+		}
+	}
+}
+
 func checkPrivacy(s *statusSnapshot) check {
-	c := check{ID: "app_privacy", Status: statusManual, FixVia: fixURL(ascURL(s.App.ID, "distribution/privacy"))}
+	page := ascURL(s.App.ID, "distribution/privacy")
+	if p := s.PrivacyPublished; p != nil {
+		if *p {
+			return check{ID: "app_privacy", Status: statusOK, Detail: "App Privacy answers are published (read via the web session)"}
+		}
+		return check{
+			ID: "app_privacy", Status: statusBlock,
+			Detail: "App Privacy answers are not published; App Review refuses the submission until they are",
+			FixVia: &fixVia{Tool: "privacy_plan", Args: map[string]any{"app": s.App.ID}, Manual: page},
+		}
+	}
+	c := check{ID: "app_privacy", Status: statusManual, FixVia: fixURL(page)}
 	c.Detail = "not readable via the API; confirm App Privacy answers are current in App Store Connect"
 	if !s.PriorReleased {
 		c.Detail = "first release: App Privacy must be published in App Store Connect (not available via the API)"
+	}
+	switch {
+	case errors.Is(s.PrivacyErr, tool.ErrWebSessionRequired):
+		c.Detail += "; or sign the user in (web_login, or `app-store-connect-mcp web login`) so privacy_get/privacy_plan can read and publish it"
+	case s.PrivacyErr != nil:
+		c.Detail += "; the web-session read failed (" + tool.BodyFor(s.PrivacyErr).Error + ")"
 	}
 	return c
 }

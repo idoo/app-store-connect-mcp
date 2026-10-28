@@ -19,8 +19,8 @@
 - 1–10 per set. PNG or JPEG, no alpha channel.
 
 ## Web only (the API can't)
-- Create a new app record: Apps → +.
-- App Privacy labels: App → App Privacy.
+- Create a new app record: Apps → +, or apps_create in the web toolset after the user signs in (web_login opens a browser window; or `app-store-connect-mcp web login` in a terminal).
+- App Privacy labels: App → App Privacy, or privacy_get / privacy_plan / privacy_apply in the web toolset (same sign-in).
 - Dashboard analytics like impressions and conversion rate. Use analytics_setup and analytics_report instead.
 - Agreements, tax and banking.
 

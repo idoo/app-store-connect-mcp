@@ -4,6 +4,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-27
+
+### Added
+
+- New opt-in `web` toolset for what Apple's API can't do, through your Apple ID web session (`app-store-connect-mcp web login`; tools never see the Apple ID, password or cookies):
+  - `apps_create` creates an app record: name, bundle id (optionally registered first), SKU, platforms, primary locale, first version. An existing app with the same name and bundle id counts as done, and a name, SKU or bundle id conflict is named in the error. Needs your approval: the record can't be deleted.
+  - `privacy_get` shows the App Privacy answers per data category (purposes, linked or not, tracking, or data not collected), whether they're published, and with `catalog:true` the valid tokens.
+  - `privacy_plan` and `privacy_apply` replace the whole declaration and publish it. Tokens are checked against Apple's catalog, every removal is listed, steps run in an order that never leaves a gap longer than Apple forces, and a failure reports each step as done, outcome unknown or not attempted. Publishing needs your approval.
+- `release_status` reads the App Privacy publish state when a web session exists: published is ok, unpublished blocks with `privacy_plan` as the fix. Without a session the check stays manual and says how to sign in.
+- `web login` signs you in through a browser window on Apple's own page (password, 2FA, passkeys), because Apple refuses password sign-in from scripts with error -20209. The window uses a dedicated profile in your Brave, Chrome, Edge or Arc, or a downloaded Chrome for Testing; `ASC_MCP_BROWSER` picks a browser or `bundled`. Your own browser's cookies and Keychain are never read.
+- Expired web sessions renew silently: the same browser profile signs in again headless, and you only see a window when Apple wants you.
+- `web_login` tool: an agent can open the sign-in window when a tool says `web_session_required`. It reuses a valid session, opens one window at a time and pauses for a minute after a cancelled or failed sign-in. The agent never sees credentials.
+- `web login --password` keeps the terminal Apple ID + password + 2FA flow for machines without a screen.
+
+### Security
+
+- macOS binaries, in the archives and in the `.mcpb`, are signed with a Developer ID and notarized by Apple. Gatekeeper opens them without a warning, and `spctl -a -vv -t install` reports `Notarized Developer ID`.
+- Each release also carries its build provenance as `app-store-connect-mcp_<version>.intoto.jsonl`, so `gh attestation verify --bundle` works offline.
+
 ## [0.14.0] - 2026-10-27
 
 ### Fixed
@@ -357,7 +376,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.11.0...v0.12.0

@@ -27,15 +27,27 @@ var (
 	anyURL = regexp.MustCompile(`https?://(?:[^\s"'<>\\]|\\u0026|\\/)+`)
 	// signedParam matches signing parameters outside a URL.
 	signedParam = regexp.MustCompile(`(?i)\b(X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token|Key-Pair-Id)=[^&\s"'\\]+`)
+	// cookieHeader matches the value of a Cookie or Set-Cookie header in
+	// header, JSON and key=value forms, up to the end of the line or quote.
+	cookieHeader = regexp.MustCompile(`(?i)(\b(?:set-)?cookie["']?\s*[:=]\s*["']?)[^\r\n"']+`)
+	// sessionCookie matches Apple ID web-session cookies (myacinfo, dqsid,
+	// itctx, acn01, aasp, DES<hex>) in name=value and JSON forms; a quoted
+	// value is taken whole.
+	sessionCookie = regexp.MustCompile(`(?i)\b(myacinfo|dqsid|itctx|acn01|aasp|(?-i:DES[0-9A-Fa-f]{8,}))(["']?\s*[:=]\s*["']?)("[^"]*"|[^;\s"',&\\]+)`)
+	// myacinfoValue matches a bare myacinfo token (DAWTKN…), e.g. from a
+	// FASTLANE_SESSION dump where name and value are on separate lines.
+	myacinfoValue = regexp.MustCompile(`\bDAWTKN[A-Za-z0-9+/=_.-]{8,}`)
 
 	redactLetters = regexp.MustCompile(`^[A-Za-z]+$`)
 )
 
 // Redact removes credentials from s: JWTs, PEM blocks (also base64-encoded,
 // and bare base64 private-key DER bodies), Authorization and
-// Bearer credentials, and the query string of signed URLs (X-Amz-*,
-// Signature, Expires, Key-Pair-Id, Policy, token, sig), keeping their scheme,
-// host and path. Text without secrets is returned unchanged.
+// Bearer credentials, Cookie/Set-Cookie header values and Apple ID
+// web-session cookies (myacinfo, dqsid, itctx, DES…), and the query string
+// of signed URLs (X-Amz-*, Signature, Expires, Key-Pair-Id, Policy, token,
+// sig), keeping their scheme, host and path. Text without secrets is
+// returned unchanged.
 func Redact(s string) string {
 	b := RedactBytes([]byte(s))
 	if bytes.Equal(b, []byte(s)) {
@@ -67,6 +79,15 @@ func RedactBytes(b []byte) []byte {
 	}
 	if bearerToken.Match(b) {
 		b = bearerToken.ReplaceAllFunc(b, redactBearer)
+	}
+	if cookieHeader.Match(b) {
+		b = cookieHeader.ReplaceAll(b, []byte("${1}"+redactedValue))
+	}
+	if sessionCookie.Match(b) {
+		b = sessionCookie.ReplaceAll(b, []byte("${1}${2}"+redactedValue))
+	}
+	if myacinfoValue.Match(b) {
+		b = myacinfoValue.ReplaceAllLiteral(b, []byte(redactedValue))
 	}
 	if anyURL.Match(b) {
 		b = anyURL.ReplaceAllFunc(b, redactURL)
