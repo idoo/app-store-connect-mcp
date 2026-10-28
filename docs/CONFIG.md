@@ -91,7 +91,7 @@ vendor_number = "81234567"
 
 `allow_no_elicit = true` on a profile lets human-approval tools run on the agent's say-so when the client can't show an approval form. Results then say `approved_by: "agent"`. That removes the human from the loop, so only use it with a client that asks you itself.
 
-Individual keys have no issuer id and get their user's permissions. Some endpoints only take team keys; `docs/tools.json` marks those tools `needs_team_key`. The vendor number lives under *Payments and Financial Reports*; with a web session (`web login`) and no `vendor_number` set, it's read from there once and remembered in the state dir. Apple keeps exchange rates off the API, so `finance_report` gives per-currency totals and never guesses USD.
+Individual keys have no issuer id and get their user's permissions. Some endpoints only take team keys; `docs/tools.json` marks those tools `needs_team_key`. The vendor number lives under *Payments and Financial Reports*; with a web session (`web login`) and no `vendor_number` set, it's read from there once and remembered in the state dir. Apple keeps exchange rates off the API, so `finance_report` gives per-currency totals and never guesses USD. Finance reports need a key with the Finance or Admin role; without one, `finance_report` reads the month from the web Payments page through the web session (per-region totals and bank-currency amounts, no per-product rows); results say `data_source: "web_payments"`.
 
 Analytics Reports (`analytics_setup`) need an Admin key. Without one, or before Apple has produced the first reports, `analytics_funnel_report` and `insights_summary` read the same numbers from the App Analytics dashboard through the web session; results say `data_source: "web_dashboard"`.
 

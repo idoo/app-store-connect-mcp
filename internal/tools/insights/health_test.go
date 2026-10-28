@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/idoo/app-store-connect-mcp/internal/reports"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 	"github.com/idoo/app-store-connect-mcp/internal/tool/tooltest"
 )
@@ -325,6 +328,93 @@ func TestReleaseHealthAnalyticsNotSetUpAndAccept(t *testing.T) {
 	reqs := k.ASC.RequestsTo(http.MethodGet, "/v1/apps/{id}/perfPowerMetrics")
 	if len(reqs) != 1 || reqs[0].Accept != xcodeMetricsAccept {
 		t.Errorf("perf requests %+v", reqs)
+	}
+}
+
+// healthNext lists the tools res suggests next.
+func healthNext(res *tool.Result) []string {
+	var out []string
+	for _, n := range res.Next {
+		out = append(out, n.Tool)
+	}
+	return out
+}
+
+// healthDashKit is the healthy fixture with a phased start of 2026-10-16
+// (Pacific) and a web session whose dashboard has data up to dataEnd.
+func healthDashKit(t *testing.T, dataEnd string) *tooltest.Kit {
+	t.Helper()
+	k := tooltest.New(t).ReadOnly()
+	f := healthyFixture
+	f.Phased, f.PhasedStart = "COMPLETE", "2026-10-16T12:00:00Z"
+	installHealthFixture(t, k, f)
+	k.WebSession()
+	k.Portal.HandleJSON(http.MethodGet, dashSetupPath, `{"configuration":{"dataEndDate":"`+dataEnd+`T00:00:00Z"}}`)
+	return k
+}
+
+// Analytics Reports not set up but a web session: crashes come from the
+// dashboard, informational only, with no analytics_setup step.
+func TestReleaseHealthAnalyticsFromDashboard(t *testing.T) {
+	k := healthDashKit(t, "2026-10-18")
+	k.Portal.HandleFile(http.MethodPost, dashMeasures, filepath.Join("testdata", "health", "dashboard_crashes.json"))
+	res, out := healthCall(t, k, `{"app":"Sail"}`)
+	a := out.Analytics
+	if a.Status != "ok" || a.DataSource != "web_dashboard" || a.Crashes == nil || *a.Crashes != 7 ||
+		a.Window == nil || *a.Window != (reports.Window{From: "2026-10-16", To: "2026-10-18"}) {
+		t.Fatalf("analytics = %s", tooltest.JSON(t, a))
+	}
+	if out.Coverage[SourceAnalytics] != covMeasured || out.Verdict != VerdictHealthy {
+		t.Errorf("coverage %v verdict %s", out.Coverage, out.Verdict)
+	}
+	if slices.Contains(healthNext(res), "analytics_setup") {
+		t.Errorf("next = %v", healthNext(res))
+	}
+	calls := k.Portal.Calls()
+	if len(calls) != 2 || !strings.Contains(calls[1].Body, `"adamId":["`+healthAppID+`"]`) || !strings.Contains(calls[1].Body, `"measures":["crashes"]`) ||
+		!strings.Contains(calls[1].Body, `"startTime":"2026-10-16T00:00:00Z"`) || !strings.Contains(calls[1].Body, `"endTime":"2026-10-18T00:00:00Z"`) {
+		t.Errorf("portal calls = %+v", calls)
+	}
+}
+
+// Without a web session not_set_up stays, naming web_login and analytics_setup.
+func TestReleaseHealthAnalyticsNotSetUpNoSession(t *testing.T) {
+	k := tooltest.New(t).ReadOnly()
+	installHealthFixture(t, k, healthyFixture)
+	res, out := healthCall(t, k, `{"app":"Sail"}`)
+	if out.Analytics.Status != "not_set_up" || out.Analytics.DataSource != "" || out.Coverage[SourceAnalytics] != covNotSetUp ||
+		!strings.Contains(out.Analytics.Message, "web_login") {
+		t.Errorf("analytics = %s coverage %v", tooltest.JSON(t, out.Analytics), out.Coverage)
+	}
+	if got := healthNext(res); !slices.Equal(got, []string{"web_login", "analytics_setup"}) {
+		t.Errorf("next = %v", got)
+	}
+}
+
+// A window starting after the dashboard's last data day is insufficient_data.
+func TestReleaseHealthAnalyticsDashboardLags(t *testing.T) {
+	k := healthDashKit(t, "2026-10-14")
+	res, out := healthCall(t, k, `{"app":"Sail"}`)
+	a := out.Analytics
+	if a.Status != "insufficient_data" || a.DataSource != "web_dashboard" || a.Crashes != nil ||
+		!strings.Contains(a.Message, "data up to 2026-10-14") || !strings.Contains(a.Message, "starts 2026-10-16") {
+		t.Errorf("analytics = %s", tooltest.JSON(t, a))
+	}
+	if out.Coverage[SourceAnalytics] != covNoData || slices.Contains(healthNext(res), "analytics_setup") {
+		t.Errorf("coverage %v next %v", out.Coverage, healthNext(res))
+	}
+	if calls := k.Portal.Calls(); len(calls) != 1 {
+		t.Errorf("portal calls past the data end = %+v", calls)
+	}
+}
+
+// A never-released app on the dashboard is insufficient_data, not an error.
+func TestReleaseHealthAnalyticsDashboardNoData(t *testing.T) {
+	k := healthDashKit(t, "2026-10-18")
+	k.Portal.HandleError(http.MethodPost, dashMeasures, http.StatusForbidden, "Invalid adam id: "+healthAppID)
+	_, out := healthCall(t, k, `{"app":"Sail"}`)
+	if out.Analytics.Status != "insufficient_data" || !strings.Contains(out.Analytics.Message, "never been on the App Store") {
+		t.Errorf("analytics = %s", tooltest.JSON(t, out.Analytics))
 	}
 }
 

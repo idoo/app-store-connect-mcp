@@ -14,7 +14,7 @@ Refs: `app` is a name, bundle id, SKU or id. Omit it for the pinned app, or for 
 1. Start with `insights_summary` with `app` and `period`. It compares with the previous period and marks what's unavailable and why. Without `app` its analytics section lists every app (impressions, page views, downloads, sessions, crashes) sorted by downloads, when a web session exists. Often that's the whole answer.
 2. Dig deeper only when asked or when something moved a lot:
    - `sales_report` with `period` (or `from`/`to`) and `group_by` like `["country"]`. `report_type: "SUBSCRIPTION_EVENT"` gives trials, conversions and churn.
-   - `finance_report` with `month` for paid-out proceeds.
+   - `finance_report` with `month` for paid-out proceeds. If the key lacks the Finance role, it reads the web Payments page through the web session instead (`data_source: "web_payments"`): proceeds per region currency plus `payments` with bank-currency amounts, but no per-product rows.
    - `analytics_funnel_report` with `app` and `period` for impressions → product page views → downloads by source or territory, compared with the previous period. It's in the `insights` toolset: if it's missing, call `toolsets` with `action: "enable"` and `toolsets: ["insights"]`. If analytics reports aren't set up, or the key isn't Admin, it reads the App Analytics dashboard through the web session instead (`data_source: "web_dashboard"`).
    - `analytics_report` with `app` and `category` for the raw report rows.
    - `reviews_list` with `since: "last_seen"` for new ratings (replies: see `app-store-connect-mcp-reviews`).
@@ -23,7 +23,7 @@ Refs: `app` is a name, bundle id, SKU or id. Omit it for the pinned app, or for 
 ## Money
 
 - Proceeds are per currency. Never add up different currencies.
-- app-store-connect-mcp has no USD totals. Apple's reports carry no exchange rates, and `finance_report` says so in its `note`. Rates and bank totals live only on the web Payments page (App Store Connect → Payments and Financial Reports). Send the user there for one number.
+- app-store-connect-mcp has no USD totals. Apple's reports carry no exchange rates, and `finance_report` says so in its `note`. Bank-currency amounts come only from the web Payments page: `finance_report` shows them under `payments` when it answered from there (`data_source: "web_payments"`), else send the user to App Store Connect → Payments and Financial Reports.
 - Never convert with rates from memory or the web.
 - `restore` units are restored non-consumables (IA3). They aren't sales and earn nothing.
 - Unpublished days come back `pending`. Say so; don't report zero.

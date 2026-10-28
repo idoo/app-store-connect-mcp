@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
 	"github.com/idoo/app-store-connect-mcp/internal/reports"
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
@@ -92,7 +93,13 @@ type HealthReport struct {
 	} `json:"ratings"`
 	Analytics struct {
 		section
-		Crashes *float64 `json:"crashes,omitempty"`
+		// DataSource is analytics_reports (Analytics Reports API) or
+		// web_dashboard (App Analytics dashboard via the web session).
+		DataSource string          `json:"data_source,omitempty"`
+		Window     *reports.Window `json:"window,omitempty"`
+		Crashes    *float64        `json:"crashes,omitempty"`
+		// webLogin is set when a web session would have answered.
+		webLogin bool
 	} `json:"analytics_crashes"`
 	// Coverage maps each source to measured, no_data or not_set_up.
 	Coverage map[string]string `json:"coverage"`
@@ -127,6 +134,9 @@ func healthReport(ctx context.Context, env *tool.Env, in HealthIn) (*tool.Result
 	}
 	res := tool.OK(rep)
 	if rep.Analytics.Status == "not_set_up" {
+		if rep.Analytics.webLogin {
+			res.Then(tool.NextStep{Tool: "web_login"})
+		}
 		res.Then(tool.NextStep{Tool: "analytics_setup", Args: map[string]any{"app": rep.App.ID}})
 	}
 	if rep.Verdict == VerdictBreach && AnyPausing(rep.Reasons) && rep.Phased != nil && rep.Phased.State == "ACTIVE" {
@@ -580,7 +590,9 @@ func ratings(ctx context.Context, env *tool.Env, appID, since string, prev *tool
 }
 
 // analytics totals production crashes since the live version via the shared
-// analytics loader; a missing setup is reported, never created.
+// analytics loader; a missing setup is reported, never created. When the
+// Analytics Reports API cannot answer (not set up, forbidden or no crash
+// report yet) it reads the App Analytics dashboard through the web session.
 func analytics(ctx context.Context, env *tool.Env, appID, since string, rep *HealthReport) {
 	to := env.Clock.Now()
 	from, err := time.Parse(time.RFC3339, since)
@@ -589,12 +601,19 @@ func analytics(ctx context.Context, env *tool.Env, appID, since string, rep *Hea
 	}
 	rows, err := reports.LoadAnalytics(ctx, env, appID, reports.ReportCrashes, "DAILY", from, to, 14)
 	var unavailable *reports.ReportUnavailableError
+	var api *tool.APIError
 	switch {
 	case errors.Is(err, reports.ErrAnalyticsNotSetUp):
-		rep.Analytics.section = section{Status: "not_set_up", Message: "analytics reports are not requested; run analytics_setup (data arrives 24–48 h later)"}
+		fallback := section{Status: "not_set_up", Message: "analytics reports are not requested; run analytics_setup (data arrives 24–48 h later)"}
+		analyticsFromDashboard(ctx, env, appID, from, to, "not set up for this app", fallback, rep)
+		return
+	case errors.As(err, &api) && api.Status == http.StatusForbidden:
+		fallback := section{Status: "unavailable", Message: "analytics reports are forbidden for this API key (needs Admin): " + err.Error()}
+		analyticsFromDashboard(ctx, env, appID, from, to, "forbidden for this API key", fallback, rep)
 		return
 	case errors.As(err, &unavailable):
-		rep.Analytics.section = section{Status: "unavailable", Message: unavailable.Error()}
+		fallback := section{Status: "unavailable", Message: unavailable.Error()}
+		analyticsFromDashboard(ctx, env, appID, from, to, "missing the crash report", fallback, rep)
 		return
 	case err != nil:
 		rep.Analytics.section = section{Status: "error", Message: err.Error()}
@@ -612,7 +631,60 @@ func analytics(ctx context.Context, env *tool.Env, appID, since string, rep *Hea
 			total += v
 		}
 	}
-	rep.Analytics.section, rep.Analytics.Crashes = section{Status: "ok"}, &total
+	rep.Analytics.section, rep.Analytics.DataSource, rep.Analytics.Crashes = section{Status: "ok"}, "analytics_reports", &total
+}
+
+// analyticsFromDashboard totals the dashboard's daily crashes measure over
+// the Pacific days from the window start to the dashboard's last data day.
+// why says why the Analytics Reports API could not answer; fallback is the
+// section kept when the dashboard cannot answer either.
+func analyticsFromDashboard(ctx context.Context, env *tool.Env, appID string, from, now time.Time, why string, fallback section, rep *HealthReport) {
+	a := &rep.Analytics
+	end, err := reports.DataEnd(ctx, env.Portal)
+	if err != nil {
+		a.section = fallback
+		if errors.Is(err, tool.ErrWebSessionRequired) {
+			a.webLogin = true
+			a.Message += ". " + webLoginAlt
+		} else {
+			a.Message += "; App Analytics dashboard: " + tool.BodyFor(err).Message
+		}
+		return
+	}
+	day := func(t time.Time) time.Time {
+		p := applemeta.PacificDay(t)
+		return time.Date(p.Year(), p.Month(), p.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	start := day(from)
+	if today := day(now); end.After(today) {
+		end = today
+	}
+	a.DataSource = "web_dashboard"
+	a.Window = &reports.Window{From: start.Format(time.DateOnly), To: end.Format(time.DateOnly)}
+	if start.After(end) {
+		a.section = section{Status: "insufficient_data", Message: fmt.Sprintf(
+			"App Analytics has data up to %s (it lags about 2 days); the window starts %s.",
+			end.Format(time.DateOnly), start.Format(time.DateOnly))}
+		return
+	}
+	ms, err := reports.Measures(ctx, env.Portal, appID, []string{"crashes"}, start, end, "day")
+	switch {
+	case errors.Is(err, reports.ErrDashboardNoData):
+		a.section = section{Status: "insufficient_data", Message: "App Analytics has no data for this app: it has never been on the App Store."}
+		return
+	case err != nil:
+		a.section = section{Status: "error", Message: "App Analytics dashboard: " + tool.BodyFor(err).Message}
+		return
+	}
+	m, ok := ms["crashes"]
+	if !ok {
+		a.section = section{Status: "insufficient_data", Message: "App Analytics returned no crashes measure for this window."}
+		return
+	}
+	total := m.Total
+	a.Crashes = &total
+	a.section = section{Status: "ok", Message: fmt.Sprintf(
+		"Read from the App Analytics dashboard with the web session (the Analytics Reports API is %s): whole Pacific days, so the first day may include the previous version; only users who share analytics with developers; data lags about 2 days.", why)}
 }
 
 // num converts a JSON number attribute to float64.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"sort"
 	"strings"
@@ -26,8 +27,8 @@ func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "finance_report", Toolset: tool.Reports, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
 		Title: "Payments and financial report",
-		Description: "Payments & Financial report for one fiscal month: proceeds per currency, top products; " +
-			"include_rows: CSV link of all rows. No FX/USD totals (web Payments only). Unpublished months: pending.",
+		Description: "Payments & Financial report for a fiscal month: proceeds per currency, top products; " +
+			"include_rows: CSV of all rows. No Finance role: web Payments with bank amounts. Unpublished: pending.",
 		Enums: map[string][]any{"report_type": {string(applemeta.ReportFinancial), string(applemeta.ReportFinanceDetail)}},
 	}, financeReport))
 }
@@ -58,6 +59,10 @@ type financeOut struct {
 	// VendorSource is "web_session" when the vendor number was read from
 	// Payments through the web session (omitted for the profile's own).
 	VendorSource string `json:"vendor_number_source,omitempty"`
+	// DataSource is web_payments when the month came from the web Payments
+	// page (the key lacks the Finance role); omitted for the API report.
+	DataSource string       `json:"data_source,omitempty"`
+	Payments   []paymentOut `json:"payments,omitempty"`
 }
 
 // financeFXNote explains why proceeds are never converted.
@@ -109,7 +114,12 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 		var nf *tool.APIError
 		t, nf, err = download(ctx, env, "/v1/financeReports", financeQuery(vendor, rt, region, month))
 		if err != nil {
-			return nil, financeCause(err, v)
+			err = financeCause(err, v)
+			var api *tool.APIError
+			if errors.As(err, &api) && api.Status == http.StatusForbidden {
+				return financeFromPayments(ctx, env, v, months, in, rt, region, err)
+			}
+			return nil, err
 		}
 		if nf == nil {
 			break
@@ -168,6 +178,111 @@ func financeCause(err error, v tool.VendorNumber) error {
 		api.Hint = financeRoleHint
 	}
 	return err
+}
+
+// financeWebAlt is added to a finance 403 when no web session could answer.
+const financeWebAlt = "or call web_login: with an App Store Connect web session finance_report reads the month from the " +
+	"web Payments page, which needs no Finance role"
+
+// financeWebNote explains a web_payments answer.
+const financeWebNote = "from the web Payments page (this API key lacks the Finance role): proceeds are what each region " +
+	"currency earned this month (the financial report's proceeds); payments are the balances Apple owes, converted to " +
+	"the bank currency with Apple's rate. Per-product rows need a Finance or Admin key."
+
+// paymentOut is one payment of a web_payments month.
+type paymentOut struct {
+	Status   string `json:"status"`
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
+	// Date is the day paid or expected to be paid.
+	Date    string             `json:"date,omitempty"`
+	Regions []paymentRegionOut `json:"regions"`
+}
+
+// paymentRegionOut is one region currency of a payment: earned, balance
+// and owed in currency; bank_amount is owed in the payment's currency.
+type paymentRegionOut struct {
+	Region         string `json:"region"`
+	Name           string `json:"name,omitempty"`
+	Currency       string `json:"currency"`
+	Units          int64  `json:"units"`
+	BalanceForward string `json:"balance_forward,omitempty"`
+	Earned         string `json:"earned"`
+	TaxesAndFees   string `json:"taxes_and_fees,omitempty"`
+	Adjustments    string `json:"adjustments,omitempty"`
+	Owed           string `json:"owed"`
+	BankAmount     string `json:"bank_amount"`
+	ExchangeRate   string `json:"exchange_rate,omitempty"`
+}
+
+// financeFromPayments answers finance_report from the web Payments page
+// after apiErr, the API's 403. Without a web session it returns apiErr with
+// the web_login route; another web failure is appended to apiErr.
+func financeFromPayments(ctx context.Context, env *tool.Env, v tool.VendorNumber, months []string, in financeIn,
+	rt applemeta.ReportType, region string, apiErr error,
+) (*tool.Result, error) {
+	var (
+		pm      *reports.PaymentsMonth
+		month   string
+		skipped []string
+	)
+	provider, err := tool.ProviderID(ctx, env.Portal)
+	if err == nil {
+		for _, month = range months {
+			if pm, err = reports.Payments(ctx, env.Portal, provider, v.Number, month); err != nil || pm.Published {
+				break
+			}
+			skipped = append(skipped, month)
+		}
+	}
+	switch {
+	case errors.Is(err, tool.ErrWebSessionRequired):
+		return nil, tool.WithNext(fmt.Errorf("%w; %s", apiErr, financeWebAlt), tool.NextStep{Tool: "web_login"})
+	case err != nil:
+		return nil, fmt.Errorf("%w; the web Payments fallback failed too: %s", apiErr, tool.BodyFor(err).Message)
+	}
+	out := financeOut{Month: month, ReportType: string(rt), Region: region, VendorSource: webVendorSource(v), DataSource: "web_payments"}
+	res := tool.OK(&out)
+	if !pm.Published {
+		m, _ := time.Parse("2006-01", month)
+		out.Status = "pending"
+		out.Explanation = "Apple has not published the financial report for " + strings.Join(skipped, " or ") + " yet; " +
+			"reports appear after the fiscal month closes, usually within its first week."
+		return res.Then(tool.NextStep{Tool: "finance_report", Args: map[string]any{"month": m.AddDate(0, -1, 0).Format("2006-01")}}), nil
+	}
+	if len(skipped) > 0 {
+		res.Warn(fmt.Sprintf("%s is not published yet; showing %s, the newest published fiscal month", skipped[0], month))
+	}
+	if in.IncludeRows || in.TopN > 0 || in.Region != "" || rt != applemeta.ReportFinancial {
+		res.Warn("the web Payments page has totals per region currency only: report_type, region, top_n and include_rows need a Finance or Admin key")
+	}
+	earned, units := pm.Earned()
+	out.Status = "available"
+	out.Units = units
+	out.Proceeds = currencyAmounts(earned)
+	out.Note = financeWebNote
+	for _, p := range pm.Payments {
+		po := paymentOut{Status: p.Status, Amount: reports.FormatExact(p.Currency, p.Amount), Currency: p.Currency, Date: p.Date}
+		for _, r := range p.Regions {
+			po.Regions = append(po.Regions, paymentRegionOut{
+				Region: r.Code, Name: tool.SanitizeText(r.Name), Currency: r.Currency, Units: r.Units,
+				BalanceForward: nonZero(r.Currency, r.Balance), Earned: reports.FormatExact(r.Currency, r.Earned),
+				TaxesAndFees: nonZero(r.Currency, r.TaxesAndFees), Adjustments: nonZero(r.Currency, r.Adjustments),
+				Owed: reports.FormatExact(r.Currency, r.Owed), BankAmount: reports.FormatExact(p.Currency, r.Bank),
+				ExchangeRate: r.ExchangeRate,
+			})
+		}
+		out.Payments = append(out.Payments, po)
+	}
+	return res, nil
+}
+
+// nonZero formats v in currency, or "" for zero (omitted).
+func nonZero(currency string, v *big.Rat) string {
+	if v.Sign() == 0 {
+		return ""
+	}
+	return reports.FormatExact(currency, v)
 }
 
 // financeProducts totals units and proceeds per SKU (Vendor Identifier),

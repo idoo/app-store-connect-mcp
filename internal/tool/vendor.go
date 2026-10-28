@@ -80,17 +80,28 @@ func VendorMissingError(profile string, noSession bool) *Error {
 	}
 }
 
-func discoverVendorNumber(ctx context.Context, p Portal) (string, error) {
+// ProviderID returns the provider (team) id of the web session's account,
+// read from /olympus/v1/session; Payments endpoints are keyed by it. No
+// provider in the session is *Error vendor_number_missing.
+func ProviderID(ctx context.Context, p Portal) (int64, error) {
 	var sess struct {
 		Provider struct {
 			ProviderID int64 `json:"providerId"`
 		} `json:"provider"`
 	}
 	if err := p.JSON(ctx, "GET", "/olympus/v1/session", nil, &sess); err != nil {
-		return "", err
+		return 0, err
 	}
 	if sess.Provider.ProviderID <= 0 {
-		return "", VendorMissingError("", false)
+		return 0, VendorMissingError("", false)
+	}
+	return sess.Provider.ProviderID, nil
+}
+
+func discoverVendorNumber(ctx context.Context, p Portal) (string, error) {
+	provider, err := ProviderID(ctx, p)
+	if err != nil {
+		return "", err
 	}
 	var vendors struct {
 		Data []struct {
@@ -98,7 +109,7 @@ func discoverVendorNumber(ctx context.Context, p Portal) (string, error) {
 			IsArcadeVendor  bool  `json:"isArcadeVendor"`
 		} `json:"data"`
 	}
-	path := "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/" + strconv.FormatInt(sess.Provider.ProviderID, 10) + "/sapVendorNumbers"
+	path := "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/" + strconv.FormatInt(provider, 10) + "/sapVendorNumbers"
 	if err := p.JSON(ctx, "GET", path, nil, &vendors); err != nil {
 		return "", err
 	}
