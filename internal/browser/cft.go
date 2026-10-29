@@ -203,6 +203,13 @@ func verifyAndExtract(zipPath, gotSum, wantSum, dest string) error {
 
 var errUnsafeZip = errors.New("unsafe path in archive")
 
+// rooted reports whether an archive path or symlink target (already
+// FromSlash'd) is absolute, has a volume, or starts at a root: Windows treats
+// `\etc` as rooted on the current drive although filepath.IsAbs says no.
+func rooted(p string) bool {
+	return filepath.IsAbs(p) || filepath.VolumeName(p) != "" || strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`)
+}
+
 const maxZipEntry = 2 << 30
 
 // extractZip extracts into dest, keeping permission bits and symlinks. It
@@ -219,7 +226,7 @@ func extractZip(zipPath, dest string) error {
 	}
 	for _, f := range r.File {
 		rel := filepath.FromSlash(f.Name)
-		if filepath.IsAbs(rel) || filepath.VolumeName(rel) != "" || strings.HasPrefix(f.Name, "/") {
+		if rooted(rel) {
 			return fmt.Errorf("%w: %q", errUnsafeZip, f.Name)
 		}
 		p := filepath.Join(root, rel)
@@ -238,7 +245,7 @@ func extractZip(zipPath, dest string) error {
 				return err
 			}
 			t := filepath.FromSlash(target)
-			if t == "" || filepath.IsAbs(t) || filepath.VolumeName(t) != "" || !within(root, filepath.Join(filepath.Dir(p), t)) {
+			if t == "" || rooted(t) || !within(root, filepath.Join(filepath.Dir(p), t)) {
 				return fmt.Errorf("%w: symlink %q -> %q", errUnsafeZip, f.Name, target)
 			}
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: see above
