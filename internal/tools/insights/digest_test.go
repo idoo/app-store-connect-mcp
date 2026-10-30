@@ -275,8 +275,27 @@ func TestDigestSalesUnavailableWithoutVendor(t *testing.T) {
 	k, _ := digestKit(t)
 	k.Env.Profile.VendorNumber = ""
 	out, _ := digestCall(t, k, `{"app":"Hjul","sources":["sales"]}`)
-	if s := out.Apps[0].Sources["sales"]; s.Status != "unavailable" || !strings.Contains(s.Note, "vendor") {
+	if s := out.Apps[0].Sources["sales"]; s.Status != "unavailable" || !strings.Contains(s.Note, "vendor") || !strings.Contains(s.Note, "web_login") {
 		t.Errorf("sales = %+v", s)
+	}
+}
+
+func TestDigestSalesVendorFromWebSession(t *testing.T) {
+	k, _ := digestKit(t)
+	k.WebSession()
+	k.Env.Profile.VendorNumber = ""
+	k.Portal.HandleJSON(http.MethodGet, "/olympus/v1/session", `{"provider":{"providerId":4242424}}`)
+	k.Portal.HandleJSON(http.MethodGet, "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/4242424/sapVendorNumbers",
+		`{"data":[{"sapVendorNumber":81234567,"isArcadeVendor":false}]}`)
+	k.ASC.Handle(http.MethodGet, "/v1/salesReports", http.StatusNotFound,
+		`{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found","detail":"Report is not available yet."}]}`)
+	out, _ := digestCall(t, k, `{"app":"Hjul","sources":["sales"]}`)
+	if s := out.Apps[0].Sources["sales"]; s.Status != "pending" {
+		t.Errorf("sales = %+v", s)
+	}
+	reqs := k.ASC.RequestsTo(http.MethodGet, "/v1/salesReports")
+	if len(reqs) == 0 || reqs[0].Query.Get("filter[vendorNumber]") != "81234567" {
+		t.Errorf("sales requests = %+v", reqs)
 	}
 }
 

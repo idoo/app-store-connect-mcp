@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/applemeta"
@@ -58,7 +59,8 @@ type proxy struct {
 
 type funnelOut struct {
 	App          tool.App             `json:"app"`
-	Status       string               `json:"status"` // ok | not_set_up | unavailable
+	Status       string               `json:"status"` // ok | not_set_up | unavailable | no_data
+	DataSource   string               `json:"data_source,omitempty"`
 	Question     string               `json:"question"`
 	By           string               `json:"by,omitempty"`
 	Current      reports.Window       `json:"current"`
@@ -96,7 +98,7 @@ func funnelReport(ctx context.Context, env *tool.Env, in funnelIn) (*tool.Result
 	if err != nil {
 		return nil, err
 	}
-	out := funnelOut{App: app, Status: "ok", Question: in.Question, By: in.By, Current: cur, Previous: prev}
+	out := funnelOut{App: app, Status: "ok", DataSource: "analytics_reports", Question: in.Question, By: in.By, Current: cur, Previous: prev}
 	res := tool.OK(&out)
 
 	span := cur
@@ -110,11 +112,31 @@ func funnelReport(ctx context.Context, env *tool.Env, in funnelIn) (*tool.Result
 	for _, name := range reportsFor(in.Question) {
 		rows, err := reports.LoadAnalytics(ctx, env, app.ID, name, "DAILY", from, to, budget)
 		var unavailable *reports.ReportUnavailableError
+		var api *tool.APIError
 		switch {
 		case errors.Is(err, reports.ErrAnalyticsNotSetUp):
-			out = funnelOut{App: app, Status: "not_set_up", Question: in.Question, Current: cur, Message: setupNote}
+			dres, derr := funnelFromDashboard(ctx, env, app, in, "not set up for this app")
+			if derr == nil {
+				return dres, nil
+			}
+			out = funnelOut{App: app, Status: "not_set_up", Question: in.Question, Current: cur, Message: setupNote + " " + webLoginAlt}
 			res = tool.OK(&out)
-			return res.Then(tool.NextStep{Tool: "analytics_setup", Args: map[string]any{"app": app.ID, "one_time_snapshot": true}}), nil
+			if !errors.Is(derr, tool.ErrWebSessionRequired) {
+				res.Warn("App Analytics dashboard: " + tool.BodyFor(derr).Message)
+			}
+			return res.Then(
+				tool.NextStep{Tool: "web_login"},
+				tool.NextStep{Tool: "analytics_setup", Args: map[string]any{"app": app.ID, "one_time_snapshot": true}},
+			), nil
+		case errors.As(err, &api) && api.Status == http.StatusForbidden:
+			dres, derr := funnelFromDashboard(ctx, env, app, in, "forbidden for this API key")
+			if derr == nil {
+				return dres, nil
+			}
+			if !errors.Is(derr, tool.ErrWebSessionRequired) {
+				return nil, fmt.Errorf("%w; the App Analytics dashboard fallback failed too: %s", err, tool.BodyFor(derr).Message)
+			}
+			return nil, tool.WithNext(fmt.Errorf("%w; %s", err, webLoginAlt), tool.NextStep{Tool: "web_login"})
 		case errors.As(err, &unavailable):
 			out.Status, out.Missing, out.Available = "unavailable", unavailable.Name, unavailable.Available
 			out.Message = "Apple lists no report with this name for the app; it may not be generated yet or the name changed."
@@ -294,6 +316,14 @@ func fillAnswer(out *funnelOut, in funnelIn, loaded map[string]*reports.Analytic
 			vals[i][m.name] = s.Total()
 		}
 	}
+	usageAnswer(out, in.Question, vals)
+	return nil
+}
+
+// usageAnswer fills the usage numbers and retention proxies from the
+// per-window totals (current first, previous second when compared) keyed
+// sessions, active_devices, crashes, installs, deletions.
+func usageAnswer(out *funnelOut, question string, vals []map[string]*big.Rat) {
 	n := &numbers{Current: format(vals[0])}
 	if len(vals) > 1 {
 		n.Previous = format(vals[1])
@@ -305,7 +335,7 @@ func fillAnswer(out *funnelOut, in funnelIn, loaded map[string]*reports.Analytic
 		}
 	}
 	c := vals[0]
-	switch in.Question {
+	switch question {
 	case "crashes":
 		n.Current["crashes_per_1000_sessions"] = reports.Ratio(new(big.Rat).Mul(c["crashes"], big.NewRat(1000, 1)), c["sessions"])
 	default:
@@ -313,7 +343,7 @@ func fillAnswer(out *funnelOut, in funnelIn, loaded map[string]*reports.Analytic
 			Name: "sessions_per_active_device", Value: reports.Ratio(c["sessions"], c["active_devices"]),
 			Note: "proxy: engagement depth, not cohort retention",
 		}}
-		if in.Question == "installs_deletions" {
+		if question == "installs_deletions" {
 			out.Retention = append(out.Retention, proxy{
 				Name: "deletions_per_install", Value: reports.Ratio(c["deletions"], c["installs"]),
 				Note: "proxy: deletions in the period over installs in the period, not the same users",
@@ -323,7 +353,6 @@ func fillAnswer(out *funnelOut, in funnelIn, loaded map[string]*reports.Analytic
 		out.Explanations = append(out.Explanations, "The Analytics Reports API has no cohort D1/D7 retention; open retention_url, pick this app, then Retention.")
 	}
 	out.Usage = n
-	return nil
 }
 
 func format(m map[string]*big.Rat) map[string]string {

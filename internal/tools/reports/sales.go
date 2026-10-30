@@ -194,6 +194,9 @@ type salesOut struct {
 	Sample  []map[string]string `json:"sample,omitempty"`
 	// RowsResource is the URI of the CSV artifact with every decoded row.
 	RowsResource string `json:"rows_resource,omitempty"`
+	// VendorSource is "web_session" when the vendor number was read from
+	// Payments through the web session (omitted for the profile's own).
+	VendorSource string `json:"vendor_number_source,omitempty"`
 }
 
 // subscriberSummary totals a SUBSCRIBER report.
@@ -205,10 +208,11 @@ type subscriberSummary struct {
 }
 
 func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, error) {
-	vendor, err := requireVendor(env)
+	v, err := resolveVendor(ctx, env)
 	if err != nil {
 		return nil, err
 	}
+	vendor := v.Number
 	rt := applemeta.ReportType(in.ReportType)
 	if rt == "" {
 		rt = applemeta.ReportSales
@@ -248,7 +252,7 @@ func salesReport(ctx context.Context, env *tool.Env, in salesIn) (*tool.Result, 
 	}
 	out := salesOut{
 		ReportType: string(rt), SubType: sub, Frequency: string(w.Freq), From: w.From, To: w.To,
-		App: app, CoveredDays: []string{}, PendingDays: w.Pending,
+		App: app, CoveredDays: []string{}, PendingDays: w.Pending, VendorSource: webVendorSource(v),
 	}
 	var tables []dayTable
 	// late are past days before yesterday whose 404 did not say "no sales":

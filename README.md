@@ -38,7 +38,7 @@ You're handing it an App Store Connect key, so here's what you can check yoursel
 
 - **All of it is here.** MIT, no closed parts. Build it yourself with `go install github.com/idoo/app-store-connect-mcp/cmd/app-store-connect-mcp@latest`.
 - **Read-only until you say otherwise.** Write tools aren't even listed until you turn writes on, and anything public or hard to undo shows a preview and waits for your yes. [docs/SAFETY.md](docs/SAFETY.md)
-- **No telemetry.** It talks to `api.appstoreconnect.apple.com`, the presigned upload and report URLs Apple hands back (sent without your token), and the public iTunes Search API for `store_lookup`. The `web` toolset adds Apple's own sign-in pages. The JWT is signed on your machine and only ever goes to the API. [SECURITY.md](SECURITY.md#keys)
+- **No telemetry.** It talks to `api.appstoreconnect.apple.com`, the presigned upload and report URLs Apple hands back (sent without your token), and the public iTunes Search API for `store_lookup`. After `web login` it also reads `appstoreconnect.apple.com` (App Analytics, Payments, the `web` toolset) and Apple's own sign-in pages. The JWT is signed on your machine and only ever goes to the API. [SECURITY.md](SECURITY.md#keys)
 - **Your key stays where you put it.** It's read from a file, an env var or the OS keychain. The config holds only a path or keychain reference, is written `0600`, and is refused if anyone else can write to it. Apple ID cookies live in the Keychain. No MCP tool can add or change credentials.
 - **Releases are signed and traceable to their source.** Every release is built by [release.yml](.github/workflows/release.yml) from a tag, published as an [immutable release](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases), and ships an SPDX SBOM per archive, a cosign keyless signature on `checksums.txt`, and [build provenance attestations](https://github.com/idoo/app-store-connect-mcp/attestations). The macOS binaries are also signed with my Developer ID and notarized by Apple, so Gatekeeper opens them without a warning.
 - **CI scans every push** with CodeQL and `govulncheck`, and a tag can't ship with a known reachable vulnerability.
@@ -87,6 +87,10 @@ Everything you'd click in App Store Connect: releases, TestFlight, listings, scr
 After launch it keeps watching, if you turn on the `insights` toolset: post-release health with a guard that pauses a phased rollout from cron, a "what's new since yesterday" digest, the analytics funnel, and keyword rank tracking. In Claude Desktop, claude.ai, ChatGPT and VS Code the release checklist, metadata diffs, screenshots, reviews and funnel show up as small interactive views.
 
 A toolset is a group of tools you switch on or off, so your agent only sees what you use. The release, TestFlight, metadata, reviews, reports and screenshots ones are on out of the box. Add others with `--toolsets +insights,+signing` or `ASC_MCP_TOOLSETS=+insights`, or ask the agent to turn one on mid-chat. The list is in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
+
+### Stats without an Admin key or vendor number
+
+Apple's Analytics Reports need an Admin key and a day or two before the first numbers, and sales need the vendor number, which the API doesn't expose. After `app-store-connect-mcp web login` neither matters: the vendor number is read from Payments once and remembered, and `analytics_funnel_report` and `insights_summary` read App Analytics the way the website does. `insights_summary` without an app lists every app's impressions, page views, downloads, sessions and crashes against the previous period.
 
 ### Creating apps and App Privacy
 

@@ -201,6 +201,20 @@ func TestReportErrorsMentionVendorNumber(t *testing.T) {
 	}
 }
 
+// A finance 403 with a vendor number Apple supplied (web session) is the
+// key's role, never another account's number.
+func TestFinanceReportForbiddenWithWebVendorNamesRole(t *testing.T) {
+	k := webVendorKit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/financeReports", http.StatusForbidden,
+		`{"errors":[{"status":"403","code":"FORBIDDEN_ERROR","title":"forbidden","detail":"not allowed"}]}`)
+	eb := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`), "api_error")
+	if eb.API == nil || eb.API.Status != http.StatusForbidden || strings.Contains(eb.Hint, "vendor number") ||
+		!strings.Contains(eb.Hint, "Finance or Admin role") || !strings.Contains(eb.Hint, "Users and Access › Integrations") ||
+		!strings.Contains(eb.Hint, "sales_report works") {
+		t.Errorf("body = %+v", eb)
+	}
+}
+
 func TestSalesReportAppFilter(t *testing.T) {
 	k := thisWeekKit(t)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env,
@@ -257,17 +271,85 @@ func TestSalesReportVendorMissing(t *testing.T) {
 	k := reportsKit(t)
 	k.Env.Profile.VendorNumber = ""
 	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_missing")
-	if !strings.Contains(body.Hint, "app-store-connect-mcp auth set test vendor_number=") || !strings.Contains(body.Message, "Payments and Financial Reports") {
+	if !strings.Contains(body.Hint, "app-store-connect-mcp auth set test vendor_number=") || !strings.Contains(body.Hint, "web_login") ||
+		!strings.Contains(body.Message, "Payments and Financial Reports") {
 		t.Errorf("body = %+v", body)
 	}
 	// Env-configured users get the command that works for them.
-	if h := tool.BodyFor(vendorNumberMissing("env")).Hint; !strings.Contains(h, "app-store-connect-mcp auth set env vendor_number=<number>") {
-		t.Errorf("env hint = %q", h)
+	k.Env.Profile.Name = "env"
+	body = tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_missing")
+	if !strings.Contains(body.Hint, "app-store-connect-mcp auth set env vendor_number=<number>") {
+		t.Errorf("env hint = %q", body.Hint)
 	}
 	if n := len(k.ASC.Requests()); n != 0 {
 		t.Errorf("requests = %d", n)
 	}
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, ``), "vendor_number_missing")
+}
+
+const (
+	olympusPath = "/olympus/v1/session"
+	vendorsPath = "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/4242424/sapVendorNumbers"
+)
+
+// webVendorKit is signed in to the web session, with no vendor number in
+// the profile and Payments listing one (plus an Arcade) vendor.
+func webVendorKit(t *testing.T) *tooltest.Kit {
+	k := reportsKit(t).WebSession()
+	k.Env.Profile.VendorNumber = ""
+	k.Portal.HandleJSON(http.MethodGet, olympusPath, `{"provider":{"providerId":4242424}}`)
+	k.Portal.HandleJSON(http.MethodGet, vendorsPath,
+		`{"data":[{"sapVendorNumber":55500,"isArcadeVendor":true},{"sapVendorNumber":81234567,"isArcadeVendor":false}]}`)
+	return k
+}
+
+func TestSalesReportVendorFromWebSession(t *testing.T) {
+	k := webVendorKit(t)
+	handleGz(t, k, "/v1/salesReports?filter[reportDate]=2026-10-21", "sales_day1.tsv")
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`))
+	if got := tooltest.Decode[map[string]any](t, res); got["vendor_number_source"] != "web_session" {
+		t.Errorf("vendor_number_source = %v", got["vendor_number_source"])
+	}
+	reqs := k.ASC.RequestsTo(http.MethodGet, "/v1/salesReports")
+	if len(reqs) != 1 || reqs[0].Query.Get("filter[vendorNumber]") != "81234567" {
+		t.Fatalf("requests = %+v", reqs)
+	}
+}
+
+func TestFinanceReportVendorFromWebSession(t *testing.T) {
+	k := webVendorKit(t)
+	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial.tsv")
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`))
+	if got := tooltest.Decode[map[string]any](t, res); got["vendor_number_source"] != "web_session" {
+		t.Errorf("vendor_number_source = %v", got["vendor_number_source"])
+	}
+	reqs := k.ASC.RequestsTo(http.MethodGet, "/v1/financeReports")
+	if len(reqs) != 1 || reqs[0].Query.Get("filter[vendorNumber]") != "81234567" {
+		t.Fatalf("requests = %+v", reqs)
+	}
+}
+
+func TestReportsProfileVendorHasNoSource(t *testing.T) {
+	k := reportsKit(t)
+	handleGz(t, k, "/v1/financeReports?filter[reportDate]=2026-08", "financial.tsv")
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`))
+	if got := tooltest.Decode[map[string]any](t, res); got["vendor_number_source"] != nil {
+		t.Errorf("vendor_number_source = %v, want omitted for the profile's number", got["vendor_number_source"])
+	}
+}
+
+func TestReportsVendorAmbiguous(t *testing.T) {
+	k := reportsKit(t).WebSession()
+	k.Env.Profile.VendorNumber = ""
+	k.Portal.HandleJSON(http.MethodGet, olympusPath, `{"provider":{"providerId":4242424}}`)
+	k.Portal.HandleJSON(http.MethodGet, vendorsPath, `{"data":[{"sapVendorNumber":111},{"sapVendorNumber":222}]}`)
+	body := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "sales_report"), k.Env, `{"period":"yesterday"}`), "vendor_number_ambiguous")
+	if !strings.Contains(body.Message, "111") || !strings.Contains(body.Message, "222") {
+		t.Errorf("message = %q", body.Message)
+	}
+	if n := len(k.ASC.Requests()); n != 0 {
+		t.Errorf("requests = %d", n)
+	}
 }
 
 func TestReportsWithheldForIndividualKey(t *testing.T) {

@@ -1,0 +1,15 @@
+{"meta":{"adjustedForPrivacy":false},"size":10,"results":[
+ {"adamId":"1000000001","measure":"impressionsTotal","cohort":{},"total":200.0,"type":"COUNT","previousTotal":100.0,"percentChange":1.0,"meetsThreshold":true,"data":[
+  {"value":20.0,"date":"2026-10-18T00:00:00Z"},{"value":30.0,"date":"2026-10-19T00:00:00Z"},{"value":30.0,"date":"2026-10-20T00:00:00Z"},
+  {"value":30.0,"date":"2026-10-21T00:00:00Z"},{"value":30.0,"date":"2026-10-22T00:00:00Z"},{"value":30.0,"date":"2026-10-23T00:00:00Z"},
+  {"value":30.0,"date":"2026-10-24T00:00:00Z"}]},
+ {"adamId":"1000000001","measure":"pageViewCount","cohort":{},"total":40.0,"type":"COUNT","previousTotal":40.0,"percentChange":0.0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"units","cohort":{},"total":10.0,"type":"COUNT","previousTotal":5.0,"percentChange":1.0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"impressionsTotalUnique","cohort":{},"total":150.0,"type":"COUNT","previousTotal":80.0,"percentChange":0.875,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"pageViewUnique","cohort":{},"total":30.0,"type":"COUNT","previousTotal":30.0,"percentChange":0.0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"totalDownloads","cohort":{},"total":14.0,"type":"COUNT","previousTotal":6.0,"percentChange":1.333,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"redownloads","cohort":{},"total":4.0,"type":"COUNT","previousTotal":1.0,"percentChange":3.0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"conversionRate","cohort":{},"total":5.0,"type":"AVERAGE","previousTotal":4.0,"percentChange":0.25,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"proceeds","cohort":{},"total":12.5,"type":"COUNT","previousTotal":0.0,"percentChange":0.0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000001","measure":"sales","cohort":{},"total":15.0,"type":"COUNT","previousTotal":0.0,"percentChange":0.0,"meetsThreshold":true,"data":[]}
+]}

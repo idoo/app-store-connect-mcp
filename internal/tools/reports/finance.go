@@ -2,7 +2,9 @@ package reports
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -53,6 +55,9 @@ type financeOut struct {
 	Note        string           `json:"note,omitempty"`
 	// RowsResource is the URI of the CSV artifact with every decoded row.
 	RowsResource string `json:"rows_resource,omitempty"`
+	// VendorSource is "web_session" when the vendor number was read from
+	// Payments through the web session (omitted for the profile's own).
+	VendorSource string `json:"vendor_number_source,omitempty"`
 }
 
 // financeFXNote explains why proceeds are never converted.
@@ -60,10 +65,11 @@ const financeFXNote = "proceeds stay in each currency: Apple's finance reports h
 	"bank-currency totals are only on the web Payments page (App Store Connect → Payments and Financial Reports)"
 
 func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Result, error) {
-	vendor, err := requireVendor(env)
+	v, err := resolveVendor(ctx, env)
 	if err != nil {
 		return nil, err
 	}
+	vendor := v.Number
 	rt := applemeta.ReportType(in.ReportType)
 	if rt == "" {
 		rt = applemeta.ReportFinancial
@@ -103,7 +109,7 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 		var nf *tool.APIError
 		t, nf, err = download(ctx, env, "/v1/financeReports", financeQuery(vendor, rt, region, month))
 		if err != nil {
-			return nil, err
+			return nil, financeCause(err, v)
 		}
 		if nf == nil {
 			break
@@ -111,7 +117,7 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 		skipped = append(skipped, month)
 		t = nil
 	}
-	out := financeOut{Month: month, ReportType: string(rt), Region: region}
+	out := financeOut{Month: month, ReportType: string(rt), Region: region, VendorSource: webVendorSource(v)}
 	if t == nil {
 		m, _ := time.Parse("2006-01", month)
 		prev := m.AddDate(0, -1, 0).Format("2006-01")
@@ -143,6 +149,25 @@ func financeReport(ctx context.Context, env *tool.Env, in financeIn) (*tool.Resu
 			salesCSV([]dayTable{{Date: month, Table: t}}, nil), func(uri string) { out.RowsResource = uri })
 	}
 	return res, nil
+}
+
+// financeRoleHint is the finance 403 hint when the vendor number came from
+// Apple (Payments via the web session), so it cannot be the wrong account's.
+const financeRoleHint = "finance reports need an API key with the Finance or Admin role (Users and Access › Integrations); " +
+	"sales_report works with this key"
+
+// financeCause explains a finance 403/5xx: a vendor number read from Apple
+// is this account's, so a 403 means the key's role; a profile number may be
+// another account's (vendorCause).
+func financeCause(err error, v tool.VendorNumber) error {
+	if v.Source != tool.VendorFromWebSession {
+		return vendorCause(err, v.Number)
+	}
+	var api *tool.APIError
+	if errors.As(err, &api) && api.Status == http.StatusForbidden {
+		api.Hint = financeRoleHint
+	}
+	return err
 }
 
 // financeProducts totals units and proceeds per SKU (Vendor Identifier),

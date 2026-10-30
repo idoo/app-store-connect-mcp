@@ -709,8 +709,13 @@ func digestBuilds(ctx context.Context, env *tool.Env, app tool.App, st digestSta
 // digestSales compares the last complete Pacific day with the same weekday a
 // week earlier. It has no watermark.
 func digestSales(ctx context.Context, env *tool.Env, app tool.App, now time.Time) digestSourceOut {
-	if env.Profile.VendorNumber == "" {
-		return digestSourceOut{Status: digestUnavailable, Note: "no vendor number: set vendor_number in the profile (or ASC_VENDOR_NUMBER) to include sales"}
+	v, err := tool.ResolveVendorNumber(ctx, env)
+	if err != nil {
+		var te *tool.Error
+		if errors.As(err, &te) && te.Code == "vendor_number_missing" {
+			return digestSourceOut{Status: digestUnavailable, Note: "no vendor number: call web_login so it is read from Payments, or set vendor_number in the profile (or ASC_VENDOR_NUMBER) to include sales"}
+		}
+		return digestFail(err)
 	}
 	loc, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
@@ -718,7 +723,7 @@ func digestSales(ctx context.Context, env *tool.Env, app tool.App, now time.Time
 	}
 	day := now.In(loc).AddDate(0, 0, -1).Format(time.DateOnly)
 	prevDay := now.In(loc).AddDate(0, 0, -8).Format(time.DateOnly)
-	cur, pending, err := digestSalesDay(ctx, env, app, day)
+	cur, pending, err := digestSalesDay(ctx, env, app, v.Number, day)
 	if err != nil {
 		return digestFail(err)
 	}
@@ -726,7 +731,7 @@ func digestSales(ctx context.Context, env *tool.Env, app tool.App, now time.Time
 		return digestSourceOut{Status: digestPending, Note: "sales report for " + day + " is not available yet"}
 	}
 	so := digestSourceOut{Status: digestOK, Sales: &digestSalesOut{Day: day, CompareDay: prevDay, Current: cur}}
-	prev, pending, err := digestSalesDay(ctx, env, app, prevDay)
+	prev, pending, err := digestSalesDay(ctx, env, app, v.Number, prevDay)
 	switch {
 	case err != nil:
 		so.Note = "comparison day failed: " + err.Error()
@@ -738,9 +743,9 @@ func digestSales(ctx context.Context, env *tool.Env, app tool.App, now time.Time
 	return so
 }
 
-func digestSalesDay(ctx context.Context, env *tool.Env, app tool.App, day string) (reports.SalesGroup, bool, error) {
+func digestSalesDay(ctx context.Context, env *tool.Env, app tool.App, vendor, day string) (reports.SalesGroup, bool, error) {
 	body, _, err := env.ASC.Download(ctx, tool.Request{Method: http.MethodGet, Path: "/v1/salesReports", Accept: "application/a-gzip", Query: url.Values{
-		"filter[vendorNumber]":  {env.Profile.VendorNumber},
+		"filter[vendorNumber]":  {vendor},
 		"filter[reportType]":    {"SALES"},
 		"filter[reportSubType]": {"SUMMARY"},
 		"filter[frequency]":     {"DAILY"},

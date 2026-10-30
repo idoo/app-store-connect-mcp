@@ -22,26 +22,20 @@ const (
 	gzipAccept = "application/a-gzip"
 )
 
-// vendorNumberMissing is the typed error for profiles without a vendor number.
-func vendorNumberMissing(profile string) error {
-	if profile == "" {
-		profile = "<profile>"
-	}
-	return &tool.Error{
-		Code: "vendor_number_missing",
-		Message: "sales and finance reports need the vendor number of the account, which the API does not expose; " +
-			"find it in App Store Connect → Payments and Financial Reports (top-left, under the account name)",
-		Hint: fmt.Sprintf("run `app-store-connect-mcp auth set %s vendor_number=<number>` (or set ASC_VENDOR_NUMBER) and restart app-store-connect-mcp", profile),
-	}
+// resolveVendor returns the vendor number for a sales/finance report (see
+// [tool.ResolveVendorNumber]: profile, else discovered via the web session).
+func resolveVendor(ctx context.Context, env *tool.Env) (tool.VendorNumber, error) {
+	return tool.ResolveVendorNumber(ctx, env)
 }
 
-// requireVendor returns the profile's vendor number or the typed error.
-func requireVendor(env *tool.Env) (string, error) {
-	v := strings.TrimSpace(env.Profile.VendorNumber)
-	if v == "" {
-		return "", vendorNumberMissing(env.Profile.Name)
+// webVendorSource is the vendor_number_source a report shows: "web_session"
+// when the number was discovered through the web session, empty (omitted)
+// for the profile's own number.
+func webVendorSource(v tool.VendorNumber) string {
+	if v.Source == tool.VendorFromWebSession {
+		return v.Source
 	}
-	return v, nil
+	return ""
 }
 
 // notFoundErr returns err as Apple's 404 (report not published, or no sales
@@ -109,7 +103,8 @@ func download(ctx context.Context, env *tool.Env, path string, q url.Values) (*r
 		if nf := notFoundErr(err); nf != nil {
 			return nil, nf, nil
 		}
-		err = vendorCause(err, q.Get("filter[vendorNumber]"))
+		// Callers add the vendor-number cause (vendorCause): only they know
+		// whether Apple itself supplied the number.
 		return nil, nil, fmt.Errorf("download %s %s: %w", path, q.Get("filter[reportDate]"), err)
 	}
 	t, err := reports.Decode(bytes.NewReader(body), reports.DefaultLimits())
@@ -136,7 +131,7 @@ func fetchSalesDates(ctx context.Context, env *tool.Env, vendor string, rs apple
 	err := tool.Parallel(ctx, reportFetchConcurrency, dates, func(ctx context.Context, i int, d string) error {
 		t, nf, err := download(ctx, env, "/v1/salesReports", salesQuery(vendor, rs, subType, freq, d))
 		if err != nil {
-			return err
+			return vendorCause(err, vendor)
 		}
 		noSales := nf != nil && isNoSales(nf)
 		out[i] = dayTable{Date: d, Table: t, Pending: nf != nil && !noSales, NoSales: noSales}

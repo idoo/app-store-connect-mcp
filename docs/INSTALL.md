@@ -42,7 +42,7 @@ Keys never pass through the agent. Ask the user to:
 
 1. Create a key in App Store Connect under *Users and Access → Integrations → App Store Connect API* and download the `.p8`. Team keys show an issuer ID above the list. Individual keys don't have one.
 2. Run `app-store-connect-mcp auth add` in a separate terminal (it asks questions), or `auth import` with `ASC_*` set (it also finds fastlane and `~/.appstoreconnect/private_keys/AuthKey_*.p8`). Both test the key against Apple before saving.
-3. Sales and finance reports need your vendor number: App Store Connect → Payments and Financial Reports, top left under the account name. Add it with `app-store-connect-mcp auth set <profile> vendor_number=…`.
+3. Sales and finance reports need your vendor number. After `app-store-connect-mcp web login` it's read from Payments and Financial Reports automatically. Without a web session, find it in App Store Connect → Payments and Financial Reports, top left under the account name, and add it with `app-store-connect-mcp auth set <profile> vendor_number=…`.
 
 Then run `app-store-connect-mcp doctor`. Everything should say ok.
 

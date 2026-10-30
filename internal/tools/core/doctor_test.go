@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -108,6 +109,73 @@ func TestDoctor(t *testing.T) {
 				t.Errorf("summary incomplete: %+v", out)
 			}
 		})
+	}
+}
+
+func TestDoctorVendorNumberViaWebSession(t *testing.T) {
+	const (
+		olympus = "/olympus/v1/session"
+		vendors = "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/4242424/sapVendorNumbers"
+	)
+	tests := []struct {
+		name         string
+		session      bool
+		vendors      string
+		vendorsErr   int
+		wantStatus   string
+		wantInDetail string
+		wantInFix    string
+	}{
+		{
+			name: "discovered", session: true, vendors: `{"data":[{"sapVendorNumber":81234567,"isArcadeVendor":false}]}`,
+			wantStatus: statusOK, wantInDetail: "vendor number 81234567 read from Payments via the web session",
+		},
+		{name: "no session", wantStatus: statusWarn, wantInDetail: "no vendor number", wantInFix: "web_login"},
+		{
+			name: "ambiguous", session: true, vendors: `{"data":[{"sapVendorNumber":111},{"sapVendorNumber":222}]}`,
+			wantStatus: statusWarn, wantInDetail: "111, 222", wantInFix: "vendor_number=",
+		},
+		{name: "portal 5xx", session: true, vendorsErr: 503, wantStatus: statusWarn, wantInDetail: "503"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k := kit(t)
+			k.ASC.Handle("GET", "/v1/apps", 200, emptyApps)
+			k.Env.Profile.VendorNumber = ""
+			if tt.session {
+				k.WebSession()
+				k.Portal.HandleJSON("GET", olympus, `{"provider":{"providerId":4242424}}`)
+				if tt.vendorsErr != 0 {
+					k.Portal.HandleError("GET", vendors, tt.vendorsErr, "Service Unavailable")
+				} else {
+					k.Portal.HandleJSON("GET", vendors, tt.vendors)
+				}
+			}
+			res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "doctor"), k.Env, ""))
+			c := checksOf(t, res)["vendor_number"]
+			if c.Status != tt.wantStatus || !strings.Contains(c.Detail, tt.wantInDetail) || !strings.Contains(c.Fix, tt.wantInFix) {
+				t.Errorf("vendor_number = %+v", c)
+			}
+			if out := tooltest.Decode[doctorOut](t, res); out.Status == statusFail {
+				t.Errorf("doctor failed: %+v", out.Checks)
+			}
+		})
+	}
+}
+
+func TestDoctorWebSessionActiveNamesWhatItServes(t *testing.T) {
+	k := kit(t).WebSession()
+	k.ASC.Handle("GET", "/v1/apps", 200, emptyApps)
+	k.Web.Handle("GET", "/v1/apps", 200, emptyApps)
+	if err := k.Toolsets.Enable(context.Background(), tool.Web); err != nil {
+		t.Fatal(err)
+	}
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "doctor"), k.Env, ""))
+	c := checksOf(t, res)["web_session"]
+	for _, want := range []string{"dashboard analytics", "vendor number", "apps_create", "privacy_*"} {
+		if c.Status != statusOK || !strings.Contains(c.Detail, want) {
+			t.Errorf("web_session = %+v, want ok mentioning %q", c, want)
+		}
 	}
 }
 

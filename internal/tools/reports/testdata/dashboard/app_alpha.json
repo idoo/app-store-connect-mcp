@@ -1,0 +1,10 @@
+{"meta":{"adjustedForPrivacy":false},"size":8,"results":[
+ {"adamId":"1000000011","measure":"impressionsTotal","type":"COUNT","total":100,"previousTotal":50,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"pageViewCount","type":"COUNT","total":10,"previousTotal":5,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"units","type":"COUNT","total":3,"previousTotal":1,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"totalDownloads","type":"COUNT","total":4,"previousTotal":2,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"proceeds","type":"COUNT","total":1.5,"previousTotal":0,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"sessions","type":"COUNT","total":20,"previousTotal":10,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"crashes","type":"COUNT","total":1,"previousTotal":0,"percentChange":0,"meetsThreshold":true,"data":[]},
+ {"adamId":"1000000011","measure":"conversionRate","type":"AVERAGE","total":3.0,"previousTotal":2.0,"percentChange":0,"meetsThreshold":true,"data":[]}
+]}
