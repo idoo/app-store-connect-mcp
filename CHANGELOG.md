@@ -4,6 +4,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-28
+
+### Added
+
+- `release_review_reply` (`web` toolset, hidden while writes are off) replies to App Review in the Resolution Center. It uses the same submission and thread as `release_review_messages`: by default the newest rejection thread of the newest submitted submission. You can also pass `submission` or `thread`.
+  - The first call previews: app, submission, thread, rejected guidelines and the exact text, with a `plan_id`. The second call, with the `plan_id`, needs your approval in the client.
+  - It sends the way App Store Connect's own web form does: it writes the thread's unsent draft (and replaces one you left there, saying so in the preview), then sends it. The text goes as plain text, at most 4000 characters.
+  - It refuses unless the submission is UNRESOLVED_ISSUES and the thread takes replies.
+  - The result has the new message id and date, plus `landed`, which says whether the message showed up when the thread was read again. A failed send reports each step and is never retried.
+  - Attachments aren't supported yet.
+- `release_review_messages` suggests `release_review_reply` in `next` when App Review is waiting for a reply. Each message now carries its `id`.
+
+### Changed
+
+- `release_review_messages` `guidelines` lists Apple's specific guideline (`2.3.7`, `4.3.0`) instead of only the section (`2.3`, `4.3`) when the reason code refines it.
+
 ## [0.18.0] - 2026-10-28
 
 ### Added
@@ -421,7 +437,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.15.0...v0.16.0
