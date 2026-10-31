@@ -23,10 +23,9 @@ type reviewStatusIn struct {
 func init() {
 	tool.Register(tool.New(tool.Meta{
 		Name: "release_review_status", Toolset: tool.Release, Class: tool.Read, Idempotent: true,
-		Title: "App Review submission status",
-		Description: "Current and recent App Review submissions and item states. Reviewer messages aren't in the API: " +
-			"see the Resolution Center.",
-		Enums: map[string][]any{"platform": platformEnum},
+		Title:       "App Review submission status",
+		Description: "Current and recent App Review submissions and item states; reviewer messages via release_review_messages.",
+		Enums:       map[string][]any{"platform": platformEnum},
 	}, releaseReviewStatus))
 }
 
@@ -207,6 +206,9 @@ func releaseReviewStatus(ctx context.Context, env *tool.Env, in reviewStatusIn) 
 		res = tool.OK(out).Then(statusNext(app, platform, "", nil))
 	} else {
 		res = tool.OK(out).Then(reviewNext(app, platform, out.Current)...)
+		if out.Rejection != nil {
+			res.Then(tool.NextStep{Tool: "release_review_messages", Args: map[string]any{"app": app.ID, "submission": out.Current.ID}})
+		}
 	}
 	if otherErr != nil {
 		res.Warn("other platforms not checked: " + otherErr.Error())
@@ -301,7 +303,7 @@ func rejection(cur *reviewSubmissionOut, rc string) *rejectionOut {
 	}
 	return &rejectionOut{
 		RejectedItems:    items,
-		Note:             "the App Store Connect API does not expose the reviewer's message or guideline; read it in the Resolution Center, fix, then resubmit with release_submit",
+		Note:             "the reviewer's message and rejected guidelines are not in the App Store Connect API: read them with release_review_messages (web session) or in the Resolution Center, fix, then resubmit with release_submit",
 		ResolutionCenter: rc,
 	}
 }

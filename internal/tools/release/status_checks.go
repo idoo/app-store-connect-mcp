@@ -244,7 +244,7 @@ func checkBuild(s *statusSnapshot) check {
 			break
 		}
 		want := s.Version.Version.Str("versionString")
-		if s.BuildVersion != "" && want != "" && s.BuildVersion != want {
+		if s.BuildVersion != "" && want != "" && !tool.SameMarketingVersion(s.BuildVersion, want) {
 			c.Status, c.FixVia = statusBlock, fixTool("release_prepare")
 			c.Detail = fmt.Sprintf("build %s belongs to version %s, not %s; attach a %s build (build: \"latest\" picks the newest one)", b.Str("version"), s.BuildVersion, want, want)
 			break

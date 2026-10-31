@@ -106,16 +106,17 @@ var (
 		"delete", "remove", "expire", "submit", "cancel", "release", "publish", "reply", "revoke", "phased",
 	}
 	classExceptions = map[string]tool.Class{
-		"doctor":           tool.Read,
-		"asc_api_request":  tool.Destructive, // generic mutation, any method
-		"metadata_apply":   tool.Destructive, // overwrites listed locales and deletes those in remove
-		"screenshots_sync": tool.Destructive, // mode:replace deletes screenshots
-		"library_apply":    tool.Destructive, // uploads and places; deletes/retires on remove, archive or replace
-		"pricing_apply":    tool.Destructive, // apply-pricing (§4.2)
-		"users_invite":     tool.Destructive, // Apple emails the invitee immediately
-		"apps_create":      tool.Destructive, // irreversible: the record cannot be deleted and its name is reserved
-		"privacy_apply":    tool.Destructive, // deletes data usages and publishes App Privacy
-		"web_login":        tool.Read,        // local only: a browser window for the human; Apple state is untouched
+		"doctor":                  tool.Read,
+		"asc_api_request":         tool.Destructive, // generic mutation, any method
+		"metadata_apply":          tool.Destructive, // overwrites listed locales and deletes those in remove
+		"screenshots_sync":        tool.Destructive, // mode:replace deletes screenshots
+		"library_apply":           tool.Destructive, // uploads and places; deletes/retires on remove, archive or replace
+		"pricing_apply":           tool.Destructive, // apply-pricing (§4.2)
+		"users_invite":            tool.Destructive, // Apple emails the invitee immediately
+		"apps_create":             tool.Destructive, // irreversible: the record cannot be deleted and its name is reserved
+		"privacy_apply":           tool.Destructive, // deletes data usages and publishes App Privacy
+		"web_login":               tool.Read,        // local only: a browser window for the human; Apple state is untouched
+		"release_review_messages": tool.Read,        // GETs the Resolution Center thread only
 		// W verbs declared D in their packages; reported to Main, kept as shipped.
 		"signing_capabilities_set": tool.Destructive, // can disable capabilities
 		"webhooks_upsert":          tool.Destructive, // sends App Store events to an external URL

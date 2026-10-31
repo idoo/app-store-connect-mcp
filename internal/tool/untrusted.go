@@ -12,6 +12,7 @@ var UntrustedFallback = []string{
 	"displayName",
 	"feedback",
 	"message",
+	"messageBody",
 	"name",
 	"notes",
 	"promotionalText",
@@ -29,7 +30,7 @@ var UntrustedFallback = []string{
 // is trusted (a comparison or an id-like use) and marked "// trusted:".
 var FreeTextKeys = []string{
 	"name", "firstName", "lastName", "title", "message", "displayName",
-	"description", "body", "comment", "responseBody",
+	"description", "body", "comment", "responseBody", "messageBody",
 	"whatsNew", "promotionalText", "subtitle", "keywords", "referenceName", "reviewerNotes",
 	"sourceBranchName", "destinationBranchName", "deviceModel", "osVersion", "email", "nickname",
 }
