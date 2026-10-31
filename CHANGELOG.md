@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-28
+
+### Added
+
+- `finance_report` works with a key that has no Finance or Admin role, once you've signed in with `app-store-connect-mcp web login`. When Apple refuses `/v1/financeReports`, it reads the month from the web Payments page instead (`data_source: "web_payments"`): each currency's earnings and units, plus `payments[]` with status, bank currency and amount, and per region the balance carried forward, taxes and fees, adjustments, amount owed, bank amount and exchange rate once Apple sets one. That's more than the API gives, which has no exchange rates. A month Apple hasn't closed yet is `pending`. Per-product rows still need the Finance role, and `region`, `report_type`, `top_n` and `include_rows` don't apply on this path, so passing them adds a warning. Without a web session the 403 hint now also suggests `web_login`.
+- `release_health_report` takes production crashes from the App Analytics dashboard when Analytics Reports aren't set up or the key isn't Admin (`data_source: "web_dashboard"`, with the window in whole Pacific days). The dashboard lags about 2 days, so a window that starts after its last data day is `insufficient_data`, and so is an app that was never on the App Store. `analytics_setup` is only suggested when neither source works. Analytics crashes still never decide the verdict.
+
+### Changed
+
+- `release_health_report` says `unavailable` (needs Admin) instead of `error` when Apple refuses the crash report to the key.
+
 ## [0.16.0] - 2026-10-28
 
 ### Added
@@ -395,7 +406,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.13.0...v0.14.0

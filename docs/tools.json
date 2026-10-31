@@ -1005,7 +1005,7 @@
     "toolset": "reports",
     "class": "R",
     "title": "Payments and financial report",
-    "description": "Payments & Financial report for one fiscal month: proceeds per currency, top products; include_rows: CSV link of all rows. No FX/USD totals (web Payments only). Unpublished months: pending.",
+    "description": "Payments & Financial report for a fiscal month: proceeds per currency, top products; include_rows: CSV of all rows. No Finance role: web Payments with bank amounts. Unpublished: pending.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,

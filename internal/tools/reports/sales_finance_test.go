@@ -202,15 +202,17 @@ func TestReportErrorsMentionVendorNumber(t *testing.T) {
 }
 
 // A finance 403 with a vendor number Apple supplied (web session) is the
-// key's role, never another account's number.
+// key's role, never another account's number; when the web Payments
+// fallback fails too, the role hint stays and the failure is named.
 func TestFinanceReportForbiddenWithWebVendorNamesRole(t *testing.T) {
 	k := webVendorKit(t)
 	k.ASC.Handle(http.MethodGet, "/v1/financeReports", http.StatusForbidden,
 		`{"errors":[{"status":"403","code":"FORBIDDEN_ERROR","title":"forbidden","detail":"not allowed"}]}`)
+	k.Portal.HandleError(http.MethodGet, vendorsPath+"/81234567?year=2026&month=8", http.StatusInternalServerError)
 	eb := tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "finance_report"), k.Env, `{"month":"2026-08"}`), "api_error")
 	if eb.API == nil || eb.API.Status != http.StatusForbidden || strings.Contains(eb.Hint, "vendor number") ||
 		!strings.Contains(eb.Hint, "Finance or Admin role") || !strings.Contains(eb.Hint, "Users and Access › Integrations") ||
-		!strings.Contains(eb.Hint, "sales_report works") {
+		!strings.Contains(eb.Hint, "sales_report works") || !strings.Contains(eb.Message, "web Payments fallback failed too") {
 		t.Errorf("body = %+v", eb)
 	}
 }

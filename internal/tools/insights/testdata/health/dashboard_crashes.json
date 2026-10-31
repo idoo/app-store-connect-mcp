@@ -1,0 +1,1 @@
+{"size":1,"results":[{"adamId":"1000000002","meetsThreshold":true,"measure":"crashes","type":"COUNT","total":7,"previousTotal":3,"percentChange":1.3333,"data":[{"date":"2026-10-16T00:00:00Z","value":2},{"date":"2026-10-17T00:00:00Z","value":4},{"date":"2026-10-18T00:00:00Z","value":1}]}]}

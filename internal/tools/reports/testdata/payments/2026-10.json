@@ -1,0 +1,117 @@
+{
+ "data": {
+  "vendorName": "Example Developer",
+  "sapVendorNumber": 81234567,
+  "lastSoldUnit": 0,
+  "reportDate": "2026-10-01T00:00:00Z",
+  "updatedDate": "2026-10-07T00:00:00Z",
+  "isPooled": false,
+  "isArcadeVendor": false,
+  "providerId": 4242424,
+  "hasConsolidatedReport": false,
+  "hasDetailedConsolidatedReport": false,
+  "hasSingaporeGSTReport": false,
+  "hasMalaysianSSTReport": false,
+  "hasThailandTOCReport": false,
+  "hasVendorTaxReport": false,
+  "hasKoreaTOCReport": false,
+  "reportSummaries": [
+   {
+    "status": "PENDING_PAYMENT",
+    "returnMessage": null,
+    "rejectMessageKey": null,
+    "amount": "349.00",
+    "currency": "SEK",
+    "bankName": "",
+    "maskedBankAccount": "",
+    "isPaymentExpected": false,
+    "paidOrExpectingPaymentDate": "",
+    "proceedsByRegion": [
+     {
+      "regionCurrency": {
+       "regionCurrencyId": 10004,
+       "regionId": 10004,
+       "regionCode": "GB",
+       "regionName": "United Kingdom",
+       "regionNameKey": "ITC.Financial.MZPaymentConsolidation.region.GB",
+       "currencyCode": "GBP"
+      },
+      "financialReportType": "D",
+      "unitsSold": 0,
+      "beginBalance": "1.73",
+      "earned": "0.00",
+      "total": "1.73",
+      "taxesAndFees": "0.00",
+      "withHoldingTax": "0.00",
+      "withHoldingTaxAndAdjustment": "0.00",
+      "inputTax": "0.00",
+      "inputTaxDetails": [],
+      "adjustmentAmount": "0.00",
+      "totalOwed": "1.73",
+      "exchangeRate": "",
+      "proceeds": "23.24",
+      "availableReportTypes": null
+     },
+     {
+      "regionCurrency": {
+       "regionCurrencyId": 10000,
+       "regionId": 10000,
+       "regionCode": "US",
+       "regionName": "Americas",
+       "regionNameKey": "ITC.Financial.MZPaymentConsolidation.region.US",
+       "currencyCode": "USD"
+      },
+      "financialReportType": "D",
+      "unitsSold": 0,
+      "beginBalance": "12.60",
+      "earned": "0.00",
+      "total": "12.60",
+      "taxesAndFees": "0.00",
+      "withHoldingTax": "0.00",
+      "withHoldingTaxAndAdjustment": "0.00",
+      "inputTax": "0.00",
+      "inputTaxDetails": [],
+      "adjustmentAmount": "0.00",
+      "totalOwed": "12.60",
+      "exchangeRate": "",
+      "proceeds": "134.05",
+      "availableReportTypes": null
+     },
+     {
+      "regionCurrency": {
+       "regionCurrencyId": 10002,
+       "regionId": 10002,
+       "regionCode": "WW",
+       "regionName": "Rest of World",
+       "regionNameKey": "ITC.Financial.MZPaymentConsolidation.region.WW",
+       "currencyCode": "USD"
+      },
+      "financialReportType": "D",
+      "unitsSold": 0,
+      "beginBalance": "18.02",
+      "earned": "0.00",
+      "total": "18.02",
+      "taxesAndFees": "0.00",
+      "withHoldingTax": "0.00",
+      "withHoldingTaxAndAdjustment": "0.00",
+      "inputTax": "0.00",
+      "inputTaxDetails": [],
+      "adjustmentAmount": "0.00",
+      "totalOwed": "18.02",
+      "exchangeRate": "",
+      "proceeds": "191.71",
+      "availableReportTypes": null
+     }
+    ],
+    "externalPaymentIdentifier": null,
+    "lastFourDigitOfBankAccountNumber": ""
+   }
+  ]
+ },
+ "messages": {
+  "warn": null,
+  "error": null,
+  "info": null
+ },
+ "statusCode": "SUCCESS"
+}

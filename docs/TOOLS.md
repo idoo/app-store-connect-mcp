@@ -66,7 +66,7 @@
 |---|---|---|---|
 |[`analytics_report`](#analytics_report)|R|none|Without report: lists the app's analytics reports. With report: sums metrics of its newest segments by dimensions. Needs analytics_setup; data lags 24–48 h.|
 |[`analytics_setup`](#analytics_setup)|W|none|Ensures an ONGOING analytics report request exists (optional ONE_TIME_SNAPSHOT for history); existing ones report already. Data arrives 24–48 h later via analytics_report.|
-|[`finance_report`](#finance_report)|R|none|Payments & Financial report for one fiscal month: proceeds per currency, top products; include_rows: CSV link of all rows. No FX/USD totals (web Payments only). Unpublished months: pending.|
+|[`finance_report`](#finance_report)|R|none|Payments & Financial report for a fiscal month: proceeds per currency, top products; include_rows: CSV of all rows. No Finance role: web Payments with bank amounts. Unpublished: pending.|
 |[`insights_summary`](#insights_summary)|R|none|Use first for "how is my app doing": units and proceeds vs previous period, ratings, versions, TestFlight feedback, analytics; each section ok or unavailable+why.|
 |[`sales_report`](#sales_report)|R|none|Sales & Trends aggregates (units by category, proceeds per currency, top-N) for a period, from/to or frequency+report_date; include_rows: CSV link of all rows. Unpublished: pending.|
 
