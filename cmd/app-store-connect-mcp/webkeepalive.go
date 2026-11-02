@@ -174,8 +174,6 @@ func (j keepaliveJob) plist() string {
 	<integer>` + strconv.Itoa(int(j.interval.Seconds())) + `</integer>
 	<key>RunAtLoad</key>
 	<true/>
-	<key>ProcessType</key>
-	<string>Background</string>
 	<key>StandardOutPath</key>
 	<string>` + esc(j.log) + `</string>
 	<key>StandardErrorPath</key>

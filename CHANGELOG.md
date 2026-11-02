@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-11-02
+
+### Fixed
+
+- `web keepalive --install` no longer marks the LaunchAgent as a background process. launchd throttled it so hard that a run never finished.
+
 ## [0.20.0] - 2026-11-02
 
 ### Added
@@ -452,7 +458,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.17.0...v0.18.0
