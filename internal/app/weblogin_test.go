@@ -20,8 +20,11 @@ import (
 // check (sessions with myacinfo=GOOD are valid). It returns the browser calls.
 func webLoginHooks(t *testing.T, display bool) *[]websession.BrowserLoginOptions {
 	t.Helper()
-	oldLogin, oldDisplay, oldValidate := webBrowserLogin, webHasDisplay, webValidate
-	t.Cleanup(func() { webBrowserLogin, webHasDisplay, webValidate = oldLogin, oldDisplay, oldValidate })
+	oldLogin, oldDisplay, oldValidate, oldNotify := webBrowserLogin, webHasDisplay, webValidate, webNotify
+	t.Cleanup(func() {
+		webBrowserLogin, webHasDisplay, webValidate, webNotify = oldLogin, oldDisplay, oldValidate, oldNotify
+	})
+	webNotify = func(string, string) {}
 	t.Setenv(websession.EnvStore, "file")
 	var calls []websession.BrowserLoginOptions
 	webHasDisplay = func() bool { return display }

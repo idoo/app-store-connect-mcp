@@ -151,7 +151,7 @@ type olympusSession struct {
 }
 
 // Validate asks Apple whether s is live (GET /olympus/v1/session with its
-// cookies) and returns the account and team. 401/403 return ErrExpired.
+// cookies) and returns the account and team. 401/403 and redirects return ErrExpired.
 // hc nil uses http.DefaultClient; it must not follow redirects to other hosts
 // with the cookies (http.Client never forwards a manual Cookie header across
 // hosts).
@@ -179,18 +179,9 @@ func Validate(ctx context.Context, hc *http.Client, s *Session, now time.Time) (
 	if err != nil {
 		return nil, fmt.Errorf("websession: validate: %w", err)
 	}
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, ErrExpired
-	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("websession: validate: Apple returned HTTP %d", resp.StatusCode)
-	}
-	var o olympusSession
-	if err := json.Unmarshal(body, &o); err != nil {
-		return nil, fmt.Errorf("websession: validate: decode session: %w", err)
-	}
-	if o.Provider.ProviderID == 0 && o.User.EmailAddress == "" {
-		return nil, ErrExpired
+	o, err := parseOlympus(resp.StatusCode, body)
+	if err != nil {
+		return nil, err
 	}
 	info := &Info{
 		AppleID:  o.User.EmailAddress,
@@ -200,6 +191,38 @@ func Validate(ctx context.Context, hc *http.Client, s *Session, now time.Time) (
 		info.Available = append(info.Available, Provider{ID: p.ProviderID, PublicID: p.PublicProviderID, Name: p.Name})
 	}
 	return info, nil
+}
+
+// ParseSession reads Apple's answer to GET /olympus/v1/session: live
+// reports a signed-in session (with its Apple ID); 401/403 or an answer
+// without account are not live; other statuses are errors.
+func ParseSession(status int, body []byte) (appleID string, live bool, err error) {
+	o, err := parseOlympus(status, body)
+	if errors.Is(err, ErrExpired) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return o.User.EmailAddress, true, nil
+}
+
+// parseOlympus decodes an olympus session answer; a dead session is ErrExpired.
+func parseOlympus(status int, body []byte) (*olympusSession, error) {
+	switch {
+	case status == http.StatusUnauthorized || status == http.StatusForbidden || (status >= 300 && status < 400):
+		return nil, ErrExpired
+	case status != http.StatusOK:
+		return nil, fmt.Errorf("websession: validate: Apple returned HTTP %d", status)
+	}
+	var o olympusSession
+	if err := json.Unmarshal(body, &o); err != nil {
+		return nil, fmt.Errorf("websession: validate: decode session: %w", err)
+	}
+	if o.Provider.ProviderID == 0 && o.User.EmailAddress == "" {
+		return nil, ErrExpired
+	}
+	return &o, nil
 }
 
 // TwoFactor describes a pending two-factor challenge shown to the human.

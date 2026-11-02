@@ -128,6 +128,11 @@ var (
 		Message: "sign-in failed",
 		Hint:    "show the message to the user; they can also run `app-store-connect-mcp web login` in a terminal",
 	}
+	errLoginWindowOpen = &tool.Error{
+		Code:    "login_window_open",
+		Message: "a sign-in window for this profile is already open (started elsewhere, e.g. `web login` in a terminal)",
+		Hint:    "ask the user to finish signing in there, then call the tool that needed the web session again",
+	}
 )
 
 // start returns the sign-in in progress (or finished and unreported), else
@@ -218,6 +223,8 @@ func explainLoginError(err error) error {
 	switch {
 	case errors.Is(err, browser.ErrClosed):
 		return fmt.Errorf("%w: %w", errLoginClosed, err)
+	case errors.Is(err, browser.ErrProfileInUse):
+		return fmt.Errorf("%w: %w", errLoginWindowOpen, err)
 	case errors.Is(err, context.DeadlineExceeded):
 		return fmt.Errorf("%w: %w", errLoginTimeout, err)
 	case errors.Is(err, browser.ErrNoBrowser):

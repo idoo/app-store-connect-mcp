@@ -3,8 +3,11 @@ package browser
 import (
 	"context"
 	"errors"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDecide(t *testing.T) {
@@ -108,5 +111,34 @@ func TestLoginValidates(t *testing.T) {
 		if _, err := Login(context.Background(), c.o, c.r); err == nil {
 			t.Errorf("%s: no error", name)
 		}
+	}
+}
+
+// A renewal (or a second window) must never take over a profile another
+// browser runs with, such as the human's open sign-in window.
+func TestLoginLeavesBusyProfileAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	dir := t.TempDir()
+	cmd := exec.Command("sh", "-c", "sleep 30; :", "sh", "--user-data-dir="+dir)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	ok := func(context.Context, string, []Cookie) (bool, error) { return true, nil }
+	modes := []bool{true}
+	if HasDisplay() {
+		modes = append(modes, false)
+	}
+	for _, headless := range modes {
+		start := time.Now()
+		_, err := Login(context.Background(), Options{ProfileDir: dir, Headless: headless, BinDir: t.TempDir(), BrowserPath: "/nonexistent"}, Request{StartURL: "https://x/", Check: ok})
+		if !errors.Is(err, ErrProfileInUse) || time.Since(start) > 10*time.Second {
+			t.Fatalf("headless=%v: err %v", headless, err)
+		}
+	}
+	if len(profilePIDs(dir)) == 0 {
+		t.Fatal("the other browser was stopped")
 	}
 }

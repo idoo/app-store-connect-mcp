@@ -117,7 +117,7 @@ func (s *Source) headerLocked(req *http.Request) (h string, renewable bool, err 
 		case err != nil:
 			return "", false, fmt.Errorf("%w: %w", tool.ErrWebSessionRequired, err)
 		}
-		if s.dead != "" && fingerprint(sess) == s.dead {
+		if s.dead != "" && Fingerprint(sess) == s.dead {
 			return "", true, fmt.Errorf("%w: session expired: %w", tool.ErrWebSessionRequired, ErrExpired)
 		}
 		s.sess, s.dead = sess, ""
@@ -205,13 +205,13 @@ func (s *Source) Expired() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.sess != nil {
-		s.dead = fingerprint(s.sess)
+		s.dead = Fingerprint(s.sess)
 	}
 	s.sess = nil
 }
 
-// fingerprint identifies a session by its cookies without keeping values.
-func fingerprint(sess *Session) string {
+// Fingerprint identifies a session by its cookies without keeping values.
+func Fingerprint(sess *Session) string {
 	parts := make([]string, 0, len(sess.Cookies))
 	for _, c := range sess.Cookies {
 		parts = append(parts, c.Name+"\x00"+normDomain(c.Domain)+"\x00"+c.Path+"\x00"+c.Value)
