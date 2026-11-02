@@ -53,6 +53,11 @@ func TestKeepaliveInstallWritesLaunchAgent(t *testing.T) {
 			t.Errorf("plist lacks %q:\n%s", want, got)
 		}
 	}
+	// launchd's Background class throttles CPU and network so hard that a run
+	// never finished.
+	if strings.Contains(got, "ProcessType") {
+		t.Errorf("plist sets a ProcessType:\n%s", got)
+	}
 	domain := "gui/" + strconv.Itoa(os.Getuid())
 	wantCalls := []string{"bootout " + domain + "/" + label, "bootstrap " + domain + " " + plist}
 	if len(*calls) != 4 || (*calls)[0] != wantCalls[0] || (*calls)[1] != wantCalls[1] || (*calls)[2] != wantCalls[0] || (*calls)[3] != wantCalls[1] {
