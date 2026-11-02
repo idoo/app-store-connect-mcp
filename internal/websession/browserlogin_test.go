@@ -135,6 +135,47 @@ func TestBrowserLogin(t *testing.T) {
 	}
 }
 
+// Apple rolls dqsid when it answers and the old value dies; the session
+// BrowserLogin returns must carry the rolled one, or the first use after
+// sign-in finds it expired.
+func TestBrowserLoginKeepsCookiesRolledWhileVerifying(t *testing.T) {
+	var mu sync.Mutex
+	live := "D1"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !strings.Contains(r.Header.Get("Cookie"), "dqsid="+live) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		live += "x"
+		w.Header().Add("Set-Cookie", "dqsid="+live+"; Domain=appstoreconnect.apple.com; Path=/; Secure; HttpOnly")
+		_, _ = fmt.Fprint(w, `{"user":{"emailAddress":"dev@example.com"},"provider":{"providerId":123}}`)
+	}))
+	t.Cleanup(srv.Close)
+	hc := serverClient(srv)
+	clk := &fakeClock{t: time.Unix(1_800_000_000, 0)}
+	ck := []browser.Cookie{
+		{Name: "myacinfo", Value: "GOOD", Domain: ".apple.com", Path: "/"},
+		{Name: "dqsid", Value: "D1", Domain: "appstoreconnect.apple.com", Path: "/"},
+	}
+	stubBrowser(t, func(ctx context.Context, _ browser.Options, r browser.Request) (browser.Result, error) {
+		if done, err := r.Check(ctx, "https://appstoreconnect.apple.com/apps", ck); err != nil || !done {
+			return browser.Result{}, fmt.Errorf("check: done=%v err=%v", done, err)
+		}
+		return browser.Result{Cookies: ck, Browser: "Fake"}, nil
+	})
+	sess, err := BrowserLogin(context.Background(), BrowserLoginOptions{ProfileDir: t.TempDir(), HTTP: hc, Now: clk.now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 2 {
+		if _, err := Validate(context.Background(), hc, sess, clk.now()); err != nil {
+			t.Fatalf("use %d after sign-in: %v", i+1, err)
+		}
+	}
+}
+
 func TestBrowserLoginLogsVerifyErrorOnce(t *testing.T) {
 	ol, hc := newOlympus(t)
 	ol.status = http.StatusInternalServerError

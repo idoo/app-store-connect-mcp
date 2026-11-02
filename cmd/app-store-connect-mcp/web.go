@@ -262,9 +262,10 @@ func webAlreadySignedIn(ctx context.Context, o webOptions, profile string, store
 		if info, err = applyTeam(ctx, sess, info, o.team); err != nil {
 			return true, err
 		}
-		if err := store.Save(profile, sess); err != nil {
-			return true, err
-		}
+	}
+	// Validate applied the cookies Apple rolled; the old ones may be dead.
+	if err := store.Save(profile, sess); err != nil {
+		return true, err
 	}
 	_, err = fmt.Fprintf(stdout, "Already signed in as %s (team %s); `web login --force` signs in again. %s\n", info.AppleID, teamLabel(info.Provider), webToolsHint)
 	return true, err
@@ -537,6 +538,9 @@ func webStatus(ctx context.Context, profile string, store websession.Store, stdo
 	case err != nil:
 		fmt.Fprintf(stdout, "status: unknown (%v)\n", err)
 		return &guardExit{1}
+	}
+	if err := store.Save(profile, sess); err != nil { // keep the cookies Apple rolled
+		return err
 	}
 	_, err = fmt.Fprintf(stdout, "status: active as %s (team %s)\n", info.AppleID, teamLabel(info.Provider))
 	return err
