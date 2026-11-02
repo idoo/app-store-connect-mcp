@@ -22,7 +22,7 @@ import (
 )
 
 const webUsage = `usage:
-  app-store-connect-mcp web login [--profile NAME] [--team ID] [--force] [--timeout 10m] [--browser PATH]
+  app-store-connect-mcp web login [--profile NAME] [--team ID] [--force] [--timeout 30m] [--browser PATH]
                                     open a browser window on Apple's own sign-in page (password, 2FA and
                                     passkeys stay in the browser); a dedicated browser profile, never yours
   app-store-connect-mcp web login --password [--profile NAME] [--apple-id EMAIL] [--team ID] [--force] [--password-stdin]
@@ -33,6 +33,10 @@ const webUsage = `usage:
   app-store-connect-mcp web status [--profile NAME]   show the stored session and check it with Apple (exit 1 unless active)
   app-store-connect-mcp web team [--profile NAME] [ID] list teams, or switch the session to team ID
   app-store-connect-mcp web logout [--profile NAME]   delete the stored session and the dedicated browser profile
+  app-store-connect-mcp web keepalive [--profile NAME] use the session once so Apple keeps it alive; renew it
+                                    silently or notify you once when you must sign in (exit 1 unless live)
+  app-store-connect-mcp web keepalive --install [--interval 30m] | --uninstall [--profile NAME]
+                                    run keepalive every interval (macOS LaunchAgent; elsewhere prints a cron line)
 
 web login reuses a still-valid session unless --force. The browser is your default one when it is
 Chromium-based (Chrome, Brave, Edge, ...), else another installed Chromium, else a downloaded
@@ -78,6 +82,9 @@ type webOptions struct {
 	force         bool
 	timeout       time.Duration
 	browserPath   string
+	install       bool
+	uninstall     bool
+	interval      time.Duration
 }
 
 func parseWebFlags(name string, args []string, stderr io.Writer, maxArgs int) (webOptions, []string, error) {
@@ -92,11 +99,15 @@ func parseWebFlags(name string, args []string, stderr io.Writer, maxArgs int) (w
 		fs.StringVar(&o.appleID, "apple-id", "", "Apple ID email for --password (asked when omitted)")
 		fs.BoolVar(&o.passwordStdin, "password-stdin", false, "with --password: read the password from the first line of stdin")
 		fs.BoolVar(&o.force, "force", false, "sign in again even if the stored session is still valid")
-		fs.DurationVar(&o.timeout, "timeout", 10*time.Minute, "how long to wait for the browser sign-in")
+		fs.DurationVar(&o.timeout, "timeout", browser.SignInWait, "how long to wait for the browser sign-in")
 		fs.StringVar(&o.browserPath, "browser", "", "Chromium-based browser executable or .app (default: "+browser.EnvBrowser+", then auto-detect)")
 		fallthrough
 	case "import":
 		fs.StringVar(&team, "team", "", "App Store Connect team (provider) id to switch to")
+	case "keepalive":
+		fs.BoolVar(&o.install, "install", false, "run keepalive every --interval in the background")
+		fs.BoolVar(&o.uninstall, "uninstall", false, "stop and remove the background keepalive")
+		fs.DurationVar(&o.interval, "interval", 30*time.Minute, "how often the background keepalive runs")
 	}
 	if err := fs.Parse(args); err != nil {
 		return o, nil, usageErr(err.Error())
@@ -109,6 +120,9 @@ func parseWebFlags(name string, args []string, stderr io.Writer, maxArgs int) (w
 	}
 	if o.timeout <= 0 && name == "login" {
 		return o, nil, usageErr("--timeout must be positive")
+	}
+	if name == "keepalive" && (o.install && o.uninstall || o.interval < time.Minute) {
+		return o, nil, usageErr("web keepalive: use --install or --uninstall, not both; --interval is at least 1m")
 	}
 	if team != "" {
 		id, err := strconv.ParseInt(strings.TrimSpace(team), 10, 64)
@@ -128,7 +142,7 @@ func runWeb(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 		_, err := fmt.Fprintln(stdout, webUsage)
 		return err
 	}
-	maxArgs := map[string]int{"login": 0, "import": 1, "status": 0, "team": 1, "logout": 0}
+	maxArgs := map[string]int{"login": 0, "import": 1, "status": 0, "team": 1, "logout": 0, "keepalive": 0}
 	n, ok := maxArgs[args[0]]
 	if !ok {
 		return usageErr(fmt.Sprintf("unknown web subcommand %q\n%s", args[0], webUsage))
@@ -155,6 +169,8 @@ func runWeb(ctx context.Context, args []string, stdin io.Reader, stdout, stderr 
 		return webStatus(ctx, profile, store, stdout)
 	case "team":
 		return webTeam(ctx, profile, store, rest, stdout)
+	case "keepalive":
+		return webKeepaliveCmd(ctx, o, profile, dir, stdout)
 	default:
 		if err := store.Delete(profile); err != nil {
 			return err

@@ -25,6 +25,10 @@ var ErrInteractionRequired = errors.New("the human needs to sign in")
 // before sign-in finished.
 var ErrClosed = errors.New("browser closed before sign-in finished")
 
+// ErrProfileInUse means another browser (a sign-in window, usually) runs
+// with the dedicated profile. Login never takes over or closes it.
+var ErrProfileInUse = errors.New("sign-in window open, skipping: another browser is using the dedicated profile")
+
 // signInHint is printed when the interactive window opens; %s is the browser.
 const signInHint = "Sign in in the %s window that just opened (a separate app-store-connect-mcp profile; your own browser profile is not touched). The window closes by itself when sign-in is done."
 
@@ -35,7 +39,7 @@ type Options struct {
 	ProfileDir  string        // dedicated user-data-dir; created 0700
 	BrowserPath string        // "" = auto-detect (EnvBrowser, default browser, other Chromium, downloaded CfT)
 	Headless    bool          // silent renewal
-	Timeout     time.Duration // overall; default 10 min interactive, 60 s headless
+	Timeout     time.Duration // overall; default SignInWait interactive, 60 s headless
 	Log         io.Writer     // human-readable progress lines; never secrets; nil = discard
 	BinDir      string        // Chrome for Testing dir; "" = <state dir>/browser-bin
 }
@@ -71,6 +75,10 @@ type Result struct {
 	Browser string   // display name, e.g. "Brave Browser"
 }
 
+// SignInWait is how long a visible sign-in window waits for the human (who
+// may be away from the computer when it opens).
+const SignInWait = 30 * time.Minute
+
 // Login launches the browser with the dedicated profile, opens r.StartURL and
 // polls until r.Check accepts the cookies. The browser is always closed
 // before Login returns.
@@ -85,7 +93,7 @@ func Login(ctx context.Context, o Options, r Request) (Result, error) {
 		return Result{}, errors.New("browser: ProfileDir is required")
 	}
 	if o.Timeout <= 0 {
-		o.Timeout = 10 * time.Minute
+		o.Timeout = SignInWait
 		if o.Headless {
 			o.Timeout = 60 * time.Second
 		}
@@ -96,6 +104,12 @@ func Login(ctx context.Context, o Options, r Request) (Result, error) {
 	}
 	if !o.Headless && !HasDisplay() {
 		return Result{}, errors.New("browser: no display (DISPLAY and WAYLAND_DISPLAY are unset); sign in on a desktop session, or use `app-store-connect-mcp web import`")
+	}
+	// A headless renew orphaned by a killed server would hold the profile
+	// lock; anything else using the profile is a live window: leave it.
+	killOrphans(o.ProfileDir)
+	if len(profilePIDs(o.ProfileDir)) > 0 {
+		return Result{}, ErrProfileInUse
 	}
 	if o.BinDir == "" {
 		o.BinDir = defaultBinDir()
@@ -115,9 +129,6 @@ func Login(ctx context.Context, o Options, r Request) (Result, error) {
 		return Result{}, err
 	}
 	excludeFromBackup(o.ProfileDir)
-	// A headless renew orphaned by a killed server would hold the profile lock.
-	killOrphans(o.ProfileDir)
-
 	bctx, cleanup, err := start(ctx, o, exe)
 	defer cleanup()
 	if err != nil {

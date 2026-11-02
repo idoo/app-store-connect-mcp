@@ -76,7 +76,7 @@ func TestWebLoginDefaultTimeout(t *testing.T) {
 	if _, errOut, err := runCLI(t, "", "web", "login"); err != nil {
 		t.Fatalf("login: %v\n%s", err, errOut)
 	}
-	if len(*calls) != 1 || (*calls)[0].Timeout != 10*time.Minute || (*calls)[0].BrowserPath != "" {
+	if len(*calls) != 1 || (*calls)[0].Timeout != 30*time.Minute || (*calls)[0].BrowserPath != "" {
 		t.Fatalf("calls = %+v", *calls)
 	}
 }

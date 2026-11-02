@@ -320,6 +320,7 @@ func newWebLogin(stateDir, profile string) func(context.Context, func(string)) (
 		if !webHasDisplay() {
 			return tool.WebAccount{}, errors.New("no display for a browser window on this machine: ask the human to run `app-store-connect-mcp web login` in a terminal")
 		}
+		webNotify(keepaliveTitle, "A sign-in window is open: sign in to App Store Connect there")
 		sess, err := webBrowserLogin(ctx, websession.BrowserLoginOptions{
 			ProfileDir: websession.BrowserProfileDir(stateDir, profile),
 			Log:        &lineWriter{fn: log},

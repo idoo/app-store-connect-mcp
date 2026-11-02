@@ -4,6 +4,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-02
+
+### Added
+
+- `web keepalive` uses the web session once so Apple doesn't drop it for sitting idle, and saves the cookies Apple rolls. A rejected session is renewed headless; if that fails too, you get one desktop notification per dead session and exit 1.
+- `web keepalive --install [--interval 30m]` runs it in the background: a LaunchAgent on macOS (log in `<state dir>/web/keepalive/`), a printed cron line elsewhere. `--uninstall` removes it.
+
+### Changed
+
+- The sign-in window, from `web login` or the `web_login` tool, waits 30 minutes instead of 10, and `web_login` posts a desktop notification when it opens one.
+
+### Fixed
+
+- A headless renewal (or a second sign-in) no longer closes a sign-in window that is already open on the same browser profile. It now stops with "sign-in window open, skipping", and `web_login` answers `login_window_open`.
+
 ## [0.19.0] - 2026-10-28
 
 ### Added
@@ -437,7 +452,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.16.0...v0.17.0

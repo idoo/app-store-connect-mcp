@@ -102,6 +102,14 @@ app-store-connect-mcp web login
 
 A browser window opens on Apple's own sign-in page. Type your password, approve 2FA or use a passkey, and the window closes by itself. It's a separate browser profile just for this: your default browser if it's Brave, Chrome, Edge or Arc, another one of those if it isn't, or a downloaded Chrome for Testing when you have none. When the session runs out later, the same profile renews it headless, so mostly you won't see a window again. An agent can open the window too, with the `web_login` tool, when a tool says `web_session_required`.
 
+Apple drops a session that sits unused for a day or so. To keep it alive, run this once:
+
+```sh
+app-store-connect-mcp web keepalive --install
+```
+
+It touches the session every 30 minutes (a LaunchAgent on macOS; elsewhere it prints a cron line). If Apple still wants you, you get one notification per dead session. The sign-in window, from `web login` or `web_login`, also posts a notification and waits 30 minutes.
+
 No screen? `web login --password` keeps the old terminal flow (Apple ID, password, 2FA code), though Apple often refuses it with error -20209. On an SSH box, use `web import` with the cookies from a browser's "Copy as cURL" or a `FASTLANE_SESSION`.
 
 Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan`, `privacy_apply`, `release_review_messages` (what App Review wrote about a rejection) and `release_review_reply` (answer App Review in the Resolution Center). The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app, publishing App Privacy and replying to App Review each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
