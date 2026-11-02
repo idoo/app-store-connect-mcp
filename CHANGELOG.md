@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Fixed
+
+- `web_login` no longer drops progress lines the sign-in logs before the call starts listening.
+
 ## [0.20.2] - 2026-11-02
 
 ### Fixed
