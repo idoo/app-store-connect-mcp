@@ -151,7 +151,9 @@ type olympusSession struct {
 }
 
 // Validate asks Apple whether s is live (GET /olympus/v1/session with its
-// cookies) and returns the account and team. 401/403 and redirects return ErrExpired.
+// cookies) and returns the account and team. Cookies Apple rolls in the
+// answer are applied to s, so callers that keep s must save it afterwards.
+// 401/403 and redirects return ErrExpired (wrapped with the HTTP status).
 // hc nil uses http.DefaultClient; it must not follow redirects to other hosts
 // with the cookies (http.Client never forwards a manual Cookie header across
 // hosts).
@@ -175,6 +177,7 @@ func Validate(ctx context.Context, hc *http.Client, s *Session, now time.Time) (
 		return nil, fmt.Errorf("websession: validate: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	mergeCookies(s, resp.Cookies(), req.URL.Hostname(), now)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return nil, fmt.Errorf("websession: validate: %w", err)
@@ -211,7 +214,7 @@ func ParseSession(status int, body []byte) (appleID string, live bool, err error
 func parseOlympus(status int, body []byte) (*olympusSession, error) {
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden || (status >= 300 && status < 400):
-		return nil, ErrExpired
+		return nil, fmt.Errorf("%w (HTTP %d)", ErrExpired, status)
 	case status != http.StatusOK:
 		return nil, fmt.Errorf("websession: validate: Apple returned HTTP %d", status)
 	}

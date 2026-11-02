@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-11-02
+
+### Fixed
+
+- `web login` could say "Signed in as …" and then report the session expired. Apple rolls session cookies when it answers the session check, and the old ones stop working; the sign-in kept the browser's stale copy. Every session check now keeps the cookies Apple rolls: sign-in, `web status`, `web login` reusing a session and the `web_login` tool save them.
+- An expired session now says which HTTP status Apple answered.
+
 ## [0.20.1] - 2026-11-02
 
 ### Fixed
@@ -458,7 +465,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.2...HEAD
+[0.20.2]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.18.0...v0.19.0

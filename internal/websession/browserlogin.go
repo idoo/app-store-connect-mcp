@@ -99,7 +99,7 @@ func BrowserLogin(ctx context.Context, o BrowserLoginOptions) (*Session, error) 
 	if !o.Headless {
 		_, _ = fmt.Fprintln(logw, "Opening a browser window… sign in to App Store Connect in the window.")
 	}
-	res, err := browserLogin(ctx, browser.Options{
+	_, err := browserLogin(ctx, browser.Options{
 		ProfileDir:  o.ProfileDir,
 		BrowserPath: o.BrowserPath,
 		Headless:    o.Headless,
@@ -115,17 +115,17 @@ func BrowserLogin(ctx context.Context, o BrowserLoginOptions) (*Session, error) 
 	if err != nil {
 		return nil, fmt.Errorf("websession: browser login: %w", err)
 	}
-	if c.info == nil {
+	if c.sess == nil {
 		return nil, errors.New("websession: browser login: the browser finished without a verified session")
 	}
-	sess := &Session{
-		AppleID:      c.info.AppleID,
-		ProviderID:   c.info.Provider.ID,
-		ProviderName: c.info.Provider.Name,
-		Cookies:      appleCookies(res.Cookies, o.Now()),
-		CreatedAt:    o.Now(),
-		Source:       "browser",
-	}
+	// The verified session, with any cookies Apple rolled while verifying:
+	// the browser's copy of the cookies may already be superseded.
+	sess := c.sess
+	sess.AppleID = c.info.AppleID
+	sess.ProviderID = c.info.Provider.ID
+	sess.ProviderName = c.info.Provider.Name
+	sess.CreatedAt = o.Now()
+	sess.Source = "browser"
 	_, _ = fmt.Fprintf(logw, "Signed in as %s (team %s).\n", sess.AppleID, teamLabel(sess))
 	return sess, nil
 }
@@ -149,6 +149,7 @@ type browserCheck struct {
 	lastVerify time.Time
 	lastErr    string
 	info       *Info
+	sess       *Session // the session that verified, with rolled cookies applied
 }
 
 func (c *browserCheck) check(ctx context.Context, _ string, cookies []browser.Cookie) (bool, error) {
@@ -165,7 +166,7 @@ func (c *browserCheck) check(ctx context.Context, _ string, cookies []browser.Co
 	info, err := Validate(ctx, c.hc, sess, now)
 	switch {
 	case err == nil:
-		c.info = info
+		c.info, c.sess = info, sess
 		return true, nil
 	case errors.Is(err, ErrExpired) || ctx.Err() != nil:
 		return false, nil

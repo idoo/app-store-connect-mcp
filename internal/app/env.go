@@ -314,6 +314,10 @@ func newWebLogin(stateDir, profile string) func(context.Context, func(string)) (
 		hc := &http.Client{Timeout: 30 * time.Second}
 		if sess, err := store.Load(profile); err == nil {
 			if info, err := webValidate(ctx, hc, sess, time.Now()); err == nil {
+				// Keep the cookies Apple rolled while validating.
+				if err := store.Save(profile, sess); err != nil {
+					log("could not save the renewed session cookies: " + err.Error())
+				}
 				return tool.WebAccount{AppleID: info.AppleID, TeamID: info.Provider.ID, TeamName: info.Provider.Name, Reused: true}, nil
 			}
 		}
