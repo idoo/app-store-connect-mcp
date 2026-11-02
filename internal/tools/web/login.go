@@ -67,9 +67,14 @@ func (r *loginRun) log(line string) {
 }
 
 // attach forwards progress lines to fn until the returned func is called.
+// Lines logged before attaching (the sign-in starts in the background
+// before the caller attaches) are replayed first.
 func (r *loginRun) attach(fn func(string)) (detach func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	for _, line := range r.lines {
+		fn(line)
+	}
 	r.progress = fn
 	return func() {
 		r.mu.Lock()
