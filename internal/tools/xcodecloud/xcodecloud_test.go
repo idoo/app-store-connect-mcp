@@ -223,7 +223,7 @@ func runDoc(progress, status string) string {
 	return `{"data":{"type":"ciBuildRuns","id":"` + runID + `","attributes":{"number":42,"executionProgress":"` + progress +
 		`","completionStatus":` + status + `,"issueCounts":{"errors":0,"warnings":3,"analyzerWarnings":0,"testFailures":1},
 		"sourceCommit":{"commitSha":"abc123","message":"Fix crash"}},
-		"relationships":{"workflow":{"data":{"type":"ciWorkflows","id":"` + wfID + `"}}}}}`
+		"relationships":{"workflow":{"data":{"type":"ciWorkflows","id":"` + wfID + `"}},"product":{"data":{"type":"ciProducts","id":"PR1"}}}}}`
 }
 
 func TestBuildStatusWaitCompletes(t *testing.T) {
@@ -239,13 +239,20 @@ func TestBuildStatusWaitCompletes(t *testing.T) {
 	k.ASC.Handle(http.MethodGet, "/v1/ciBuildActions/{id}/testResults", http.StatusOK, `{"data":[
 	 {"type":"ciTestResults","id":"T1","attributes":{"className":"HjulTests","name":"testSpin()","status":"SUCCESS"}},
 	 {"type":"ciTestResults","id":"T2","attributes":{"className":"HjulTests","name":"testCrash()","status":"FAILURE","message":"XCTAssertEqual failed"}}]}`)
+	// The completed archive reads the run's uploads: none yet.
+	k.ASC.Handle(http.MethodGet, "/v1/ciProducts/{id}/app", http.StatusOK, `{"data":{"type":"apps","id":"A1"}}`)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/buildUploads", http.StatusOK, `{"data":[]}`)
 	var progress []string
 	k.Env.Progress = func(_, _ float64, msg string) { progress = append(progress, msg) }
 	start := k.Clock.Now()
 	res := tooltest.MustOK(t, tooltest.Call(t, lookup(t, "xcc_build_status"), k.Env, `{"run":"`+runID+`","wait":true}`))
 	wantLog(t, k,
 		"GET /v1/ciBuildRuns/"+runID, "GET /v1/ciBuildRuns/"+runID, "GET /v1/ciBuildRuns/"+runID+"/actions",
-		"GET /v1/ciBuildActions/AC1/artifacts", "GET /v1/ciBuildActions/AC1/testResults", "GET /v1/ciBuildActions/AC2/artifacts")
+		"GET /v1/ciBuildActions/AC1/artifacts", "GET /v1/ciBuildActions/AC1/testResults", "GET /v1/ciBuildActions/AC2/artifacts",
+		"GET /v1/ciBuildRuns/"+runID, "GET /v1/ciProducts/PR1/app", "GET /v1/apps/A1/buildUploads")
+	if len(res.Meta.Warnings) != 0 {
+		t.Fatalf("warnings = %v", res.Meta.Warnings)
+	}
 	if d := k.Clock.Now().Sub(start); d != 15*time.Second || len(progress) != 1 || progress[0] != "build run #42: RUNNING" {
 		t.Fatalf("slept %v, progress %v", d, progress)
 	}

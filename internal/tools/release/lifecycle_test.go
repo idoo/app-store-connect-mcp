@@ -264,6 +264,9 @@ func TestBuildsList(t *testing.T) {
 		`{"type":"buildBetaDetails","id":"bd3","attributes":{"internalBuildState":"PROCESSING","externalBuildState":"PROCESSING"}},`+
 		`{"type":"betaGroups","id":"g1","attributes":{"name":"Team","isInternalGroup":true}},{"type":"betaGroups","id":"g2","attributes":{"name":"Public","isInternalGroup":false}}],`+
 		`"meta":{"paging":{"total":2,"limit":20}}}`)
+	k.ASC.Handle("GET", "/v1/apps/{id}/buildUploads", 200, `{"data":[{"type":"buildUploads","id":"u45","attributes":{`+
+		`"cfBundleShortVersionString":"1.4","cfBundleVersion":"45","platform":"IOS","createdDate":"2026-01-03T00:00:00Z",`+
+		`"state":{"state":"FAILED","errors":[{"code":"90626","description":"App Intent description cannot contain apple"}]}}}]}`)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "builds_list"), k.Env, `{"app":"Hjul","version":"1.4"}`))
 	out := tooltest.Decode[buildsListOut](t, res)
 	if out.Total != 2 || out.Returned != 2 {
@@ -280,9 +283,19 @@ func TestBuildsList(t *testing.T) {
 	if len(res.Next) != 1 || res.Next[0].Tool != "builds_wait" || res.Next[0].Args["build"] != "b3" {
 		t.Errorf("next = %+v", res.Next)
 	}
+	if f := out.FailedUploads; len(f) != 1 || f[0].BuildNumber != "45" || f[0].State != "FAILED" || len(f[0].Errors) != 1 || f[0].Errors[0].Code != "90626" {
+		t.Errorf("failed uploads = %+v", out.FailedUploads)
+	}
+	if j := tooltest.JSON(t, res.Data); !strings.Contains(j, `"description":{"untrusted":"App Intent description cannot contain apple"}`) {
+		t.Errorf("description not untrusted: %s", j)
+	}
 	reqs := k.ASC.Requests()
-	if len(reqs) > 2 {
-		t.Errorf("%d requests, want ≤2", len(reqs))
+	if len(reqs) != 2 {
+		t.Errorf("%d requests, want 2", len(reqs))
+	}
+	if q := reqs[1].Query; q.Get("filter[platform]") != "IOS" || q.Get("filter[state]") != "FAILED" ||
+		q.Get("filter[cfBundleShortVersionString]") != "1.4" || q.Get("limit") != "5" {
+		t.Errorf("uploads query = %s", q.Encode())
 	}
 	q := reqs[0].Query
 	if q.Get("filter[app]") != "100" || q.Get("filter[preReleaseVersion.version]") != "1.4" || q.Get("filter[expired]") != "false" ||

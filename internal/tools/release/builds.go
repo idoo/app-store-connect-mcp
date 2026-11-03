@@ -72,6 +72,9 @@ type buildsListOut struct {
 	// PlatformFallback is set when the defaulted platform had no builds and
 	// the only other platform with builds was listed instead.
 	PlatformFallback *platformFallback `json:"platform_fallback,omitempty"`
+	// FailedUploads are the platform's newest uploads Apple rejected
+	// (they never became builds), with Apple's errors.
+	FailedUploads []tool.BuildUpload `json:"failed_uploads,omitempty"`
 }
 
 type platformFallback struct {
@@ -131,7 +134,23 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 			}
 		}
 	}
+	var warn string
+	fq := url.Values{
+		"filter[platform]": {string(platform)},
+		"filter[state]":    {"FAILED"},
+		"sort":             {"-uploadedDate"},
+		"limit":            {strconv.Itoa(failedUploadsShown)},
+	}
+	if in.Version != "" {
+		fq.Set("filter[cfBundleShortVersionString]", in.Version)
+	}
+	if out.FailedUploads, err = tool.ListBuildUploads(ctx, env, app.ID, fq); err != nil {
+		warn = "could not read failed uploads: " + tool.SanitizeText(err.Error())
+	}
 	res := tool.OK(out)
+	if warn != "" {
+		res.Warn(warn)
+	}
 	if processing >= 0 {
 		res.Then(tool.NextStep{Tool: "builds_wait", Args: map[string]any{"app": app.ID, "platform": string(platform), "build": out.Builds[processing].ID}})
 	}
@@ -142,6 +161,9 @@ func buildsList(ctx context.Context, env *tool.Env, in buildsListIn) (*tool.Resu
 	}
 	return res, nil
 }
+
+// failedUploadsShown caps builds_list's failed_uploads.
+const failedUploadsShown = 5
 
 // fetchBuilds lists the builds matching q into out and returns the index of
 // the newest PROCESSING build, or -1.
