@@ -115,8 +115,10 @@ var (
 		"users_invite":            tool.Destructive, // Apple emails the invitee immediately
 		"apps_create":             tool.Destructive, // irreversible: the record cannot be deleted and its name is reserved
 		"privacy_apply":           tool.Destructive, // deletes data usages and publishes App Privacy
+		"signing_portal_apply":    tool.Destructive, // creates App Groups, may disable capabilities (invalidates profiles)
 		"web_login":               tool.Read,        // local only: a browser window for the human; Apple state is untouched
 		"release_review_messages": tool.Read,        // GETs the Resolution Center thread only
+		"xcc_build_number":        tool.Write,       // reads; with next sets the Xcode Cloud build counter
 		// W verbs declared D in their packages; reported to Main, kept as shipped.
 		"signing_capabilities_set": tool.Destructive, // can disable capabilities
 		"webhooks_upsert":          tool.Destructive, // sends App Store events to an external URL

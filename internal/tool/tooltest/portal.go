@@ -75,7 +75,9 @@ func (f *FakePortal) Calls() []PortalCall {
 	return append([]PortalCall(nil), f.calls...)
 }
 
-// JSON implements [tool.Portal].
+// JSON implements [tool.Portal]. Like the real client, a non-GET/POST
+// request needs a write context and fails with [tool.ErrWritesDisabled]
+// otherwise (still recorded).
 func (f *FakePortal) JSON(ctx context.Context, method, path string, body, out any) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -87,6 +89,12 @@ func (f *FakePortal) JSON(ctx context.Context, method, path string, body, out an
 			return fmt.Errorf("tooltest: portal body: %w", err)
 		}
 		call.Body = string(b)
+	}
+	if method != "GET" && method != "POST" && !tool.IsWrite(ctx) {
+		f.mu.Lock()
+		f.calls = append(f.calls, call)
+		f.mu.Unlock()
+		return fmt.Errorf("tooltest: portal %s %s: %w", method, path, tool.ErrWritesDisabled)
 	}
 	f.mu.Lock()
 	f.calls = append(f.calls, call)

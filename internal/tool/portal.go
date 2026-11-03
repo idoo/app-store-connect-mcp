@@ -9,9 +9,11 @@ import (
 // Portal reaches App Store Connect's web-only JSON endpoints with the
 // human's web session (the same Apple ID cookies as [Env.Web]): the App
 // Analytics dashboard API (/analytics/api/v1/...), Payments and Financial
-// Reports (/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/...) and
-// /olympus/v1/session. Every call is a read, POST included: dashboard
-// queries are POSTs that change nothing.
+// Reports (/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/...),
+// /olympus/v1/session and Xcode Cloud reads (/ci/api/teams/...). Every call
+// is a read, POST included (dashboard queries are POSTs that change
+// nothing), except PUT /ci/api/teams/{team}/products/{id}/next-build-number,
+// which needs a write context.
 type Portal interface {
 	// JSON sends method to path (one of the allowed prefixes above, query
 	// allowed) with body encoded as JSON when non-nil, and decodes a 2xx

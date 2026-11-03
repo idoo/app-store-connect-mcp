@@ -78,6 +78,12 @@ func TestPortalRefusesOtherPathsAndMethods(t *testing.T) {
 		{http.MethodGet, "/analytics/api/v1/"},
 		{http.MethodDelete, "/analytics/api/v1/settings/all"},
 		{http.MethodPatch, "/olympus/v1/session"},
+		{http.MethodPost, "/ci/api/teams/" + ciTeam + "/products-v5"},
+		{http.MethodPut, "/analytics/api/v1/settings/all"},
+		{http.MethodPut, "/ci/api/teams/" + ciTeam + "/products/" + ciProduct + "/workflows-v15/x"},
+		{http.MethodPut, ciNextPath + "0"},
+		{http.MethodPut, ciNextPath + "5&x=1"},
+		{http.MethodDelete, ciNextPath + "5"},
 	} {
 		if err := c.JSON(context.Background(), tc.method, tc.path, nil, nil); err == nil {
 			t.Errorf("%s %s: no error", tc.method, tc.path)
@@ -86,10 +92,48 @@ func TestPortalRefusesOtherPathsAndMethods(t *testing.T) {
 	if hits.Load() != 0 {
 		t.Fatalf("refused requests reached the server %d times", hits.Load())
 	}
-	for _, p := range []string{"/olympus/v1/session", "/olympus/v1/session?x=1", "/analytics/api/v1/settings/all", "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/1/sapVendorNumbers"} {
+	for _, p := range []string{"/olympus/v1/session", "/olympus/v1/session?x=1", "/analytics/api/v1/settings/all", "/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/providers/1/sapVendorNumbers", ciNextPath[:len(ciNextPath)-len("?next_build_number=")]} {
 		if err := c.JSON(context.Background(), http.MethodGet, p, nil, nil); err != nil {
 			t.Errorf("GET %s: %v", p, err)
 		}
+	}
+}
+
+const (
+	ciTeam     = "0a1b2c3d-0000-1111-2222-333344445555"
+	ciProduct  = "9f8e7d6c-0000-1111-2222-333344445555"
+	ciNextPath = "/ci/api/teams/" + ciTeam + "/products/" + ciProduct + "/next-build-number?next_build_number="
+)
+
+// The next-build-number PUT is the one portal write: it needs writes on
+// and a write context, and goes out with an empty body and Content-Length 0.
+func TestPortalNextBuildNumberPut(t *testing.T) {
+	var method, ctype, query string
+	var length int64
+	var body []byte
+	c, _, _, hits := portalHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		method, ctype, query, length = r.Method, r.Header.Get("Content-Type"), r.URL.RawQuery, r.ContentLength
+		body, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	if err := c.JSON(devWriteCtx(t), http.MethodPut, ciNextPath+"67", nil, nil); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("writes off: %v", err)
+	}
+	c.SetAllowWrites(true)
+	if err := c.JSON(context.Background(), http.MethodPut, ciNextPath+"67", nil, nil); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("no write context: %v", err)
+	}
+	if err := c.JSON(devWriteCtx(t), http.MethodPut, ciNextPath+"67", map[string]any{"x": 1}, nil); err == nil {
+		t.Fatal("PUT with a body accepted")
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("refused PUTs reached the server %d times", hits.Load())
+	}
+	if err := c.JSON(devWriteCtx(t), http.MethodPut, ciNextPath+"67", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPut || length != 0 || len(body) != 0 || ctype != "" || query != "next_build_number=67" {
+		t.Fatalf("method %s length %d body %q content-type %q query %q", method, length, body, ctype, query)
 	}
 }
 
