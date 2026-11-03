@@ -9,6 +9,7 @@ import (
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/library"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/metadata"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/monetization"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/portalsigning"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/release"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/reports"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/reviews"

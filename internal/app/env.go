@@ -200,8 +200,17 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 	if web != nil {
 		env.Web = web
 	}
+	var (
+		portal *portalClient
+		dev    *devPortalClient
+	)
 	if src != nil {
-		env.Portal = newPortalClient(src, portalBaseURL, version)
+		portal = newPortalClient(src, portalBaseURL, version)
+		portal.SetAllowWrites(r.Profile.AllowWrites)
+		env.Portal = portal
+		dev = newDevPortalClient(src, devPortalBaseURL, version)
+		dev.SetAllowWrites(r.Profile.AllowWrites)
+		env.DevPortal = dev
 	}
 	if transport == tool.TransportStdio && stateDir != "" {
 		env.WebLogin = newWebLogin(stateDir, WebProfile(r))
@@ -212,6 +221,12 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 		}
 		if web != nil {
 			web.SetAllowWrites(on)
+		}
+		if portal != nil {
+			portal.SetAllowWrites(on)
+		}
+		if dev != nil {
+			dev.SetAllowWrites(on)
 		}
 	}
 	return env, nil

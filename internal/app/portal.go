@@ -8,7 +8,9 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/idoo/app-store-connect-mcp/internal/asc"
@@ -35,7 +37,16 @@ const (
 var portalPrefixes = []string{
 	"/analytics/api/v1/",
 	"/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/",
+	portalCIPrefix,
 }
+
+// portalCIPrefix is the Xcode Cloud web API. Only GETs reach it, except the
+// one PUT matched by portalCIPut.
+const portalCIPrefix = "/ci/api/teams/"
+
+// portalCIPut is the only portal write: setting an Xcode Cloud product's
+// next build number (team and product are UUIDs).
+var portalCIPut = regexp.MustCompile(`^/ci/api/teams/[0-9A-Fa-f-]{36}/products/[0-9A-Fa-f-]{36}/next-build-number\?next_build_number=[1-9][0-9]{0,9}$`)
 
 // portalClient is [tool.Portal] over the human's web session. It shares the
 // env's session source with the iris client, never follows redirects and
@@ -48,6 +59,7 @@ type portalClient struct {
 	sem   chan struct{}
 	now   func() time.Time
 	sleep func(ctx context.Context, d time.Duration) error
+	allow atomic.Bool // writes allowed (env SetWrites)
 }
 
 func newPortalClient(src asc.SessionAuth, base, version string) *portalClient {
@@ -66,6 +78,9 @@ func newPortalClient(src asc.SessionAuth, base, version string) *portalClient {
 		sleep: sleepCtx,
 	}
 }
+
+// SetAllowWrites turns the one portal write (portalCIPut) on or off.
+func (c *portalClient) SetAllowWrites(on bool) { c.allow.Store(on) }
 
 // portalPathAllowed reports whether p (query allowed) is an allowed portal
 // endpoint: one of portalPrefixes or exactly portalSessionPath, with no
@@ -89,13 +104,22 @@ func portalPathAllowed(p string) bool {
 	return false
 }
 
-// JSON implements [tool.Portal].
+// JSON implements [tool.Portal]. GET and POST are reads (POST never on the
+// Xcode Cloud API); PUT is only portalCIPut and needs writes allowed plus a
+// write-enabled call.
 func (c *portalClient) JSON(ctx context.Context, method, path string, body, out any) error {
-	if method != http.MethodGet && method != http.MethodPost {
-		return fmt.Errorf("app: web portal: method %s not allowed", tool.SanitizeText(method))
-	}
 	if !portalPathAllowed(path) {
 		return fmt.Errorf("app: web portal: path %s not allowed", tool.SanitizeText(path))
+	}
+	ci := strings.HasPrefix(path, portalCIPrefix)
+	switch {
+	case method == http.MethodGet, method == http.MethodPost && !ci:
+	case method == http.MethodPut && body == nil && portalCIPut.MatchString(path):
+		if !c.allow.Load() || !tool.IsWrite(ctx) {
+			return fmt.Errorf("app: web portal: PUT %s: %w", tool.SanitizeText(path), tool.ErrWritesDisabled)
+		}
+	default:
+		return fmt.Errorf("app: web portal: %s %s not allowed", tool.SanitizeText(method), tool.SanitizeText(path))
 	}
 	label := method + " " + path
 	var payload []byte

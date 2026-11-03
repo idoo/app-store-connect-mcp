@@ -3369,6 +3369,36 @@
     "confirm": "plan"
   },
   {
+    "name": "signing_app_groups_list",
+    "toolset": "web",
+    "class": "R",
+    "title": "List App Groups",
+    "description": "App Groups of the developer team (web session): id, identifier, name. filter keeps identifiers or names containing it.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "List App Groups"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "description": "keep App Groups whose identifier or name contains this (case-insensitive)",
+          "type": "string"
+        },
+        "team_id": {
+          "description": "developer team id; default the API key's team (App ID prefix)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
     "name": "signing_bundle_id_create",
     "toolset": "signing",
     "class": "W",
@@ -3740,6 +3770,101 @@
     "default_toolset": false,
     "needs_team_key": true,
     "confirm": "flag"
+  },
+  {
+    "name": "signing_portal_apply",
+    "toolset": "web",
+    "class": "D",
+    "title": "Set App Groups and portal capabilities",
+    "description": "Without plan_id previews per bundle ID: App Groups to create/assign, capabilities (ids or names) to enable or disable; with plan_id applies. Creating a group or disabling needs human approval. Invalidates provisioning profiles.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Set App Groups and portal capabilities"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app_groups": {
+          "description": "App Group identifiers (group.com.example) to assign to every bundle ID; missing ones are created",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "bundle_ids": {
+          "description": "bundle identifiers or resource ids to change",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "capabilities": {
+          "description": "capability ids or names from the portal catalog to enable on every bundle ID",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "disable": {
+          "description": "capability ids or names to disable (human approval)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "plan_id": {
+          "description": "from the preview call",
+          "type": "string"
+        },
+        "team_id": {
+          "description": "developer team id; default the bundle IDs' App ID prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bundle_ids"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": true,
+    "confirm": "plan"
+  },
+  {
+    "name": "signing_portal_get",
+    "toolset": "web",
+    "class": "R",
+    "title": "Read a bundle ID in the developer portal",
+    "description": "A bundle ID as the developer portal sees it (web session): enabled capabilities incl. portal-only ones (Increased Memory Limit, ...), assigned App Groups, and the portal capability catalog for it. Use before signing_portal_apply.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Read a bundle ID in the developer portal"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {
+          "description": "bundle identifier (com.example.app) or bundle ID resource id",
+          "type": "string"
+        },
+        "team_id": {
+          "description": "developer team id; default the bundle ID's App ID prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bundle_id"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": true,
+    "confirm": "none"
   },
   {
     "name": "signing_profile_create",
@@ -5011,6 +5136,51 @@
     "default_toolset": false,
     "needs_team_key": false,
     "confirm": "human"
+  },
+  {
+    "name": "xcc_build_number",
+    "toolset": "web",
+    "class": "W",
+    "title": "Xcode Cloud next build number",
+    "description": "Next build number of an app's Xcode Cloud product (web session) and the app's highest uploaded build. next sets it: preview, then confirm:true. Below the current value or not above the highest upload needs allow_lower and a human.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Xcode Cloud next build number"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_lower": {
+          "description": "allow a value below the current one or not above the highest uploaded build (needs a human)",
+          "type": "boolean"
+        },
+        "app": {
+          "description": "app whose Xcode Cloud product to use; default: pinned app",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "next": {
+          "description": "set the next build number to this",
+          "maximum": 999999999,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "product": {
+          "description": "Xcode Cloud product id, instead of app",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "flag"
   },
   {
     "name": "xcc_build_start",

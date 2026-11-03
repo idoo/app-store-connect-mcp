@@ -29,15 +29,18 @@ type Kit struct {
 	Web *FakeASC
 	// Portal fakes the web-only JSON endpoints (dashboard, Payments). Like
 	// Web, Env.Portal starts nil; [Kit.WebSession] routes it here.
-	Portal   *FakePortal
-	Spec     tool.Spec
-	Plans    *FakePlanner
-	State    *FakeStore
-	Files    *FakeFiles
-	Fetch    *FakeFetcher
-	Toolsets *FakeToolsets
-	Clock    *FakeClock
-	Resolve  *FakeResolver
+	Portal *FakePortal
+	// DevPortal fakes developer.apple.com/services-account; Env.DevPortal
+	// starts nil and [Kit.WebSession] routes it here.
+	DevPortal *FakeDevPortal
+	Spec      tool.Spec
+	Plans     *FakePlanner
+	State     *FakeStore
+	Files     *FakeFiles
+	Fetch     *FakeFetcher
+	Toolsets  *FakeToolsets
+	Clock     *FakeClock
+	Resolve   *FakeResolver
 }
 
 var (
@@ -64,17 +67,18 @@ func New(t testing.TB) *Kit {
 	t.Helper()
 	clock := NewFakeClock()
 	k := &Kit{
-		ASC:      NewFakeASC(t),
-		Web:      NewFakeASC(t),
-		Portal:   NewFakePortal(t),
-		Spec:     pinnedSpec(t),
-		Plans:    NewFakePlanner(clock.Now),
-		State:    NewFakeStore(),
-		Files:    NewFakeFiles(t),
-		Fetch:    NewFakeFetcher(t),
-		Toolsets: NewFakeToolsets(),
-		Clock:    clock,
-		Resolve:  &FakeResolver{},
+		ASC:       NewFakeASC(t),
+		Web:       NewFakeASC(t),
+		Portal:    NewFakePortal(t),
+		DevPortal: NewFakeDevPortal(t),
+		Spec:      pinnedSpec(t),
+		Plans:     NewFakePlanner(clock.Now),
+		State:     NewFakeStore(),
+		Files:     NewFakeFiles(t),
+		Fetch:     NewFakeFetcher(t),
+		Toolsets:  NewFakeToolsets(),
+		Clock:     clock,
+		Resolve:   &FakeResolver{},
 	}
 	k.ASC.Spec = k.Spec
 	k.Web.SkipSpecCheck = true
@@ -111,11 +115,12 @@ func (k *Kit) ReadOnly() *Kit {
 	return k
 }
 
-// WebSession signs the Kit in to the web session: Env.Web becomes k.Web and
-// Env.Portal becomes k.Portal.
+// WebSession signs the Kit in to the web session: Env.Web becomes k.Web,
+// Env.Portal k.Portal and Env.DevPortal k.DevPortal.
 func (k *Kit) WebSession() *Kit {
 	k.Env.Web = k.Web
 	k.Env.Portal = k.Portal
+	k.Env.DevPortal = k.DevPortal
 	return k
 }
 

@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-03
+
+### Added
+
+- Developer portal signing in the `web` toolset (Apple ID web session), for setup the public API can't do:
+  - `signing_portal_get` shows a bundle ID as the developer portal sees it: enabled capabilities including portal-only ones (Increased Memory Limit, Background GPU Access, ...), the App Groups assigned to it, and the portal's capability catalog for it.
+  - `signing_app_groups_list` lists the team's App Groups.
+  - `signing_portal_apply` assigns App Groups to several bundle IDs at once, creating the missing ones, and enables or disables capabilities by id or by name. The first call previews the changes for each bundle ID and returns a `plan_id`. The second call applies them in order: create groups, then assign the full group set (existing plus new), then enable, then disable. Each step reports done, outcome unknown or not attempted, and a request is never replayed after a timeout or 5xx. Creating an App Group or disabling a capability needs your approval. The result then points to regenerating provisioning profiles.
+  - The team defaults to the bundle IDs' App ID prefix; pass `team_id` to choose another.
+- `xcc_build_number` (`web` toolset) reads an Xcode Cloud product's next build number, which the public API doesn't expose, next to the app's highest uploaded build number, and warns when the next cloud build would reuse an uploaded one. With `next` it sets the counter (preview, then `confirm:true`), for example after a local upload, and reads it back. Going below the current value or onto an uploaded build number is refused unless `allow_lower` is passed, and then needs your approval.
+
 ### Fixed
 
 - `web_login` no longer drops progress lines the sign-in logs before the call starts listening.
@@ -469,7 +480,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.2...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.19.0...v0.20.0
