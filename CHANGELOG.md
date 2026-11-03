@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-03
+
+### Added
+
+- `xcc_build_status` shows why an Xcode Cloud archive failed with only "Preparing build for App Store Connect failed": for a run with a finished ARCHIVE action it reads the app's App Store Connect uploads of the run's build number. Each archive action lists its platform's uploads (`uploads`: state, version, Apple's errors and warnings such as 90626, with descriptions marked untrusted), uploads no action claims go to `other_uploads`, and a rejected upload of a failed action adds a warning with its error codes. Runs without a finished archive make no extra calls; a failed read is a warning.
+- `builds_list` adds `failed_uploads`: the platform's newest uploads Apple rejected (up to 5, filtered by `version`), which never became builds, with Apple's errors. One extra call; a failed read is a warning.
+
 ## [0.21.0] - 2026-11-03
 
 ### Added
@@ -480,7 +487,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.0...v0.20.1

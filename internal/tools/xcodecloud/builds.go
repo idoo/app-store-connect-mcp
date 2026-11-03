@@ -281,11 +281,17 @@ type actionOut struct {
 	Issues            *issueCount    `json:"issues,omitempty"`
 	Tests             *testSummary   `json:"tests,omitempty"`
 	Artifacts         []artifactOut  `json:"artifacts,omitempty"`
+	// Uploads are the App Store Connect uploads of an ARCHIVE action's
+	// platform for the run's build number, newest first.
+	Uploads []tool.BuildUpload `json:"uploads,omitempty"`
 }
 
 type buildStatusOut struct {
 	Run     runOut      `json:"run"`
 	Actions []actionOut `json:"actions"`
+	// OtherUploads are uploads of the run's build number that no archive
+	// action of the run claims (another platform, or a local upload).
+	OtherUploads []tool.BuildUpload `json:"other_uploads,omitempty"`
 }
 
 // Wait bounds and poll cadence.
@@ -342,10 +348,17 @@ func buildStatus(ctx context.Context, env *tool.Env, in buildStatusIn) (*tool.Re
 		return nil, err
 	}
 	out := buildStatusOut{Run: run, Actions: actions}
+	warnings := attachUploads(ctx, env, &out)
+	var res *tool.Result
 	if in.Wait && run.ExecutionProgress != "COMPLETE" {
-		return tool.StillProcessing(out, fmt.Sprintf("call xcc_build_status again with run=%q and wait:true", runID)), nil
+		res = tool.StillProcessing(out, fmt.Sprintf("call xcc_build_status again with run=%q and wait:true", runID))
+	} else {
+		res = tool.OK(out)
 	}
-	return tool.OK(out), nil
+	for _, w := range warnings {
+		res.Warn(w)
+	}
+	return res, nil
 }
 
 // latestRun returns the id of the newest build run of a workflow.

@@ -137,6 +137,7 @@ func TestBuildsListOtherPlatforms(t *testing.T) {
 		}
 		return tooltest.Fixture{Status: 200, Body: []byte(`{"data":[]}`)}
 	})
+	k.ASC.Handle("GET", "/v1/apps/{id}/buildUploads", 200, `{"data":[]}`)
 	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "builds_list"), k.Env, `{"app":"Hjul"}`))
 	out := tooltest.Decode[buildsListOut](t, res)
 	if out.Platform != tool.MacOS || out.PlatformFallback == nil || out.PlatformFallback.From != tool.IOS ||
@@ -157,6 +158,10 @@ func TestBuildsListOtherPlatforms(t *testing.T) {
 	if probes != 1 {
 		t.Errorf("probes = %d, want 1", probes)
 	}
+	// Failed uploads are read for the listed (fallback) platform.
+	if q := k.ASC.RequestsTo("GET", "/v1/apps/{id}/buildUploads")[0].Query; q.Get("filter[platform]") != "MAC_OS" {
+		t.Errorf("uploads query = %s", q.Encode())
+	}
 
 	// An explicit platform is never second-guessed.
 	before := len(k.ASC.RequestsTo("GET", "/v1/builds"))
@@ -166,5 +171,20 @@ func TestBuildsListOtherPlatforms(t *testing.T) {
 	}
 	if n := len(k.ASC.RequestsTo("GET", "/v1/builds")) - before; n != 1 {
 		t.Errorf("requests = %d, want 1", n)
+	}
+}
+
+// A failing failed-uploads read is a warning; the builds still list.
+func TestBuildsListFailedUploadsReadWarns(t *testing.T) {
+	k := tooltest.New(t).ReadOnly()
+	k.Resolve.Apps = []tool.App{{ID: "100", Name: "Hjul", BundleID: "se.jvcr.hjul", Platforms: []tool.Platform{tool.IOS}}}
+	k.ASC.Handle("GET", "/v1/builds", 200, `{"data":[{"type":"builds","id":"b1","attributes":{"version":"7","processingState":"VALID"}}]}`)
+	k.ASC.Handle("GET", "/v1/apps/{id}/buildUploads", 403, `{"errors":[{"status":"403","code":"FORBIDDEN_ERROR","title":"no"}]}`)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "builds_list"), k.Env, `{"app":"Hjul"}`))
+	if out := tooltest.Decode[buildsListOut](t, res); len(out.Builds) != 1 || out.FailedUploads != nil {
+		t.Fatalf("out = %+v", out)
+	}
+	if len(res.Meta.Warnings) != 1 || !strings.Contains(res.Meta.Warnings[0], "could not read failed uploads") {
+		t.Errorf("warnings = %v", res.Meta.Warnings)
 	}
 }
