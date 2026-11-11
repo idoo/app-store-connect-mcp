@@ -228,19 +228,7 @@ func resolveProduct(ctx context.Context, env *tool.Env, app tool.AppRef, id stri
 // ciTeam returns the team id the Xcode Cloud web API is keyed by: the
 // public provider id (UUID) of the web session's team.
 func ciTeam(ctx context.Context, env *tool.Env) (string, error) {
-	var sess struct {
-		Provider struct {
-			PublicProviderID string `json:"publicProviderId"`
-		} `json:"provider"`
-	}
-	if err := env.Portal.JSON(ctx, http.MethodGet, "/olympus/v1/session", nil, &sess); err != nil {
-		return "", fmt.Errorf("read web session team: %w", err)
-	}
-	id := sess.Provider.PublicProviderID
-	if !uuidRE.MatchString(id) {
-		return "", fmt.Errorf("web session has no team public id; sign in again: %w", tool.ErrWebSessionRequired)
-	}
-	return id, nil
+	return tool.PublicProviderID(ctx, env.Portal)
 }
 
 // readNextBuildNumber GETs the product's next build number.

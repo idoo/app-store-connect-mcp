@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Added
+
+- Regulated medical device declaration in the `web` toolset (Apple ID web session). Apple refuses to review a new Health & Fitness or Medical app until it is declared under App Information > App Store Regulations & Permits, and the public API has no endpoint for it:
+  - `medical_device_get` shows whether the app is declared not regulated, regulated (and in which regions) or not declared yet, and whether Apple requires it.
+  - `medical_device_set` with `regulated:false` declares that the app is not a regulated medical device, when nothing is declared yet. It sends the same form App Store Connect's own page sends for "No". The first call previews that form, `confirm:true` saves it after your approval, and the answer is read back. A write whose answer was lost is checked by reading, never sent again. Declaring a regulated device (registration number, instructions for use, safety information per region) and changing an existing answer stay in App Store Connect.
+- `release_status` and `release_submit` check the declaration for apps whose primary or secondary category is Health & Fitness or Medical, or whose age rating has frequent medical or treatment information: `medical_device` blocks while Apple waits for the answer, and is a manual item with the App Information link when there is no web session. Other apps make no extra request.
+
+### Fixed
+
+- `release_status` suggested `privacy_plan` as the next call with a `platform` argument the tool rejects. The suggestion now carries the check's own arguments.
+
 ## [0.22.0] - 2026-11-03
 
 ### Added

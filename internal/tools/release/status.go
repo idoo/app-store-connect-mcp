@@ -281,7 +281,11 @@ func releaseStatus(ctx context.Context, env *tool.Env, in statusIn) (*tool.Resul
 	}
 	for _, c := range out.Checks {
 		if (c.Status == statusWarn || c.Status == statusBlock) && c.FixVia != nil && c.FixVia.Tool != "" && in.Desired == nil {
-			res.Then(tool.NextStep{Tool: c.FixVia.Tool, Args: map[string]any{"app": app.ID, "platform": string(platform)}})
+			args := c.FixVia.Args
+			if args == nil {
+				args = map[string]any{"app": app.ID, "platform": string(platform)}
+			}
+			res.Then(tool.NextStep{Tool: c.FixVia.Tool, Args: args})
 			break
 		}
 	}
@@ -336,7 +340,8 @@ func phaseFor(state string) string {
 }
 
 // loadStatusSnapshot reads everything the preflight needs: 9 GETs plus one
-// per version localization (screenshot sets).
+// per version localization (screenshot sets), and the web-session reads
+// (App Privacy; the medical device declaration for apps it applies to).
 func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platform tool.Platform, ref tool.VersionRef) (*statusSnapshot, error) {
 	s := &statusSnapshot{App: app, Platform: platform, VersionRef: ref, Now: env.Clock.Now(), Uploadable: pendingUploadable(env.Spec, platform), Screenshots: map[string][]screenshotSet{}, IAPs: map[string]string{}, Subscriptions: map[string]string{}}
 
@@ -412,6 +417,7 @@ func loadStatusSnapshot(ctx context.Context, env *tool.Env, app tool.App, platfo
 	fetchAccessibility(ctx, env, s)
 	fetchCPPKeywords(ctx, env, s)
 	fetchPrivacy(ctx, env, s)
+	fetchMedicalDevice(ctx, env, s)
 	if err := loadProducts(ctx, env, s); err != nil {
 		return nil, err
 	}
@@ -423,7 +429,7 @@ var releasedStates = []string{"READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSI
 
 func loadAppInfo(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 	resp, err := env.ASC.Get(ctx, "/v1/apps/"+s.App.ID+"/appInfos", url.Values{
-		"include":                     {"appInfoLocalizations,ageRatingDeclaration"},
+		"include":                     {"appInfoLocalizations,ageRatingDeclaration,primaryCategory,secondaryCategory"},
 		"limit[appInfoLocalizations]": {"50"},
 	})
 	if err != nil {
@@ -445,6 +451,11 @@ func loadAppInfo(ctx context.Context, env *tool.Env, s *statusSnapshot) error {
 		}
 	}
 	s.AgeTier = info.Str("appStoreAgeRating")
+	for _, rel := range []string{"primaryCategory", "secondaryCategory"} {
+		if id := info.RelID(rel); id != "" {
+			s.Categories = append(s.Categories, id)
+		}
+	}
 	locIDs := info.RelIDs("appInfoLocalizations")
 	ageID := info.RelID("ageRatingDeclaration")
 	for _, r := range resp.Included {

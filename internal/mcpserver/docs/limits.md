@@ -21,6 +21,7 @@
 ## Web only (the API can't)
 - Create a new app record: Apps → +, or apps_create in the web toolset after the user signs in (web_login opens a browser window; or `app-store-connect-mcp web login` in a terminal).
 - App Privacy labels: App → App Privacy, or privacy_get / privacy_plan / privacy_apply in the web toolset (same sign-in).
+- Regulated medical device status (required for Health & Fitness and Medical apps): App → App Information → App Store Regulations & Permits, or medical_device_get / medical_device_set in the web toolset (same sign-in; only "not regulated" can be saved by tool).
 - Dashboard analytics like impressions and conversion rate. Use analytics_setup and analytics_report instead.
 - Agreements, tax and banking.
 

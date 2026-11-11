@@ -112,7 +112,7 @@ It touches the session every 30 minutes (a LaunchAgent on macOS; elsewhere it pr
 
 No screen? `web login --password` keeps the old terminal flow (Apple ID, password, 2FA code), though Apple often refuses it with error -20209. On an SSH box, use `web import` with the cookies from a browser's "Copy as cURL" or a `FASTLANE_SESSION`.
 
-Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan`, `privacy_apply`, `release_review_messages` (what App Review wrote about a rejection) and `release_review_reply` (answer App Review in the Resolution Center). The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app, publishing App Privacy and replying to App Review each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
+Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan`, `privacy_apply`, `medical_device_get` and `medical_device_set` (the "not a regulated medical device" declaration Apple wants from Health & Fitness and Medical apps), `release_review_messages` (what App Review wrote about a rejection) and `release_review_reply` (answer App Review in the Resolution Center). The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app, publishing App Privacy, declaring the medical device status and replying to App Review each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
 
 ## License
 

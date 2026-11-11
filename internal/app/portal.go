@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -38,15 +39,24 @@ var portalPrefixes = []string{
 	"/analytics/api/v1/",
 	"/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/",
 	portalCIPrefix,
+	tool.ComplianceFormsPath,
 }
 
 // portalCIPrefix is the Xcode Cloud web API. Only GETs reach it, except the
 // one PUT matched by portalCIPut.
 const portalCIPrefix = "/ci/api/teams/"
 
-// portalCIPut is the only portal write: setting an Xcode Cloud product's
-// next build number (team and product are UUIDs).
+// portalCIPut is a portal write: setting an Xcode Cloud product's next
+// build number (team and product are UUIDs).
 var portalCIPut = regexp.MustCompile(`^/ci/api/teams/[0-9A-Fa-f-]{36}/products/[0-9A-Fa-f-]{36}/next-build-number\?next_build_number=[1-9][0-9]{0,9}$`)
+
+// portalFormWrite is the other portal write: saving one compliance form of
+// an app (POST the first answer, PUT a changed one). Everything else under
+// tool.ComplianceFormsPath is GET only.
+var portalFormWrite = regexp.MustCompile(`^/ppm/complianceform/v1/accounts/[0-9A-Fa-f-]{36}/contents/[0-9]{1,20}/requirements/[A-Za-z0-9_-]{1,64}/forms$`)
+
+// portalFormApp finds the app id in a compliance form path.
+var portalFormApp = regexp.MustCompile(`(?:[?&]contentId=|/contents/)([0-9]{1,20})(?:[/&]|$)`)
 
 // portalClient is [tool.Portal] over the human's web session. It shares the
 // env's session source with the iris client, never follows redirects and
@@ -79,7 +89,8 @@ func newPortalClient(src asc.SessionAuth, base, version string) *portalClient {
 	}
 }
 
-// SetAllowWrites turns the one portal write (portalCIPut) on or off.
+// SetAllowWrites turns the portal writes (portalCIPut, portalFormWrite) on
+// or off.
 func (c *portalClient) SetAllowWrites(on bool) { c.allow.Store(on) }
 
 // portalPathAllowed reports whether p (query allowed) is an allowed portal
@@ -105,19 +116,25 @@ func portalPathAllowed(p string) bool {
 }
 
 // JSON implements [tool.Portal]. GET and POST are reads (POST never on the
-// Xcode Cloud API); PUT is only portalCIPut and needs writes allowed plus a
-// write-enabled call.
+// Xcode Cloud API or the compliance forms); the writes are portalCIPut and
+// portalFormWrite, which need writes allowed plus a write-enabled call. A
+// form write is never replayed: a 5xx or a lost answer is
+// [tool.ErrOutcomeUnknown].
 func (c *portalClient) JSON(ctx context.Context, method, path string, body, out any) error {
 	if !portalPathAllowed(path) {
 		return fmt.Errorf("app: web portal: path %s not allowed", tool.SanitizeText(path))
 	}
 	ci := strings.HasPrefix(path, portalCIPrefix)
+	form := strings.HasPrefix(path, tool.ComplianceFormsPath)
+	formWrite := false
 	switch {
-	case method == http.MethodGet, method == http.MethodPost && !ci:
-	case method == http.MethodPut && body == nil && portalCIPut.MatchString(path):
+	case method == http.MethodGet, method == http.MethodPost && !ci && !form:
+	case method == http.MethodPut && body == nil && portalCIPut.MatchString(path),
+		(method == http.MethodPost || method == http.MethodPut) && body != nil && portalFormWrite.MatchString(path):
 		if !c.allow.Load() || !tool.IsWrite(ctx) {
-			return fmt.Errorf("app: web portal: PUT %s: %w", tool.SanitizeText(path), tool.ErrWritesDisabled)
+			return fmt.Errorf("app: web portal: %s %s: %w", method, tool.SanitizeText(path), tool.ErrWritesDisabled)
 		}
+		formWrite = form
 	default:
 		return fmt.Errorf("app: web portal: %s %s not allowed", tool.SanitizeText(method), tool.SanitizeText(path))
 	}
@@ -132,8 +149,12 @@ func (c *portalClient) JSON(ctx context.Context, method, path string, body, out 
 	renewed := false
 	retries := 0
 	for {
-		status, header, data, err := c.do(ctx, method, c.base+path, payload)
+		status, header, data, err := c.do(ctx, method, path, payload)
 		if err != nil {
+			var sent sentError
+			if formWrite && errors.As(err, &sent) {
+				return fmt.Errorf("app: web portal: %s: %w (%v)", label, tool.ErrOutcomeUnknown, err)
+			}
 			return fmt.Errorf("app: web portal: %s: %w", label, err)
 		}
 		switch {
@@ -159,6 +180,8 @@ func (c *portalClient) JSON(ctx context.Context, method, path string, body, out 
 				}
 			}
 			return nil
+		case formWrite && status >= 500:
+			return fmt.Errorf("app: web portal: %s: App Store Connect web %d: %w", label, status, tool.ErrOutcomeUnknown)
 		}
 		if wait, ok := c.retryWait(status, header, retries); ok {
 			retries++
@@ -172,7 +195,7 @@ func (c *portalClient) JSON(ctx context.Context, method, path string, body, out 
 }
 
 // do sends one attempt and returns the status, headers and bounded body.
-func (c *portalClient) do(ctx context.Context, method, u string, payload []byte) (int, http.Header, []byte, error) {
+func (c *portalClient) do(ctx context.Context, method, path string, payload []byte) (int, http.Header, []byte, error) {
 	select {
 	case c.sem <- struct{}{}:
 	case <-ctx.Done():
@@ -183,7 +206,7 @@ func (c *portalClient) do(ctx context.Context, method, u string, payload []byte)
 	if payload != nil {
 		rd = bytes.NewReader(payload)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, rd)
+	req, err := http.NewRequestWithContext(ctx, method, c.base+path, rd)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -198,22 +221,45 @@ func (c *portalClient) do(ctx context.Context, method, u string, payload []byte)
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if strings.HasPrefix(path, tool.ComplianceFormsPath) {
+		c.formHeaders(req, path)
+	}
 	rctx, cancel := context.WithTimeout(ctx, asc.DefaultRequestTimeout)
 	defer cancel()
 	resp, err := c.hc.Do(req.WithContext(rctx))
 	if err != nil {
-		return 0, nil, nil, err
+		return 0, nil, nil, sentError{err}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	c.src.Observe(resp)
 	data, err := io.ReadAll(io.LimitReader(resp.Body, portalMaxBody+1))
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("read body: %w", err)
+		return 0, nil, nil, sentError{fmt.Errorf("read body: %w", err)}
 	}
 	if len(data) > portalMaxBody {
-		return 0, nil, nil, fmt.Errorf("response exceeds %d MiB", portalMaxBody>>20)
+		return 0, nil, nil, sentError{fmt.Errorf("response exceeds %d MiB", portalMaxBody>>20)}
 	}
 	return resp.StatusCode, resp.Header, data, nil
+}
+
+// sentError marks a failure after the request may have reached Apple, so a
+// write's outcome is unknown.
+type sentError struct{ error }
+
+func (e sentError) Unwrap() error { return e.error }
+
+// formHeaders adds what App Store Connect's own page sends to the
+// compliance form service: without the CSRF header a write is answered
+// with an empty 403.
+func (c *portalClient) formHeaders(req *http.Request, path string) {
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("X-Csrf-Itc", "itc")
+	req.Header.Set("Origin", c.base)
+	referer := c.base + "/apps"
+	if m := portalFormApp.FindStringSubmatch(path); m != nil {
+		referer += "/" + m[1] + "/distribution/info"
+	}
+	req.Header.Set("Referer", referer)
 }
 
 // retryWait reports whether status is retried after retries earlier

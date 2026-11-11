@@ -137,6 +137,94 @@ func TestPortalNextBuildNumberPut(t *testing.T) {
 	}
 }
 
+const (
+	formBase = "/ppm/complianceform/v1/accounts/" + ciTeam
+	formRead = formBase + "/requirements/req-1/forms?contentId=6400000001"
+	formSave = formBase + "/contents/6400000001/requirements/req-1/forms"
+)
+
+// Compliance forms are read with GET; saving one app's form is the only
+// write there, gated like the build-number PUT and sent with the headers
+// App Store Connect's own page uses.
+func TestPortalComplianceForms(t *testing.T) {
+	var got http.Header
+	var method, body string
+	status := http.StatusOK
+	c, _, sleeps, hits := portalHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		got, method = r.Header.Clone(), r.Method
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, `{}`)
+	})
+	if err := c.JSON(context.Background(), http.MethodGet, formRead, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range map[string]string{
+		"X-Csrf-Itc":       "itc",
+		"X-Requested-With": "XMLHttpRequest",
+		"Origin":           c.base,
+		"Referer":          c.base + "/apps/6400000001/distribution/info",
+	} {
+		if got.Get(k) != v {
+			t.Errorf("%s = %q, want %q", k, got.Get(k), v)
+		}
+	}
+
+	answer := map[string]any{"medicalDeviceData": map[string]string{"declaration": "no"}}
+	before := hits.Load()
+	c.SetAllowWrites(true)
+	for _, tc := range []struct {
+		name, method, path string
+		ctx                context.Context
+		body               any
+	}{
+		{"no write context", http.MethodPost, formSave, context.Background(), answer},
+		{"no body", http.MethodPost, formSave, devWriteCtx(t), nil},
+		{"POST of a read path", http.MethodPost, formRead, devWriteCtx(t), answer},
+		{"another account path", http.MethodPut, formBase + "/requirements/req-1", devWriteCtx(t), answer},
+		{"query on the write", http.MethodPost, formSave + "?x=1", devWriteCtx(t), answer},
+		{"DELETE", http.MethodDelete, formSave, devWriteCtx(t), nil},
+	} {
+		if err := c.JSON(tc.ctx, tc.method, tc.path, tc.body, nil); err == nil {
+			t.Errorf("%s: no error", tc.name)
+		}
+	}
+	c.SetAllowWrites(false)
+	if err := c.JSON(devWriteCtx(t), http.MethodPost, formSave, answer, nil); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Errorf("writes off: %v", err)
+	}
+	if hits.Load() != before {
+		t.Fatalf("refused form writes reached the server %d times", hits.Load()-before)
+	}
+
+	c.SetAllowWrites(true)
+	for _, m := range []string{http.MethodPost, http.MethodPut} {
+		if err := c.JSON(devWriteCtx(t), m, formSave, answer, nil); err != nil {
+			t.Fatalf("%s: %v", m, err)
+		}
+		if method != m || body != `{"medicalDeviceData":{"declaration":"no"}}` || got.Get("X-Csrf-Itc") != "itc" {
+			t.Errorf("%s: sent %s %s csrf %q", m, method, body, got.Get("X-Csrf-Itc"))
+		}
+	}
+
+	// A write Apple may have applied is not sent again.
+	status, before = http.StatusServiceUnavailable, hits.Load()
+	if err := c.JSON(devWriteCtx(t), http.MethodPost, formSave, answer, nil); !errors.Is(err, tool.ErrOutcomeUnknown) {
+		t.Errorf("503 on a write: %v", err)
+	}
+	if hits.Load() != before+1 || len(*sleeps) != 0 {
+		t.Errorf("503 on a write: %d requests, sleeps %v", hits.Load()-before, *sleeps)
+	}
+	// A refusal is Apple's answer, not an unknown outcome.
+	status = http.StatusForbidden
+	var pe *tool.PortalError
+	if err := c.JSON(devWriteCtx(t), http.MethodPost, formSave, answer, nil); !errors.As(err, &pe) || pe.Status != http.StatusForbidden {
+		t.Errorf("403 on a write: %v", err)
+	}
+}
+
 func TestPortalSendsHeadersAndDecodes(t *testing.T) {
 	var got http.Header
 	var gotBody, gotQuery string

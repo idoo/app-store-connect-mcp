@@ -44,6 +44,8 @@ type fixture struct {
 	a11y string
 	// age overrides age rating declaration attributes.
 	age map[string]any
+	// category is the editable appInfo's primary category id ("" : none).
+	category string
 	// cpp routes the custom product page GETs (nil: no pages).
 	cpp func(k *tooltest.Kit)
 	// library routes the Asset Library placement GETs (nil: none placed).
@@ -228,9 +230,13 @@ func setup(t *testing.T, f fixture) *tooltest.Kit {
 		}))
 	}
 	infoInc = append(infoInc, jres{Type: "ageRatingDeclarations", ID: "age1", Attrs: age})
+	infoRels := map[string]any{"appInfoLocalizations": infoLocRels, "ageRatingDeclaration": "ageRatingDeclarations:age1"}
+	if f.category != "" {
+		infoRels["primaryCategory"] = "appCategories:" + f.category
+	}
 	k.ASC.Handle("GET", "/v1/apps/{id}/appInfos", 200, doc(t, []jres{{
 		Type: "appInfos", ID: "ai1", Attrs: map[string]any{"state": "PREPARE_FOR_SUBMISSION"},
-		Rels: map[string]any{"appInfoLocalizations": infoLocRels, "ageRatingDeclaration": "ageRatingDeclarations:age1"},
+		Rels: infoRels,
 	}}, infoInc...))
 
 	k.ASC.HandleFunc("GET", "/v1/appStoreVersionLocalizations/{id}/appScreenshotSets", func(req tool.Request) tooltest.Fixture {
