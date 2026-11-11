@@ -1402,6 +1402,70 @@
     "confirm": "none"
   },
   {
+    "name": "medical_device_get",
+    "toolset": "web",
+    "class": "R",
+    "title": "Read the regulated medical device status",
+    "description": "The app's regulated medical device declaration (web session): not declared, not regulated or regulated (with the regions), and whether Apple requires it before submission (Health & Fitness and Medical apps).",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Read the regulated medical device status"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "medical_device_set",
+    "toolset": "web",
+    "class": "W",
+    "title": "Declare the regulated medical device status",
+    "description": "Declare that the app is not a regulated medical device (regulated:false) when nothing is declared yet. Previews, then confirm:true; a human approves. Declaring yes or changing an answer is done in App Store Connect.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Declare the regulated medical device status"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "regulated": {
+          "description": "false = not a regulated medical device; true is refused (declare it in App Store Connect)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "regulated"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "human"
+  },
+  {
     "name": "metadata_apply",
     "toolset": "metadata",
     "class": "D",

@@ -125,6 +125,13 @@ type statusSnapshot struct {
 	// web session; nil when unknown (PrivacyErr says why).
 	PrivacyPublished *bool
 	PrivacyErr       error
+	// Categories are the editable appInfo's primary and secondary category ids.
+	Categories []string
+	// MedicalDevice is the regulated medical device requirement read through
+	// the web session, only for apps it applies to; nil when not read
+	// (MedicalDeviceErr says why).
+	MedicalDevice    *tool.MedicalDeviceRequirement
+	MedicalDeviceErr error
 }
 
 func fixTool(name string) *fixVia { return &fixVia{Tool: name} }
@@ -140,7 +147,11 @@ func runChecks(s *statusSnapshot) []check {
 			out = append(out, checkPendingDisplays(s), checkCPPKeywords(s))
 		}
 	}
-	out = append(out, checkAgeRating(s), checkAccessibility(s), checkContentRights(s), checkPricing(s), checkProducts(s), checkPrivacy(s), checkSubmission(s))
+	out = append(out, checkAgeRating(s), checkAccessibility(s), checkContentRights(s), checkPricing(s), checkProducts(s), checkPrivacy(s))
+	if c, ok := checkMedicalDevice(s); ok {
+		out = append(out, c)
+	}
+	out = append(out, checkSubmission(s))
 	if s.Version != nil {
 		out = append(out, checkPhased(s))
 	}
@@ -742,6 +753,64 @@ func checkPrivacy(s *statusSnapshot) check {
 		c.Detail += "; the web-session read failed (" + tool.BodyFor(s.PrivacyErr).Error + ")"
 	}
 	return c
+}
+
+// medicalDeviceApplies reports Apple's criteria for the regulated medical
+// device declaration: a Health & Fitness or Medical category, or an age
+// rating with frequent medical or treatment information.
+func (s *statusSnapshot) medicalDeviceApplies() bool {
+	if slices.Contains(s.Categories, "HEALTH_AND_FITNESS") || slices.Contains(s.Categories, "MEDICAL") {
+		return true
+	}
+	return s.AgeRating != nil && s.AgeRating.Str("medicalOrTreatmentInformation") == "FREQUENT_OR_INTENSE"
+}
+
+// fetchMedicalDevice reads the regulated medical device requirement through
+// the web session (two requests), only for apps it applies to. Any failure
+// leaves the check manual; it never fails the status.
+func fetchMedicalDevice(ctx context.Context, env *tool.Env, s *statusSnapshot) {
+	if !s.medicalDeviceApplies() {
+		return
+	}
+	if env.Portal == nil {
+		s.MedicalDeviceErr = tool.ErrWebSessionRequired
+		return
+	}
+	req, err := tool.ReadMedicalDeviceRequirement(ctx, env.Portal, s.App.ID)
+	if err != nil {
+		s.MedicalDeviceErr = err
+		return
+	}
+	s.MedicalDevice = &req
+}
+
+// checkMedicalDevice is the regulated medical device declaration; false
+// when it does not apply or Apple lists no such requirement for the app.
+func checkMedicalDevice(s *statusSnapshot) (check, bool) {
+	if !s.medicalDeviceApplies() {
+		return check{}, false
+	}
+	page := ascURL(s.App.ID, "distribution/info")
+	if err := s.MedicalDeviceErr; err != nil {
+		c := check{ID: "medical_device", Status: statusManual, FixVia: fixURL(page)}
+		c.Detail = "Health & Fitness and Medical apps must declare whether they are a regulated medical device (App Information > App Store Regulations & Permits); not readable via the API: check it in App Store Connect, or sign the user in (web_login) so medical_device_get/medical_device_set can read and set it"
+		if !errors.Is(err, tool.ErrWebSessionRequired) {
+			c.Detail += "; the web-session read failed (" + tool.BodyFor(err).Error + ")"
+		}
+		return c, true
+	}
+	r := s.MedicalDevice
+	switch {
+	case r == nil || r.ID == "":
+		return check{}, false
+	case r.Answered():
+		return check{ID: "medical_device", Status: statusOK, Detail: "regulated medical device status is declared (read via the web session)"}, true
+	}
+	return check{
+		ID: "medical_device", Status: statusBlock,
+		Detail: "regulated medical device status is not declared; Apple refuses the submission of Health & Fitness and Medical apps until it is",
+		FixVia: &fixVia{Tool: "medical_device_set", Args: map[string]any{"app": s.App.ID}, Manual: page},
+	}, true
 }
 
 func checkSubmission(s *statusSnapshot) check {
