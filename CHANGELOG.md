@@ -14,6 +14,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 ### Fixed
 
 - `release_status` suggested `privacy_plan` as the next call with a `platform` argument the tool rejects. The suggestion now carries the check's own arguments.
+- Builds use Go 1.26.11: `net/http` in Go 1.26.10 has GO-2026-6859, which govulncheck reports on every HTTP path of the server.
+- The weekly spec-drift job failed twice on the same Apple spec: GitHub Actions could not open the PR, and the next run could not push over the branch the first one left. It now replaces that branch.
 
 ## [0.22.0] - 2026-11-03
 
