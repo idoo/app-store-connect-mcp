@@ -10,13 +10,15 @@ import (
 // human's web session (the same Apple ID cookies as [Env.Web]): the App
 // Analytics dashboard API (/analytics/api/v1/...), Payments and Financial
 // Reports (/WebObjects/iTunesConnect.woa/ra/paymentConsolidation/...),
-// /olympus/v1/session, Xcode Cloud reads (/ci/api/teams/...) and the
+// /olympus/v1/session, the Xcode Cloud web API (/ci/api/teams/...) and the
 // compliance forms ([ComplianceFormsPath]). Every call is a read, POST
-// included (dashboard queries are POSTs that change nothing), except two
+// included (dashboard queries are POSTs that change nothing), except three
 // writes that need a write context: PUT
-// /ci/api/teams/{team}/products/{id}/next-build-number, and POST or PUT of
-// one app's compliance form (.../contents/{app}/requirements/{id}/forms),
-// which is never replayed (a lost answer wraps [ErrOutcomeUnknown]).
+// /ci/api/teams/{team}/products/{id}/next-build-number, PUT
+// /ci/api/teams/{team}/products/{id}/workflows-v15/{workflow} (one Xcode
+// Cloud workflow's content as the body), and POST or PUT of one app's
+// compliance form (.../contents/{app}/requirements/{id}/forms). Only the
+// form write is never replayed (a lost answer wraps [ErrOutcomeUnknown]).
 type Portal interface {
 	// JSON sends method to path (one of the allowed prefixes above, query
 	// allowed) with body encoded as JSON when non-nil, and decodes a 2xx

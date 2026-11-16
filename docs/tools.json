@@ -5351,6 +5351,62 @@
     "confirm": "none"
   },
   {
+    "name": "xcc_post_actions_set",
+    "toolset": "web",
+    "class": "W",
+    "title": "Xcode Cloud workflow post-actions",
+    "description": "Post-actions of an Xcode Cloud workflow (web session). internal_groups sets TestFlight Internal Testing on its archives so new builds reach those groups; remove_internal deletes it. Preview, then confirm:true.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Xcode Cloud workflow post-actions"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "app whose workflow to use; default: pinned app",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "internal_groups": {
+          "description": "1-20 internal beta group names or ids that get every new build",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "platforms": {
+          "description": "limit a change to these archives: IOS, MAC_OS, TV_OS, VISION_OS; default: every archive action",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remove_internal": {
+          "description": "delete the TestFlight Internal Testing post-actions",
+          "type": "boolean"
+        },
+        "workflow": {
+          "description": "workflow name or id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "flag"
+  },
+  {
     "name": "xcc_workflows_list",
     "toolset": "xcodecloud",
     "class": "R",
