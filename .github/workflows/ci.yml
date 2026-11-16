@@ -19,7 +19,7 @@ concurrency:
 env:
   # Same exact toolchain as release.yml, so CI tests what ships. Bump it
   # together with go.mod's toolchain line, release.yml and the Dockerfile.
-  GO_VERSION: "1.26.11"
+  GO_VERSION: "1.27.4"
 
 jobs:
   test:
@@ -28,12 +28,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ["1.26.11"]
+        go: ["1.27.4"]
         include:
           # go.mod's minimum Go, so newer-only APIs fail CI. GOTOOLCHAIN=local
           # keeps it from switching to go.mod's toolchain line.
           - os: ubuntu-latest
-            go: "1.25.x"
+            go: "1.26.x"
             gotoolchain: local
     runs-on: ${{ matrix.os }}
     env:

@@ -21,7 +21,7 @@ concurrency:
 env:
   # Exact toolchain so a tag rebuild is byte-identical; bump with go.mod's
   # toolchain line (they must match), ci.yml and the Dockerfile.
-  GO_VERSION: "1.26.11"
+  GO_VERSION: "1.27.4"
   GORELEASER_VERSION: "v2.19.0"
   GOVULNCHECK_VERSION: "v1.9.0"
   COSIGN_VERSION: "v3.1.4"
