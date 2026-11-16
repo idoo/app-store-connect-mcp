@@ -68,24 +68,35 @@ func TestPortalRefusesOtherPathsAndMethods(t *testing.T) {
 	c, _, _, hits := portalHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{}`)
 	})
-	for _, tc := range []struct{ method, path string }{
-		{http.MethodGet, "/iris/v1/apps"},
-		{http.MethodGet, "/olympus/v1/session/extra"},
-		{http.MethodGet, "/olympus/v1/providerSwitchRequests"},
-		{http.MethodGet, "/analytics/api/v1/../../iris/v1/apps"},
-		{http.MethodGet, "/analytics/api/v1/%2e%2e/x"},
-		{http.MethodGet, "//evil.example/analytics/api/v1/x"},
-		{http.MethodGet, "/analytics/api/v1/"},
-		{http.MethodDelete, "/analytics/api/v1/settings/all"},
-		{http.MethodPatch, "/olympus/v1/session"},
-		{http.MethodPost, "/ci/api/teams/" + ciTeam + "/products-v5"},
-		{http.MethodPut, "/analytics/api/v1/settings/all"},
-		{http.MethodPut, "/ci/api/teams/" + ciTeam + "/products/" + ciProduct + "/workflows-v15/x"},
-		{http.MethodPut, ciNextPath + "0"},
-		{http.MethodPut, ciNextPath + "5&x=1"},
-		{http.MethodDelete, ciNextPath + "5"},
+	// Writes on and a write context: every refusal below is the allow-list's.
+	c.SetAllowWrites(true)
+	workflow := map[string]any{"name": "Release"}
+	for _, tc := range []struct {
+		method, path string
+		body         any
+	}{
+		{method: http.MethodGet, path: "/iris/v1/apps"},
+		{method: http.MethodGet, path: "/olympus/v1/session/extra"},
+		{method: http.MethodGet, path: "/olympus/v1/providerSwitchRequests"},
+		{method: http.MethodGet, path: "/analytics/api/v1/../../iris/v1/apps"},
+		{method: http.MethodGet, path: "/analytics/api/v1/%2e%2e/x"},
+		{method: http.MethodGet, path: "//evil.example/analytics/api/v1/x"},
+		{method: http.MethodGet, path: "/analytics/api/v1/"},
+		{method: http.MethodDelete, path: "/analytics/api/v1/settings/all"},
+		{method: http.MethodPatch, path: "/olympus/v1/session"},
+		{method: http.MethodPost, path: "/ci/api/teams/" + ciTeam + "/products-v5"},
+		{method: http.MethodPut, path: "/analytics/api/v1/settings/all"},
+		{method: http.MethodPut, path: "/ci/api/teams/" + ciTeam + "/products/" + ciProduct + "/workflows-v15/x"},
+		{method: http.MethodPut, path: ciNextPath + "0"},
+		{method: http.MethodPut, path: ciNextPath + "5&x=1"},
+		{method: http.MethodDelete, path: ciNextPath + "5"},
+		{method: http.MethodPost, path: ciWorkflowPath, body: workflow},
+		{method: http.MethodDelete, path: ciWorkflowPath},
+		{method: http.MethodPut, path: ciWorkflowList, body: workflow},
+		{method: http.MethodPut, path: ciWorkflowPath + "?x=1", body: workflow},
+		{method: http.MethodPut, path: ciWorkflowList + "/not-a-uuid", body: workflow},
 	} {
-		if err := c.JSON(context.Background(), tc.method, tc.path, nil, nil); err == nil {
+		if err := c.JSON(devWriteCtx(t), tc.method, tc.path, tc.body, nil); err == nil {
 			t.Errorf("%s %s: no error", tc.method, tc.path)
 		}
 	}
@@ -102,11 +113,15 @@ func TestPortalRefusesOtherPathsAndMethods(t *testing.T) {
 const (
 	ciTeam     = "0a1b2c3d-0000-1111-2222-333344445555"
 	ciProduct  = "9f8e7d6c-0000-1111-2222-333344445555"
+	ciWorkflow = "5e4d3c2b-0000-1111-2222-333344445555"
 	ciNextPath = "/ci/api/teams/" + ciTeam + "/products/" + ciProduct + "/next-build-number?next_build_number="
+	// ciWorkflowList lists a product's workflows; ciWorkflowPath is one of them.
+	ciWorkflowList = "/ci/api/teams/" + ciTeam + "/products/" + ciProduct + "/workflows-v15"
+	ciWorkflowPath = ciWorkflowList + "/" + ciWorkflow
 )
 
-// The next-build-number PUT is the one portal write: it needs writes on
-// and a write context, and goes out with an empty body and Content-Length 0.
+// The next-build-number PUT is a portal write: it needs writes on and a
+// write context, and goes out with an empty body and Content-Length 0.
 func TestPortalNextBuildNumberPut(t *testing.T) {
 	var method, ctype, query string
 	var length int64
@@ -134,6 +149,48 @@ func TestPortalNextBuildNumberPut(t *testing.T) {
 	}
 	if method != http.MethodPut || length != 0 || len(body) != 0 || ctype != "" || query != "next_build_number=67" {
 		t.Fatalf("method %s length %d body %q content-type %q query %q", method, length, body, ctype, query)
+	}
+}
+
+// Saving a workflow is a portal write too: it needs writes on, a write
+// context and a body, and goes out as a JSON PUT whose answer is decoded.
+func TestPortalWorkflowPut(t *testing.T) {
+	var method, ctype, query, body string
+	c, _, _, hits := portalHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		method, ctype, query = r.Method, r.Header.Get("Content-Type"), r.URL.RawQuery
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"`+ciWorkflow+`","content":{"name":"Release"}}`)
+	})
+	content := map[string]any{"name": "Release", "post_actions": []any{}}
+	if err := c.JSON(devWriteCtx(t), http.MethodPut, ciWorkflowPath, content, nil); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("writes off: %v", err)
+	}
+	c.SetAllowWrites(true)
+	if err := c.JSON(context.Background(), http.MethodPut, ciWorkflowPath, content, nil); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("no write context: %v", err)
+	}
+	if err := c.JSON(devWriteCtx(t), http.MethodPut, ciWorkflowPath, nil, nil); err == nil {
+		t.Fatal("PUT without a body accepted")
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("refused PUTs reached the server %d times", hits.Load())
+	}
+	var out struct {
+		ID      string `json:"id"`
+		Content struct {
+			Name string `json:"name"`
+		} `json:"content"`
+	}
+	if err := c.JSON(devWriteCtx(t), http.MethodPut, ciWorkflowPath, content, &out); err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPut || ctype != "application/json" || query != "" || body != `{"name":"Release","post_actions":[]}` {
+		t.Fatalf("method %s content-type %q query %q body %s", method, ctype, query, body)
+	}
+	if out.ID != ciWorkflow || out.Content.Name != "Release" {
+		t.Fatalf("out %+v", out)
 	}
 }
 

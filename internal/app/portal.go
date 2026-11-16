@@ -43,14 +43,18 @@ var portalPrefixes = []string{
 }
 
 // portalCIPrefix is the Xcode Cloud web API. Only GETs reach it, except the
-// one PUT matched by portalCIPut.
+// two PUTs matched by portalCIPut and portalCIWorkflowPut.
 const portalCIPrefix = "/ci/api/teams/"
 
 // portalCIPut is a portal write: setting an Xcode Cloud product's next
 // build number (team and product are UUIDs).
 var portalCIPut = regexp.MustCompile(`^/ci/api/teams/[0-9A-Fa-f-]{36}/products/[0-9A-Fa-f-]{36}/next-build-number\?next_build_number=[1-9][0-9]{0,9}$`)
 
-// portalFormWrite is the other portal write: saving one compliance form of
+// portalCIWorkflowPut is a portal write: saving one Xcode Cloud workflow
+// (team, product and workflow are UUIDs) with its content as the body.
+var portalCIWorkflowPut = regexp.MustCompile(`^/ci/api/teams/[0-9A-Fa-f-]{36}/products/[0-9A-Fa-f-]{36}/workflows-v15/[0-9A-Fa-f-]{36}$`)
+
+// portalFormWrite is the third portal write: saving one compliance form of
 // an app (POST the first answer, PUT a changed one). Everything else under
 // tool.ComplianceFormsPath is GET only.
 var portalFormWrite = regexp.MustCompile(`^/ppm/complianceform/v1/accounts/[0-9A-Fa-f-]{36}/contents/[0-9]{1,20}/requirements/[A-Za-z0-9_-]{1,64}/forms$`)
@@ -89,8 +93,8 @@ func newPortalClient(src asc.SessionAuth, base, version string) *portalClient {
 	}
 }
 
-// SetAllowWrites turns the portal writes (portalCIPut, portalFormWrite) on
-// or off.
+// SetAllowWrites turns the portal writes (portalCIPut, portalCIWorkflowPut,
+// portalFormWrite) on or off.
 func (c *portalClient) SetAllowWrites(on bool) { c.allow.Store(on) }
 
 // portalPathAllowed reports whether p (query allowed) is an allowed portal
@@ -116,10 +120,11 @@ func portalPathAllowed(p string) bool {
 }
 
 // JSON implements [tool.Portal]. GET and POST are reads (POST never on the
-// Xcode Cloud API or the compliance forms); the writes are portalCIPut and
-// portalFormWrite, which need writes allowed plus a write-enabled call. A
-// form write is never replayed: a 5xx or a lost answer is
-// [tool.ErrOutcomeUnknown].
+// Xcode Cloud API or the compliance forms); the writes are portalCIPut,
+// portalCIWorkflowPut and portalFormWrite, which need writes allowed plus a
+// write-enabled call. A form write is never replayed: a 5xx or a lost
+// answer is [tool.ErrOutcomeUnknown]; the two Xcode Cloud PUTs are retried
+// like a read.
 func (c *portalClient) JSON(ctx context.Context, method, path string, body, out any) error {
 	if !portalPathAllowed(path) {
 		return fmt.Errorf("app: web portal: path %s not allowed", tool.SanitizeText(path))
@@ -130,6 +135,7 @@ func (c *portalClient) JSON(ctx context.Context, method, path string, body, out 
 	switch {
 	case method == http.MethodGet, method == http.MethodPost && !ci && !form:
 	case method == http.MethodPut && body == nil && portalCIPut.MatchString(path),
+		method == http.MethodPut && body != nil && portalCIWorkflowPut.MatchString(path),
 		(method == http.MethodPost || method == http.MethodPut) && body != nil && portalFormWrite.MatchString(path):
 		if !c.allow.Load() || !tool.IsWrite(ctx) {
 			return fmt.Errorf("app: web portal: %s %s: %w", method, tool.SanitizeText(path), tool.ErrWritesDisabled)

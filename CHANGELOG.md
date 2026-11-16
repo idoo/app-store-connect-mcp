@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Added
+
+- `xcc_post_actions_set` (`web` toolset) reads an Xcode Cloud workflow's post-actions, which the public API doesn't expose: TestFlight Internal and External Testing with their groups, notarization and notifications. With `internal_groups` it sets TestFlight Internal Testing on the workflow's archives (all of them, or the `platforms` you name), so every new cloud build reaches those internal groups without a `testflight_distribute` call; `remove_internal` deletes it. The first call previews, `confirm:true` saves and reads the workflow back. An internal group with automatic distribution does not receive Xcode Cloud builds by itself; this post-action is what delivers them. Apple's web API saves a workflow as a whole: the tool sends every other part back unchanged, refuses a workflow saved since the preview, and warns when Apple changed something else on save.
+
 ## [0.23.0] - 2026-11-16
 
 ### Added
