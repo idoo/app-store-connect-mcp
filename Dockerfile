@@ -8,7 +8,7 @@
 #                     -v "$PWD/tls:/tls:ro" app-store-connect-mcp serve --http 0.0.0.0:8765 \
 #                     --allow-remote --tls-cert /tls/cert.pem --tls-key /tls/key.pem
 # The bearer token is required either way; see docs/INSTALL.md.
-FROM golang:1.26.11@sha256:f6946db66567acc1497655237e58f06ec3a57478a5e0d67fca29d2ffcf2ea136 AS build
+FROM golang:1.27.4@sha256:fe517acaa580cc7915457080f850c37e618b3c1e750f98b58fc6429b605147a1 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

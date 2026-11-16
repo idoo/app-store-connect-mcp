@@ -4,7 +4,7 @@ app-store-connect-mcp is small on purpose. Open a short issue before a big PR.
 
 ## Setup
 
-Go 1.26.11 (go.mod pins the toolchain; Go 1.25+ fetches it for you), plus golangci-lint v2 for linting.
+Go 1.27.4 (go.mod pins the toolchain; Go 1.26+ fetches it for you), plus golangci-lint v2 for linting.
 
 ```sh
 make build      # bin/app-store-connect-mcp
