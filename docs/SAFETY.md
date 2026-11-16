@@ -25,6 +25,7 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 - `iap_upsert` / `subscriptions_upsert` when `availability` removes territories (sales stop there);
 - `signing_devices_register` when a device is new (each one uses a yearly device slot);
 - `iap_upsert` / `subscriptions_upsert` when they create a product (its id is burned for good), turn on family sharing or change a subscription's level;
+- `asset_packs_upload` when it creates an asset pack (the identifier is reserved for the app for good and can't be renamed);
 - `signing_portal_apply` when it creates an App Group (the identifier is taken for good) or disables a capability;
 - `signing_capabilities_set` when it disables a capability;
 - `xcc_build_number` with `allow_lower` (a next build number below the current one or not above the highest uploaded build);

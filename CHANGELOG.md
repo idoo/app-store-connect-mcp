@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Added
+
+- `asset_packs_upload` (`uploads` toolset, hidden while writes are off) uploads a Background Assets archive (`.aar` from `xcrun ba-package`) as a new version of an Apple-hosted asset pack, creating the pack when it doesn't exist yet. The first call previews: whether the pack exists, which version the file goes to, and the size. `confirm:true` uploads to an existing pack; creating a pack also needs your approval, because the identifier is reserved for the app for good. A version still `AWAITING_UPLOAD` is reused together with its matching unfinished reservation, so calling again with the same file resumes, and a version already processing or complete with the same file answers `already: true` without writing anything. With `wait` (on by default, up to 300 s) it polls until `COMPLETE` or `FAILED` and returns the version's state, platforms, Apple's errors and warnings and its three release states. The tool can't read the archive: `pack` must equal the manifest's `assetPackID`.
+
 ## [0.24.0] - 2026-11-16
 
 ### Added

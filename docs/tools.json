@@ -716,6 +716,57 @@
     "confirm": "none"
   },
   {
+    "name": "asset_packs_upload",
+    "toolset": "uploads",
+    "class": "W",
+    "title": "Upload a Background Assets asset pack (.aar)",
+    "description": "Uploads an .aar (xcrun ba-package) as an asset pack version; pack must equal its manifest assetPackID (unchecked). A new pack id needs a human. Same file again resumes. COMPLETE serves internal TestFlight; external and App Store need review.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Upload a Background Assets asset pack (.aar)"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "name, bundle id, SKU or id; default pinned",
+          "type": "string"
+        },
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "file": {
+          "description": ".aar archive made by xcrun ba-package, inside the project",
+          "type": "string"
+        },
+        "pack": {
+          "description": "asset pack identifier, equal to assetPackID in the archive's manifest",
+          "type": "string"
+        },
+        "wait": {
+          "description": "wait for Apple's processing (default true)",
+          "type": "boolean"
+        },
+        "wait_seconds": {
+          "description": "seconds to wait for processing (default 300, max 300)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pack",
+        "file"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "flag"
+  },
+  {
     "name": "builds_expire",
     "toolset": "testflight",
     "class": "D",

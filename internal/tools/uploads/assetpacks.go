@@ -2,7 +2,9 @@ package uploads
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
@@ -105,21 +107,27 @@ func assetPacksList(ctx context.Context, env *tool.Env, in packsIn) (*tool.Resul
 	return tool.OK(out), nil
 }
 
+// versionInclude and versionFields read a version with its release states.
+var (
+	versionInclude = []string{"appStoreRelease", "externalBetaRelease", "internalBetaRelease"}
+	versionFields  = map[string][]string{
+		"backgroundAssetVersions": {
+			"createdDate", "platforms", "state", "stateDetails", "version", "locale",
+			"appStoreRelease", "externalBetaRelease", "internalBetaRelease",
+		},
+		"backgroundAssetVersionAppStoreReleases":     {"state"},
+		"backgroundAssetVersionExternalBetaReleases": {"state"},
+		"backgroundAssetVersionInternalBetaReleases": {"state"},
+	}
+)
+
 // packVersions reads a pack's newest versions with their release states.
 func packVersions(ctx context.Context, env *tool.Env, packID string) ([]packVerOut, error) {
 	res, err := env.ASC.List(ctx, "/v1/backgroundAssets/"+url.PathEscape(packID)+"/versions", tool.ListOptions{
 		Query:   url.Values{"sort": {"-version"}},
-		Include: []string{"appStoreRelease", "externalBetaRelease", "internalBetaRelease"},
-		Fields: map[string][]string{
-			"backgroundAssetVersions": {
-				"createdDate", "platforms", "state", "stateDetails", "version", "locale",
-				"appStoreRelease", "externalBetaRelease", "internalBetaRelease",
-			},
-			"backgroundAssetVersionAppStoreReleases":     {"state"},
-			"backgroundAssetVersionExternalBetaReleases": {"state"},
-			"backgroundAssetVersionInternalBetaReleases": {"state"},
-		},
-		Limit: versionsMax, MaxItems: versionsMax,
+		Include: versionInclude,
+		Fields:  versionFields,
+		Limit:   versionsMax, MaxItems: versionsMax,
 	})
 	if err != nil {
 		return nil, err
@@ -127,30 +135,52 @@ func packVersions(ctx context.Context, env *tool.Env, packID string) ([]packVerO
 	inc := tool.IndexIncluded(res.Included)
 	out := make([]packVerOut, 0, len(res.Data))
 	for _, v := range res.Data {
-		o := packVerOut{ID: v.ID, Version: v.Str("version"), State: v.Str("state"), Locale: v.Str("locale"), Created: v.Str("createdDate")}
-		o.Platforms, _ = v.Attributes["platforms"].([]any)
-		if sd, ok := v.Attributes["stateDetails"].(map[string]any); ok {
-			o.Errors, o.Warnings, o.Infos = details(sd["errors"]), details(sd["warnings"]), details(sd["infos"])
-		}
-		for rel, name := range releaseRels {
-			id := v.RelID(rel)
-			if id == "" {
-				continue
-			}
-			state := ""
-			for _, r := range inc {
-				if r.ID == id && r.Type != "backgroundAssetVersions" {
-					state = r.Str("state")
-				}
-			}
-			if o.Releases == nil {
-				o.Releases = map[string]string{}
-			}
-			o.Releases[name] = state
-		}
-		out = append(out, o)
+		out = append(out, shapeVersion(v, inc))
 	}
 	return out, nil
+}
+
+// packVersion reads one version with its release states.
+func packVersion(ctx context.Context, env *tool.Env, id string) (packVerOut, error) {
+	q := url.Values{"include": {strings.Join(versionInclude, ",")}}
+	for typ, f := range versionFields {
+		q.Set("fields["+typ+"]", strings.Join(f, ","))
+	}
+	res, err := env.ASC.Get(ctx, "/v1/backgroundAssetVersions/"+url.PathEscape(id), q)
+	if err != nil {
+		return packVerOut{}, err
+	}
+	v, ok := res.First()
+	if !ok {
+		return packVerOut{}, fmt.Errorf("backgroundAssetVersions %s: empty response", id)
+	}
+	return shapeVersion(v, tool.IndexIncluded(res.Included)), nil
+}
+
+// shapeVersion shapes a version; inc holds its included release resources.
+func shapeVersion(v tool.Resource, inc map[string]tool.Resource) packVerOut {
+	o := packVerOut{ID: v.ID, Version: v.Str("version"), State: v.Str("state"), Locale: v.Str("locale"), Created: v.Str("createdDate")}
+	o.Platforms, _ = v.Attributes["platforms"].([]any)
+	if sd, ok := v.Attributes["stateDetails"].(map[string]any); ok {
+		o.Errors, o.Warnings, o.Infos = details(sd["errors"]), details(sd["warnings"]), details(sd["infos"])
+	}
+	for rel, name := range releaseRels {
+		id := v.RelID(rel)
+		if id == "" {
+			continue
+		}
+		state := ""
+		for _, r := range inc {
+			if r.ID == id && r.Type != "backgroundAssetVersions" {
+				state = r.Str("state")
+			}
+		}
+		if o.Releases == nil {
+			o.Releases = map[string]string{}
+		}
+		o.Releases[name] = state
+	}
+	return o
 }
 
 func details(v any) []stateDetail {
