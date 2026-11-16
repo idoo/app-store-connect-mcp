@@ -108,7 +108,9 @@ jobs:
           retention-days: 7
 
   # Holds the write token but runs no repository code: it commits the files
-  # regenerate produced and opens the PR.
+  # regenerate produced and opens the PR. `gh pr create` needs the repository
+  # setting Actions > General > "Allow GitHub Actions to create and approve
+  # pull requests".
   open-pr:
     needs: [detect, regenerate]
     if: always() && needs.detect.outputs.changed == 'true' && needs.regenerate.result == 'success'
@@ -169,7 +171,9 @@ jobs:
           git add internal/spec docs
           git commit -m "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" --allow-empty
           gh auth setup-git
-          git push origin "$branch"
+          # The branch is this job's own: a run whose PR step failed left it
+          # behind, and a new commit of the same spec replaces it.
+          git push --force origin "$branch"
           gh pr create --base main --head "$branch" \
             --title "chore(spec): App Store Connect OpenAPI drift ${SPEC_SHA:0:12}" \
             --body-file /tmp/body.md
