@@ -86,7 +86,7 @@ jobs:
       # counts tests as roots, so test-only helpers belong in _test.go files.
       - name: deadcode -test ./...
         run: |
-          out="$(go run golang.org/x/tools/cmd/deadcode@v0.38.0 -test ./...)"
+          out="$(go run golang.org/x/tools/cmd/deadcode@v0.52.0 -test ./...)"
           if [ -n "$out" ]; then
             printf '%s\n' "$out"
             exit 1
