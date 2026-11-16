@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-16
+
 ### Added
 
 - Regulated medical device declaration in the `web` toolset (Apple ID web session). Apple refuses to review a new Health & Fitness or Medical app until it is declared under App Information > App Store Regulations & Permits, and the public API has no endpoint for it:
@@ -506,7 +508,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.1...v0.20.2
