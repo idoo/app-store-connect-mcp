@@ -53,6 +53,8 @@ var destructiveRoots = []string{
 	"/v1/inAppPurchaseOfferCodes", "/v1/inAppPurchaseOfferCodeCustomCodes", "/v1/inAppPurchaseOfferCodeOneTimeUseCodes",
 	"/v1/subscriptionOfferCodes", "/v1/subscriptionOfferCodeCustomCodes", "/v1/subscriptionOfferCodeOneTimeUseCodes",
 	"/v1/subscriptionIntroductoryOffers", "/v1/subscriptionPromotionalOffers", "/v1/winBackOffers",
+	// Retention offers: discounts shown to subscribers who are about to cancel.
+	"/v1/retentionOffers",
 }
 
 // writeRoots are resources whose POST/PATCH operations (including their
@@ -95,7 +97,11 @@ var writeRoots = []string{
 	"/v1/inAppPurchaseLocalizations",
 	"/v1/inAppPurchaseVersions", "/v1/marketplaceSearchDetails",
 	"/v1/merchantIds", "/v1/nominations", "/v1/passTypeIds",
-	"/v1/profiles", "/v1/promotedPurchases", "/v1/routingAppCoverages",
+	"/v1/profiles", "/v1/promotedPurchases",
+	// Retention messages: drafts of the text shown when a subscriber cancels;
+	// a version reaches customers only through App Review.
+	"/v1/retentionMessageLocalizations", "/v1/retentionMessages", "/v1/retentionMessageVersions",
+	"/v1/routingAppCoverages",
 	"/v1/subscriptionAppStoreReviewScreenshots", "/v1/subscriptionGracePeriods", "/v1/subscriptionGroupLocalizations",
 	"/v1/subscriptionGroups", "/v1/subscriptionGroupVersions", "/v1/subscriptionImages",
 	"/v1/subscriptionLocalizations",

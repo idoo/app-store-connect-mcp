@@ -15,7 +15,7 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// Enums of App Store Connect spec 4.5.1.
+// Enums of App Store Connect spec 4.6.
 var (
 	// platforms is BundleIdPlatform.
 	platforms = []any{"IOS", "MAC_OS", "UNIVERSAL"}

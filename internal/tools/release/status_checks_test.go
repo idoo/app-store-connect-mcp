@@ -22,7 +22,7 @@ func TestIPhoneDuoByDate(t *testing.T) {
 		t.Errorf("before cutoff: %+v ready=%v", c, ready(out))
 	}
 
-	// The pinned spec (4.5.1) lacks APP_IPHONE_DUO as a set type, but the
+	// The pinned spec (4.6) lacks APP_IPHONE_DUO as a set type, but the
 	// library uploads it: block, with the manual route as fix_via.
 	after := setup(t, readyFixture())
 	after.Clock.Set(time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC))
