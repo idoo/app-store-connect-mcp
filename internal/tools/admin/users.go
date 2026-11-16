@@ -11,7 +11,7 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// roles is UserRole of App Store Connect spec 4.5.1.
+// roles is UserRole of App Store Connect spec 4.6.
 var roles = []any{
 	"ADMIN", "FINANCE", "ACCOUNT_HOLDER", "SALES", "MARKETING", "APP_MANAGER", "DEVELOPER", "ACCESS_TO_REPORTS",
 	"CUSTOMER_SUPPORT", "CREATE_APPS", "CLOUD_MANAGED_DEVELOPER_ID", "CLOUD_MANAGED_APP_DISTRIBUTION",

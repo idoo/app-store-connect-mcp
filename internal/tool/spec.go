@@ -62,7 +62,7 @@ func (e *ValidationError) Error() string {
 
 // Spec is the embedded App Store Connect OpenAPI index (internal/spec).
 type Spec interface {
-	// Version is the pinned spec version (e.g. "4.5.1").
+	// Version is the pinned spec version (e.g. "4.6").
 	Version() string
 	// Search ranks operations by keyword, tag or resource type.
 	Search(query string, limit int) []SearchHit

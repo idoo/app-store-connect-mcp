@@ -77,8 +77,11 @@ jobs:
         with:
           name: spec-zip
           path: spec-zip
+      # `shell: bash` runs with pipefail, so `| tee` doesn't hide a failed
+      # generator or test run (the default shell reported both as success).
       - name: Regenerate index
         id: gen
+        shell: bash
         run: |
           unzip -o -j spec-zip/spec.zip 'openapi.oas*.json' -d spec-zip
           spec=$(find spec-zip -maxdepth 1 -name 'openapi.oas*.json' | head -n 1)
@@ -92,6 +95,7 @@ jobs:
       - name: Test
         id: test
         if: steps.gen.outcome == 'success'
+        shell: bash
         run: go test ./... 2>&1 | tee /tmp/test.log
         continue-on-error: true
       - name: Collect output
@@ -154,7 +158,7 @@ jobs:
             echo "- generator: **${GEN}**"
             echo "- tests: **${TEST}**"
             echo
-            echo "Classify any new non-GET operation in \`internal/spec/ops_class.json\` before merging."
+            echo "Classify any new non-GET operation in \`internal/spec/sensitive.go\` before merging."
             echo
             echo "<details><summary>Added operations ($(printf '%s' "$added" | grep -c . || true))</summary>"
             echo; echo '```'; printf '%s\n' "$added"; echo '```'; echo "</details>"

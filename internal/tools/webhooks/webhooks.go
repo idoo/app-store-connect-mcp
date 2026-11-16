@@ -17,7 +17,7 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// eventTypes is WebhookEventType of App Store Connect spec 4.5.1.
+// eventTypes is WebhookEventType of App Store Connect spec 4.6.
 var eventTypes = []any{
 	"ALTERNATIVE_DISTRIBUTION_PACKAGE_AVAILABLE_UPDATED", "ALTERNATIVE_DISTRIBUTION_PACKAGE_VERSION_CREATED",
 	"ALTERNATIVE_DISTRIBUTION_TERRITORY_AVAILABILITY_UPDATED", "APP_STORE_VERSION_APP_VERSION_STATE_UPDATED",

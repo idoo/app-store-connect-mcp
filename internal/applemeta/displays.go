@@ -12,7 +12,7 @@ import (
 // DisplayType is an App Store Connect ScreenshotDisplayType enum value.
 type DisplayType string
 
-// Screenshot display types, exactly as in the pinned spec (4.5.1). There is no
+// Screenshot display types, exactly as in the pinned spec (4.6). There is no
 // APP_IPHONE_69: the 6.9" slot is APP_IPHONE_67, and the 13" iPad slot is
 // APP_IPAD_PRO_3GEN_129.
 const (
@@ -52,7 +52,7 @@ const (
 )
 
 // AppIPhoneDuo is the iPhone Duo screenshot slot Apple announced. It is not
-// in the pinned spec (4.5.1), so it is pending: absent from [Displays] and
+// in the pinned spec (4.6), so it is pending: absent from [Displays] and
 // [ParseDisplay], and callers must not send it to Apple unless the spec
 // index lists it as a ScreenshotDisplayType value.
 const AppIPhoneDuo DisplayType = "APP_IPHONE_DUO"
