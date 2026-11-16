@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-16
+
 ### Added
 
 - `xcc_post_actions_set` (`web` toolset) reads an Xcode Cloud workflow's post-actions, which the public API doesn't expose: TestFlight Internal and External Testing with their groups, notarization and notifications. With `internal_groups` it sets TestFlight Internal Testing on the workflow's archives (all of them, or the `platforms` you name), so every new cloud build reaches those internal groups without a `testflight_distribute` call; `remove_internal` deletes it. The first call previews, `confirm:true` saves and reads the workflow back. An internal group with automatic distribution does not receive Xcode Cloud builds by itself; this post-action is what delivers them. Apple's web API saves a workflow as a whole: the tool sends every other part back unchanged, refuses a workflow saved since the preview, and warns when Apple changed something else on save.
@@ -512,7 +514,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.20.2...v0.21.0
