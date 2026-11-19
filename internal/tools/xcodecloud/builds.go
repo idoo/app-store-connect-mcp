@@ -358,7 +358,17 @@ func buildStatus(ctx context.Context, env *tool.Env, in buildStatusIn) (*tool.Re
 	for _, w := range warnings {
 		res.Warn(w)
 	}
+	if diedAtStart(run.ExecutionProgress, run.CompletionStatus, run.StartedDate) && len(actions) == 0 {
+		res.Warn("the run ended without starting (no actions): Xcode Cloud did not take it; the usual cause is used-up compute hours")
+		res.Then(tool.NextStep{Tool: "xcc_usage_report"})
+	}
 	return res, nil
+}
+
+// diedAtStart reports a run that completed FAILED or ERRORED without ever
+// starting: Xcode Cloud refused it before any action ran.
+func diedAtStart(progress, status, started string) bool {
+	return progress == "COMPLETE" && (status == "FAILED" || status == "ERRORED") && started == ""
 }
 
 // latestRun returns the id of the newest build run of a workflow.

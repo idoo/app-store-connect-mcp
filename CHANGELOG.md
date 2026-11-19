@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Added
+
+- `xcc_usage_report` (`xcodecloud` toolset) shows how much Xcode Cloud compute time the team used, by product and by day. With an Apple ID web session it reads the numbers of App Store Connect's own usage page: the plan (minutes included, used and left, and the date they reset), the window since the last reset or the last `days`, each product's share with the window before it, and one product's share by workflow when you name an `app` or a `product`. A plan with nothing left is called out, with the date Xcode Cloud starts taking runs again. Without a web session it estimates from the public API: the durations of every run's actions, summed by product and by day for up to 31 days, plus the runs that ended without ever starting. One call reads the actions of at most 100 runs and keeps them on disk, so a busy team's first answers say `still_processing` and calling again finishes; later calls only read new runs. `source` picks `apple`, `runs` or `auto` (Apple's numbers when a session is active, else the estimate with a hint to sign in). The plan is the team's, so the pinned app narrows nothing here.
+- `xcc_build_status` says so when a run ended without starting (failed in seconds, no start date, no actions) and points at `xcc_usage_report`: that is what a team out of compute hours looks like, and neither the run nor the public API gives a reason.
+
 ## [0.25.0] - 2026-11-16
 
 ### Added

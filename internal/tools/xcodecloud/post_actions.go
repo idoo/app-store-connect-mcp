@@ -508,7 +508,7 @@ func postActions(ctx context.Context, env *tool.Env, in postActionsIn) (*tool.Re
 	if err != nil {
 		return nil, err
 	}
-	_, appID, err := resolveProduct(ctx, env, "", wf.ProductID)
+	_, appID, err := resolveProduct(ctx, env, "", wf.ProductID, "xcc_post_actions_set")
 	if err != nil {
 		return nil, err
 	}

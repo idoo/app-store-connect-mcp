@@ -76,7 +76,7 @@ func buildNumber(ctx context.Context, env *tool.Env, in buildNumberIn) (*tool.Re
 	if in.Next < 0 {
 		return nil, tool.InvalidArgs("next must be positive")
 	}
-	prod, appID, err := resolveProduct(ctx, env, in.App, in.Product)
+	prod, appID, err := resolveProduct(ctx, env, in.App, in.Product, "xcc_build_number")
 	if err != nil {
 		return nil, err
 	}
@@ -169,8 +169,9 @@ func readResult(out buildNumberOut) *tool.Result {
 }
 
 // resolveProduct finds the Xcode Cloud product by id, or the only product
-// of the app (default: pinned app), and returns it with its app id.
-func resolveProduct(ctx context.Context, env *tool.Env, app tool.AppRef, id string) (productRef, string, error) {
+// of the app (default: pinned app), and returns it with its app id. Several
+// products are listed with a nextTool call per candidate.
+func resolveProduct(ctx context.Context, env *tool.Env, app tool.AppRef, id, nextTool string) (productRef, string, error) {
 	next := []tool.NextStep{{Tool: "xcc_workflows_list"}}
 	if id != "" {
 		if !uuidRE.MatchString(id) {
@@ -219,7 +220,7 @@ func resolveProduct(ctx context.Context, env *tool.Env, app tool.AppRef, id stri
 		}
 		amb.Candidates = append(amb.Candidates, tool.Candidate{ID: p.ID, Label: fmt.Sprintf("%q", p.Text("name"))})
 		if i < 5 {
-			amb.Next = append(amb.Next, tool.NextStep{Tool: "xcc_build_number", Args: map[string]any{"product": p.ID}})
+			amb.Next = append(amb.Next, tool.NextStep{Tool: nextTool, Args: map[string]any{"product": p.ID}})
 		}
 	}
 	return productRef{}, "", amb
