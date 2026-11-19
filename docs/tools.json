@@ -1177,7 +1177,7 @@
         },
         "availability": {
           "additionalProperties": false,
-          "description": "territories it is sold in",
+          "description": "territories it is sold in, or remove_from_sale:true to take it off sale everywhere",
           "properties": {
             "all": {
               "description": "every App Store territory",
@@ -1185,6 +1185,10 @@
             },
             "available_in_new_territories": {
               "description": "default: current value, else all",
+              "type": "boolean"
+            },
+            "remove_from_sale": {
+              "description": "no territory: stop selling it everywhere (Remove from Sale)",
               "type": "boolean"
             },
             "territories": {
@@ -4312,7 +4316,7 @@
         },
         "availability": {
           "additionalProperties": false,
-          "description": "territories it is sold in",
+          "description": "territories it is sold in, or remove_from_sale:true to take it off sale everywhere",
           "properties": {
             "all": {
               "description": "every App Store territory",
@@ -4320,6 +4324,10 @@
             },
             "available_in_new_territories": {
               "description": "default: current value, else all",
+              "type": "boolean"
+            },
+            "remove_from_sale": {
+              "description": "no territory: stop selling it everywhere (Remove from Sale)",
               "type": "boolean"
             },
             "territories": {
@@ -5462,7 +5470,7 @@
     "toolset": "xcodecloud",
     "class": "R",
     "title": "Xcode Cloud compute usage",
-    "description": "The team's Xcode Cloud compute minutes by product and day. With a web session: Apple's numbers and the plan (included, used, left, reset date). Without: an estimate summed from the runs' actions, and the runs that ended without starting, the sign of used-up hours.",
+    "description": "The team's Xcode Cloud compute minutes by product and day. With a web session: Apple's numbers and the plan (included, used, left, reset date). Without: an estimate from the runs' actions, often twice Apple's, and the runs that ended without starting, the sign of used-up hours.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,

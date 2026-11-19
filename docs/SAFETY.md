@@ -22,7 +22,7 @@ app-store-connect-mcp holds a key that can publish apps, answer customers in pub
 - `release_phased` with `complete` or `remove`;
 - `metadata_apply` when it changes promotional text on the live version (public at once, no review);
 - `library_apply` when it deletes placements or retires assets (`remove`, `archive`, or `mode:"replace"`). Placements go before their asset; an asset Apple has already reviewed is archived, not deleted;
-- `iap_upsert` / `subscriptions_upsert` when `availability` removes territories (sales stop there);
+- `iap_upsert` / `subscriptions_upsert` when `availability` removes territories (sales stop there), `remove_from_sale` included. If Apple refuses the API key because only the Account Holder may do that, the approved request is sent once through the Apple ID web session, which must be the Account Holder's;
 - `signing_devices_register` when a device is new (each one uses a yearly device slot);
 - `iap_upsert` / `subscriptions_upsert` when they create a product (its id is burned for good), turn on family sharing or change a subscription's level;
 - `asset_packs_upload` when it creates an asset pack (the identifier is reserved for the app for good and can't be renamed);
