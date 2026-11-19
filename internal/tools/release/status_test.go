@@ -760,6 +760,17 @@ func TestReleaseStatusAgeRatingUnansweredBlocks(t *testing.T) {
 	}
 }
 
+// Spec 4.6.1: the Shared Location and Dating and Relationships questions are
+// general questions (mandatory from 2026-11-16), not optional or Korea-only.
+func TestReleaseStatusAgeRating461QuestionsBlock(t *testing.T) {
+	f := readyFixture()
+	f.age = map[string]any{"sharedLocation": nil, "datingAndRelationships": nil}
+	out, _ := call(t, setup(t, f), `{"app":"Hjul"}`)
+	if c := checkByID(t, out, "age_rating"); c.Status != statusBlock || !slices.Equal(c.Items, []string{"datingAndRelationships", "sharedLocation"}) {
+		t.Errorf("age_rating = %+v", c)
+	}
+}
+
 // AgentUX#4: in read-only mode the release_cancel option says it is locked
 // and how to unlock it.
 func TestReleaseStatusCancelOptionLocked(t *testing.T) {

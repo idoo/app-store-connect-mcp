@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Fixed
+
+- Apple's App Store Connect API spec 4.6.1 (1342 operations, was 1337). Apple made the age rating questions Shared Location (`sharedLocation`) and Dating and Relationships (`datingAndRelationships`) mandatory for every submission from 2026-11-16, but the old spec didn't list them, so `appinfo_update {age_rating: {sharedLocation: false, datingAndRelationships: false}}` failed with `unknown attribute`. They can be answered now, and `release_status` blocks while either is unanswered. The new subscription price change previews and tier equalizations are ordinary writes for `asc_api_request`.
+
 ## [0.26.0] - 2026-11-19
 
 ### Added

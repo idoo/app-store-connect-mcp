@@ -105,6 +105,9 @@ var writeRoots = []string{
 	"/v1/subscriptionAppStoreReviewScreenshots", "/v1/subscriptionGracePeriods", "/v1/subscriptionGroupLocalizations",
 	"/v1/subscriptionGroups", "/v1/subscriptionGroupVersions", "/v1/subscriptionImages",
 	"/v1/subscriptionLocalizations",
+	// Price change previews and tier equalizations compute prices; nothing is
+	// stored or published.
+	"/v1/subscriptionPriceChangePreviews", "/v1/subscriptionPriceTierEqualizations",
 	"/v1/subscriptions", "/v1/subscriptionVersions", "/v1/webhookDeliveries",
 	"/v1/webhookPings", "/v2/appStoreVersionExperiments",
 	"/v2/gameCenterAchievementImages", "/v2/gameCenterAchievementLocalizations", "/v2/gameCenterAchievements",
