@@ -13,7 +13,7 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// profileTypes is ProfileType of App Store Connect spec 4.6.
+// profileTypes is ProfileType of App Store Connect spec 4.6.1.
 var profileTypes = []any{
 	"IOS_APP_DEVELOPMENT", "IOS_APP_STORE", "IOS_APP_ADHOC", "IOS_APP_INHOUSE",
 	"MAC_APP_DEVELOPMENT", "MAC_APP_STORE", "MAC_APP_DIRECT",

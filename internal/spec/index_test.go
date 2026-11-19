@@ -14,10 +14,10 @@ import (
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// Counts logged by the generator for Apple spec 4.6.
+// Counts logged by the generator for Apple spec 4.6.1.
 const (
-	wantPaths = 1027
-	wantOps   = 1337
+	wantPaths = 1032
+	wantOps   = 1342
 )
 
 func load(t *testing.T) *Index {
@@ -31,8 +31,8 @@ func load(t *testing.T) *Index {
 
 func TestIndexCounts(t *testing.T) {
 	x := load(t)
-	if got := x.Version(); got != "4.6" {
-		t.Errorf("Version = %q, want 4.6", got)
+	if got := x.Version(); got != "4.6.1" {
+		t.Errorf("Version = %q, want 4.6.1", got)
 	}
 	if got := x.PathCount(); got != wantPaths {
 		t.Errorf("PathCount = %d, want %d", got, wantPaths)

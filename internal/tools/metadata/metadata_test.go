@@ -360,6 +360,30 @@ func TestAppinfoUnknownCategoryAndAgeAttr(t *testing.T) {
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "appinfo_update"), k.Env, `{"age_rating":{"colour":"red"}}`), "invalid_arguments")
 }
 
+// Spec 4.6.1 added sharedLocation and datingAndRelationships; the spec
+// validator must accept them.
+func TestAppinfoAgeRating461Questions(t *testing.T) {
+	k := kit(t)
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appInfos", http.StatusOK, `{"data":[
+		{"type":"appInfos","id":"info2","attributes":{"state":"PREPARE_FOR_SUBMISSION"},"relationships":{
+			"ageRatingDeclaration":{"data":{"type":"ageRatingDeclarations","id":"age1"}}}}],
+		"included":[{"type":"ageRatingDeclarations","id":"age1","attributes":{"sharedLocation":null,"datingAndRelationships":null}}],"links":{}}`)
+	k.ASC.Handle(http.MethodPatch, "/v1/ageRatingDeclarations/{id}", http.StatusOK, `{"data":{"type":"ageRatingDeclarations","id":"age1","attributes":{}}}`)
+	args := `{"age_rating":{"sharedLocation":false,"datingAndRelationships":false}`
+	prev := decode(t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "appinfo_update"), k.Env, args+"}")))
+	if prev["status"] != "needs_confirm" || len(prev["preview"].(map[string]any)["intended"].([]any)) != 2 {
+		t.Fatalf("preview = %v", prev)
+	}
+	tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "appinfo_update"), k.Env, args+`,"confirm":true}`))
+	reqs := k.ASC.RequestsTo(http.MethodPatch, "/v1/ageRatingDeclarations/{id}")
+	if len(reqs) != 1 {
+		t.Fatalf("PATCH sent %d times", len(reqs))
+	}
+	if body := mustJSON(t, reqs[0].Body); !strings.Contains(body, `"sharedLocation":false`) || !strings.Contains(body, `"datingAndRelationships":false`) {
+		t.Errorf("PATCH body %s", body)
+	}
+}
+
 func TestPullReportsMissingLocales(t *testing.T) {
 	k := kit(t)
 	listing(k)
