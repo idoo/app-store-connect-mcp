@@ -4,9 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-19
+
 ### Added
 
-- `xcc_usage_report` (`xcodecloud` toolset) shows how much Xcode Cloud compute time the team used, by product and by day. With an Apple ID web session it reads the numbers of App Store Connect's own usage page: the plan (minutes included, used and left, and the date they reset), the window since the last reset or the last `days`, each product's share with the window before it, and one product's share by workflow when you name an `app` or a `product`. A plan with nothing left is called out, with the date Xcode Cloud starts taking runs again. Without a web session it estimates from the public API: the durations of every run's actions, summed by product and by day for up to 31 days, plus the runs that ended without ever starting. One call reads the actions of at most 100 runs and keeps them on disk, so a busy team's first answers say `still_processing` and calling again finishes; later calls only read new runs. `source` picks `apple`, `runs` or `auto` (Apple's numbers when a session is active, else the estimate with a hint to sign in). The plan is the team's, so the pinned app narrows nothing here.
+- `subscriptions_upsert` and `iap_upsert` take a product off sale: `availability: {remove_from_sale: true}` sends what App Store Connect's own Remove from Sale button sends (no territories, not available in new ones). The preview counts the territories instead of listing them, and for a subscription repeats what Apple's confirm dialog says: it is discontinued as an auto-renewable subscription, existing subscribers cannot renew, and they keep full service until the end of their billing period. It needs your approval; a product already off sale answers `already` without a request.
+- Apple lets only the Account Holder change the availability of an on-sale subscription and refuses the API key with a 409 (`INVALID_REQUEST_SUBSCRIPTION_AVAILABILITY_REMOVAL_NOT_ALLOWED`, "Only account holder can remove availability…"). On that answer the same request now goes once through the Apple ID web session, the way the App Store Connect page sends it. Without a session the error says why and suggests `web_login`; a session that isn't the Account Holder's gets Apple's answer and the same suggestion.
+- `xcc_usage_report` (`xcodecloud` toolset) shows how much Xcode Cloud compute time the team used, by product and by day. With an Apple ID web session it reads the numbers of App Store Connect's own usage page: the plan (minutes included, used and left, and the date they reset), the window since the last reset or the last `days`, each product's share with the window before it, and one product's share by workflow when you name an `app` or a `product`. A plan with nothing left is called out, with the date Xcode Cloud starts taking runs again. Without a web session it estimates from the public API: the durations of every run's actions, summed by product and by day for up to 31 days, plus the runs that ended without ever starting. That estimate ran 1.1 to 2.7 times Apple's own count per day when measured, and the answer says so. One call reads the actions of at most 100 runs and keeps them on disk, so a busy team's first answers say `still_processing` and calling again finishes; later calls only read new runs. `source` picks `apple`, `runs` or `auto` (Apple's numbers when a session is active, else the estimate with a hint to sign in). The plan is the team's, so the pinned app narrows nothing here.
 - `xcc_build_status` says so when a run ended without starting (failed in seconds, no start date, no actions) and points at `xcc_usage_report`: that is what a team out of compute hours looks like, and neither the run nor the public API gives a reason.
 
 ## [0.25.0] - 2026-11-16
@@ -525,7 +529,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.22.0...v0.23.0
