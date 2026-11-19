@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-11-19
+
 ### Fixed
 
 - Apple's App Store Connect API spec 4.6.1 (1342 operations, was 1337). Apple made the age rating questions Shared Location (`sharedLocation`) and Dating and Relationships (`datingAndRelationships`) mandatory for every submission from 2026-11-16, but the old spec didn't list them, so `appinfo_update {age_rating: {sharedLocation: false, datingAndRelationships: false}}` failed with `unknown attribute`. They can be answered now, and `release_status` blocks while either is unanswered. The new subscription price change previews and tier equalizations are ordinary writes for `asc_api_request`.
@@ -533,7 +535,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.23.0...v0.24.0
