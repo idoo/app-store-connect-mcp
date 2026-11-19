@@ -22,7 +22,7 @@ const (
 	uaBase     = "/ci/api/teams/" + uaTeam
 	uaSummary  = uaBase + "/usage/summary"
 	uaFull     = "?start=2025-12-03&end=2026-01-02"
-	uaPlanDoc  = `{"plan":{"name":"25 compute hours","available":%A,"used":%U,"total":%T,"reset_date":"%D","reset_date_time":"%R"},"links":{"manage":"x"}}`
+	uaPlanDoc  = `{"plan":{"name":"Plan","available":%A,"used":%U,"total":%T,"reset_date":"%D","reset_date_time":"%R"},"links":{"manage":"https://developer.apple.com/xcode-cloud/"}}`
 )
 
 // uaPlan fills uaPlanDoc.
@@ -69,9 +69,9 @@ func TestUsageApplePlan(t *testing.T) {
 		wantReset                 string
 		wantTotal, wantUsed, left int
 	}{
-		{"left", "300", "1200", "1500", "Feb 1", "2026-02-01T00:00:00Z", false, "2026-02-01T00:00:00Z", 1500, 1200, 300},
-		{"used up", "0", "1500", "1500", "Feb 1", "2026-02-01T00:00:00Z", true, "2026-02-01T00:00:00Z", 1500, 1500, 0},
-		{"overdrawn", "-20", "1520", "1500", "Feb 1", "", true, "Feb 1", 1500, 1520, -20},
+		{"left", "300", "1200", "1500", "2026-02-01", "2026-02-01T00:00:00Z", false, "2026-02-01T00:00:00Z", 1500, 1200, 300},
+		{"used up", "0", "1500", "1500", "2026-02-01", "2026-02-01T00:00:00Z", true, "2026-02-01T00:00:00Z", 1500, 1500, 0},
+		{"overdrawn", "-20", "1520", "1500", "2026-02-01", "", true, "2026-02-01", 1500, 1520, -20},
 		{"no plan", "0", "0", "0", "", "", false, "", 0, 0, 0},
 	}
 	for _, c := range cases {
@@ -86,7 +86,7 @@ func TestUsageApplePlan(t *testing.T) {
 			out := uaCall(t, k, `{"source":"apple"}`)
 			p := out.Plan
 			if p == nil || p.Exhausted != c.wantExhausted || p.ResetDate != c.wantReset || p.TotalMinutes != c.wantTotal ||
-				p.UsedMinutes != c.wantUsed || p.AvailableMinutes != c.left || p.Name != "25 compute hours" {
+				p.UsedMinutes != c.wantUsed || p.AvailableMinutes != c.left || p.Name != "Plan" {
 				t.Fatalf("plan = %+v", p)
 			}
 			if out.Source != usageApple {
@@ -197,7 +197,7 @@ func TestUsageAppleProduct(t *testing.T) {
 	  {"workflow_id":"`+strings.ToUpper(uaWF2)+`","usage_in_minutes":10,"number_of_builds":2},
 	  {"workflow_id":"`+strings.ToUpper(uaWF1)+`","usage_in_minutes":10,"number_of_builds":1,"previous_usage_in_minutes":40,"previous_number_of_builds":4},
 	  {"workflow_id":"cc000000-0000-1111-2222-333344445555","usage_in_minutes":10,"number_of_builds":0}],
-	 "info":{}}`)
+	 "info":{"current":{"builds":3,"used":30,"average_30_days":900},"previous":{"builds":4,"used":40,"average_30_days":1200}}}`)
 	out := uaCall(t, k, `{"source":"apple","product":"`+uaProduct+`"}`)
 
 	if out.Minutes != 30 || out.Builds != 3 || len(out.Days) != 2 || out.Days[0].Date != "2025-12-28" {

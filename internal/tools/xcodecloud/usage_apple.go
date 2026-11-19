@@ -138,8 +138,8 @@ func usageFromApple(ctx context.Context, env *tool.Env, days int, now time.Time,
 
 // applePlan turns the summary's plan into the output's.
 //
-// Unverified: available, used and total are taken as minutes. This is the
-// one place to change if Apple counts them in another unit.
+// Verified live on 2026-11-19: available, used and total are minutes (a
+// free plan answers total 1500, its 25 compute hours).
 func applePlan(p appleUsagePlan) *usagePlan {
 	return &usagePlan{
 		Name:             p.Name,
@@ -153,8 +153,8 @@ func applePlan(p appleUsagePlan) *usagePlan {
 
 // appleDaysQuery is the window of a days call.
 //
-// Unverified: start and end are taken as YYYY-MM-DD. This is the one place
-// to change if Apple wants another date format.
+// Verified live on 2026-11-19: start and end are YYYY-MM-DD, both days
+// included; a timestamp or no window answers 400.
 func appleDaysQuery(from, to time.Time) string {
 	return "?start=" + usageDate(from) + "&end=" + usageDate(to)
 }

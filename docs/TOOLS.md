@@ -121,7 +121,7 @@
 |---|---|---|---|
 |[`xcc_build_start`](#xcc_build_start)|W|flag|Start a build run of a workflow (name or id) on a branch, tag or open pull request number (default: the workflow's source). Preview first, then confirm:true; PR builds need a human, fork PRs also allow_fork_pr. Each confirm starts a new run.|
 |[`xcc_build_status`](#xcc_build_status)|R|none|Status of a build run (id, or latest of a workflow): progress, result, issue counts, actions, test summary, artifacts (URL host only unless include_urls). wait:true polls until complete (default 45 s, max 300 s), else still_processing.|
-|[`xcc_usage_report`](#xcc_usage_report)|R|none|The team's Xcode Cloud compute minutes by product and day. With a web session: Apple's numbers and the plan (included, used, left, reset date). Without: an estimate summed from the runs' actions, and the runs that ended without starting, the sign of used-up hours.|
+|[`xcc_usage_report`](#xcc_usage_report)|R|none|The team's Xcode Cloud compute minutes by product and day. With a web session: Apple's numbers and the plan (included, used, left, reset date). Without: an estimate from the runs' actions, often twice Apple's, and the runs that ended without starting, the sign of used-up hours.|
 |[`xcc_workflows_list`](#xcc_workflows_list)|R|none|Xcode Cloud products of the app (all apps when none is given or pinned) with their workflows: id, name, enabled, repository, start conditions summary and actions. Use the workflow name or id with xcc_build_start and xcc_build_status.|
 
 ## webhooks
@@ -404,7 +404,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`availability`|object|||territories it is sold in|
+|`availability`|object|||territories it is sold in, or remove_from_sale:true to take it off sale everywhere|
 |`confirm`|boolean|||true after the preview|
 |`family_sharable`|boolean|||cannot be turned off once on|
 |`localizations`|object|||by locale: display name (max 30) and description (max 45)|
@@ -937,7 +937,7 @@ No arguments.
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`app`|string|||name, bundle id, SKU or id; default pinned|
-|`availability`|object|||territories it is sold in|
+|`availability`|object|||territories it is sold in, or remove_from_sale:true to take it off sale everywhere|
 |`confirm`|boolean|||true after the preview|
 |`family_sharable`|boolean|||cannot be turned off once on|
 |`group`|string|yes||subscription group reference name (max 64); created if missing|

@@ -15,8 +15,8 @@ func init() {
 		Name: "xcc_usage_report", Toolset: tool.XcodeCloud, Class: tool.Read, Idempotent: true,
 		Title: "Xcode Cloud compute usage",
 		Description: "The team's Xcode Cloud compute minutes by product and day. With a web session: Apple's numbers and the plan " +
-			"(included, used, left, reset date). Without: an estimate summed from the runs' actions, and the runs that ended " +
-			"without starting, the sign of used-up hours.",
+			"(included, used, left, reset date). Without: an estimate from the runs' actions, often twice Apple's, " +
+			"and the runs that ended without starting, the sign of used-up hours.",
 		Enums:  map[string][]any{"source": {usageAuto, usageApple, usageRuns}},
 		Ranges: map[string][2]int{"days": {1, maxUsageDays}},
 	}, usage))
@@ -205,7 +205,10 @@ func runsUsageResult(out usageOut) *tool.Result {
 		res = tool.StillProcessing(out, fmt.Sprintf(
 			"call xcc_usage_report again with the same arguments: %d more run(s) are still to be read (what was read is kept)", out.RunsPending))
 	}
-	res.Warn("an estimate: the sum of the runs' action durations; Apple's own count, the plan's limit and its reset date need a web session (web_login, then source apple)")
+	// Measured on 2026-11-19 against Apple's usage page: action wall time ran
+	// 1.1–2.7x Apple's minutes per day (1495 vs 761 over 14–18 Nov; one
+	// product's three archives 21 vs 11), with no rule the public API shows.
+	res.Warn("an estimate: the sum of the runs' action durations, often about twice Apple's count; Apple's own count, the plan's limit and its reset date need a web session (web_login, then source apple)")
 	if out.Truncated {
 		res.Warn("older runs of the window were left out; pass fewer days or one product for the rest")
 	}

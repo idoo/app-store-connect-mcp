@@ -203,7 +203,7 @@ type subsUpsertIn struct {
 	FamilySharable     *bool                     `json:"family_sharable,omitempty" jsonschema:"cannot be turned off once on"`
 	Localizations      map[string]locIn          `json:"localizations,omitempty" jsonschema:"by locale: display name (max 30) and description (max 45)"`
 	ReviewScreenshot   string                    `json:"review_screenshot,omitempty" jsonschema:"path to a PNG/JPEG screenshot for App Review"`
-	Availability       *availIn                  `json:"availability,omitempty" jsonschema:"territories it is sold in"`
+	Availability       *availIn                  `json:"availability,omitempty" jsonschema:"territories it is sold in, or remove_from_sale:true to take it off sale everywhere"`
 	tool.ConfirmFlag
 }
 
