@@ -5458,6 +5458,51 @@
     "confirm": "flag"
   },
   {
+    "name": "xcc_usage_report",
+    "toolset": "xcodecloud",
+    "class": "R",
+    "title": "Xcode Cloud compute usage",
+    "description": "The team's Xcode Cloud compute minutes by product and day. With a web session: Apple's numbers and the plan (included, used, left, reset date). Without: an estimate summed from the runs' actions, and the runs that ended without starting, the sign of used-up hours.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Xcode Cloud compute usage"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "description": "only this app's Xcode Cloud product; default: every product of the team (the pinned app is not used)",
+          "type": "string"
+        },
+        "days": {
+          "description": "days of history up to today; default: since the plan's last reset (apple) or 31 (runs)",
+          "maximum": 31,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "product": {
+          "description": "Xcode Cloud product id, instead of app",
+          "type": "string"
+        },
+        "source": {
+          "description": "apple: the usage page's numbers (web session); runs: an estimate from the runs' actions (public API, one call per run); auto (default): apple when a web session is active, else runs",
+          "enum": [
+            "auto",
+            "apple",
+            "runs"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
     "name": "xcc_workflows_list",
     "toolset": "xcodecloud",
     "class": "R",

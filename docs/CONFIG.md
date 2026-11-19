@@ -117,6 +117,8 @@ Earlier releases read `.asc-mcp.toml` and `.hamn.toml`. If one of those is in a 
 
 Idle sessions die sooner, often within a day. `web keepalive` uses the session once (`/olympus/v1/session`), saves the cookies Apple rolls, renews it headless if Apple rejected it, and otherwise posts one desktop notification per dead session (exit 1). Renewal is skipped while a sign-in window has the browser profile open. `web keepalive --install [--interval 30m]` runs it in the background: a LaunchAgent `io.github.idoo.app-store-connect-mcp.keepalive.<profile>` on macOS, logging to `<state dir>/web/keepalive/<profile>.log`; on other systems it prints a cron line. `--uninstall` removes it. Sign-in windows wait 30 minutes and post a notification when they open.
 
+`xcc_usage_report` (`xcodecloud` toolset) works both ways: with a web session it reads the numbers of App Store Connect's Xcode Cloud usage page (the plan, what is left and when it resets); without one it estimates the compute time from the runs' actions through the API key, and lists the runs that ended without starting.
+
 Expressions: `all`, `release,reviews` (just those), `+signing,-reports` (defaults with edits), `all,-admin`. `core` can't be removed. The `toolsets` tool changes them mid-session and the client gets `tools/list_changed`. Discovery mode starts with core only, for clients with a tool cap.
 
 ## HTTP mode
