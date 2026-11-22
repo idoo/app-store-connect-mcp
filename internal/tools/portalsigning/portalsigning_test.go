@@ -2,6 +2,7 @@ package portalsigning
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -81,10 +82,10 @@ func TestExpiredSession(t *testing.T) {
 	k := kit(t)
 	k.DevPortal.Handle("GET", "v1/bundleIds/B1", func(tooltest.PortalCall) (string, error) { return "", tool.ErrWebSessionRequired })
 	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_portal_get"), k.Env, `{"bundle_id":"B1"}`), tool.ErrWebSessionRequired.Code)
-	// No web session at all: the stand-in answers.
+	// No developer portal at all: the stand-in answers.
 	k2 := kit(t)
 	k2.Env.DevPortal = nil
-	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_app_groups_list"), k2.Env, `{"team_id":"`+team+`"}`), tool.ErrWebSessionRequired.Code)
+	tooltest.MustFail(t, tooltest.Call(t, mustTool(t, "signing_portal_get"), k2.Env, `{"bundle_id":"B1"}`), tool.ErrWebSessionRequired.Code)
 }
 
 const applyArgs = `"bundle_ids":["com.example.app","com.example.app.widgets"],"app_groups":["group.com.example.shared","group.com.example.old"],"capabilities":["background gpu","Increased Memory Limit"]`
@@ -291,5 +292,169 @@ func TestOutcomeOf(t *testing.T) {
 		if got := outcomeOf(c.err); got != c.want {
 			t.Errorf("outcomeOf(%v) = %s", c.err, got)
 		}
+	}
+}
+
+// --- API key only (no web session) ---
+
+// keyBundle is one bundle ID of keyKit: its App Group (id, identifier)
+// when it carries the APP_GROUPS capability.
+type keyBundle struct{ id, identifier, groupID, group string }
+
+// keyKit is a Kit with the API key alone: legacy .action and v1/appGroups
+// fail web_session_required. The public API lists bundles (unrelated ones
+// first, to prove the sibling order); each is readable in the portal.
+func keyKit(t *testing.T, bundles []keyBundle) *tooltest.Kit {
+	t.Helper()
+	k := tooltest.New(t).KeyPortal()
+	var data, inc, all []string
+	for _, b := range bundles {
+		res := fmt.Sprintf(`{"type":"bundleIds","id":%q,"attributes":{"identifier":%q,"seedId":%q}`, b.id, b.identifier, team)
+		all = append(all, res+"}")
+		k.ASC.Handle("GET", "/v1/bundleIds/"+b.id, 200, `{"data":`+res+`}}`)
+		doc := `{"data":{"type":"bundleIds","id":"` + b.id + `"},"included":[]}`
+		caps := `[]`
+		if b.group != "" {
+			caps = `[{"type":"bundleIdCapabilities","id":"` + b.id + `_AG"}]`
+			inc = append(inc, `{"type":"bundleIdCapabilities","id":"`+b.id+`_AG","attributes":{"capabilityType":"APP_GROUPS"}}`)
+			doc = fmt.Sprintf(`{"data":{"type":"bundleIds","id":%q},"included":[
+				{"type":"bundleIdCapabilities","id":"%s_AG","attributes":{"enabled":true},
+				 "relationships":{"capability":{"data":{"type":"capabilities","id":"APP_GROUPS"}},"appGroups":{"data":[{"type":"appGroups","id":%q}]}}},
+				{"type":"capabilities","id":"APP_GROUPS","attributes":{"name":"App Groups"}},
+				{"type":"appGroups","id":%q,"attributes":{"identifier":%q,"name":"Shared %s"}}]}`, b.id, b.id, b.groupID, b.groupID, b.group, b.groupID)
+		}
+		data = append(data, res+`,"relationships":{"bundleIdCapabilities":{"data":`+caps+`}}}`)
+		k.DevPortal.HandleJSON("GET", "v1/bundleIds/"+b.id, doc)
+		k.DevPortal.HandleJSON("PATCH", "v1/bundleIds/"+b.id, `{}`)
+	}
+	k.ASC.Handle("GET", "/v1/bundleIds", 200, `{"data":[`+strings.Join(all, ",")+`]}`)
+	k.ASC.Handle("GET", "/v1/bundleIds?include=bundleIdCapabilities", 200,
+		`{"data":[`+strings.Join(data, ",")+`],"included":[`+strings.Join(inc, ",")+`]}`)
+	k.DevPortal.HandleJSON("GET", "v1/capabilities", `{"data":[{"type":"capabilities","id":"APP_GROUPS","attributes":{"name":"App Groups"}}]}`)
+	return k
+}
+
+// keyBundles: four unrelated bundle IDs (sorted before the siblings), the
+// app B1 (group.com.example.old), its watch app B3 (group.com.example.shared)
+// and widgets B2 without App Groups.
+var keyBundles = []keyBundle{
+	{"A1", "com.aaa.one", "GA1", "group.com.aaa.one"},
+	{"A2", "com.aaa.two", "GA2", "group.com.aaa.two"},
+	{"A3", "com.aaa.three", "GA3", "group.com.aaa.three"},
+	{"A4", "com.aaa.four", "GA4", "group.com.aaa.four"},
+	{"B1", "com.example.app", "G1", "group.com.example.old"},
+	{"B2", "com.example.app.widgets", "", ""},
+	{"B3", "com.example.app.watch", "G2", "group.com.example.shared"},
+}
+
+// portalReads returns the bundle ids read in the portal, in order.
+func portalReads(k *tooltest.Kit) []string {
+	var out []string
+	for _, c := range k.DevPortal.Calls() {
+		if c.Method == "GET" && strings.HasPrefix(c.Path, pathBundlePrefx) {
+			out = append(out, strings.TrimPrefix(c.Path, pathBundlePrefx))
+		}
+	}
+	return out
+}
+
+func TestKeyOnlyGetNamesGroupFromIncluded(t *testing.T) {
+	k := keyKit(t, keyBundles)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_portal_get"), k.Env, `{"bundle_id":"com.example.app"}`))
+	out := tooltest.Decode[portalGetOut](t, res)
+	if len(out.AppGroups) != 1 || out.AppGroups[0].ID != "G1" || out.AppGroups[0].Identifier != "group.com.example.old" || out.AppGroups[0].Name != "Shared G1" {
+		t.Fatalf("app groups = %+v", out.AppGroups)
+	}
+	for _, c := range k.DevPortal.Calls() {
+		if c.Path == pathListGroups {
+			t.Error("named groups through the team list although the bundle document named them")
+		}
+	}
+}
+
+func TestKeyOnlyApplyAssignsSiblingGroup(t *testing.T) {
+	k := keyKit(t, keyBundles)
+	args := `"bundle_ids":["com.example.app.widgets"],"app_groups":["group.com.example.shared"]`
+	p := planApply(t, k, args)
+	if got := ops(p.Plan.Steps); !slices.Equal(got, []string{"assign_groups:B2:APP_GROUPS:"}) || len(p.Plan.CreateGroups) != 0 {
+		t.Fatalf("steps = %v create = %v", got, p.Plan.CreateGroups)
+	}
+	// B2 itself, then one wave of 4: the siblings B1 and B3 first, then the
+	// unrelated ones by identifier (com.aaa.four, com.aaa.one). The search
+	// stopped there: A3 (three) and A2 (two) were never read.
+	reads := portalReads(k)
+	if len(reads) != 5 || reads[0] != "B2" || !slices.Contains(reads, "B1") || !slices.Contains(reads, "B3") ||
+		slices.Contains(reads, "A2") || slices.Contains(reads, "A3") {
+		t.Fatalf("portal reads = %v", reads)
+	}
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_portal_apply"), k.Env, "{"+args+`,"plan_id":"`+p.PlanID+`"}`))
+	if out := tooltest.Decode[applyOut](t, res); !slices.Equal(ops(out.Steps), []string{"assign_groups:B2:APP_GROUPS:done"}) {
+		t.Fatalf("steps = %v", ops(out.Steps))
+	}
+	var patch string
+	for _, c := range k.DevPortal.Calls() {
+		if c.Method == "PATCH" {
+			if c.Path != "v1/bundleIds/B2" || patch != "" {
+				t.Fatalf("unexpected PATCH %s", c.Path)
+			}
+			patch = c.Body
+		}
+	}
+	if !strings.Contains(patch, `"appGroups":{"data":[{"id":"G2","type":"appGroups"}]}`) {
+		t.Errorf("PATCH body = %s", patch)
+	}
+}
+
+func TestKeyOnlyApplyUnknownGroupNeedsSignIn(t *testing.T) {
+	k := keyKit(t, keyBundles)
+	res := tooltest.Call(t, mustTool(t, "signing_portal_apply"), k.Env,
+		`{"bundle_ids":["com.example.app.widgets"],"app_groups":["group.com.example.none"]}`)
+	body := tooltest.MustFail(t, res, tool.ErrWebSessionRequired.Code)
+	if !strings.Contains(body.Message, "group.com.example.none") || !strings.Contains(body.Message, "creating one, needs the Apple ID sign-in") {
+		t.Errorf("message = %s", body.Message)
+	}
+	if !slices.ContainsFunc(res.Next, func(n tool.NextStep) bool { return n.Tool == "web_login" }) {
+		t.Errorf("next = %+v", res.Next)
+	}
+	if len(portalReads(k)) != len(keyBundles) {
+		t.Errorf("portal reads = %v (want every bundle ID with App Groups)", portalReads(k))
+	}
+	for _, c := range k.DevPortal.Calls() {
+		if c.Method != "GET" && c.Path != pathListGroups {
+			t.Errorf("wrote %s %s", c.Method, c.Path)
+		}
+	}
+	if strings.Contains(tooltest.JSON(t, res.Data), "plan_id") {
+		t.Errorf("a plan was proposed: %s", tooltest.JSON(t, res.Data))
+	}
+}
+
+func TestKeyOnlyListIsPartial(t *testing.T) {
+	k := keyKit(t, keyBundles)
+	res := tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_app_groups_list"), k.Env, `{"filter":"example"}`))
+	out := tooltest.Decode[groupsListOut](t, res)
+	if !out.Partial || out.BundleIDsRead != 6 || out.BundleIDsUnread != 0 || out.Count != 2 ||
+		out.AppGroups[0].Identifier != "group.com.example.old" || out.AppGroups[1].ID != "G2" ||
+		!strings.Contains(out.PartialReason, "assigned to no bundle ID") {
+		t.Fatalf("out = %+v", out)
+	}
+	if len(res.Next) != 1 || res.Next[0].Tool != "web_login" {
+		t.Errorf("next = %+v", res.Next)
+	}
+}
+
+func TestKeyOnlyDiscoveryCap(t *testing.T) {
+	var bs []keyBundle
+	for i := range discoveryMaxReads + 6 {
+		bs = append(bs, keyBundle{fmt.Sprintf("C%02d", i), fmt.Sprintf("com.cap.app%02d", i), fmt.Sprintf("GC%02d", i), fmt.Sprintf("group.com.cap.app%02d", i)})
+	}
+	k := keyKit(t, bs)
+	out := tooltest.Decode[groupsListOut](t, tooltest.MustOK(t, tooltest.Call(t, mustTool(t, "signing_app_groups_list"), k.Env, `{}`)))
+	if out.BundleIDsRead != discoveryMaxReads || out.BundleIDsUnread != 6 || out.Count != discoveryMaxReads ||
+		!strings.Contains(out.PartialReason, "6 more bundle IDs") {
+		t.Fatalf("out = %+v", out)
+	}
+	if n := len(portalReads(k)); n != discoveryMaxReads {
+		t.Errorf("read %d bundle IDs", n)
 	}
 }

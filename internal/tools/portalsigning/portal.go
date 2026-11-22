@@ -1,7 +1,10 @@
-// Package portalsigning manages developer-portal-only signing setup through
-// the human's Apple ID web session (developer.apple.com/services-account):
-// App Groups, their assignment to bundle IDs, and capabilities missing from
-// the public API (Increased Memory Limit, Background GPU Access, ...).
+// Package portalsigning manages developer-portal-only signing setup: App
+// Groups, their assignment to bundle IDs, and capabilities missing from the
+// public API (Increased Memory Limit, Background GPU Access, ...). It goes
+// through env.DevPortal, which uses the API key where Apple accepts it
+// (reading a bundle ID, the capability catalog, saving a bundle ID) and the
+// human's web session only where Apple refuses the key: listing every App
+// Group of the team and creating one.
 package portalsigning
 
 import (
@@ -16,11 +19,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 )
 
-// Portal paths (relative to developer.apple.com/services-account/).
+// Portal paths (relative to the developer portal's API root).
 const (
 	legacyPrefix    = "QH65B2/account/ios/identifiers/"
 	pathListGroups  = legacyPrefix + "listApplicationGroups.action"
@@ -30,6 +34,14 @@ const (
 	capAppGroups    = "APP_GROUPS"
 	groupsPageSize  = 500
 	groupsMaxPages  = 20
+	// discoveryMaxReads caps the bundle IDs read to learn App Groups without
+	// a web session. Measured live: 24 reads, 4 at a time, took 3.2 s, so
+	// 80 take about 11 s (20 s if Apple slows to 1 s a read), under a
+	// client's 30 s call.
+	discoveryMaxReads = 80
+	discoveryParallel = 4
+	// discoveryMaxBundles caps the public API listing of bundle IDs.
+	discoveryMaxBundles = 2000
 )
 
 var (
@@ -208,6 +220,161 @@ func listGroups(ctx context.Context, env *tool.Env, team string) ([]appGroup, er
 	return out, nil
 }
 
+// groupList is the team's App Groups as far as they could be learned.
+type groupList struct {
+	groups []appGroup
+	// partial: no web session, so the groups were learned from bundle IDs;
+	// a group assigned to no bundle ID is missing.
+	partial bool
+	read    int // bundle IDs read to learn them (partial only)
+	unread  int // bundle IDs with App Groups left unread at the cap
+}
+
+// reason says why a partial list is partial.
+func (l groupList) reason() string {
+	s := fmt.Sprintf("without an Apple ID sign-in App Groups are learned from bundle IDs (%d read)", l.read)
+	if l.unread > 0 {
+		s += fmt.Sprintf("; %d more bundle IDs with App Groups were not read (cap %d)", l.unread, discoveryMaxReads)
+	}
+	return s + "; a group assigned to no bundle ID is not listed"
+}
+
+// teamGroups lists the team's App Groups: the whole list through the web
+// session, else (no session) the groups assigned to bundle IDs. near are
+// the bundle IDs being changed (siblings are read first, these themselves
+// not at all: known holds what their reads found); want stops the search
+// once every identifier in it is found.
+func teamGroups(ctx context.Context, env *tool.Env, team string, near []portalBundle, want []string) (groupList, error) {
+	gs, err := listGroups(ctx, env, team)
+	if err == nil {
+		return groupList{groups: gs}, nil
+	}
+	if !errors.Is(err, tool.ErrWebSessionRequired) {
+		return groupList{}, err
+	}
+	return groupsFromBundles(ctx, env, team, near, want)
+}
+
+// groupsFromBundles learns App Groups from the bundle IDs that carry them.
+func groupsFromBundles(ctx context.Context, env *tool.Env, team string, near []portalBundle, want []string) (groupList, error) {
+	l := groupList{partial: true}
+	byID := map[string]appGroup{}
+	skip := map[string]bool{}
+	for _, b := range near {
+		skip[b.ref.ID] = true
+		for _, g := range b.groupInfo {
+			byID[g.ID] = g
+		}
+	}
+	done := func() bool {
+		if len(want) == 0 {
+			return false
+		}
+		found := map[string]bool{}
+		for _, g := range byID {
+			found[g.Identifier] = true
+		}
+		return !slices.ContainsFunc(want, func(w string) bool { return !found[w] })
+	}
+	finish := func() groupList {
+		for _, g := range byID {
+			if g.Identifier != "" {
+				l.groups = append(l.groups, g)
+			}
+		}
+		sort.Slice(l.groups, func(i, j int) bool { return l.groups[i].Identifier < l.groups[j].Identifier })
+		return l
+	}
+	if done() {
+		return finish(), nil
+	}
+	cands, more, err := groupBundles(ctx, env)
+	if err != nil {
+		return groupList{}, err
+	}
+	cands = slices.DeleteFunc(cands, func(b bundleRef) bool { return skip[b.ID] })
+	score := func(b bundleRef) int {
+		best := 0
+		for _, n := range near {
+			best = max(best, sharedLabels(b.Identifier, n.ref.Identifier))
+		}
+		return best
+	}
+	sort.SliceStable(cands, func(i, j int) bool {
+		if si, sj := score(cands[i]), score(cands[j]); si != sj {
+			return si > sj
+		}
+		return cands[i].Identifier < cands[j].Identifier
+	})
+	var mu sync.Mutex
+	for start := 0; start < len(cands) && !done(); start += discoveryParallel {
+		if l.read >= discoveryMaxReads {
+			l.unread = len(cands) - start
+			break
+		}
+		wave := cands[start:min(start+discoveryParallel, len(cands), start+discoveryMaxReads-l.read)]
+		err := tool.Parallel(ctx, discoveryParallel, wave, func(ctx context.Context, _ int, ref bundleRef) error {
+			b, err := readBundle(ctx, env, team, ref)
+			var pe *tool.PortalError
+			if errors.As(err, &pe) && pe.Status == http.StatusNotFound {
+				return nil // deleted since the listing
+			}
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			for _, g := range b.groupInfo {
+				byID[g.ID] = g
+			}
+			return nil
+		})
+		if err != nil {
+			return groupList{}, fmt.Errorf("learn App Groups from bundle IDs: %w", err)
+		}
+		l.read += len(wave)
+	}
+	if more && !done() {
+		l.unread++ // the listing itself was cut: at least one more may exist
+	}
+	return finish(), nil
+}
+
+// groupBundles lists the team's bundle IDs with the App Groups capability
+// through the public API; more reports a listing cut at its cap.
+func groupBundles(ctx context.Context, env *tool.Env) ([]bundleRef, bool, error) {
+	q := url.Values{
+		"fields[bundleIds]":            {"identifier,seedId,bundleIdCapabilities"},
+		"fields[bundleIdCapabilities]": {"capabilityType"},
+		"include":                      {"bundleIdCapabilities"},
+		"limit[bundleIdCapabilities]":  {"50"},
+	}
+	res, err := env.ASC.List(ctx, "/v1/bundleIds", tool.ListOptions{Query: q, Limit: 200, MaxItems: discoveryMaxBundles})
+	if err != nil {
+		return nil, false, fmt.Errorf("list bundle IDs: %w", err)
+	}
+	inc := tool.IndexIncluded(res.Included)
+	var out []bundleRef
+	for _, r := range res.Data {
+		if slices.ContainsFunc(r.RelIDs("bundleIdCapabilities"), func(id string) bool {
+			return inc["bundleIdCapabilities/"+id].Str("capabilityType") == capAppGroups
+		}) {
+			out = append(out, bundleFromResource(r))
+		}
+	}
+	return out, res.NextCursor != "", nil
+}
+
+// sharedLabels counts the leading dot-separated labels a and b share.
+func sharedLabels(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	n := 0
+	for n < len(as) && n < len(bs) && as[n] == bs[n] {
+		n++
+	}
+	return n
+}
+
 // enabledCap is one capability enabled on a bundle ID.
 type enabledCap struct {
 	ID       string         `json:"id"`
@@ -225,9 +392,10 @@ type catalogCap struct {
 
 // portalBundle is a bundle ID as the portal sees it.
 type portalBundle struct {
-	ref    bundleRef
-	caps   []enabledCap
-	groups []string // assigned App Group ids, sorted
+	ref       bundleRef
+	caps      []enabledCap
+	groups    []string   // assigned App Group ids, sorted
+	groupInfo []appGroup // included appGroups resources, sorted by id
 }
 
 func (b portalBundle) has(capID string) bool {
@@ -242,12 +410,16 @@ func readBundle(ctx context.Context, env *tool.Env, team string, ref bundleRef) 
 		return portalBundle{}, fmt.Errorf("read bundle ID %s: %w", ref.Identifier, err)
 	}
 	names := map[string]string{}
+	out := portalBundle{ref: ref}
 	for _, r := range doc.Included {
-		if r.Type == "capabilities" {
+		switch r.Type {
+		case "capabilities":
 			names[r.ID] = r.str("name")
+		case "appGroups":
+			out.groupInfo = append(out.groupInfo, appGroup{ID: r.ID, Identifier: r.str("identifier"), Name: tool.Untrusted(r.str("name"))})
 		}
 	}
-	out := portalBundle{ref: ref}
+	sort.Slice(out.groupInfo, func(i, j int) bool { return out.groupInfo[i].ID < out.groupInfo[j].ID })
 	groups := map[string]bool{}
 	for _, r := range doc.Included {
 		if r.Type != "bundleIdCapabilities" {

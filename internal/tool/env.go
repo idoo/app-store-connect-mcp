@@ -176,9 +176,9 @@ type Env struct {
 	// Payments, olympus session) with the same web session as Web. nil
 	// installs a stand-in failing with [ErrWebSessionRequired].
 	Portal Portal
-	// DevPortal reaches developer.apple.com/services-account with the same
-	// web session. nil installs a stand-in failing with
-	// [ErrWebSessionRequired].
+	// DevPortal reaches the developer portal: with the API key where Apple
+	// accepts it, else with the same web session. nil installs a stand-in
+	// failing with [ErrWebSessionRequired].
 	DevPortal DevPortal
 	// WebLogin signs the human in to the App Store Connect web session in a
 	// browser window on their machine (they type the Apple ID password and

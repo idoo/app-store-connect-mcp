@@ -5,15 +5,18 @@ import (
 	"net/url"
 )
 
-// DevPortal reaches the Apple Developer portal's services-account API
-// (https://developer.apple.com/services-account/) with the human's web
-// session. path is relative to that root, e.g. "v1/bundleIds/{id}" or
+// DevPortal reaches the Apple Developer portal's v1 API and its legacy
+// App Group endpoints. With an API key, bundle ID reads, the capability
+// catalog and bundle ID PATCHes go with the key (appstoreconnect.apple.com/
+// xcbuild/); everything else, and anything Apple refuses the key, goes
+// through developer.apple.com/services-account/ with the human's web
+// session. path is relative, e.g. "v1/bundleIds/{id}" or
 // "QH65B2/account/ios/identifiers/listApplicationGroups.action".
 type DevPortal interface {
 	// Do sends method to path with body encoded as JSON when non-nil and
-	// decodes a 2xx JSON answer into out (out may be nil). Expired or
-	// missing session returns an error wrapping [ErrWebSessionRequired];
-	// other non-2xx answers return *PortalError.
+	// decodes a 2xx JSON answer into out (out may be nil). A call that
+	// needs a web session when none is active returns an error wrapping
+	// [ErrWebSessionRequired]; other non-2xx answers return *PortalError.
 	Do(ctx context.Context, method, path string, body, out any) error
 }
 

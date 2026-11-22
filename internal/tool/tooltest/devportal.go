@@ -20,6 +20,8 @@ type FakeDevPortal struct {
 	mu     sync.Mutex
 	routes map[string]PortalHandler
 	calls  []PortalCall
+	// keyOnly answers what Apple refuses the API key (see [Kit.KeyPortal]).
+	keyOnly bool
 }
 
 // NewFakeDevPortal returns an empty FakeDevPortal.
@@ -69,7 +71,11 @@ func (f *FakeDevPortal) Do(ctx context.Context, method, path string, body, out a
 	f.mu.Lock()
 	f.calls = append(f.calls, call)
 	fn := f.routes[method+" "+path]
+	keyOnly := f.keyOnly
 	f.mu.Unlock()
+	if keyOnly && needsWebSession(path) {
+		return fmt.Errorf("%s %s: Apple refuses the API key here: %w", method, path, tool.ErrWebSessionRequired)
+	}
 	if fn == nil {
 		f.t.Errorf("tooltest: unexpected devportal request %s %s", method, path)
 		return &tool.PortalError{Status: 404, Messages: []string{"no fake route"}}
@@ -82,4 +88,10 @@ func (f *FakeDevPortal) Do(ctx context.Context, method, path string, body, out a
 		return nil
 	}
 	return json.Unmarshal([]byte(resp), out)
+}
+
+// needsWebSession reports whether Apple serves path to the web session
+// only: the legacy .action endpoints and everything under v1/appGroups.
+func needsWebSession(path string) bool {
+	return strings.HasSuffix(path, ".action") || path == "v1/appGroups" || strings.HasPrefix(path, "v1/appGroups/")
 }

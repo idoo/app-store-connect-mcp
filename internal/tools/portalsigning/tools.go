@@ -12,22 +12,23 @@ import (
 
 func init() {
 	tool.Register(tool.New(tool.Meta{
-		Name: "signing_portal_get", Toolset: tool.Web, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
+		Name: "signing_portal_get", Toolset: tool.Signing, Class: tool.Read, Idempotent: true, NeedsTeamKey: true,
 		Title: "Read a bundle ID in the developer portal",
-		Description: "A bundle ID as the developer portal sees it (web session): enabled capabilities incl. portal-only ones " +
+		Description: "A bundle ID as the developer portal sees it: enabled capabilities incl. portal-only ones " +
 			"(Increased Memory Limit, ...), assigned App Groups, and the portal capability catalog for it. Use before signing_portal_apply.",
 	}, portalGet))
 	tool.Register(tool.New(tool.Meta{
-		Name: "signing_app_groups_list", Toolset: tool.Web, Class: tool.Read, Idempotent: true,
-		Title:       "List App Groups",
-		Description: "App Groups of the developer team (web session): id, identifier, name. filter keeps identifiers or names containing it.",
+		Name: "signing_app_groups_list", Toolset: tool.Signing, Class: tool.Read, Idempotent: true,
+		Title: "List App Groups",
+		Description: "App Groups of the developer team: id, identifier, name. filter keeps identifiers or names containing it. " +
+			"Without the Apple ID sign-in only groups assigned to a bundle ID (partial:true).",
 	}, appGroupsList))
 	tool.Register(tool.New(tool.Meta{
-		Name: "signing_portal_apply", Toolset: tool.Web, Class: tool.Destructive, NeedsTeamKey: true,
+		Name: "signing_portal_apply", Toolset: tool.Signing, Class: tool.Destructive, NeedsTeamKey: true,
 		Confirm: tool.ConfirmByPlan,
 		Title:   "Set App Groups and portal capabilities",
 		Description: "Without plan_id previews per bundle ID: App Groups to create/assign, capabilities (ids or names) to enable or " +
-			"disable; with plan_id applies. Creating a group or disabling needs human approval. Invalidates provisioning profiles.",
+			"disable; with plan_id applies. Creating a group (needs the Apple ID sign-in) or disabling needs human approval. Invalidates provisioning profiles.",
 	}, portalApply))
 }
 
@@ -74,12 +75,20 @@ func portalGet(ctx context.Context, env *tool.Env, in portalGetIn) (*tool.Result
 		TeamID: team, BundleID: ref.ID, Identifier: ref.Identifier,
 		Capabilities: append([]enabledCap{}, b.caps...), AppGroups: []groupOut{}, Available: catalog,
 	}
+	// Names come from the bundle document; the team list (web session)
+	// fills in only groups without them, and a failure leaves ids only.
 	byID := map[string]appGroup{}
-	if len(b.groups) > 0 {
-		// Identifiers come from the team list; a failure leaves ids only.
+	for _, g := range b.groupInfo {
+		if g.Identifier != "" {
+			byID[g.ID] = g
+		}
+	}
+	if slices.ContainsFunc(b.groups, func(id string) bool { _, ok := byID[id]; return !ok }) {
 		if gs, err := listGroups(ctx, env, team); err == nil {
 			for _, g := range gs {
-				byID[g.ID] = g
+				if _, ok := byID[g.ID]; !ok {
+					byID[g.ID] = g
+				}
 			}
 		}
 	}
@@ -101,6 +110,11 @@ type groupsListOut struct {
 	TeamID    string     `json:"team_id"`
 	AppGroups []appGroup `json:"app_groups"`
 	Count     int        `json:"count"`
+	// Partial: no web session, so only groups assigned to a bundle ID.
+	Partial         bool   `json:"partial,omitempty"`
+	PartialReason   string `json:"partial_reason,omitempty"`
+	BundleIDsRead   int    `json:"bundle_ids_read,omitempty"`
+	BundleIDsUnread int    `json:"bundle_ids_unread,omitempty"`
 }
 
 func appGroupsList(ctx context.Context, env *tool.Env, in groupsListIn) (*tool.Result, error) {
@@ -108,19 +122,24 @@ func appGroupsList(ctx context.Context, env *tool.Env, in groupsListIn) (*tool.R
 	if err != nil {
 		return nil, err
 	}
-	gs, err := listGroups(ctx, env, team)
+	gl, err := teamGroups(ctx, env, team, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	f := strings.ToLower(strings.TrimSpace(in.Filter))
 	out := groupsListOut{TeamID: team, AppGroups: []appGroup{}}
-	for _, g := range gs {
+	for _, g := range gl.groups {
 		if f == "" || strings.Contains(strings.ToLower(g.Identifier), f) || strings.Contains(strings.ToLower(string(g.Name)), f) {
 			out.AppGroups = append(out.AppGroups, g)
 		}
 	}
 	out.Count = len(out.AppGroups)
-	return tool.OK(out), nil
+	if !gl.partial {
+		return tool.OK(out), nil
+	}
+	out.Partial, out.PartialReason = true, gl.reason()
+	out.BundleIDsRead, out.BundleIDsUnread = gl.read, gl.unread
+	return tool.OK(out).Then(tool.NextStep{Tool: "web_login"}), nil
 }
 
 // --- signing_portal_apply ---
@@ -230,20 +249,37 @@ func compute(ctx context.Context, env *tool.Env, in applyPlanIn) (*computed, err
 	}
 	c := &computed{groupIDs: map[string]string{}, curGroups: map[string][]string{}}
 	c.out = applyOut{TeamID: team, Bundles: []bundlePlan{}, Steps: []step{}}
-	var groupState []appGroup
-	if len(groupsIn) > 0 {
-		gs, err := listGroups(ctx, env, team)
+	bundles := make([]portalBundle, 0, len(refs))
+	for _, ref := range refs {
+		b, err := readBundle(ctx, env, team, ref)
 		if err != nil {
 			return nil, err
 		}
-		for _, g := range gs {
+		bundles = append(bundles, b)
+	}
+	var groupState []appGroup
+	if len(groupsIn) > 0 {
+		gl, err := teamGroups(ctx, env, team, bundles, groupsIn)
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range gl.groups {
 			c.groupIDs[g.Identifier] = g.ID
 		}
+		var missing []string
 		for _, g := range groupsIn {
 			if _, ok := c.groupIDs[g]; ok {
 				groupState = append(groupState, appGroup{ID: c.groupIDs[g], Identifier: g})
 				continue
 			}
+			missing = append(missing, g)
+		}
+		if gl.partial && len(missing) > 0 {
+			return nil, tool.WithNext(fmt.Errorf("no bundle ID read with the API key carries App Group %s (%s); "+
+				"finding a group assigned to no bundle ID, or creating one, needs the Apple ID sign-in: %w",
+				strings.Join(missing, ", "), gl.reason(), tool.ErrWebSessionRequired), tool.NextStep{Tool: "web_login"})
+		}
+		for _, g := range missing {
 			c.out.CreateGroups = append(c.out.CreateGroups, g)
 			c.out.Steps = append(c.out.Steps, step{Op: opCreateGroup, Target: g})
 			c.human = true
@@ -255,11 +291,8 @@ func compute(ctx context.Context, env *tool.Env, in applyPlanIn) (*computed, err
 	}
 	var enables, disables []step
 	var bundleState []any
-	for _, ref := range refs {
-		b, err := readBundle(ctx, env, team, ref)
-		if err != nil {
-			return nil, err
-		}
+	for _, b := range bundles {
+		ref := b.ref
 		bundleState = append(bundleState, map[string]any{"id": ref.ID, "caps": b.caps, "groups": b.groups})
 		c.curGroups[ref.ID] = b.groups
 		bp := bundlePlan{BundleID: ref.ID, Identifier: ref.Identifier}

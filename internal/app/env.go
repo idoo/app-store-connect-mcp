@@ -87,17 +87,24 @@ func KeySource(ref config.KeyRef, getenv func(string) string) (auth.KeySource, e
 // enable_writes (after the human approves) opens it. The write context set by
 // tool.Call remains a second gate for every mutation.
 func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spec.Index) (*asc.Client, error) {
+	c, _, err := newClient(ctx, r, version, idx)
+	return c, err
+}
+
+// newClient is [NewClient] that also returns the client's token source, so
+// the developer-portal key transport signs with the same one.
+func newClient(ctx context.Context, r *config.Resolved, version string, idx *spec.Index) (*asc.Client, asc.TokenSource, error) {
 	p := r.Profile
 	if p.KeyID == "" {
-		return nil, ErrNoProfile
+		return nil, nil, ErrNoProfile
 	}
 	src, err := KeySource(p.Key, os.Getenv)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	key, err := auth.ResolveKey(ctx, p.KeyID, src)
 	if err != nil {
-		return nil, fmt.Errorf("app: load key: %w", err)
+		return nil, nil, fmt.Errorf("app: load key: %w", err)
 	}
 	issuer := p.IssuerID
 	if p.KeyKind == tool.KeyIndividual {
@@ -105,10 +112,11 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 	}
 	signer, err := auth.NewSigner(key, issuer)
 	if err != nil {
-		return nil, fmt.Errorf("app: signer: %w", err)
+		return nil, nil, fmt.Errorf("app: signer: %w", err)
 	}
+	tokens := auth.NewTokenSource(signer)
 	opts := asc.Options{
-		Tokens:      auth.NewTokenSource(signer),
+		Tokens:      tokens,
 		MaxRetries:  r.MaxRetries,
 		AllowWrites: p.AllowWrites,
 		Clock:       tool.SystemClock{},
@@ -121,15 +129,15 @@ func NewClient(ctx context.Context, r *config.Resolved, version string, idx *spe
 	if r.BaseURL != "" {
 		u, err := url.Parse(r.BaseURL)
 		if err != nil {
-			return nil, fmt.Errorf("app: base url: %w", err)
+			return nil, nil, fmt.Errorf("app: base url: %w", err)
 		}
 		opts.BaseURL = u
 	}
 	c, err := asc.New(opts)
 	if err != nil {
-		return nil, fmt.Errorf("app: client: %w", err)
+		return nil, nil, fmt.Errorf("app: client: %w", err)
 	}
-	return c, nil
+	return c, tokens, nil
 }
 
 // NewEnv builds the base tool environment for resolved. Without a configured
@@ -176,7 +184,7 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 	if store != nil {
 		env.State = store
 	}
-	client, err := NewClient(ctx, r, version, idx)
+	client, tokens, err := newClient(ctx, r, version, idx)
 	switch {
 	case errors.Is(err, ErrNoProfile):
 		env.ASC = noCredentialsASC{}
@@ -203,6 +211,7 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 	var (
 		portal *portalClient
 		dev    *devPortalClient
+		router *devPortalRouter
 	)
 	if src != nil {
 		portal = newPortalClient(src, portalBaseURL, version)
@@ -211,6 +220,16 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 		dev = newDevPortalClient(src, devPortalBaseURL, version)
 		dev.SetAllowWrites(r.Profile.AllowWrites)
 		env.DevPortal = dev
+	}
+	// With an API key the developer portal goes key first and falls back to
+	// the web session (when there is one) where Apple refuses the key.
+	if client != nil {
+		router = &devPortalRouter{key: newKeyPortalClient(tokens, keyPortalBaseURL, version)}
+		if dev != nil {
+			router.web = dev
+		}
+		router.SetAllowWrites(r.Profile.AllowWrites)
+		env.DevPortal = router
 	}
 	if transport == tool.TransportStdio && stateDir != "" {
 		env.WebLogin = newWebLogin(stateDir, WebProfile(r))
@@ -225,7 +244,9 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 		if portal != nil {
 			portal.SetAllowWrites(on)
 		}
-		if dev != nil {
+		if router != nil {
+			router.SetAllowWrites(on)
+		} else if dev != nil {
 			dev.SetAllowWrites(on)
 		}
 	}

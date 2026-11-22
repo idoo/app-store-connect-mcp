@@ -3489,10 +3489,10 @@
   },
   {
     "name": "signing_app_groups_list",
-    "toolset": "web",
+    "toolset": "signing",
     "class": "R",
     "title": "List App Groups",
-    "description": "App Groups of the developer team (web session): id, identifier, name. filter keeps identifiers or names containing it.",
+    "description": "App Groups of the developer team: id, identifier, name. filter keeps identifiers or names containing it. Without the Apple ID sign-in only groups assigned to a bundle ID (partial:true).",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,
@@ -3892,10 +3892,10 @@
   },
   {
     "name": "signing_portal_apply",
-    "toolset": "web",
+    "toolset": "signing",
     "class": "D",
     "title": "Set App Groups and portal capabilities",
-    "description": "Without plan_id previews per bundle ID: App Groups to create/assign, capabilities (ids or names) to enable or disable; with plan_id applies. Creating a group or disabling needs human approval. Invalidates provisioning profiles.",
+    "description": "Without plan_id previews per bundle ID: App Groups to create/assign, capabilities (ids or names) to enable or disable; with plan_id applies. Creating a group (needs the Apple ID sign-in) or disabling needs human approval. Invalidates provisioning profiles.",
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": false,
@@ -3954,10 +3954,10 @@
   },
   {
     "name": "signing_portal_get",
-    "toolset": "web",
+    "toolset": "signing",
     "class": "R",
     "title": "Read a bundle ID in the developer portal",
-    "description": "A bundle ID as the developer portal sees it (web session): enabled capabilities incl. portal-only ones (Increased Memory Limit, ...), assigned App Groups, and the portal capability catalog for it. Use before signing_portal_apply.",
+    "description": "A bundle ID as the developer portal sees it: enabled capabilities incl. portal-only ones (Increased Memory Limit, ...), assigned App Groups, and the portal capability catalog for it. Use before signing_portal_apply.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": true,

@@ -30,8 +30,9 @@ type Kit struct {
 	// Portal fakes the web-only JSON endpoints (dashboard, Payments). Like
 	// Web, Env.Portal starts nil; [Kit.WebSession] routes it here.
 	Portal *FakePortal
-	// DevPortal fakes developer.apple.com/services-account; Env.DevPortal
-	// starts nil and [Kit.WebSession] routes it here.
+	// DevPortal fakes the developer portal; Env.DevPortal starts nil.
+	// [Kit.WebSession] routes it here whole, [Kit.KeyPortal] with the API
+	// key alone.
 	DevPortal *FakeDevPortal
 	Spec      tool.Spec
 	Plans     *FakePlanner
@@ -120,6 +121,18 @@ func (k *Kit) ReadOnly() *Kit {
 func (k *Kit) WebSession() *Kit {
 	k.Env.Web = k.Web
 	k.Env.Portal = k.Portal
+	k.Env.DevPortal = k.DevPortal
+	return k
+}
+
+// KeyPortal routes Env.DevPortal to k.DevPortal as the API key alone sees
+// it, with no web session: routed v1 bundleIds and capabilities requests
+// are served, the legacy .action paths and v1/appGroups fail with
+// tool.ErrWebSessionRequired (still recorded in Calls).
+func (k *Kit) KeyPortal() *Kit {
+	k.DevPortal.mu.Lock()
+	k.DevPortal.keyOnly = true
+	k.DevPortal.mu.Unlock()
 	k.Env.DevPortal = k.DevPortal
 	return k
 }
