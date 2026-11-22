@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-22
+
+### Added
+
+- Developer portal signing works with the API key alone. `signing_portal_get`, `signing_app_groups_list` and `signing_portal_apply` go through `appstoreconnect.apple.com/xcbuild/`, the endpoint Xcode itself uses when it signs with an API key, so reading a bundle ID in the portal, reading the capability catalog and assigning an existing App Group no longer need an Apple ID sign-in. Enabling or disabling a capability goes the same way first; whenever Apple refuses the key (401 or 403, nothing applied) the call falls back to the web session. Apple refuses the key for App Groups themselves: creating one, or listing every group of the team, still needs the web session. Without one, `signing_portal_get` names a bundle ID's groups from its own portal document; `signing_app_groups_list` lists the groups it finds on bundle IDs and says the list is partial (`partial`, `partial_reason`, `bundle_ids_read`, `bundle_ids_unread`; it reads at most 80 bundle IDs); and `signing_portal_apply` finds a requested group on the bundle IDs closest to the ones you change and assigns it, but answers `web_session_required` with `web_login` for a group it can't find, since that group may exist assigned to no bundle ID.
+
+### Changed
+
+- `signing_portal_get`, `signing_app_groups_list` and `signing_portal_apply` moved from the `web` toolset to `signing`.
+
 ## [0.26.1] - 2026-11-19
 
 ### Fixed
@@ -535,7 +545,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.24.0...v0.25.0
