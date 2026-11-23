@@ -202,6 +202,15 @@ func (pf *ProjectFiles) WriteFile(p string, data []byte, perm fs.FileMode) error
 	return f.WriteFile(p, data, perm)
 }
 
+// WriteNewFile implements tool.Files over the default root.
+func (pf *ProjectFiles) WriteNewFile(p string, data []byte, perm fs.FileMode) error {
+	f, err := pf.base()
+	if err != nil {
+		return err
+	}
+	return f.WriteNewFile(p, data, perm)
+}
+
 // Open implements tool.Files over the default root.
 func (pf *ProjectFiles) Open(p string) (*os.File, error) {
 	f, err := pf.base()

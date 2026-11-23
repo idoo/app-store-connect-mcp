@@ -11,8 +11,9 @@ import (
 )
 
 var wantSkills = []string{
-	"app-store-connect-mcp-metadata-translate", "app-store-connect-mcp-release", "app-store-connect-mcp-reviews",
-	"app-store-connect-mcp-sales", "app-store-connect-mcp-screenshots", "app-store-connect-mcp-testflight",
+	"app-store-connect-mcp-developer", "app-store-connect-mcp-metadata-translate", "app-store-connect-mcp-release",
+	"app-store-connect-mcp-reviews", "app-store-connect-mcp-sales", "app-store-connect-mcp-screenshots",
+	"app-store-connect-mcp-testflight",
 }
 
 // vocabulary lists snake_case words skills may put in backticks that are
@@ -28,6 +29,7 @@ var vocabulary = map[string]bool{
 	"missing_localization": true, "upload_failed": true, "reply_locale": true,
 	"last_7_days": true, "month_to_date": true, "this_week": true,
 	"last_week": true, "last_month": true, "last_seen": true, "review_id": true, // review_id: field of reviews_reply.replies
+	"web_session_required": true, "next_offset": true,
 }
 
 var (

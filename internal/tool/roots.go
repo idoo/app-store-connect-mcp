@@ -73,6 +73,14 @@ func (c *callFiles) WriteFile(p string, data []byte, perm fs.FileMode) error {
 	return f.WriteFile(p, data, perm)
 }
 
+func (c *callFiles) WriteNewFile(p string, data []byte, perm fs.FileMode) error {
+	f, err := c.get()
+	if err != nil {
+		return err
+	}
+	return f.WriteNewFile(p, data, perm)
+}
+
 func (c *callFiles) Open(p string) (*os.File, error) {
 	f, err := c.get()
 	if err != nil {

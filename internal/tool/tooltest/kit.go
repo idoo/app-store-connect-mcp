@@ -34,14 +34,17 @@ type Kit struct {
 	// [Kit.WebSession] routes it here whole, [Kit.KeyPortal] with the API
 	// key alone.
 	DevPortal *FakeDevPortal
-	Spec      tool.Spec
-	Plans     *FakePlanner
-	State     *FakeStore
-	Files     *FakeFiles
-	Fetch     *FakeFetcher
-	Toolsets  *FakeToolsets
-	Clock     *FakeClock
-	Resolve   *FakeResolver
+	// DevSite fakes the rest of the developer account site; Env.DevSite
+	// starts nil and [Kit.WebSession] routes it here.
+	DevSite  *FakeDevSite
+	Spec     tool.Spec
+	Plans    *FakePlanner
+	State    *FakeStore
+	Files    *FakeFiles
+	Fetch    *FakeFetcher
+	Toolsets *FakeToolsets
+	Clock    *FakeClock
+	Resolve  *FakeResolver
 }
 
 var (
@@ -72,6 +75,7 @@ func New(t testing.TB) *Kit {
 		Web:       NewFakeASC(t),
 		Portal:    NewFakePortal(t),
 		DevPortal: NewFakeDevPortal(t),
+		DevSite:   NewFakeDevSite(t),
 		Spec:      pinnedSpec(t),
 		Plans:     NewFakePlanner(clock.Now),
 		State:     NewFakeStore(),
@@ -117,11 +121,12 @@ func (k *Kit) ReadOnly() *Kit {
 }
 
 // WebSession signs the Kit in to the web session: Env.Web becomes k.Web,
-// Env.Portal k.Portal and Env.DevPortal k.DevPortal.
+// Env.Portal k.Portal, Env.DevPortal k.DevPortal and Env.DevSite k.DevSite.
 func (k *Kit) WebSession() *Kit {
 	k.Env.Web = k.Web
 	k.Env.Portal = k.Portal
 	k.Env.DevPortal = k.DevPortal
+	k.Env.DevSite = k.DevSite
 	return k
 }
 

@@ -115,6 +115,10 @@ type Files interface {
 	ReadFile(path string) ([]byte, error)
 	// WriteFile writes data, creating parent directories.
 	WriteFile(path string, data []byte, perm fs.FileMode) error
+	// WriteNewFile writes data to a file that must not exist yet, creating
+	// parent directories; an existing path fails with an error matching
+	// [fs.ErrExist] and nothing is replaced.
+	WriteNewFile(path string, data []byte, perm fs.FileMode) error
 	Open(path string) (*os.File, error)
 	Stat(path string) (fs.FileInfo, error)
 	// WalkDir walks root like [fs.WalkDir]; callback paths are absolute.
@@ -180,6 +184,11 @@ type Env struct {
 	// accepts it, else with the same web session. nil installs a stand-in
 	// failing with [ErrWebSessionRequired].
 	DevPortal DevPortal
+	// DevSite reaches the rest of the developer account site with the web
+	// session: any services-account endpoint, the account and contact
+	// pages and their forms. nil installs a stand-in failing with
+	// [ErrWebSessionRequired].
+	DevSite DevSite
 	// WebLogin signs the human in to the App Store Connect web session in a
 	// browser window on their machine (they type the Apple ID password and
 	// 2FA code into Apple's own page; the tool never sees them). It reuses
@@ -260,6 +269,9 @@ func (e *Env) complete() *Env {
 	}
 	if c.DevPortal == nil {
 		c.DevPortal = noDevPortal{}
+	}
+	if c.DevSite == nil {
+		c.DevSite = noDevSite{}
 	}
 	if c.Spec == nil {
 		c.Spec = noSpec{}

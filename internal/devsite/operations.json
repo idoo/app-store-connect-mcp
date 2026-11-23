@@ -1,0 +1,5663 @@
+[
+ {
+  "id": "session.list_teams",
+  "ref": "S3",
+  "group": "session",
+  "title": "List the developer teams of the Apple Account",
+  "method": "POST",
+  "path": "QH65B2/account/listTeams.action",
+  "wire": "form",
+  "read": true,
+  "params": [],
+  "answer": [
+   "teams[].teamId",
+   "teams[].name",
+   "teams[].type",
+   "teams[].status",
+   "data.teams[]"
+  ],
+  "notes": [
+   "Empty body; no CSRF pair is needed.",
+   "The first call that returns the csrf / csrf_ts pair.",
+   "type In-House marks an Enterprise team.",
+   "asc-cli also accepts the list under data.teams[]."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "session.list_pending_agreements",
+  "ref": "S6",
+  "group": "session",
+  "title": "List pending program agreements",
+  "method": "POST",
+  "path": "QH65B2/account/listPendingAgreements",
+  "wire": "json",
+  "read": true,
+  "params": [
+   {
+    "name": "languageIsoCode",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "whole body"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "session.get_notifications",
+  "ref": "S7",
+  "group": "session",
+  "title": "Get account notifications and outstanding agreements",
+  "method": "POST",
+  "path": "QH65B2/account/getNotifications",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "notifications.agreementsOutstanding[]"
+  ],
+  "notes": [
+   "The source sends X-Requested-With: XMLHttpRequest and Referer https://developer.apple.com/account."
+  ],
+  "status": "observed",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "session.get_agreement_history",
+  "ref": "S8",
+  "group": "session",
+  "title": "Get the agreement history",
+  "method": "POST",
+  "path": "QH65B2/account/getAgreementHistory",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "dateAccepted",
+   "dateEffective",
+   "agreementDownloadUrl"
+  ],
+  "notes": [
+   "The source sends X-Requested-With: XMLHttpRequest and Referer https://developer.apple.com/account."
+  ],
+  "status": "observed",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "session.accept_agreements",
+  "ref": "S9",
+  "group": "session",
+  "title": "Accept program agreements",
+  "method": "POST",
+  "path": "QH65B2/account/acceptAgreements",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "agreementIds",
+    "in": "json",
+    "required": true,
+    "note": "list of agreement ids"
+   }
+  ],
+  "answer": [
+   "resultCode"
+  ],
+  "notes": [
+   "resultCode 0 means accepted.",
+   "The source sends X-Requested-With: XMLHttpRequest and Referer https://developer.apple.com/account."
+  ],
+  "status": "observed",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.list_members",
+  "ref": "S10",
+  "group": "team",
+  "title": "List team members",
+  "method": "POST",
+  "path": "QH65B2/account/getTeamMembers",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "members[]",
+   "admins[]",
+   "personId",
+   "firstName",
+   "lastName",
+   "email",
+   "developerStatus",
+   "dateJoined",
+   "teamMemberId"
+  ],
+  "notes": [
+   "Other role lists come beside members[] and admins[].",
+   "The source reads this first to get the CSRF pair for the team writes."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.list_invites",
+  "ref": "S11",
+  "group": "team",
+  "title": "List pending team invitations",
+  "method": "POST",
+  "path": "QH65B2/account/getInvites",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "invites[].inviteId",
+   "invites[].inviterName",
+   "invites[].recipientEmail",
+   "invites[].recipientRole",
+   "invites[].dateCreated",
+   "invites[].dateExpires"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.set_member_roles",
+  "ref": "S12",
+  "group": "team",
+  "title": "Change a team member's role",
+  "method": "POST",
+  "path": "QH65B2/account/setTeamMemberRoles",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "role",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "teamMemberIds",
+    "in": "json",
+    "required": true,
+    "note": "list holding the member's teamMemberId"
+   }
+  ],
+  "answer": [
+   "whole body"
+  ],
+  "notes": [
+   "CSRF pair primed by team.list_members."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.remove_members",
+  "ref": "S13",
+  "group": "team",
+  "title": "Remove a team member",
+  "method": "POST",
+  "path": "QH65B2/account/removeTeamMembers",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "teamMemberIds",
+    "in": "json",
+    "required": true,
+    "note": "list holding the member's teamMemberId"
+   }
+  ],
+  "answer": [
+   "whole body"
+  ],
+  "notes": [
+   "CSRF pair primed by team.list_members."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.send_invites",
+  "ref": "S14",
+  "group": "team",
+  "title": "Invite a team member",
+  "method": "POST",
+  "path": "QH65B2/account/sendInvites",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "invites",
+    "in": "json",
+    "required": true,
+    "note": "list of {recipientEmail, recipientRole}"
+   }
+  ],
+  "answer": [
+   "whole body"
+  ],
+  "notes": [
+   "CSRF pair primed by team.list_members."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.list",
+  "ref": "K1",
+  "group": "keys",
+  "title": "List keys",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/list",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   }
+  ],
+  "answer": [
+   "keys[].keyId",
+   "keys[].keyName",
+   "keys[].canDownload",
+   "keys[].canRevoke",
+   "keys[].services[].id",
+   "keys[].services[].name",
+   "keys[].services[].configurations[]",
+   "resultCode"
+  ],
+  "notes": [
+   "Also the CSRF primer for every key write."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.get",
+  "ref": "K2",
+  "group": "keys",
+  "title": "Get one key with its service configurations",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/get",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "keyId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "keys[0]",
+   "keys[0].services[].configurations[].id",
+   "keys[0].services[].configurations[].type"
+  ],
+  "notes": [
+   "configurations[] items carry id and type (e.g. bundle).",
+   "asc-cli: a detail read re-keys the CSRF pair."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.create",
+  "ref": "K3",
+  "group": "keys",
+  "title": "Create a key",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/v2/create",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "serviceConfigurationsRequests",
+    "in": "json",
+    "required": true,
+    "note": "list with one entry per service; the entry shape is each value's label",
+    "values": [
+     {
+      "value": "U27F4V844T",
+      "label": "APNs: {serviceId, isNew:true, identifiers:{}, environment:\"all\", scope:\"team\"}"
+     },
+     {
+      "value": "DQ8HTZ7739",
+      "label": "DeviceCheck: {serviceId, isNew:true, identifiers:{}} (Expo omits identifiers)"
+     },
+     {
+      "value": "6A7HVUVQ3M",
+      "label": "MusicKit: {serviceId, isNew:true, identifiers:{music:[<Media ID resource id>]}}"
+     },
+     {
+      "value": "APPLE_ID_AUTH_KEY_CONFIGURATION",
+      "label": "Sign in with Apple: {serviceId, isNew:true, identifiers:{bundle:[<opaque bundleIds resource id of the primary App ID>]}}"
+     }
+    ]
+   },
+   {
+    "name": "serviceConfigurations",
+    "in": "json",
+    "required": false,
+    "note": "Expo also sends {serviceId:[ids]}"
+   },
+   {
+    "name": "scope",
+    "in": "json",
+    "required": false,
+    "note": "Expo sends \"team\""
+   },
+   {
+    "name": "usageDescription",
+    "in": "json",
+    "required": false
+   }
+  ],
+  "answer": [
+   "keys[0].keyId",
+   "keys[0].keyName"
+  ],
+  "notes": [
+   "CSRF pair primed by keys.list.",
+   "Error text 'maximum allowed number of Keys' when the per-service limit is hit.",
+   "APNs entries with another environment or scope (sandbox-only, topic-scoped) were not captured by any source.",
+   "MusicKit takes the Media ID's autogenerated resource id, not the music.com... identifier.",
+   "Sign in with Apple: verify by reading services[].configurations[] for {id:<that id>, type:\"bundle\"}."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.update",
+  "ref": "K4",
+  "group": "keys",
+  "title": "Update a key: name, Sign in with Apple apps, description",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/v2/update",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "keyId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "usageDescription",
+    "in": "json",
+    "required": false
+   },
+   {
+    "name": "serviceConfigurationsRequests",
+    "in": "json",
+    "required": true,
+    "note": "[{isNew:false, serviceId:\"APPLE_ID_AUTH_KEY_CONFIGURATION\", identifiers:{bundle:[ids]}, relatedKeys:[]}]"
+   }
+  ],
+  "answer": [
+   "keys[0]"
+  ],
+  "notes": [
+   "CSRF pair primed by keys.list."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.download",
+  "ref": "K5",
+  "group": "keys",
+  "title": "Download a key's .p8 private key",
+  "method": "GET",
+  "path": "QH65B2/account/auth/key/download",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "keyId",
+    "in": "query",
+    "required": true
+   }
+  ],
+  "answer": [
+   "body: PEM text of the key, not JSON"
+  ],
+  "notes": [
+   "One-time download: the key record carries canDownload; asc-cli refuses when it is false and notes Apple may consume the download even when it returns a malformed body.",
+   "That the server flips canDownload after the first download is inferred.",
+   "The body is saved to save_to and never returned."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.revoke",
+  "ref": "K6",
+  "group": "keys",
+  "title": "Revoke a key",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/revoke",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "keyId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "resultCode"
+  ],
+  "notes": [
+   "CSRF pair primed by keys.list; asc-cli calls keys.list again right before, because a detail read re-keys the pair.",
+   "resultCode 0; the key then leaves the list."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.list",
+  "ref": "N1",
+  "group": "services_ids",
+  "title": "List Services IDs",
+  "method": "GET",
+  "path": "v1/bundleIds",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[platform]",
+    "in": "query",
+    "required": true,
+    "values": [
+     {
+      "value": "SERVICES",
+      "label": "Services IDs only"
+     }
+    ]
+   },
+   {
+    "name": "limit",
+    "in": "query",
+    "required": false,
+    "note": "sources send 1000"
+   },
+   {
+    "name": "sort",
+    "in": "query",
+    "required": false,
+    "note": "sources send name"
+   }
+  ],
+  "answer": [
+   "data[].attributes.identifier",
+   "data[].attributes.name",
+   "data[].attributes.platform",
+   "data[].attributes.seedId",
+   "included[]",
+   "links.next",
+   "meta.paging.total"
+  ],
+  "notes": [
+   "Services IDs are bundleIds with platform SERVICES."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.get",
+  "ref": "N2",
+  "group": "services_ids",
+  "title": "Get one Services ID with its capability graph",
+  "method": "GET",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the Services ID's opaque bundleIds resource id"
+   },
+   {
+    "name": "include",
+    "in": "query",
+    "required": false,
+    "note": "sources send bundleIdCapabilities,bundleIdCapabilities.capability,bundleIdCapabilities.appConsentBundleId"
+   }
+  ],
+  "answer": [
+   "data",
+   "included[].attributes.enabled",
+   "included[].attributes.settings",
+   "included[].attributes.inputs[]",
+   "included[].relationships.appConsentBundleId"
+  ],
+  "notes": [
+   "After a delete this read returns 404."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.create",
+  "ref": "N3",
+  "group": "services_ids",
+  "title": "Create a Services ID",
+  "method": "POST",
+  "path": "v1/bundleIds",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.platform",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "SERVICES",
+      "label": "Services ID"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.seedId",
+    "in": "json",
+    "required": true,
+    "note": "the team id"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "an empty list [] on create"
+   }
+  ],
+  "answer": [
+   "data.id"
+  ],
+  "notes": [
+   "No root-level teamId: Apple rejects it on a non-override POST.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.rename",
+  "ref": "N4",
+  "group": "services_ids",
+  "title": "Rename a Services ID",
+  "method": "PATCH",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the Services ID's opaque bundleIds resource id"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true,
+    "note": "the new name; carry every other current attribute beside it"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "every current capability carried over"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "No reliable body: re-read after with services_ids.get.",
+   "Needs the CSRF pair; the source sends Referer .../account/resources/identifiers/bundleId/edit/{id}."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.delete",
+  "ref": "N5",
+  "group": "services_ids",
+  "title": "Delete a Services ID",
+  "method": "DELETE",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the Services ID's opaque bundleIds resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "HTTP 204; a later services_ids.get returns 404.",
+   "Without the root teamId (the tool adds it) Apple answers HTTP 403 'Please select a team.'",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.configure_sign_in_with_apple",
+  "ref": "N6",
+  "group": "services_ids",
+  "title": "Configure Sign in with Apple on a Services ID",
+  "method": "PATCH",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the Services ID's opaque bundleIds resource id"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.seedId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "[{type:\"bundleIdCapabilities\", attributes:{enabled:true, inputs:[{key:\"APPLE_ID_AUTH_WEB_RETURN_URL\", values:[{value:url}]}, {key:\"APPLE_ID_AUTH_WEB_DOMAIN\", values:[{value:domain}]}]}, relationships:{capability:{data:{type:\"capabilities\", id:\"APPLE_ID_AUTH\"}}, appConsentBundleId:{data:{type:\"bundleIds\", id:<primary App ID resource id>}}}}]"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Sets the primary App ID, the domains and the return URLs.",
+   "The capability list is replaced wholesale.",
+   "No reliable body: re-read after with services_ids.get and compare inputs.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "expo",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "services_ids.disable_sign_in_with_apple",
+  "ref": "N7",
+  "group": "services_ids",
+  "title": "Turn Sign in with Apple off on a Services ID",
+  "method": "PATCH",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the Services ID's opaque bundleIds resource id"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.seedId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "an empty list []"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The capability list is replaced wholesale.",
+   "No reliable body: re-read after with services_ids.get.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "pass_type_ids.list",
+  "ref": "N8",
+  "group": "pass_type_ids",
+  "title": "List Pass Type IDs",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/listPassTypeIds.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   }
+  ],
+  "answer": [
+   "passTypeIdList[].passTypeId",
+   "passTypeIdList[].name",
+   "passTypeIdList[].prefix",
+   "passTypeIdList[].identifier",
+   "passTypeIdList[].status"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "pass_type_ids.create",
+  "ref": "N9",
+  "group": "pass_type_ids",
+  "title": "Create a Pass Type ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/addPassTypeId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "identifier",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "passTypeId"
+  ],
+  "notes": [
+   "CSRF pair primed by pass_type_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "pass_type_ids.delete",
+  "ref": "N10",
+  "group": "pass_type_ids",
+  "title": "Delete a Pass Type ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/deletePassTypeId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "passTypeId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by pass_type_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.list",
+  "ref": "N11",
+  "group": "website_push_ids",
+  "title": "List Website Push IDs",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/listWebsitePushIds.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   },
+   {
+    "name": "onlyCountLists",
+    "in": "form",
+    "required": false,
+    "note": "asc-cli adds true"
+   }
+  ],
+  "answer": [
+   "websitePushIdList[].websitePushId",
+   "websitePushIdList[].name",
+   "websitePushIdList[].prefix",
+   "websitePushIdList[].identifier",
+   "websitePushIdList[].status",
+   "pageNumber",
+   "pageSize"
+  ],
+  "notes": [],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.create",
+  "ref": "N12",
+  "group": "website_push_ids",
+  "title": "Create a Website Push ID (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/addWebsitePushId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "identifier",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "websitePushId"
+  ],
+  "notes": [
+   "CSRF pair primed by website_push_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.delete",
+  "ref": "N13",
+  "group": "website_push_ids",
+  "title": "Delete a Website Push ID (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/deleteWebsitePushId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "websitePushId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by website_push_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.get",
+  "ref": "N14",
+  "group": "website_push_ids",
+  "title": "Get one Website Push ID (JSON:API)",
+  "method": "GET",
+  "path": "v1/websitepushIds/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   },
+   {
+    "name": "include",
+    "in": "query",
+    "required": false,
+    "note": "sources send websitepushIdCapabilities"
+   }
+  ],
+  "answer": [
+   "data.attributes.identifier",
+   "data.attributes.name",
+   "data.attributes.canDelete",
+   "included[]"
+  ],
+  "notes": [
+   "The source sends Referer .../account/resources/identifiers/websitePushId/edit/{id}."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.create_v1",
+  "ref": "N15",
+  "group": "website_push_ids",
+  "title": "Create a Website Push ID (JSON:API)",
+  "method": "POST",
+  "path": "v1/websitepushIds",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "websitepushIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.websitepushIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "an empty list []"
+   }
+  ],
+  "answer": [
+   "data.id"
+  ],
+  "notes": [
+   "HTTP 201.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.delete_v1",
+  "ref": "N16",
+  "group": "website_push_ids",
+  "title": "Delete a Website Push ID (JSON:API)",
+  "method": "DELETE",
+  "path": "v1/websitepushIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "HTTP 204, empty body.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.list_capabilities",
+  "ref": "N17",
+  "group": "website_push_ids",
+  "title": "Capability catalog for Website Push IDs",
+  "method": "GET",
+  "path": "v1/capabilities",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[referenceType]",
+    "in": "query",
+    "required": true,
+    "values": [
+     {
+      "value": "websitepushId",
+      "label": "capabilities of Website Push IDs"
+     }
+    ]
+   }
+  ],
+  "answer": [
+   "data[]",
+   "meta",
+   "links"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.list",
+  "ref": "N18",
+  "group": "merchant_ids",
+  "title": "List Merchant IDs",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/listOMCs.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   }
+  ],
+  "answer": [
+   "identifierList[].omcId",
+   "identifierList[].name",
+   "identifierList[].prefix",
+   "identifierList[].identifier",
+   "identifierList[].status"
+  ],
+  "notes": [
+   "Also the CSRF primer for the merchant writes."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.create",
+  "ref": "N19",
+  "group": "merchant_ids",
+  "title": "Create a Merchant ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/addOMC.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "identifier",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "omcId"
+  ],
+  "notes": [
+   "CSRF pair primed by merchant_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.delete",
+  "ref": "N20",
+  "group": "merchant_ids",
+  "title": "Delete a Merchant ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/deleteOMC.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "omcId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by merchant_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.list_domains",
+  "ref": "N21",
+  "group": "merchant_ids",
+  "title": "List a merchant's web domains",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/listDomainsForMerchant",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "merchantId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "domainList[].displayId",
+   "domainList[].name",
+   "domainList[].status",
+   "domainList[].path",
+   "domainList[].canVerify",
+   "domainList[].expirationDate",
+   "domainList[].expirationDateString"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.register_domain",
+  "ref": "N22",
+  "group": "merchant_ids",
+  "title": "Register a web domain for a merchant",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/registerDomain",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "merchantId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "domainName",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "domainList[0]"
+  ],
+  "notes": [
+   "CSRF pair primed by merchant_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.download_domain_verification_file",
+  "ref": "N23",
+  "group": "merchant_ids",
+  "title": "Download the domain verification file",
+  "method": "GET",
+  "path": "QH65B2/account/ios/identifiers/downloadDomainVerificationFile",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "domainId",
+    "in": "query",
+    "required": true
+   }
+  ],
+  "answer": [
+   "body: base64 PKCS#7 text containing \"Apple Inc.\""
+  ],
+  "notes": [
+   "The body is saved to save_to and never returned."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.verify_domain",
+  "ref": "N24",
+  "group": "merchant_ids",
+  "title": "Ask Apple to verify a merchant's web domain",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/verifyDomain",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "domainId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by merchant_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.remove_domain",
+  "ref": "N25",
+  "group": "merchant_ids",
+  "title": "Remove a merchant's web domain",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/removeDomain",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "merchantId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "domainId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by merchant_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.list_v1",
+  "ref": "N26",
+  "group": "merchant_ids",
+  "title": "List Merchant IDs (JSON:API)",
+  "method": "GET",
+  "path": "v1/merchantIds",
+  "wire": "v1",
+  "read": true,
+  "params": [],
+  "answer": [
+   "data[]"
+  ],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix merchant)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.get_v1",
+  "ref": "N26",
+  "group": "merchant_ids",
+  "title": "Get one Merchant ID (JSON:API)",
+  "method": "GET",
+  "path": "v1/merchantIds/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix merchant)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.create_v1",
+  "ref": "N26",
+  "group": "merchant_ids",
+  "title": "Create a Merchant ID (JSON:API)",
+  "method": "POST",
+  "path": "v1/merchantIds",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "merchantIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix merchant)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.delete_v1",
+  "ref": "N26",
+  "group": "merchant_ids",
+  "title": "Delete a Merchant ID (JSON:API)",
+  "method": "DELETE",
+  "path": "v1/merchantIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix merchant)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "cloud_containers.list",
+  "ref": "N27",
+  "group": "cloud_containers",
+  "title": "List iCloud containers (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/cloudContainer/listCloudContainers.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   }
+  ],
+  "answer": [
+   "cloudContainerList[].cloudContainer",
+   "cloudContainerList[].identifier",
+   "cloudContainerList[].name",
+   "cloudContainerList[].prefix",
+   "cloudContainerList[].status",
+   "cloudContainerList[].canEdit",
+   "cloudContainerList[].canDelete"
+  ],
+  "notes": [
+   "cloudContainer is the resource id.",
+   "Also the CSRF primer for the legacy container writes."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "cloud_containers.create",
+  "ref": "N28",
+  "group": "cloud_containers",
+  "title": "Create an iCloud container (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/cloudContainer/addCloudContainer.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "identifier",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "cloudContainer"
+  ],
+  "notes": [
+   "CSRF pair primed by cloud_containers.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "cloud_containers.list_v1",
+  "ref": "N29",
+  "group": "cloud_containers",
+  "title": "List iCloud containers (JSON:API)",
+  "method": "GET",
+  "path": "v1/cloudContainers",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[AND][hidden]",
+    "in": "query",
+    "required": true,
+    "values": [
+     {
+      "value": "false",
+      "label": "visible containers"
+     },
+     {
+      "value": "true",
+      "label": "hidden containers"
+     }
+    ]
+   },
+   {
+    "name": "limit",
+    "in": "query",
+    "required": false,
+    "note": "sources send 1000"
+   },
+   {
+    "name": "offset",
+    "in": "query",
+    "required": false,
+    "note": "sources send 0"
+   },
+   {
+    "name": "sort",
+    "in": "query",
+    "required": false,
+    "note": "sources send name"
+   }
+  ],
+  "answer": [
+   "data[].attributes.identifier",
+   "data[].attributes.name",
+   "data[].attributes.prefix",
+   "data[].attributes.hidden",
+   "data[].attributes.canEdit",
+   "data[].attributes.canDelete",
+   "data[].attributes.responseId",
+   "links",
+   "meta"
+  ],
+  "notes": [],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "cloud_containers.create_v1",
+  "ref": "N30",
+  "group": "cloud_containers",
+  "title": "Create an iCloud container (JSON:API)",
+  "method": "POST",
+  "path": "v1/cloudContainers",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "cloudContainers",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true,
+    "note": "must start with iCloud."
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   }
+  ],
+  "answer": [
+   "data.id"
+  ],
+  "notes": [
+   "No root-level teamId.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "cloud_containers.delete_v1",
+  "ref": "N31",
+  "group": "cloud_containers",
+  "title": "Delete an iCloud container (JSON:API)",
+  "method": "DELETE",
+  "path": "v1/cloudContainers/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Inferred: the generic delete method exists in Expo, but asc-cli states iCloud containers cannot be deleted.",
+   "Answer unknown."
+  ],
+  "status": "inferred",
+  "source": [
+   "expo",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.list",
+  "ref": "N32",
+  "group": "app_groups",
+  "title": "List App Groups",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/listApplicationGroups.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   }
+  ],
+  "answer": [
+   "applicationGroupList[].applicationGroup",
+   "applicationGroupList[].name",
+   "applicationGroupList[].prefix",
+   "applicationGroupList[].identifier",
+   "applicationGroupList[].status",
+   "totalRecords",
+   "pageNumber",
+   "pageSize"
+  ],
+  "notes": [
+   "applicationGroup is the opaque resource id.",
+   "Also the CSRF primer for the App Group writes."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.create",
+  "ref": "N33",
+  "group": "app_groups",
+  "title": "Create an App Group",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/addApplicationGroup.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "identifier",
+    "in": "form",
+    "required": true,
+    "note": "starts with group."
+   }
+  ],
+  "answer": [
+   "applicationGroup"
+  ],
+  "notes": [
+   "CSRF pair primed by app_groups.list."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.delete",
+  "ref": "N34",
+  "group": "app_groups",
+  "title": "Delete an App Group",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/deleteApplicationGroup.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "applicationGroup",
+    "in": "form",
+    "required": true,
+    "note": "the opaque resource id, not the group. identifier"
+   }
+  ],
+  "answer": [
+   "resultCode"
+  ],
+  "notes": [
+   "CSRF pair primed by app_groups.list.",
+   "asc-cli calls its own use inferred and live-unverified."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.list_v1",
+  "ref": "N35",
+  "group": "app_groups",
+  "title": "List App Groups (JSON:API)",
+  "method": "GET",
+  "path": "v1/appGroups",
+  "wire": "v1",
+  "read": true,
+  "params": [],
+  "answer": [
+   "data[]"
+  ],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix group)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.get_v1",
+  "ref": "N35",
+  "group": "app_groups",
+  "title": "Get one App Group (JSON:API)",
+  "method": "GET",
+  "path": "v1/appGroups/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix group)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.create_v1",
+  "ref": "N35",
+  "group": "app_groups",
+  "title": "Create a App Group (JSON:API)",
+  "method": "POST",
+  "path": "v1/appGroups",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "appGroups",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix group)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.delete_v1",
+  "ref": "N35",
+  "group": "app_groups",
+  "title": "Delete a App Group (JSON:API)",
+  "method": "DELETE",
+  "path": "v1/appGroups/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "From Expo's generic capability-identifier model (prefix group)."
+  ],
+  "status": "observed",
+  "source": [
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.list",
+  "ref": "A1",
+  "group": "app_ids",
+  "title": "List App IDs (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/listAppIds.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   }
+  ],
+  "answer": [
+   "appIds[].appIdId",
+   "appIds[].name",
+   "appIds[].appIdPlatform",
+   "appIds[].prefix",
+   "appIds[].identifier",
+   "appIds[].isWildCard",
+   "appIds[].features",
+   "appIds[].enabledFeatures",
+   "appIds[].isDevPushEnabled",
+   "appIds[].isProdPushEnabled",
+   "appIds[].associatedApplicationGroupsCount",
+   "appIds[].associatedCloudContainersCount",
+   "appIds[].associatedIdentifiersCount"
+  ],
+  "notes": [
+   "Also the CSRF primer for the App ID writes."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.get",
+  "ref": "A2",
+  "group": "app_ids",
+  "title": "Get an App ID's detail: features and containers",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/getAppIdDetail.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "appId",
+   "appId.features",
+   "appId.enabledFeatures",
+   "appId.associatedCloudContainers"
+  ],
+  "notes": [
+   "appId carries the keys of app_ids.list plus associatedCloudContainers."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.create",
+  "ref": "A3",
+  "group": "app_ids",
+  "title": "Create an App ID (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/addAppId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "type",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "explicit",
+      "label": "explicit App ID"
+     },
+     {
+      "value": "wildcard",
+      "label": "wildcard App ID"
+     }
+    ]
+   },
+   {
+    "name": "identifier",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "inAppPurchase",
+    "in": "form",
+    "required": false,
+    "note": "an explicit App ID also sends on"
+   },
+   {
+    "name": "gameCenter",
+    "in": "form",
+    "required": false,
+    "note": "an explicit App ID also sends on"
+   }
+  ],
+  "answer": [
+   "appId"
+  ],
+  "notes": [
+   "Plus one form field per enabled service: <service id>=<value> (ids: app_ids.update_service's featureType).",
+   "CSRF pair primed by app_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.delete",
+  "ref": "A4",
+  "group": "app_ids",
+  "title": "Delete an App ID (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/deleteAppId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by app_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.rename",
+  "ref": "A5",
+  "group": "app_ids",
+  "title": "Rename an App ID (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/updateAppIdName.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "name",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "appId"
+  ],
+  "notes": [
+   "CSRF pair primed by app_ids.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.update_service",
+  "ref": "A6",
+  "group": "app_ids",
+  "title": "Turn an App ID service on or off, or set its value",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/updateService.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "displayId",
+    "in": "form",
+    "required": true,
+    "note": "the appIdId"
+   },
+   {
+    "name": "featureType",
+    "in": "form",
+    "required": true,
+    "note": "service id",
+    "values": [
+     {
+      "value": "AWEQ28MY3E",
+      "label": "Access WiFi Information"
+     },
+     {
+      "value": "APG3427HIY",
+      "label": "App Groups"
+     },
+     {
+      "value": "OM633U5T5G",
+      "label": "Apple Pay"
+     },
+     {
+      "value": "SKC3T5S89Y",
+      "label": "Associated Domains"
+     },
+     {
+      "value": "PKTJAN2017",
+      "label": "ClassKit"
+     },
+     {
+      "value": "CPEQ28MX4E",
+      "label": "AutoFill Credential Provider"
+     },
+     {
+      "value": "dataProtection",
+      "label": "Data Protection; featureValue \"\" (off), complete, unlessopen, untilfirstauth"
+     },
+     {
+      "value": "gameCenter",
+      "label": "Game Center"
+     },
+     {
+      "value": "HK421J6T7P",
+      "label": "HealthKit"
+     },
+     {
+      "value": "homeKit",
+      "label": "HomeKit"
+     },
+     {
+      "value": "HSC639VEI8",
+      "label": "Hotspot"
+     },
+     {
+      "value": "iCloud",
+      "label": "iCloud"
+     },
+     {
+      "value": "cloudKitVersion",
+      "label": "CloudKit version; featureValue 1 (Xcode 5 compatible), 2 (CloudKit)"
+     },
+     {
+      "value": "inAppPurchase",
+      "label": "In-App Purchase"
+     },
+     {
+      "value": "IAD53UNK2F",
+      "label": "Inter-App Audio"
+     },
+     {
+      "value": "MP49FN762P",
+      "label": "Multipath"
+     },
+     {
+      "value": "NWEXT04537",
+      "label": "Network Extensions"
+     },
+     {
+      "value": "NFCTRMAY17",
+      "label": "NFC Tag Reading"
+     },
+     {
+      "value": "V66P55NK2I",
+      "label": "Personal VPN / VPN Configuration"
+     },
+     {
+      "value": "passbook",
+      "label": "Wallet / Passbook"
+     },
+     {
+      "value": "push",
+      "label": "Push Notifications (own endpoint: app_ids.update_push_service)"
+     },
+     {
+      "value": "SI015DKUHP",
+      "label": "SiriKit"
+     },
+     {
+      "value": "WC421J6T7P",
+      "label": "Wireless Accessory Configuration"
+     }
+    ]
+   },
+   {
+    "name": "featureValue",
+    "in": "form",
+    "required": true,
+    "note": "true or false unless the service's label lists other values"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The answer is not read: re-read after with app_ids.get.",
+   "CSRF pair primed by app_ids.list.",
+   "Whether Apple still serves this legacy endpoint is not stated by any source; the modern replacement is bundle_ids.update_capabilities."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.update_push_service",
+  "ref": "A7",
+  "group": "app_ids",
+  "title": "Turn Push Notifications on or off for an App ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/updatePushService.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "displayId",
+    "in": "form",
+    "required": true,
+    "note": "the appIdId"
+   },
+   {
+    "name": "featureType",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "push",
+      "label": "Push Notifications"
+     }
+    ]
+   },
+   {
+    "name": "featureValue",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "true",
+      "label": "on"
+     },
+     {
+      "value": "false",
+      "label": "off"
+     }
+    ]
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The answer is not read: re-read after with app_ids.get.",
+   "CSRF pair primed by app_ids.list.",
+   "Whether Apple still serves this legacy endpoint is not stated by any source; the modern replacement is bundle_ids.update_capabilities."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.assign_app_groups",
+  "ref": "A8",
+  "group": "app_ids",
+  "title": "Associate App Groups with an App ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/assignApplicationGroupToAppId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "displayId",
+    "in": "form",
+    "required": true,
+    "note": "same value as appIdId"
+   },
+   {
+    "name": "applicationGroups",
+    "in": "form",
+    "required": true,
+    "note": "list of App Group resource ids"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The answer is not read: re-read after with app_ids.get.",
+   "CSRF pair primed by app_groups.list.",
+   "Whether Apple still serves this legacy endpoint is not stated by any source; the modern replacement is bundle_ids.update_capabilities."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.assign_cloud_containers",
+  "ref": "A9",
+  "group": "app_ids",
+  "title": "Associate iCloud containers with an App ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/assignCloudContainerToAppId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "cloudContainers",
+    "in": "form",
+    "required": true,
+    "note": "list of container resource ids"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The answer is not read: re-read after with app_ids.get.",
+   "CSRF pair primed by cloud_containers.list.",
+   "Whether Apple still serves this legacy endpoint is not stated by any source; the modern replacement is bundle_ids.update_capabilities."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_ids.assign_merchant_ids",
+  "ref": "A10",
+  "group": "app_ids",
+  "title": "Associate Merchant IDs with an App ID",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/assignOMCToAppId.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "omcIds",
+    "in": "form",
+    "required": true,
+    "note": "list of merchant resource ids"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The answer is not read: re-read after with app_ids.get.",
+   "CSRF pair primed by merchant_ids.list.",
+   "Whether Apple still serves this legacy endpoint is not stated by any source; the modern replacement is bundle_ids.update_capabilities."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.list",
+  "ref": "C1",
+  "group": "certificates",
+  "title": "List certificates of given types",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/certificate/listCertRequests.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "types",
+    "in": "form",
+    "required": true,
+    "note": "comma-joined type ids",
+    "values": [
+     {
+      "value": "83Q87W3TGH",
+      "label": "Apple Development (ios or mac; team)"
+     },
+     {
+      "value": "WXV89964HE",
+      "label": "Apple Distribution (ios or mac; team)"
+     },
+     {
+      "value": "5QPB9NHCEI",
+      "label": "iOS Development (ios; team)"
+     },
+     {
+      "value": "R58UK2EWSO",
+      "label": "iOS Distribution, App Store and Ad Hoc (ios; team)"
+     },
+     {
+      "value": "9RQEK7MSXA",
+      "label": "iOS In-House, Enterprise (ios; team)"
+     },
+     {
+      "value": "LA30L5BJEU",
+      "label": "unnamed generic certificate (ios; binding unknown)"
+     },
+     {
+      "value": "JKG5JZ54H7",
+      "label": "APNs Development (sandbox) SSL (ios; App ID, appIdId)"
+     },
+     {
+      "value": "UPV3DW712I",
+      "label": "APNs Production SSL (ios; App ID)"
+     },
+     {
+      "value": "Y3B2F3TYSI",
+      "label": "Pass Type ID certificate (ios; Pass Type ID)"
+     },
+     {
+      "value": "3T2ZP62QW8",
+      "label": "Website Push ID certificate (ios; Website Push ID, specialIdentifierDisplayId)"
+     },
+     {
+      "value": "E5D663CMZW",
+      "label": "VoIP Services certificate (ios; App ID)"
+     },
+     {
+      "value": "4APLUP237T",
+      "label": "Apple Pay Payment Processing certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "MD8Q2VRT6A",
+      "label": "Apple Pay Merchant Identity certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "3BQKVH9I2X",
+      "label": "old APNs Production (ios; App ID)"
+     },
+     {
+      "value": "BKLRAVXMGM",
+      "label": "old APNs Development (ios; App ID)"
+     },
+     {
+      "value": "T44PTHVNID",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "DZQUP8189Y",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FGQUP4785Z",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "S5WE21TULA",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FUOY7LWJET",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "749Y1QAGU7",
+      "label": "Mac Development (mac; team)"
+     },
+     {
+      "value": "HXZEUKP0FP",
+      "label": "Mac App Distribution (mac; team)"
+     },
+     {
+      "value": "2PQI8IDXNH",
+      "label": "Mac Installer Distribution (mac; team)"
+     },
+     {
+      "value": "OYVN2GW35E",
+      "label": "Developer ID Installer (mac; team; Account Holder)"
+     },
+     {
+      "value": "W0EURJRMC5",
+      "label": "Developer ID Application (mac; team; Account Holder)"
+     },
+     {
+      "value": "DIVN2GW3XT",
+      "label": "Developer ID Application, presumably the G2 intermediate (mac; team; Account Holder)"
+     },
+     {
+      "value": "CDZ7EMXIZ1",
+      "label": "Mac APNs Production (mac; App ID)"
+     },
+     {
+      "value": "HQ4KP3I34R",
+      "label": "Mac APNs Development (mac; App ID)"
+     }
+    ]
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send certRequestStatusCode=asc"
+   }
+  ],
+  "answer": [
+   "certRequests[].certificateId",
+   "certRequests[].name",
+   "certRequests[].statusString",
+   "certRequests[].dateCreated",
+   "certRequests[].expirationDate",
+   "certRequests[].ownerType",
+   "certRequests[].ownerName",
+   "certRequests[].ownerId",
+   "certRequests[].canDownload",
+   "certRequests[].certificateTypeDisplayId",
+   "certRequests[].certificateType.certificateTypeDisplayId",
+   "certRequests[].serialNumber",
+   "certRequests[].certificateType.name",
+   "certRequests[].certificateType.platform",
+   "certRequests[].certificateType.permissionType",
+   "certRequests[].certificateType.distributionType",
+   "certRequests[].certificateType.ownerType",
+   "certRequests[].certificateType.daysOverlap",
+   "certRequests[].certificateType.maxActive"
+  ],
+  "notes": [
+   "ownerType is team or bundle.",
+   "platform is mac for the Mac certificate types, else ios.",
+   "Also the CSRF primer for the certificate writes."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.create",
+  "ref": "C2",
+  "group": "certificates",
+  "title": "Create a certificate from a CSR",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/certificate/submitCertificateRequest.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "type",
+    "in": "form",
+    "required": true,
+    "note": "type id",
+    "values": [
+     {
+      "value": "83Q87W3TGH",
+      "label": "Apple Development (ios or mac; team)"
+     },
+     {
+      "value": "WXV89964HE",
+      "label": "Apple Distribution (ios or mac; team)"
+     },
+     {
+      "value": "5QPB9NHCEI",
+      "label": "iOS Development (ios; team)"
+     },
+     {
+      "value": "R58UK2EWSO",
+      "label": "iOS Distribution, App Store and Ad Hoc (ios; team)"
+     },
+     {
+      "value": "9RQEK7MSXA",
+      "label": "iOS In-House, Enterprise (ios; team)"
+     },
+     {
+      "value": "LA30L5BJEU",
+      "label": "unnamed generic certificate (ios; binding unknown)"
+     },
+     {
+      "value": "JKG5JZ54H7",
+      "label": "APNs Development (sandbox) SSL (ios; App ID, appIdId)"
+     },
+     {
+      "value": "UPV3DW712I",
+      "label": "APNs Production SSL (ios; App ID)"
+     },
+     {
+      "value": "Y3B2F3TYSI",
+      "label": "Pass Type ID certificate (ios; Pass Type ID)"
+     },
+     {
+      "value": "3T2ZP62QW8",
+      "label": "Website Push ID certificate (ios; Website Push ID, specialIdentifierDisplayId)"
+     },
+     {
+      "value": "E5D663CMZW",
+      "label": "VoIP Services certificate (ios; App ID)"
+     },
+     {
+      "value": "4APLUP237T",
+      "label": "Apple Pay Payment Processing certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "MD8Q2VRT6A",
+      "label": "Apple Pay Merchant Identity certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "3BQKVH9I2X",
+      "label": "old APNs Production (ios; App ID)"
+     },
+     {
+      "value": "BKLRAVXMGM",
+      "label": "old APNs Development (ios; App ID)"
+     },
+     {
+      "value": "T44PTHVNID",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "DZQUP8189Y",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FGQUP4785Z",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "S5WE21TULA",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FUOY7LWJET",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "749Y1QAGU7",
+      "label": "Mac Development (mac; team)"
+     },
+     {
+      "value": "HXZEUKP0FP",
+      "label": "Mac App Distribution (mac; team)"
+     },
+     {
+      "value": "2PQI8IDXNH",
+      "label": "Mac Installer Distribution (mac; team)"
+     },
+     {
+      "value": "OYVN2GW35E",
+      "label": "Developer ID Installer (mac; team; Account Holder)"
+     },
+     {
+      "value": "W0EURJRMC5",
+      "label": "Developer ID Application (mac; team; Account Holder)"
+     },
+     {
+      "value": "DIVN2GW3XT",
+      "label": "Developer ID Application, presumably the G2 intermediate (mac; team; Account Holder)"
+     },
+     {
+      "value": "CDZ7EMXIZ1",
+      "label": "Mac APNs Production (mac; App ID)"
+     },
+     {
+      "value": "HQ4KP3I34R",
+      "label": "Mac APNs Development (mac; App ID)"
+     }
+    ]
+   },
+   {
+    "name": "csrContent",
+    "in": "form",
+    "required": true,
+    "note": "PEM CSR"
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": false,
+    "note": "for push, Pass and Apple Pay certificates"
+   },
+   {
+    "name": "specialIdentifierDisplayId",
+    "in": "form",
+    "required": false,
+    "note": "same value as appIdId; Website Push"
+   }
+  ],
+  "answer": [
+   "certRequest",
+   "certRequest.certificateType.certificateTypeDisplayId"
+  ],
+  "notes": [
+   "Developer ID certificates (type ids W0EURJRMC5, DIVN2GW3XT, OYVN2GW35E) need the Account Holder signed in with the Apple ID; that these are the only such legacy type ids is inferred.",
+   "platform is mac for the Mac certificate types, else ios.",
+   "CSRF pair primed by certificates.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.download",
+  "ref": "C3",
+  "group": "certificates",
+  "title": "Download a certificate's .cer",
+  "method": "GET",
+  "path": "QH65B2/account/{platform}/certificate/downloadCertificateContent.action",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "certificateId",
+    "in": "query",
+    "required": true
+   },
+   {
+    "name": "type",
+    "in": "query",
+    "required": true,
+    "note": "type id",
+    "values": [
+     {
+      "value": "83Q87W3TGH",
+      "label": "Apple Development (ios or mac; team)"
+     },
+     {
+      "value": "WXV89964HE",
+      "label": "Apple Distribution (ios or mac; team)"
+     },
+     {
+      "value": "5QPB9NHCEI",
+      "label": "iOS Development (ios; team)"
+     },
+     {
+      "value": "R58UK2EWSO",
+      "label": "iOS Distribution, App Store and Ad Hoc (ios; team)"
+     },
+     {
+      "value": "9RQEK7MSXA",
+      "label": "iOS In-House, Enterprise (ios; team)"
+     },
+     {
+      "value": "LA30L5BJEU",
+      "label": "unnamed generic certificate (ios; binding unknown)"
+     },
+     {
+      "value": "JKG5JZ54H7",
+      "label": "APNs Development (sandbox) SSL (ios; App ID, appIdId)"
+     },
+     {
+      "value": "UPV3DW712I",
+      "label": "APNs Production SSL (ios; App ID)"
+     },
+     {
+      "value": "Y3B2F3TYSI",
+      "label": "Pass Type ID certificate (ios; Pass Type ID)"
+     },
+     {
+      "value": "3T2ZP62QW8",
+      "label": "Website Push ID certificate (ios; Website Push ID, specialIdentifierDisplayId)"
+     },
+     {
+      "value": "E5D663CMZW",
+      "label": "VoIP Services certificate (ios; App ID)"
+     },
+     {
+      "value": "4APLUP237T",
+      "label": "Apple Pay Payment Processing certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "MD8Q2VRT6A",
+      "label": "Apple Pay Merchant Identity certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "3BQKVH9I2X",
+      "label": "old APNs Production (ios; App ID)"
+     },
+     {
+      "value": "BKLRAVXMGM",
+      "label": "old APNs Development (ios; App ID)"
+     },
+     {
+      "value": "T44PTHVNID",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "DZQUP8189Y",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FGQUP4785Z",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "S5WE21TULA",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FUOY7LWJET",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "749Y1QAGU7",
+      "label": "Mac Development (mac; team)"
+     },
+     {
+      "value": "HXZEUKP0FP",
+      "label": "Mac App Distribution (mac; team)"
+     },
+     {
+      "value": "2PQI8IDXNH",
+      "label": "Mac Installer Distribution (mac; team)"
+     },
+     {
+      "value": "OYVN2GW35E",
+      "label": "Developer ID Installer (mac; team; Account Holder)"
+     },
+     {
+      "value": "W0EURJRMC5",
+      "label": "Developer ID Application (mac; team; Account Holder)"
+     },
+     {
+      "value": "DIVN2GW3XT",
+      "label": "Developer ID Application, presumably the G2 intermediate (mac; team; Account Holder)"
+     },
+     {
+      "value": "CDZ7EMXIZ1",
+      "label": "Mac APNs Production (mac; App ID)"
+     },
+     {
+      "value": "HQ4KP3I34R",
+      "label": "Mac APNs Development (mac; App ID)"
+     }
+    ]
+   }
+  ],
+  "answer": [
+   "body: the DER certificate"
+  ],
+  "notes": [
+   "A JSON envelope with resultString webservice.certificate.downloadNotAllowed means no permission.",
+   "platform is mac for the Mac certificate types, else ios.",
+   "The body is saved to save_to and never returned."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.revoke",
+  "ref": "C4",
+  "group": "certificates",
+  "title": "Revoke a certificate",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/certificate/revokeCertificate.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "certificateId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "type",
+    "in": "form",
+    "required": true,
+    "note": "type id",
+    "values": [
+     {
+      "value": "83Q87W3TGH",
+      "label": "Apple Development (ios or mac; team)"
+     },
+     {
+      "value": "WXV89964HE",
+      "label": "Apple Distribution (ios or mac; team)"
+     },
+     {
+      "value": "5QPB9NHCEI",
+      "label": "iOS Development (ios; team)"
+     },
+     {
+      "value": "R58UK2EWSO",
+      "label": "iOS Distribution, App Store and Ad Hoc (ios; team)"
+     },
+     {
+      "value": "9RQEK7MSXA",
+      "label": "iOS In-House, Enterprise (ios; team)"
+     },
+     {
+      "value": "LA30L5BJEU",
+      "label": "unnamed generic certificate (ios; binding unknown)"
+     },
+     {
+      "value": "JKG5JZ54H7",
+      "label": "APNs Development (sandbox) SSL (ios; App ID, appIdId)"
+     },
+     {
+      "value": "UPV3DW712I",
+      "label": "APNs Production SSL (ios; App ID)"
+     },
+     {
+      "value": "Y3B2F3TYSI",
+      "label": "Pass Type ID certificate (ios; Pass Type ID)"
+     },
+     {
+      "value": "3T2ZP62QW8",
+      "label": "Website Push ID certificate (ios; Website Push ID, specialIdentifierDisplayId)"
+     },
+     {
+      "value": "E5D663CMZW",
+      "label": "VoIP Services certificate (ios; App ID)"
+     },
+     {
+      "value": "4APLUP237T",
+      "label": "Apple Pay Payment Processing certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "MD8Q2VRT6A",
+      "label": "Apple Pay Merchant Identity certificate (ios; Merchant ID)"
+     },
+     {
+      "value": "3BQKVH9I2X",
+      "label": "old APNs Production (ios; App ID)"
+     },
+     {
+      "value": "BKLRAVXMGM",
+      "label": "old APNs Development (ios; App ID)"
+     },
+     {
+      "value": "T44PTHVNID",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "DZQUP8189Y",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FGQUP4785Z",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "S5WE21TULA",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "FUOY7LWJET",
+      "label": "sent by the browser in the list call; meaning unknown to fastlane (ios)"
+     },
+     {
+      "value": "749Y1QAGU7",
+      "label": "Mac Development (mac; team)"
+     },
+     {
+      "value": "HXZEUKP0FP",
+      "label": "Mac App Distribution (mac; team)"
+     },
+     {
+      "value": "2PQI8IDXNH",
+      "label": "Mac Installer Distribution (mac; team)"
+     },
+     {
+      "value": "OYVN2GW35E",
+      "label": "Developer ID Installer (mac; team; Account Holder)"
+     },
+     {
+      "value": "W0EURJRMC5",
+      "label": "Developer ID Application (mac; team; Account Holder)"
+     },
+     {
+      "value": "DIVN2GW3XT",
+      "label": "Developer ID Application, presumably the G2 intermediate (mac; team; Account Holder)"
+     },
+     {
+      "value": "CDZ7EMXIZ1",
+      "label": "Mac APNs Production (mac; App ID)"
+     },
+     {
+      "value": "HQ4KP3I34R",
+      "label": "Mac APNs Development (mac; App ID)"
+     }
+    ]
+   }
+  ],
+  "answer": [
+   "certRequests"
+  ],
+  "notes": [
+   "platform is mac for the Mac certificate types, else ios.",
+   "CSRF pair primed by certificates.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.list",
+  "ref": "D1",
+  "group": "devices",
+  "title": "List devices (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/device/listDevices.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   },
+   {
+    "name": "includeRemovedDevices",
+    "in": "form",
+    "required": false,
+    "note": "true shows disabled devices"
+   },
+   {
+    "name": "deviceClasses",
+    "in": "form",
+    "required": false,
+    "values": [
+     {
+      "value": "iphone",
+      "label": "iphone"
+     },
+     {
+      "value": "ipad",
+      "label": "ipad"
+     },
+     {
+      "value": "ipod",
+      "label": "ipod"
+     },
+     {
+      "value": "watch",
+      "label": "watch"
+     },
+     {
+      "value": "tvOS",
+      "label": "tvOS"
+     }
+    ]
+   }
+  ],
+  "answer": [
+   "devices[].deviceId",
+   "devices[].name",
+   "devices[].deviceNumber",
+   "devices[].devicePlatform",
+   "devices[].status",
+   "devices[].deviceClass",
+   "devices[].model"
+  ],
+  "notes": [
+   "deviceNumber is the UDID; status c is enabled, r is disabled.",
+   "Also the CSRF primer for devices.register."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.register",
+  "ref": "D2",
+  "group": "devices",
+  "title": "Register a device (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/device/addDevices.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "deviceClasses",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "mac",
+      "label": "Mac"
+     },
+     {
+      "value": "iphone",
+      "label": "every other device"
+     }
+    ]
+   },
+   {
+    "name": "deviceNumbers",
+    "in": "form",
+    "required": true,
+    "note": "the UDID"
+   },
+   {
+    "name": "deviceNames",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "register",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "single",
+      "label": "one device"
+     }
+    ]
+   }
+  ],
+  "answer": [
+   "devices[0]",
+   "validationMessages[].validationUserMessage"
+  ],
+  "notes": [
+   "On refusal read validationMessages[].validationUserMessage.",
+   "CSRF pair primed by devices.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.disable",
+  "ref": "D3",
+  "group": "devices",
+  "title": "Disable a device (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/device/deleteDevice.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "deviceId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The answer is not read; the device's status becomes r.",
+   "fastlane does not prime CSRF for this call."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.enable",
+  "ref": "D4",
+  "group": "devices",
+  "title": "Enable a device again (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/device/enableDevice.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "displayId",
+    "in": "form",
+    "required": true,
+    "note": "the deviceId"
+   },
+   {
+    "name": "deviceNumber",
+    "in": "form",
+    "required": true,
+    "note": "the UDID"
+   }
+  ],
+  "answer": [
+   "device"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.list",
+  "ref": "D6",
+  "group": "profiles",
+  "title": "List provisioning profiles (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/profile/listProvisioningProfiles.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false,
+    "note": "1-based page"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "sources send name=asc"
+   },
+   {
+    "name": "includeInactiveProfiles",
+    "in": "form",
+    "required": false,
+    "note": "sources send true"
+   },
+   {
+    "name": "onlyCountLists",
+    "in": "form",
+    "required": false,
+    "note": "sources send true"
+   }
+  ],
+  "answer": [
+   "provisioningProfiles[].provisioningProfileId",
+   "provisioningProfiles[].UUID",
+   "provisioningProfiles[].dateExpire",
+   "provisioningProfiles[].distributionMethod",
+   "provisioningProfiles[].name",
+   "provisioningProfiles[].status",
+   "provisioningProfiles[].type",
+   "provisioningProfiles[].version",
+   "provisioningProfiles[].proProPlatform",
+   "provisioningProfiles[].proProSubPlatform",
+   "provisioningProfiles[].managingApp",
+   "provisioningProfiles[].appId",
+   "provisioningProfiles[].isTemplateProfile",
+   "provisioningProfiles[].template"
+  ],
+  "notes": [
+   "distributionMethod is limited, store, adhoc, inhouse or direct; managingApp Xcode marks an Xcode-managed profile.",
+   "Also the CSRF primer for the profile writes (sources read it with pageSize=1)."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.get",
+  "ref": "D8",
+  "group": "profiles",
+  "title": "Get a provisioning profile's detail (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/profile/getProvisioningProfile.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "provisioningProfileId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "provisioningProfile"
+  ],
+  "notes": [
+   "Adds certificates, devices and template detail."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.create",
+  "ref": "D9",
+  "group": "profiles",
+  "title": "Create a provisioning profile (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/profile/createProvisioningProfile.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "provisioningProfileName",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "distributionType",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "limited",
+      "label": "limited"
+     },
+     {
+      "value": "store",
+      "label": "store"
+     },
+     {
+      "value": "adhoc",
+      "label": "adhoc"
+     },
+     {
+      "value": "inhouse",
+      "label": "inhouse"
+     },
+     {
+      "value": "direct",
+      "label": "direct"
+     }
+    ]
+   },
+   {
+    "name": "certificateIds",
+    "in": "form",
+    "required": true,
+    "note": "comma-joined on regenerate"
+   },
+   {
+    "name": "deviceIds",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "subPlatform",
+    "in": "form",
+    "required": false,
+    "values": [
+     {
+      "value": "tvOS",
+      "label": "tvOS profile"
+     }
+    ]
+   },
+   {
+    "name": "template",
+    "in": "form",
+    "required": false,
+    "note": "entitlement template name, i.e. a managed-capability profile"
+   }
+  ],
+  "answer": [
+   "provisioningProfile"
+  ],
+  "notes": [
+   "CSRF pair primed by profiles.list with pageSize=1."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.download",
+  "ref": "D10",
+  "group": "profiles",
+  "title": "Download a .mobileprovision",
+  "method": "GET",
+  "path": "QH65B2/account/{platform}/profile/downloadProfileContent",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "provisioningProfileId",
+    "in": "query",
+    "required": true
+   }
+  ],
+  "answer": [
+   "body: the profile plist text"
+  ],
+  "notes": [
+   "CSRF pair primed by profiles.list.",
+   "The body is saved to save_to and never returned."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.delete",
+  "ref": "D11",
+  "group": "profiles",
+  "title": "Delete a provisioning profile (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/profile/deleteProvisioningProfile.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "provisioningProfileId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Answers with the envelope only.",
+   "CSRF pair primed by profiles.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.regenerate",
+  "ref": "D12",
+  "group": "profiles",
+  "title": "Repair or regenerate a provisioning profile in place",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/profile/regenProvisioningProfile.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "provisioningProfileId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "provisioningProfileName",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "appIdId",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "distributionType",
+    "in": "form",
+    "required": true,
+    "values": [
+     {
+      "value": "limited",
+      "label": "limited"
+     },
+     {
+      "value": "store",
+      "label": "store"
+     },
+     {
+      "value": "adhoc",
+      "label": "adhoc"
+     },
+     {
+      "value": "inhouse",
+      "label": "inhouse"
+     },
+     {
+      "value": "direct",
+      "label": "direct"
+     }
+    ]
+   },
+   {
+    "name": "certificateIds",
+    "in": "form",
+    "required": true,
+    "note": "comma-joined on regenerate"
+   },
+   {
+    "name": "deviceIds",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "subPlatform",
+    "in": "form",
+    "required": false,
+    "values": [
+     {
+      "value": "tvOS",
+      "label": "tvOS profile"
+     }
+    ]
+   },
+   {
+    "name": "template",
+    "in": "form",
+    "required": false,
+    "note": "entitlement template name, i.e. a managed-capability profile"
+   }
+  ],
+  "answer": [
+   "provisioningProfile"
+  ],
+  "notes": [
+   "Keeps the profile's id; the public API can only delete and recreate.",
+   "CSRF pair primed by profiles.list."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "bundle_ids.list",
+  "ref": "J1",
+  "group": "bundle_ids",
+  "title": "List bundle IDs (App IDs)",
+  "method": "GET",
+  "path": "v1/bundleIds",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[identifier]",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "filter[platform]",
+    "in": "query",
+    "required": false,
+    "note": "sources send IOS,MACOS"
+   },
+   {
+    "name": "include",
+    "in": "query",
+    "required": false,
+    "note": "sources send bundleIdCapabilities"
+   },
+   {
+    "name": "fields[bundleIds]",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "limit",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "sort",
+    "in": "query",
+    "required": false,
+    "note": "sources send name"
+   }
+  ],
+  "answer": [
+   "data[].attributes.identifier",
+   "data[].attributes.name",
+   "data[].attributes.platform",
+   "data[].attributes.seedId",
+   "data[].attributes.bundleType",
+   "data[].relationships.bundleIdCapabilities"
+  ],
+  "notes": [
+   "platform in answers is IOS, MAC_OS, UNIVERSAL or SERVICES."
+  ],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "bundle_ids.get",
+  "ref": "J2",
+  "group": "bundle_ids",
+  "title": "Get one bundle ID with its capability graph",
+  "method": "GET",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the opaque bundleIds resource id"
+   },
+   {
+    "name": "fields[bundleIds]",
+    "in": "query",
+    "required": false,
+    "note": "sources send name,identifier,platform,seedId,wildcard,~permissions.delete,~permissions.edit"
+   },
+   {
+    "name": "include",
+    "in": "query",
+    "required": false,
+    "note": "sources send bundleIdCapabilities,bundleIdCapabilities.capability and its .associatedBundleIds, .appGroups, .merchantIds, .cloudContainers, .certificates, .appConsentBundleId, .macBundleId, .relatedAppConsentBundleIds, .parentBundleId, .mediaSharingProtocolIds"
+   },
+   {
+    "name": "limit[bundleIdCapabilities]",
+    "in": "query",
+    "required": false,
+    "note": "sources send 50"
+   }
+  ],
+  "answer": [
+   "data",
+   "included[].attributes.enabled",
+   "included[].attributes.settings",
+   "included[].attributes.inputs",
+   "included[].relationships.capability",
+   "included[].relationships.appGroups",
+   "included[].relationships.merchantIds",
+   "included[].relationships.cloudContainers",
+   "included[].relationships.appConsentBundleId"
+  ],
+  "notes": [],
+  "status": "observed_live_by_source",
+  "source": [
+   "fastlane",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "bundle_ids.create",
+  "ref": "J3",
+  "group": "bundle_ids",
+  "title": "Create a bundle ID (App ID)",
+  "method": "POST",
+  "path": "v1/bundleIds",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.platform",
+    "in": "json",
+    "required": true,
+    "note": "seen in answers: IOS, MAC_OS, UNIVERSAL"
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.seedId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.attributes.bundleType",
+    "in": "json",
+    "required": false,
+    "note": "App Clip: onDemandInstallCapable"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": false,
+    "note": "App Clip: an ON_DEMAND_INSTALL_CAPABLE entry with relationship parentBundleId"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "bundle_ids.delete",
+  "ref": "J4",
+  "group": "bundle_ids",
+  "title": "Delete a bundle ID (App ID)",
+  "method": "DELETE",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the opaque bundleIds resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "HTTP 204."
+  ],
+  "status": "observed",
+  "source": [
+   "expo",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "bundle_ids.update_capabilities",
+  "ref": "J5",
+  "group": "bundle_ids",
+  "title": "Enable, disable or configure a bundle ID's capabilities",
+  "method": "PATCH",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the opaque bundleIds resource id"
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.seedId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.attributes.permissions",
+    "in": "json",
+    "required": false,
+    "note": "fastlane adds {edit:true, delete:true}"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "[{type:\"bundleIdCapabilities\", attributes:{enabled, settings:[{key, options:[{key, enabled:true}]}]}, relationships:{capability:{data:{type:\"capabilities\", id:<CAPABILITY_TYPE>}}}}]; capability ids: capabilities.create's capabilityType values"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "This is what the portal's Edit App ID screen saves.",
+   "fastlane and Expo send only the changed capability; asc-cli sends the complete current list and treats the PATCH as a wholesale replacement.",
+   "No reliable body: re-read after with bundle_ids.get.",
+   "Settings keys: ICLOUD_VERSION (XCODE_5, XCODE_6), DATA_PROTECTION_PERMISSION_LEVEL (COMPLETE_PROTECTION, PROTECTED_UNLESS_OPEN, PROTECTED_UNTIL_FIRST_USER_AUTH), APPLE_ID_AUTH_APP_CONSENT (PRIMARY_APP_CONSENT), GAME_CENTER_SETTING (GAME_CENTER_MAC, GAME_CENTER_IOS).",
+   "fastlane sends Content-Type application/json; asc-cli and Expo application/vnd.api+json.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "bundle_ids.link_identifiers",
+  "ref": "J6",
+  "group": "bundle_ids",
+  "title": "Link App Groups, iCloud containers or Merchant IDs",
+  "method": "PATCH",
+  "path": "v1/bundleIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the opaque bundleIds resource id"
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIds",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.seedId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.bundleIdCapabilities.data",
+    "in": "json",
+    "required": true,
+    "note": "as bundle_ids.update_capabilities; inside the APP_GROUPS, ICLOUD or APPLE_PAY entry: relationships:{appGroups:{data:[{type:\"appGroups\", id}]}}, cloudContainers:{data:[{type:\"cloudContainers\", id}]}, merchantIds:{data:[{type:\"merchantIds\", id}]}"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "The linked ids are the opaque resource ids.",
+   "Re-read after with bundle_ids.get.",
+   "asc-cli: live acceptance unverified.",
+   "Needs the CSRF pair."
+  ],
+  "status": "observed",
+  "source": [
+   "asc-cli",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.list_for_bundle_id",
+  "ref": "J7",
+  "group": "capabilities",
+  "title": "List a bundle ID's capabilities",
+  "method": "GET",
+  "path": "v1/bundleIds/{id}/bundleIdCapabilities",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the opaque bundleIds resource id"
+   },
+   {
+    "name": "include",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "limit",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "sort",
+    "in": "query",
+    "required": false
+   }
+  ],
+  "answer": [
+   "data[].attributes.capabilityType",
+   "data[].attributes.settings"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.create",
+  "ref": "J8",
+  "group": "capabilities",
+  "title": "Enable a capability on a bundle ID",
+  "method": "POST",
+  "path": "v1/bundleIdCapabilities",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "bundleIdCapabilities",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.capabilityType",
+    "in": "json",
+    "required": true,
+    "note": "capability type id",
+    "values": [
+     {
+      "value": "ACCESS_WIFI_INFORMATION",
+      "label": "fastlane list"
+     },
+     {
+      "value": "APP_ATTEST",
+      "label": "fastlane list"
+     },
+     {
+      "value": "APP_GROUPS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "APPLE_PAY",
+      "label": "fastlane list"
+     },
+     {
+      "value": "ASSOCIATED_DOMAINS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "AUTOFILL_CREDENTIAL_PROVIDER",
+      "label": "fastlane list"
+     },
+     {
+      "value": "CLASSKIT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "ICLOUD",
+      "label": "fastlane list"
+     },
+     {
+      "value": "USERNOTIFICATIONS_COMMUNICATION",
+      "label": "fastlane list"
+     },
+     {
+      "value": "NETWORK_CUSTOM_PROTOCOL",
+      "label": "fastlane list"
+     },
+     {
+      "value": "DATA_PROTECTION",
+      "label": "fastlane list"
+     },
+     {
+      "value": "EXTENDED_VIRTUAL_ADDRESSING",
+      "label": "fastlane list"
+     },
+     {
+      "value": "FAMILY_CONTROLS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "FILEPROVIDER_TESTINGMODE",
+      "label": "fastlane list"
+     },
+     {
+      "value": "FONT_INSTALLATION",
+      "label": "fastlane list"
+     },
+     {
+      "value": "GAME_CENTER",
+      "label": "fastlane list"
+     },
+     {
+      "value": "GROUP_ACTIVITIES",
+      "label": "fastlane list"
+     },
+     {
+      "value": "HEALTHKIT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "HEALTHKIT_RECALIBRATE_ESTIMATES",
+      "label": "fastlane list"
+     },
+     {
+      "value": "HLS_INTERSTITIAL_PREVIEW",
+      "label": "fastlane list"
+     },
+     {
+      "value": "HOMEKIT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "HOT_SPOT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "IN_APP_PURCHASE",
+      "label": "fastlane list"
+     },
+     {
+      "value": "INTER_APP_AUDIO",
+      "label": "fastlane list"
+     },
+     {
+      "value": "COREMEDIA_HLS_LOW_LATENCY",
+      "label": "fastlane list"
+     },
+     {
+      "value": "MDM_MANAGED_ASSOCIATED_DOMAINS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "MAPS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "MULTIPATH",
+      "label": "fastlane list"
+     },
+     {
+      "value": "NETWORK_EXTENSIONS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "NFC_TAG_READING",
+      "label": "fastlane list"
+     },
+     {
+      "value": "PERSONAL_VPN",
+      "label": "fastlane list"
+     },
+     {
+      "value": "PUSH_NOTIFICATIONS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "APPLE_ID_AUTH",
+      "label": "fastlane list"
+     },
+     {
+      "value": "SIRIKIT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "SYSTEM_EXTENSION_INSTALL",
+      "label": "fastlane list"
+     },
+     {
+      "value": "USERNOTIFICATIONS_TIMESENSITIVE",
+      "label": "fastlane list"
+     },
+     {
+      "value": "USER_MANAGEMENT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "WALLET",
+      "label": "fastlane list"
+     },
+     {
+      "value": "WIRELESS_ACCESSORY_CONFIGURATION",
+      "label": "fastlane list"
+     },
+     {
+      "value": "CARPLAY_PLAYABLE_CONTENT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "CARPLAY_MESSAGING",
+      "label": "fastlane list"
+     },
+     {
+      "value": "CARPLAY_NAVIGATION",
+      "label": "fastlane list"
+     },
+     {
+      "value": "CARPLAY_VOIP",
+      "label": "fastlane list"
+     },
+     {
+      "value": "CRITICAL_ALERTS",
+      "label": "fastlane list"
+     },
+     {
+      "value": "HOTSPOT_HELPER_MANAGED",
+      "label": "fastlane list"
+     },
+     {
+      "value": "DRIVERKIT",
+      "label": "fastlane list; also DRIVERKIT_* variants"
+     },
+     {
+      "value": "IPAD_CAMERA_MULTITASKING",
+      "label": "fastlane list"
+     },
+     {
+      "value": "SFUNIVERSALLINK_API",
+      "label": "fastlane list"
+     },
+     {
+      "value": "VP9_DECODER",
+      "label": "fastlane list"
+     },
+     {
+      "value": "MUSIC_KIT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "SHAZAM_KIT",
+      "label": "fastlane list"
+     },
+     {
+      "value": "MARZIPAN",
+      "label": "fastlane list"
+     },
+     {
+      "value": "DECLARED_AGE_RANGE",
+      "label": "fastlane list"
+     },
+     {
+      "value": "PRIVATE_CLOUD_COMPUTE",
+      "label": "portal-only, added by asc-cli"
+     },
+     {
+      "value": "ON_DEMAND_INSTALL_CAPABLE",
+      "label": "added by Expo"
+     },
+     {
+      "value": "ENABLED_FOR_MAC",
+      "label": "added by Expo"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.settings",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.relationships.bundleId.data",
+    "in": "json",
+    "required": true,
+    "note": "{type:\"bundleIds\", id}"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Settings keys: ICLOUD_VERSION (XCODE_5, XCODE_6), DATA_PROTECTION_PERMISSION_LEVEL (COMPLETE_PROTECTION, PROTECTED_UNLESS_OPEN, PROTECTED_UNTIL_FIRST_USER_AUTH), APPLE_ID_AUTH_APP_CONSENT (PRIMARY_APP_CONSENT), GAME_CENTER_SETTING (GAME_CENTER_MAC, GAME_CENTER_IOS)."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.delete",
+  "ref": "J9",
+  "group": "capabilities",
+  "title": "Disable a capability of a bundle ID",
+  "method": "DELETE",
+  "path": "v1/bundleIdCapabilities/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "<bundleId id>_<CAPABILITY_TYPE>"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "HTTP 204."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.list",
+  "ref": "J10",
+  "group": "capabilities",
+  "title": "Capability catalog",
+  "method": "GET",
+  "path": "v1/capabilities",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[bundleId]",
+    "in": "query",
+    "required": false,
+    "note": "fastlane: the bundle ID's resource id"
+   },
+   {
+    "name": "filter[capabilityType]",
+    "in": "query",
+    "required": false,
+    "note": "asc-cli sends capability,service"
+   },
+   {
+    "name": "filter[includeRequestable]",
+    "in": "query",
+    "required": false,
+    "note": "asc-cli sends true"
+   },
+   {
+    "name": "filter[referenceType]",
+    "in": "query",
+    "required": false,
+    "note": "asc-cli sends websitepushId"
+   }
+  ],
+  "answer": [
+   "data[].id",
+   "data[].attributes.name",
+   "data[].attributes.description",
+   "data[].attributes.entitlement",
+   "data[].attributes.isPublic",
+   "data[].attributes.editable",
+   "data[].attributes.canRequestFromPortal",
+   "data[].attributes.enabledByDefault"
+  ],
+  "notes": [
+   "data[].id is the capability type.",
+   "canRequestFromPortal tells which capabilities the Capability Requests tab would offer; no source shows how a request is filed."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "asc-cli"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.list_v1",
+  "ref": "J11",
+  "group": "certificates",
+  "title": "List certificates (JSON:API)",
+  "method": "GET",
+  "path": "v1/certificates",
+  "wire": "v1",
+  "read": true,
+  "params": [],
+  "answer": [
+   "attributes.certificateContent",
+   "attributes.displayName",
+   "attributes.expirationDate",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.serialNumber",
+   "attributes.certificateType",
+   "attributes.requesterEmail",
+   "attributes.requesterFirstName",
+   "attributes.requesterLastName"
+  ],
+  "notes": [
+   "certificateContent is base64 DER."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.get_v1",
+  "ref": "J11",
+  "group": "certificates",
+  "title": "Get one certificate (JSON:API)",
+  "method": "GET",
+  "path": "v1/certificates/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [
+   "attributes.certificateContent",
+   "attributes.displayName",
+   "attributes.expirationDate",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.serialNumber",
+   "attributes.certificateType",
+   "attributes.requesterEmail",
+   "attributes.requesterFirstName",
+   "attributes.requesterLastName"
+  ],
+  "notes": [
+   "certificateContent is base64 DER."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.create_v1",
+  "ref": "J11",
+  "group": "certificates",
+  "title": "Create a certificate from a CSR (JSON:API)",
+  "method": "POST",
+  "path": "v1/certificates",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "certificates",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.csrContent",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.certificateType",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "DEVELOPMENT",
+      "label": "DEVELOPMENT"
+     },
+     {
+      "value": "DISTRIBUTION",
+      "label": "DISTRIBUTION"
+     },
+     {
+      "value": "IOS_DEVELOPMENT",
+      "label": "IOS_DEVELOPMENT"
+     },
+     {
+      "value": "IOS_DISTRIBUTION",
+      "label": "IOS_DISTRIBUTION"
+     },
+     {
+      "value": "MAC_APP_DEVELOPMENT",
+      "label": "MAC_APP_DEVELOPMENT"
+     },
+     {
+      "value": "MAC_APP_DISTRIBUTION",
+      "label": "MAC_APP_DISTRIBUTION"
+     },
+     {
+      "value": "MAC_INSTALLER_DISTRIBUTION",
+      "label": "MAC_INSTALLER_DISTRIBUTION"
+     },
+     {
+      "value": "DEVELOPER_ID_KEXT",
+      "label": "DEVELOPER_ID_KEXT"
+     },
+     {
+      "value": "DEVELOPER_ID_APPLICATION",
+      "label": "DEVELOPER_ID_APPLICATION"
+     },
+     {
+      "value": "DEVELOPER_ID_APPLICATION_G2",
+      "label": "DEVELOPER_ID_APPLICATION_G2"
+     },
+     {
+      "value": "DEVELOPER_ID_INSTALLER",
+      "label": "web session only"
+     },
+     {
+      "value": "APPLE_PUSH_SERVICES",
+      "label": "Expo"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   }
+  ],
+  "answer": [
+   "attributes.certificateContent",
+   "attributes.displayName",
+   "attributes.expirationDate",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.serialNumber",
+   "attributes.certificateType",
+   "attributes.requesterEmail",
+   "attributes.requesterFirstName",
+   "attributes.requesterLastName"
+  ],
+  "notes": [
+   "DEVELOPER_ID_INSTALLER is reachable only with the Apple ID web session, not with an API key.",
+   "Renewing Developer ID certificates needs the Account Holder."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.delete_v1",
+  "ref": "J11",
+  "group": "certificates",
+  "title": "Delete (revoke) a certificate (JSON:API)",
+  "method": "DELETE",
+  "path": "v1/certificates/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.list_for_profile",
+  "ref": "J11",
+  "group": "certificates",
+  "title": "List a profile's certificates (JSON:API)",
+  "method": "GET",
+  "path": "v1/profiles/{id}/certificates",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the profile's resource id"
+   }
+  ],
+  "answer": [
+   "attributes.certificateContent",
+   "attributes.displayName",
+   "attributes.expirationDate",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.serialNumber",
+   "attributes.certificateType",
+   "attributes.requesterEmail",
+   "attributes.requesterFirstName",
+   "attributes.requesterLastName"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.list_v1",
+  "ref": "J12",
+  "group": "devices",
+  "title": "List devices (JSON:API)",
+  "method": "GET",
+  "path": "v1/devices",
+  "wire": "v1",
+  "read": true,
+  "params": [],
+  "answer": [
+   "attributes.deviceClass",
+   "attributes.model",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.status",
+   "attributes.udid",
+   "attributes.addedDate"
+  ],
+  "notes": [
+   "status is ENABLED or DISABLED."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.register_v1",
+  "ref": "J12",
+  "group": "devices",
+  "title": "Register a device (JSON:API)",
+  "method": "POST",
+  "path": "v1/devices",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "devices",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.platform",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.udid",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   }
+  ],
+  "answer": [
+   "attributes.deviceClass",
+   "attributes.model",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.status",
+   "attributes.udid",
+   "attributes.addedDate"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.list_for_profile",
+  "ref": "J12",
+  "group": "devices",
+  "title": "List a profile's devices (JSON:API)",
+  "method": "GET",
+  "path": "v1/profiles/{id}/devices",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the profile's resource id"
+   }
+  ],
+  "answer": [
+   "attributes.deviceClass",
+   "attributes.model",
+   "attributes.name",
+   "attributes.platform",
+   "attributes.status",
+   "attributes.udid",
+   "attributes.addedDate"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.update",
+  "ref": "J13",
+  "group": "devices",
+  "title": "Rename, enable or disable a device (JSON:API)",
+  "method": "PATCH",
+  "path": "v1/devices/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "devices",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": false
+   },
+   {
+    "name": "data.attributes.status",
+    "in": "json",
+    "required": false,
+    "values": [
+     {
+      "value": "ENABLED",
+      "label": "enabled"
+     },
+     {
+      "value": "DISABLED",
+      "label": "disabled"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": false,
+    "note": "fastlane's web-session client adds none to a PATCH body; whether the portal accepts the call without it is not shown (inferred)"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "The legacy API has no rename call in any source; this is the only one.",
+   "fastlane sends Content-Type application/json."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.list_v1",
+  "ref": "J14",
+  "group": "profiles",
+  "title": "List provisioning profiles (JSON:API)",
+  "method": "GET",
+  "path": "v1/profiles",
+  "wire": "v1",
+  "read": true,
+  "params": [],
+  "answer": [
+   "attributes.name",
+   "attributes.platform",
+   "attributes.profileContent",
+   "attributes.uuid",
+   "attributes.createdDate",
+   "attributes.profileState",
+   "attributes.profileType",
+   "attributes.expirationDate",
+   "relationships.bundleId",
+   "relationships.certificates",
+   "relationships.devices"
+  ],
+  "notes": [
+   "profileContent is base64; profileState is ACTIVE or INVALID."
+  ],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.create_v1",
+  "ref": "J14",
+  "group": "profiles",
+  "title": "Create a provisioning profile (JSON:API)",
+  "method": "POST",
+  "path": "v1/profiles",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "profiles",
+      "label": "fixed resource type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.profileType",
+    "in": "json",
+    "required": true,
+    "note": "web-session-only types: MAC_APP_INHOUSE, MAC_CATALYST_APP_INHOUSE"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true,
+    "note": "the 10-character developer team id; a v1 write carries it here, the tool does not add it"
+   },
+   {
+    "name": "data.attributes.isOfflineProfile",
+    "in": "json",
+    "required": false,
+    "note": "web session only"
+   },
+   {
+    "name": "data.relationships.bundleId.data",
+    "in": "json",
+    "required": true,
+    "note": "{type:\"bundleIds\", id}"
+   },
+   {
+    "name": "data.relationships.certificates.data",
+    "in": "json",
+    "required": true,
+    "note": "[{type:\"certificates\", id}]"
+   },
+   {
+    "name": "data.relationships.devices.data",
+    "in": "json",
+    "required": true,
+    "note": "[{type:\"devices\", id}]"
+   }
+  ],
+  "answer": [
+   "attributes.name",
+   "attributes.platform",
+   "attributes.profileContent",
+   "attributes.uuid",
+   "attributes.createdDate",
+   "attributes.profileState",
+   "attributes.profileType",
+   "attributes.expirationDate",
+   "relationships.bundleId",
+   "relationships.certificates",
+   "relationships.devices"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.delete_v1",
+  "ref": "J14",
+  "group": "profiles",
+  "title": "Delete a provisioning profile (JSON:API)",
+  "method": "DELETE",
+  "path": "v1/profiles/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the resource id"
+   }
+  ],
+  "answer": [],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.get_bundle_id",
+  "ref": "J14",
+  "group": "profiles",
+  "title": "Get a profile's bundle ID (JSON:API)",
+  "method": "GET",
+  "path": "v1/profiles/{id}/bundleId",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the profile's resource id"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.list_for_bundle_id",
+  "ref": "J14",
+  "group": "profiles",
+  "title": "List a bundle ID's profiles (JSON:API)",
+  "method": "GET",
+  "path": "v1/bundleIds/{id}/profiles",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the opaque bundleIds resource id"
+   }
+  ],
+  "answer": [
+   "attributes.name",
+   "attributes.platform",
+   "attributes.profileContent",
+   "attributes.uuid",
+   "attributes.createdDate",
+   "attributes.profileState",
+   "attributes.profileType",
+   "attributes.expirationDate",
+   "relationships.bundleId",
+   "relationships.certificates",
+   "relationships.devices"
+  ],
+  "notes": [],
+  "status": "observed",
+  "source": [
+   "fastlane",
+   "expo"
+  ],
+  "verified": ""
+ }
+]

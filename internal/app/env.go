@@ -212,6 +212,7 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 		portal *portalClient
 		dev    *devPortalClient
 		router *devPortalRouter
+		site   *devSiteClient
 	)
 	if src != nil {
 		portal = newPortalClient(src, portalBaseURL, version)
@@ -220,6 +221,9 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 		dev = newDevPortalClient(src, devPortalBaseURL, version)
 		dev.SetAllowWrites(r.Profile.AllowWrites)
 		env.DevPortal = dev
+		site = newDevSiteClient(dev)
+		site.SetAllowWrites(r.Profile.AllowWrites)
+		env.DevSite = site
 	}
 	// With an API key the developer portal goes key first and falls back to
 	// the web session (when there is one) where Apple refuses the key.
@@ -248,6 +252,9 @@ func newEnv(ctx context.Context, r *config.Resolved, version, root, transport st
 			router.SetAllowWrites(on)
 		} else if dev != nil {
 			dev.SetAllowWrites(on)
+		}
+		if site != nil {
+			site.SetAllowWrites(on)
 		}
 	}
 	return env, nil

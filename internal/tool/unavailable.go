@@ -110,13 +110,15 @@ func (noFetcher) Fetch(context.Context, string, string, http.Header, io.Reader, 
 	return nil, unavail("fetcher")
 }
 
-func (noFiles) Resolve(string) (string, error)              { return "", unavail("file access") }
-func (noFiles) ReadFile(string) ([]byte, error)             { return nil, unavail("file access") }
-func (noFiles) WriteFile(string, []byte, fs.FileMode) error { return unavail("file access") }
-func (noFiles) Open(string) (*os.File, error)               { return nil, unavail("file access") }
-func (noFiles) Stat(string) (fs.FileInfo, error)            { return nil, unavail("file access") }
-func (noFiles) WalkDir(string, fs.WalkDirFunc) error        { return unavail("file access") }
-func (noFiles) Rename(string, string) error                 { return unavail("file access") }
+func (noFiles) Resolve(string) (string, error)                 { return "", unavail("file access") }
+func (noFiles) ReadFile(string) ([]byte, error)                { return nil, unavail("file access") }
+func (noFiles) WriteFile(string, []byte, fs.FileMode) error    { return unavail("file access") }
+func (noFiles) WriteNewFile(string, []byte, fs.FileMode) error { return unavail("file access") }
+func (noFiles) Open(string) (*os.File, error)                  { return nil, unavail("file access") }
+
+func (noFiles) Stat(string) (fs.FileInfo, error)     { return nil, unavail("file access") }
+func (noFiles) WalkDir(string, fs.WalkDirFunc) error { return unavail("file access") }
+func (noFiles) Rename(string, string) error          { return unavail("file access") }
 
 func (noArtifacts) Put(context.Context, string, string, []byte) (Link, error) {
 	return Link{}, unavail("artifact store")

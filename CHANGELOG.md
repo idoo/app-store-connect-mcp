@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+### Added
+
+- `developer` toolset (opt-in, Apple ID web session): the Apple Developer account site, developer.apple.com, beyond signing. `developer_api_get` reads any `services-account` endpoint (v1 JSON:API GETs, legacy `QH65B2/account/...` reads), refusing anything that isn't a read. `developer_api_request` sends any other call there after a preview, `confirm:true` and your approval, once; a download needs `save_to`, a new file under the project root written 0600, and its body is never returned. `developer_page_get` reads an `account/` or `contact/` page: title, text paged by `offset`, links and forms with their fields, never a hidden value, and says when a page builds itself in the browser. `developer_form_submit` fills one of a page's forms, previews every visible value (hidden fields by name only), and with `plan_id` sends it once after your approval, with fresh anti-forgery tokens; it reads a redirect inside the site once and says when Apple shows the form again. `developer_api_search` and `developer_api_describe` find the site's 105 known operations (keys, identifiers, certificates, devices, profiles, capabilities) in a built-in catalog from fastlane, asc-cli and expo, marked as not verified live, and give the ready call for `developer_api_get` or `developer_api_request`; they never contact Apple. `team_id` defaults to the API key's team.
+- What the `developer` tools show and keep: a preview carries everything that is sent, uncut (the whole JSON body or form, the action with its query, and a hidden field's value when the call set it; the page's own hidden and prefilled password values by name only), and a prompt too large to show is refused, not shortened. Every string of Apple's answers is third-party data unless it is a single token (an id, a date, a URL). Page redirects are followed only inside `account/` and `contact/`; a write answered with something that is not JSON is reported as outcome unknown and never sent again; a forbidden page does not end the session; `save_to` never replaces a file.
+- Agent skill `app-store-connect-mcp-developer` (`app-store-connect-mcp skills install`): when to use the developer site instead of the signing tools, how to read a page or a known call, how to send a change or one of Apple's request forms, and what never to ask the user for.
+
 ## [0.27.0] - 2026-11-22
 
 ### Added

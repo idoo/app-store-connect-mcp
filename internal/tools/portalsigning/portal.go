@@ -103,25 +103,8 @@ func resolveBundle(ctx context.Context, env *tool.Env, ref string) (bundleRef, e
 // prefix (seed id) shared by the bundle IDs. Without bundle IDs it reads
 // one bundle ID of the API key's team.
 func resolveTeam(ctx context.Context, env *tool.Env, arg string, bundles []bundleRef) (string, error) {
-	if arg = strings.TrimSpace(arg); arg != "" {
-		if !teamRE.MatchString(arg) {
-			return "", tool.InvalidArgs("team_id %q is not a 10-character team id", tool.SanitizeText(arg))
-		}
-		return arg, nil
-	}
-	if len(bundles) == 0 {
-		resp, err := env.ASC.Do(ctx, tool.Request{
-			Method: http.MethodGet, Path: "/v1/bundleIds",
-			Query: url.Values{"fields[bundleIds]": {"identifier,seedId"}, "limit": {"1"}},
-		})
-		if err != nil {
-			return "", fmt.Errorf("find the team (pass team_id to skip): %w", err)
-		}
-		r, ok := resp.First()
-		if !ok {
-			return "", tool.InvalidArgs("the team has no bundle IDs to read its team id from; pass team_id")
-		}
-		bundles = []bundleRef{bundleFromResource(r)}
+	if strings.TrimSpace(arg) != "" || len(bundles) == 0 {
+		return tool.ResolveDevTeam(ctx, env, arg)
 	}
 	seeds := map[string]bool{}
 	for _, b := range bundles {

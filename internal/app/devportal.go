@@ -77,6 +77,8 @@ type devPortalRequest struct {
 	contentType string
 	write       bool
 	payload     []byte
+	accept      string // Accept header, "" for application/json
+	referer     string // Referer header, "" for none
 }
 
 // devPortalPathOK reports whether p is a clean relative path: no query,
@@ -285,7 +287,14 @@ func (c *devPortalClient) send(ctx context.Context, r devPortalRequest, u string
 	if err := c.p.src.Authorize(ctx, req); err != nil {
 		return 0, nil, nil, err
 	}
-	req.Header.Set("Accept", "application/json")
+	accept := r.accept
+	if accept == "" {
+		accept = "application/json"
+	}
+	req.Header.Set("Accept", accept)
+	if r.referer != "" {
+		req.Header.Set("Referer", r.referer)
+	}
 	req.Header.Set("User-Agent", c.p.ua)
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	if r.payload != nil {
@@ -303,14 +312,22 @@ func (c *devPortalClient) send(ctx context.Context, r devPortalRequest, u string
 	return c.exchange(ctx, req)
 }
 
+// hasCSRF reports whether a csrf pair is held.
+func (c *devPortalClient) hasCSRF() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.csrf != ""
+}
+
 // exchange runs req without following redirects, keeps rotated cookies and
-// csrf tokens, and returns the bounded body.
+// csrf tokens, and returns the bounded body. A failure after the request
+// left is a sentError.
 func (c *devPortalClient) exchange(ctx context.Context, req *http.Request) (int, http.Header, []byte, error) {
 	rctx, cancel := context.WithTimeout(ctx, asc.DefaultRequestTimeout)
 	defer cancel()
 	resp, err := c.p.hc.Do(req.WithContext(rctx))
 	if err != nil {
-		return 0, nil, nil, err
+		return 0, nil, nil, sentError{err}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	c.p.src.Observe(resp)
@@ -321,10 +338,10 @@ func (c *devPortalClient) exchange(ctx context.Context, req *http.Request) (int,
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, portalMaxBody+1))
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("read body: %w", err)
+		return 0, nil, nil, sentError{fmt.Errorf("read body: %w", err)}
 	}
 	if len(data) > portalMaxBody {
-		return 0, nil, nil, fmt.Errorf("response exceeds %d MiB", portalMaxBody>>20)
+		return 0, nil, nil, sentError{fmt.Errorf("response exceeds %d MiB", portalMaxBody>>20)}
 	}
 	return resp.StatusCode, resp.Header, data, nil
 }
@@ -354,16 +371,27 @@ func (c *devPortalClient) bootstrap(ctx context.Context) error {
 		if status < 300 || status >= 400 {
 			return nil
 		}
-		loc, err := req.URL.Parse(header.Get("Location"))
-		if err != nil || (loc.Scheme != "https" && loc.Scheme != req.URL.Scheme) {
-			return errors.New("bootstrap: bad redirect")
-		}
-		if host := loc.Hostname(); host != req.URL.Hostname() && host != "developer.apple.com" && host != "idmsa.apple.com" {
-			return errors.New("bootstrap: redirect off the developer site")
+		loc, err := devPortalHop(req.URL, header.Get("Location"))
+		if err != nil {
+			return fmt.Errorf("bootstrap: %w", err)
 		}
 		next = loc.String()
 	}
 	return errors.New("bootstrap: too many redirects")
+}
+
+// devPortalHop resolves a redirect's Location against from and allows it
+// only over https (or from's own scheme) and only to from's host, the
+// developer site or Apple's sign-in host.
+func devPortalHop(from *url.URL, location string) (*url.URL, error) {
+	loc, err := from.Parse(location)
+	if err != nil || (loc.Scheme != "https" && loc.Scheme != from.Scheme) {
+		return nil, errors.New("bad redirect")
+	}
+	if host := loc.Hostname(); host != from.Hostname() && host != "developer.apple.com" && host != devSiteSignInHost {
+		return nil, errors.New("redirect off the developer site")
+	}
+	return loc, nil
 }
 
 var _ tool.DevPortal = (*devPortalClient)(nil)

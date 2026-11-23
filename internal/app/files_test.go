@@ -118,6 +118,41 @@ func TestFilesWriteReadWalk(t *testing.T) {
 	}
 }
 
+func TestFilesWriteNewFileNeverReplaces(t *testing.T) {
+	f, base := newTestFiles(t)
+	if err := f.WriteNewFile("keys/a.p8", []byte("first"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := f.Stat("keys/a.p8"); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
+		t.Fatalf("stat = %v, %v", fi, err)
+	}
+	if err := f.WriteNewFile("keys/a.p8", []byte("second"), 0o600); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("existing file: err = %v, want fs.ErrExist", err)
+	}
+	if b, err := f.ReadFile("keys/a.p8"); err != nil || string(b) != "first" {
+		t.Fatalf("file = %q, %v", b, err)
+	}
+	if runtime.GOOS == "windows" {
+		return // symlinks need a privilege there
+	}
+	// A symlink at the name, dangling or to a file outside the root, is not written through.
+	outside := filepath.Join(base, "secret.txt")
+	for name, to := range map[string]string{"dangling": filepath.Join(base, "nowhere"), "outside": outside} {
+		if err := os.Symlink(to, filepath.Join(base, "root", name)); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.WriteNewFile(name, []byte("x"), 0o600); err == nil {
+			t.Errorf("%s symlink: written", name)
+		}
+	}
+	if b, _ := os.ReadFile(outside); string(b) != "secret" {
+		t.Errorf("file outside the root = %q", b)
+	}
+	if _, err := os.Lstat(filepath.Join(base, "nowhere")); err == nil {
+		t.Error("the dangling symlink's target was created")
+	}
+}
+
 func TestDefaultRoot(t *testing.T) {
 	base := t.TempDir()
 	deep := filepath.Join(base, "repo", "a", "b")

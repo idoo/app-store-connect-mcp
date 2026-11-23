@@ -198,6 +198,40 @@ func (f *Files) WriteFile(p string, data []byte, perm fs.FileMode) error {
 	return nil
 }
 
+// WriteNewFile writes data to a file that must not exist yet (an error
+// matching [fs.ErrExist] otherwise, also for a symbolic link there),
+// creating parent directories. Nothing is ever replaced. perm 0 means 0644.
+func (f *Files) WriteNewFile(p string, data []byte, perm fs.FileMode) error {
+	rel, err := f.rel(p)
+	if err != nil {
+		return err
+	}
+	if perm == 0 {
+		perm = 0o644
+	}
+	if err := f.r.MkdirAll(filepath.Dir(rel), 0o750); err != nil {
+		return fmt.Errorf("files: %w", err)
+	}
+	fh, err := f.r.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return fmt.Errorf("files: %w", err)
+	}
+	if _, err = fh.Write(data); err == nil {
+		err = fh.Chmod(perm)
+	}
+	if err == nil {
+		err = fh.Sync()
+	}
+	if cerr := fh.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = f.r.Remove(rel)
+		return fmt.Errorf("files: write %q: %w", p, err)
+	}
+	return nil
+}
+
 // Open opens a confined file for reading. A path whose last element is a
 // symbolic link is refused with [tool.ErrSymlink].
 func (f *Files) Open(p string) (*os.File, error) {

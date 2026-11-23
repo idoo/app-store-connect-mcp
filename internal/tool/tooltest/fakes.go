@@ -265,6 +265,27 @@ func (f *FakeFiles) WriteFile(path string, data []byte, perm fs.FileMode) error 
 	return os.WriteFile(p, data, perm)
 }
 
+// WriteNewFile implements tool.Files: an existing path fails with
+// [fs.ErrExist].
+func (f *FakeFiles) WriteNewFile(path string, data []byte, perm fs.FileMode) error {
+	p, err := f.Resolve(path)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	fh, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm) //nolint:gosec // confined by Resolve
+	if err != nil {
+		return err
+	}
+	_, err = fh.Write(data)
+	if cerr := fh.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
 // Open implements tool.Files, refusing a symlinked last element like the
 // real Files.
 func (f *FakeFiles) Open(path string) (*os.File, error) {

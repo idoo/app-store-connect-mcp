@@ -5,7 +5,7 @@ import "slices"
 // Toolset groups tools that are enabled or disabled together.
 type Toolset string
 
-// Toolset names. The first six are enabled by default.
+// Toolset names. The first seven are enabled by default.
 const (
 	Core         Toolset = "core"
 	Release      Toolset = "release"
@@ -26,12 +26,16 @@ const (
 	// Web holds Apple ID web-session tools (create app records, App
 	// Privacy). They need an Apple ID sign-in (`web login` or web_login).
 	Web Toolset = "web"
+	// Developer holds the Apple Developer account site (developer.apple.com):
+	// its services-account API, its pages and their request forms. Same
+	// Apple ID sign-in as Web.
+	Developer Toolset = "developer"
 )
 
 // AllToolsets lists every toolset in display order.
 var AllToolsets = []Toolset{
 	Core, Release, TestFlight, Metadata, Reviews, Reports,
-	Screenshots, Uploads, Monetization, Signing, XcodeCloud, Webhooks, Admin, Store, Insights, Library, Web,
+	Screenshots, Uploads, Monetization, Signing, XcodeCloud, Webhooks, Admin, Store, Insights, Library, Web, Developer,
 }
 
 // DefaultToolsets lists the toolsets enabled when no selection is given.

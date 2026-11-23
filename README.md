@@ -114,6 +114,10 @@ No screen? `web login --password` keeps the old terminal flow (Apple ID, passwor
 
 Then turn the toolset on (`--toolsets +web`) and ask for `apps_create`, `privacy_get`, `privacy_plan`, `privacy_apply`, `medical_device_get` and `medical_device_set` (the "not a regulated medical device" declaration Apple wants from Health & Fitness and Medical apps), `release_review_messages` (what App Review wrote about a rejection) and `release_review_reply` (answer App Review in the Resolution Center). The agent never sees your Apple ID, password or cookies: the cookies stay in your Keychain and the password isn't stored anywhere. Creating an app, publishing App Privacy, declaring the medical device status and replying to App Review each wait for your yes. Details in [docs/CONFIG.md](docs/CONFIG.md#toolsets).
 
+### The developer account site
+
+Keys, Apple's request forms (an entitlement request, say) and the rest of developer.apple.com's account pages have no API either. The opt-in `developer` toolset (`--toolsets +developer`) reaches them with the same `web login`: `developer_api_get` reads any of the site's own calls, `developer_page_get` reads an account or contact page with its forms, and `developer_api_request` and `developer_form_submit` send a change or a form once you've seen exactly what goes out and said yes. Hidden form tokens and downloaded keys never reach the agent: a key goes straight into a file you name. Details in [docs/SAFETY.md](docs/SAFETY.md).
+
 ## License
 
 [MIT](LICENSE) © Ivan Verevkin

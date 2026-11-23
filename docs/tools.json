@@ -972,6 +972,315 @@
     "confirm": "none"
   },
   {
+    "name": "developer_api_describe",
+    "toolset": "developer",
+    "class": "R",
+    "title": "Describe a developer account operation",
+    "description": "One known developer account operation: method, path, params with known values, answer keys, notes, and the ready developer_api_get or developer_api_request call. From open-source clients, not verified live.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Describe a developer account operation"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "fills {id}",
+          "type": "string"
+        },
+        "operation": {
+          "description": "id (keys.revoke), row ref (K6) or METHOD path",
+          "type": "string"
+        },
+        "portal_platform": {
+          "description": "fills {platform} in the path; default ios",
+          "enum": [
+            "ios",
+            "mac"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "developer_api_get",
+    "toolset": "developer",
+    "class": "R",
+    "title": "Read any developer account API",
+    "description": "Read any developer.apple.com services-account endpoint with the Apple ID sign-in (web_login): v1 JSON:API GETs (query) or legacy reads (form or json). Answers are Apple's JSON as third-party data. Writes and downloads: developer_api_request.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Read any developer account API"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "form": {
+          "additionalProperties": true,
+          "description": "legacy read's form fields",
+          "type": "object"
+        },
+        "json": {
+          "additionalProperties": true,
+          "description": "legacy JSON read's body; teamId added when absent",
+          "type": "object"
+        },
+        "path": {
+          "description": "relative to services-account/, e.g. v1/bundleIds or QH65B2/account/auth/key/list",
+          "type": "string"
+        },
+        "query": {
+          "additionalProperties": true,
+          "description": "v1 read query; values a string or a list of strings",
+          "type": "object"
+        },
+        "team_id": {
+          "description": "developer team id; default the API key's team",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "developer_api_request",
+    "toolset": "developer",
+    "class": "D",
+    "title": "Call any developer account API write",
+    "description": "Send one developer.apple.com services-account write or legacy download with the Apple ID sign-in (web_login). Previews first; needs confirm:true and human approval. Downloads need save_to: the body goes to a file, never to you. Reads: developer_api_get.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Call any developer account API write"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "true after the preview",
+          "type": "boolean"
+        },
+        "form": {
+          "additionalProperties": true,
+          "description": "legacy form body; teamId added",
+          "type": "object"
+        },
+        "json": {
+          "additionalProperties": true,
+          "description": "JSON body, sent as given (v1: JSON:API with data.attributes.teamId)",
+          "type": "object"
+        },
+        "method": {
+          "description": "GET only for a legacy download",
+          "enum": [
+            "POST",
+            "PATCH",
+            "PUT",
+            "DELETE",
+            "GET"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "description": "relative to services-account/",
+          "type": "string"
+        },
+        "query": {
+          "additionalProperties": true,
+          "description": "v1 DELETE's or legacy download's query",
+          "type": "object"
+        },
+        "save_to": {
+          "description": "new file under the root for the answer's body (0600, not returned); required for download paths",
+          "type": "string"
+        },
+        "team_id": {
+          "description": "developer team id; default the API key's team",
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "path"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "human"
+  },
+  {
+    "name": "developer_api_search",
+    "toolset": "developer",
+    "class": "R",
+    "title": "Find a developer account operation",
+    "description": "Find a developer account operation (keys, identifiers, certificates, devices, profiles, capabilities) by words in the catalog of known services-account calls; then developer_api_describe.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Find a developer account operation"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "enum": [
+            "session",
+            "team",
+            "keys",
+            "services_ids",
+            "pass_type_ids",
+            "website_push_ids",
+            "merchant_ids",
+            "cloud_containers",
+            "app_groups",
+            "app_ids",
+            "certificates",
+            "devices",
+            "profiles",
+            "capabilities",
+            "bundle_ids"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "description": "default 10",
+          "maximum": 30,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "words, e.g. revoke key; empty lists the group or all",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
+    "name": "developer_form_submit",
+    "toolset": "developer",
+    "class": "D",
+    "title": "Submit a developer account form",
+    "description": "Send a form of a developer.apple.com account or contact page (Apple's request forms) with the Apple ID sign-in (web_login). Without plan_id fills it and previews every value; with plan_id sends it once after human approval. Read the page first: developer_page_get.",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Submit a developer account form"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "additionalProperties": true,
+          "description": "field name → string or list of strings; others keep the page's defaults",
+          "type": "object"
+        },
+        "files": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "file field name → file path under the root (at most 10 MiB)",
+          "type": "object"
+        },
+        "form": {
+          "description": "form index, id or name; optional when the page has one POST form",
+          "type": "string"
+        },
+        "path": {
+          "description": "page the form stands on, as developer_page_get takes it",
+          "type": "string"
+        },
+        "plan_id": {
+          "description": "from the preview call",
+          "type": "string"
+        },
+        "query": {
+          "additionalProperties": true,
+          "description": "page query; values a string or a list of strings",
+          "type": "object"
+        },
+        "submitter": {
+          "description": "name of the submit control to send",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "plan"
+  },
+  {
+    "name": "developer_page_get",
+    "toolset": "developer",
+    "class": "R",
+    "title": "Read a developer account page",
+    "description": "Read a developer.apple.com account or contact page with the Apple ID sign-in (web_login): title, text paged by offset, links, forms with their fields (hidden values never shown), as third-party data. Send a form: developer_form_submit.",
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "Read a developer account page"
+    },
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "offset": {
+          "description": "characters into the text (next_offset)",
+          "maximum": 100000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "under https://developer.apple.com/, starting account/ or contact/; a full URL on that host works",
+          "type": "string"
+        },
+        "query": {
+          "additionalProperties": true,
+          "description": "values a string or a list of strings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "default_toolset": false,
+    "needs_team_key": false,
+    "confirm": "none"
+  },
+  {
     "name": "digest_summary",
     "toolset": "insights",
     "class": "R",
@@ -4924,7 +5233,8 @@
               "store",
               "insights",
               "library",
-              "web"
+              "web",
+              "developer"
             ],
             "type": "string"
           },

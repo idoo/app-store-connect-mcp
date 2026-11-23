@@ -108,6 +108,7 @@ var (
 	classExceptions = map[string]tool.Class{
 		"doctor":                  tool.Read,
 		"asc_api_request":         tool.Destructive, // generic mutation, any method
+		"developer_api_request":   tool.Destructive, // generic developer-site mutation or key download, any method
 		"metadata_apply":          tool.Destructive, // overwrites listed locales and deletes those in remove
 		"screenshots_sync":        tool.Destructive, // mode:replace deletes screenshots
 		"library_apply":           tool.Destructive, // uploads and places; deletes/retires on remove, archive or replace

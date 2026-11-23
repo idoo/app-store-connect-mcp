@@ -5,6 +5,7 @@ package all
 import (
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/admin"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/core"
+	_ "github.com/idoo/app-store-connect-mcp/internal/tools/developer"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/insights"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/library"
 	_ "github.com/idoo/app-store-connect-mcp/internal/tools/metadata"

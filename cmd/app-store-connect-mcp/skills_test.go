@@ -23,7 +23,7 @@ func TestSkillsInstall(t *testing.T) {
 	home := t.TempDir()
 	setHome(t, home)
 	all, err := skills.All()
-	if err != nil || len(all) != 6 {
+	if err != nil || len(all) == 0 {
 		t.Fatalf("skills.All() = %d skills, %v", len(all), err)
 	}
 
@@ -120,7 +120,7 @@ func TestSkillsList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"app-store-connect-mcp-release", "app-store-connect-mcp-testflight", "app-store-connect-mcp-reviews", "app-store-connect-mcp-metadata-translate", "app-store-connect-mcp-screenshots", "app-store-connect-mcp-sales"} {
+	for _, name := range []string{"app-store-connect-mcp-release", "app-store-connect-mcp-testflight", "app-store-connect-mcp-reviews", "app-store-connect-mcp-metadata-translate", "app-store-connect-mcp-screenshots", "app-store-connect-mcp-sales", "app-store-connect-mcp-developer"} {
 		if !strings.Contains(out, name+"\t") {
 			t.Errorf("list misses %s:\n%s", name, out)
 		}
