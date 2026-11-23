@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -101,14 +102,20 @@ type DevSiteAnswer struct {
 // devSiteReadVerbs start the name of a legacy endpoint that only reads.
 var devSiteReadVerbs = []string{"list", "get", "search", "view", "check", "is", "has", "validate"}
 
+// devSiteReadPosts are the v1 POSTs the site itself only reads with. POST
+// v1/featureRequest answers the request history of one capability of an
+// App ID and files nothing (run live on 2026-11-23: the capability's request
+// count did not move).
+var devSiteReadPosts = []string{"v1/featureRequest"}
+
 // DevSiteIsRead reports whether a services-account call only reads: a v1
-// GET, or a legacy endpoint whose last path segment (".action" dropped)
-// starts with a reading verb ("listKeys", "getTeams", "list"). Everything
-// else, downloads of key material included, counts as a write and needs a
-// human's approval.
+// GET, one of the v1 POSTs of devSiteReadPosts, or a legacy endpoint whose
+// last path segment (".action" dropped) starts with a reading verb
+// ("listKeys", "getTeams", "list"). Everything else, downloads of key
+// material included, counts as a write and needs a human's approval.
 func DevSiteIsRead(method, path string) bool {
 	if strings.HasPrefix(path, "v1/") || strings.HasPrefix(path, "v2/") {
-		return method == http.MethodGet
+		return method == http.MethodGet || (method == http.MethodPost && slices.Contains(devSiteReadPosts, path))
 	}
 	if method != http.MethodPost && method != http.MethodGet {
 		return false

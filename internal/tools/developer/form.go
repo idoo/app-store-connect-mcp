@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/idoo/app-store-connect-mcp/internal/tool"
 	"github.com/idoo/app-store-connect-mcp/internal/webpage"
@@ -330,28 +331,63 @@ func (f *filledForm) actionURL() string {
 	return u
 }
 
+// untrustedEntryMax is how many runes of one untrusted entry an approval
+// prompt shows ([tool.ApprovalPrompt] cuts a longer one).
+const untrustedEntryMax = 400
+
+// packLines joins lines with " | " into entries of at most maxRunes runes,
+// in order, so a form's dozen captions cost a few prompt blocks, not a dozen.
+// A line longer than maxRunes stands alone.
+func packLines(lines []string, maxRunes int) []string {
+	var out []string
+	cur, n := "", 0
+	for _, l := range lines {
+		ln := utf8.RuneCountInString(l)
+		switch {
+		case cur == "":
+			cur, n = l, ln
+		case n+3+ln <= maxRunes:
+			cur, n = cur+" | "+l, n+3+ln
+		default:
+			out = append(out, cur)
+			cur, n = l, ln
+		}
+	}
+	if cur != "" {
+		out = append(out, cur)
+	}
+	return out
+}
+
 // preview shows every pair that is sent: a shown value whole as
 // "<name>: <value>", a file by name and size, and the pairs that carry the
 // page's own unseen value (hidden controls, a prefilled password) by name
-// only. What the page calls a field is page text and goes to Untrusted.
+// only. What the page says about a field (its caption and label) is page
+// text and goes to Untrusted, packed into few entries.
 func (f *filledForm) preview() tool.PlanPreview {
-	labels := map[string]string{}
+	labels, captions := map[string]string{}, map[string]string{}
 	for _, fd := range f.form.Fields {
 		labels[fd.Name] = strings.TrimSpace(fd.Label)
+		captions[fd.Name] = strings.TrimSpace(fd.Caption)
 	}
 	var intended, hidden, untrusted []string
 	if f.title != "" {
 		untrusted = append(untrusted, "page title: "+f.title)
 	}
-	labelled := map[string]bool{}
+	described := map[string]bool{}
 	for _, p := range f.filled.Pairs {
 		if p.Hidden {
 			hidden = append(hidden, p.Name)
 			continue
 		}
-		if l := labels[p.Name]; l != "" && !labelled[p.Name] {
-			labelled[p.Name] = true
-			untrusted = append(untrusted, "label of "+p.Name+": "+l)
+		if !described[p.Name] {
+			described[p.Name] = true
+			if c := captions[p.Name]; c != "" {
+				untrusted = append(untrusted, "caption of "+p.Name+": "+c)
+			}
+			if l := labels[p.Name]; l != "" {
+				untrusted = append(untrusted, "label of "+p.Name+": "+l)
+			}
 		}
 		switch {
 		case p.File:
@@ -374,7 +410,7 @@ func (f *filledForm) preview() tool.PlanPreview {
 		Intended:     intended,
 		Affected:     []string{"POST " + f.actionURL()},
 		Irreversible: []string{"Apple receives the form from the signed-in account; a sent request cannot be withdrawn here"},
-		Untrusted:    untrusted,
+		Untrusted:    packLines(untrusted, untrustedEntryMax),
 	}
 }
 

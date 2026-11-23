@@ -29,7 +29,7 @@ var vocabulary = map[string]bool{
 	"missing_localization": true, "upload_failed": true, "reply_locale": true,
 	"last_7_days": true, "month_to_date": true, "this_week": true,
 	"last_week": true, "last_month": true, "last_seen": true, "review_id": true, // review_id: field of reviews_reply.replies
-	"web_session_required": true, "next_offset": true,
+	"web_session_required": true, "next_offset": true, "max_length": true, "data_resource": true, // max_length, data_resource: fields of the developer tools' results
 }
 
 var (

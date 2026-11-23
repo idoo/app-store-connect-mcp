@@ -252,6 +252,35 @@ func TestDevSiteWritePrimesCSRF(t *testing.T) {
 	}
 }
 
+// The request history is a v1 POST that only reads: it needs no write
+// context, and it carries the csrf pair like a write.
+func TestDevSiteV1PostReadPrimesCSRF(t *testing.T) {
+	h := newSiteHarness(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/listTeams.action") {
+			w.Header().Set("csrf", "MINTED")
+			w.Header().Set("csrf_ts", "2")
+		}
+		jsonOK(w, `{"data":{"type":"featureRequest"}}`)
+	})
+	read := tool.DevSiteCall{Method: http.MethodPost, Path: "v1/featureRequest", JSON: map[string]any{"data": map[string]any{"type": "featureRequest"}}}
+	if _, err := h.c.API(context.Background(), read); err != nil {
+		t.Fatal(err)
+	}
+	got := h.requests()
+	if len(got) != 2 || got[0].path != "/services-account/"+devSitePrimePath || got[1].path != "/services-account/v1/featureRequest" ||
+		got[1].method != http.MethodPost || got[1].csrf != "MINTED" {
+		t.Fatalf("requests = %+v", got)
+	}
+	// Any other v1 POST is a write and stops at the gate without a request.
+	other := tool.DevSiteCall{Method: http.MethodPost, Path: "v1/bundleIds", JSON: map[string]any{"data": map[string]any{}}}
+	if _, err := h.c.API(context.Background(), other); !errors.Is(err, tool.ErrWritesDisabled) {
+		t.Fatalf("v1 POST write without a write context: %v", err)
+	}
+	if n := len(h.requests()); n != 2 {
+		t.Fatalf("a refused write reached the site: %d requests", n)
+	}
+}
+
 func TestDevSiteWrite5xxIsOutcomeUnknown(t *testing.T) {
 	h := newSiteHarness(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

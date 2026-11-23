@@ -222,3 +222,40 @@ func TestApprovalUsedCleanup(t *testing.T) {
 		t.Fatalf("used has %d entries, want 2 (mid + late)", len(s.used))
 	}
 }
+
+func TestRedeemPartBinding(t *testing.T) {
+	s := newApprovalSigner()
+	hashes := []string{"h1", "h2"}
+	base := testClaims()
+	base.Set = partsSet(hashes)
+	issue := func(part int, prompt, set string) string {
+		c := base
+		c.Part, c.Prompt, c.Set = part, prompt, set
+		return mustIssue(t, s, c, approvalNow)
+	}
+	for name, state := range map[string]string{
+		"part past the end":      issue(2, "h2", base.Set),
+		"negative part":          issue(-1, "h1", base.Set),
+		"other set":              issue(1, "h2", partsSet([]string{"h1", "hX"})),
+		"prompt of another part": issue(1, "h1", base.Set),
+		"one-part state":         issue(0, "h1", ""),
+	} {
+		if _, err := s.redeemPart(state, base, hashes, approvalNow); !errors.Is(err, errApprovalMismatch) {
+			t.Errorf("%s: redeemPart = %v, want approval mismatch", name, err)
+		}
+	}
+	part, err := s.redeemPart(issue(1, "h2", base.Set), base, hashes, approvalNow)
+	if err != nil || part != 1 {
+		t.Fatalf("redeemPart = %d, %v; want 1", part, err)
+	}
+	stale := base
+	stale.Plan = "plan-2"
+	if _, err := s.redeemPart(issue(0, "h1", base.Set), stale, hashes, approvalNow); !errors.Is(err, ErrStalePlan) {
+		t.Fatalf("changed plan: redeemPart = %v, want stale plan", err)
+	}
+	// A one-part state keeps today's claims: no part or set key.
+	b, err := json.Marshal(testClaims())
+	if err != nil || strings.Contains(string(b), `"k"`) || strings.Contains(string(b), `"s"`) {
+		t.Fatalf("one-part claims = %s, %v", b, err)
+	}
+}

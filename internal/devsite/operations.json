@@ -13,8 +13,7 @@
    "teams[].teamId",
    "teams[].name",
    "teams[].type",
-   "teams[].status",
-   "data.teams[]"
+   "teams[].status"
   ],
   "notes": [
    "Empty body; no CSRF pair is needed.",
@@ -28,7 +27,7 @@
    "asc-cli",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "session.list_pending_agreements",
@@ -47,14 +46,14 @@
    }
   ],
   "answer": [
-   "whole body"
+   "agreements[]"
   ],
   "notes": [],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "session.get_notifications",
@@ -70,13 +69,14 @@
    "notifications.agreementsOutstanding[]"
   ],
   "notes": [
-   "The source sends X-Requested-With: XMLHttpRequest and Referer https://developer.apple.com/account."
+   "The source sends X-Requested-With: XMLHttpRequest and Referer https://developer.apple.com/account.",
+   "With nothing outstanding the site answers notifications as an empty object (2026-11-23)."
   ],
   "status": "observed",
   "source": [
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "session.get_agreement_history",
@@ -89,9 +89,12 @@
   "read": true,
   "params": [],
   "answer": [
-   "dateAccepted",
-   "dateEffective",
-   "agreementDownloadUrl"
+   "agreements[].agreementId",
+   "agreements[].title",
+   "agreements[].status",
+   "agreements[].dateAccepted",
+   "agreements[].dateEffective",
+   "agreements[].agreementDownloadUrl"
   ],
   "notes": [
    "The source sends X-Requested-With: XMLHttpRequest and Referer https://developer.apple.com/account."
@@ -100,7 +103,7 @@
   "source": [
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "session.accept_agreements",
@@ -133,62 +136,6 @@
   "verified": ""
  },
  {
-  "id": "team.list_members",
-  "ref": "S10",
-  "group": "team",
-  "title": "List team members",
-  "method": "POST",
-  "path": "QH65B2/account/getTeamMembers",
-  "wire": "json",
-  "read": true,
-  "params": [],
-  "answer": [
-   "members[]",
-   "admins[]",
-   "personId",
-   "firstName",
-   "lastName",
-   "email",
-   "developerStatus",
-   "dateJoined",
-   "teamMemberId"
-  ],
-  "notes": [
-   "Other role lists come beside members[] and admins[].",
-   "The source reads this first to get the CSRF pair for the team writes."
-  ],
-  "status": "observed",
-  "source": [
-   "fastlane"
-  ],
-  "verified": ""
- },
- {
-  "id": "team.list_invites",
-  "ref": "S11",
-  "group": "team",
-  "title": "List pending team invitations",
-  "method": "POST",
-  "path": "QH65B2/account/getInvites",
-  "wire": "json",
-  "read": true,
-  "params": [],
-  "answer": [
-   "invites[].inviteId",
-   "invites[].inviterName",
-   "invites[].recipientEmail",
-   "invites[].recipientRole",
-   "invites[].dateCreated",
-   "invites[].dateExpires"
-  ],
-  "notes": [],
-  "status": "observed",
-  "source": [
-   "fastlane"
-  ],
-  "verified": ""
- },
- {
   "id": "team.set_member_roles",
   "ref": "S12",
   "group": "team",
@@ -214,7 +161,7 @@
    "whole body"
   ],
   "notes": [
-   "CSRF pair primed by team.list_members."
+   "Likely gone: on 2026-11-23 getTeamMembers (this write's CSRF primer in the sources) and getInvites answered 404 in every form, and the account site sends team management to App Store Connect Users and Access. Not tried (a write)."
   ],
   "status": "observed",
   "source": [
@@ -243,7 +190,7 @@
    "whole body"
   ],
   "notes": [
-   "CSRF pair primed by team.list_members."
+   "Likely gone: on 2026-11-23 getTeamMembers (this write's CSRF primer in the sources) and getInvites answered 404 in every form, and the account site sends team management to App Store Connect Users and Access. Not tried (a write)."
   ],
   "status": "observed",
   "source": [
@@ -272,7 +219,7 @@
    "whole body"
   ],
   "notes": [
-   "CSRF pair primed by team.list_members."
+   "Likely gone: on 2026-11-23 getTeamMembers (this write's CSRF primer in the sources) and getInvites answered 404 in every form, and the account site sends team management to App Store Connect Users and Access. Not tried (a write)."
   ],
   "status": "observed",
   "source": [
@@ -293,14 +240,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -316,11 +275,14 @@
    "keys[].canRevoke",
    "keys[].services[].id",
    "keys[].services[].name",
-   "keys[].services[].configurations[]",
+   "keys[].services[].environment",
+   "keys[].services[].scope",
    "resultCode"
   ],
   "notes": [
-   "Also the CSRF primer for every key write."
+   "Also the CSRF primer for every key write.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23).",
+   "List rows carry no service configurations; keys.get does (2026-11-23)."
   ],
   "status": "observed_live_by_source",
   "source": [
@@ -328,7 +290,7 @@
    "asc-cli",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "keys.get",
@@ -361,7 +323,7 @@
    "asc-cli",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "keys.create",
@@ -597,7 +559,7 @@
    "asc-cli",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "services_ids.get",
@@ -630,13 +592,14 @@
    "included[].relationships.appConsentBundleId"
   ],
   "notes": [
-   "After a delete this read returns 404."
+   "After a delete this read returns 404.",
+   "Verified with an App ID's resource id and this include; the account held no Services ID (2026-11-23)."
   ],
   "status": "observed_live_by_source",
   "source": [
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "services_ids.create",
@@ -963,14 +926,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -986,12 +961,14 @@
    "passTypeIdList[].identifier",
    "passTypeIdList[].status"
   ],
-  "notes": [],
+  "notes": [
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
+  ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "pass_type_ids.create",
@@ -1082,14 +1059,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -1113,13 +1102,15 @@
    "pageNumber",
    "pageSize"
   ],
-  "notes": [],
+  "notes": [
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
+  ],
   "status": "observed_live_by_source",
   "source": [
    "fastlane",
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "website_push_ids.create",
@@ -1243,7 +1234,8 @@
    "included[]"
   ],
   "notes": [
-   "The source sends Referer .../account/resources/identifiers/websitePushId/edit/{id}."
+   "The source sends Referer .../account/resources/identifiers/websitePushId/edit/{id}.",
+   "Not verified: the account has no Website Push ID; an unknown id answers 404 \"There is no resource of type 'websitepushIds' with id ...\", so the path exists (2026-11-23)."
   ],
   "status": "observed_live_by_source",
   "source": [
@@ -1368,7 +1360,7 @@
   "source": [
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "merchant_ids.list",
@@ -1383,14 +1375,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -1407,13 +1411,14 @@
    "identifierList[].status"
   ],
   "notes": [
-   "Also the CSRF primer for the merchant writes."
+   "Also the CSRF primer for the merchant writes.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
   ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "merchant_ids.create",
@@ -1498,14 +1503,17 @@
    "domainList[].path",
    "domainList[].canVerify",
    "domainList[].expirationDate",
-   "domainList[].expirationDateString"
+   "domainList[].expirationDateString",
+   "psp"
   ],
-  "notes": [],
+  "notes": [
+   "An unknown merchantId answers resultCode 0 with an empty domainList (2026-11-23)."
+  ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "merchant_ids.register_domain",
@@ -1647,7 +1655,7 @@
   "source": [
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "merchant_ids.get_v1",
@@ -1670,7 +1678,8 @@
    "data"
   ],
   "notes": [
-   "From Expo's generic capability-identifier model (prefix merchant)."
+   "From Expo's generic capability-identifier model (prefix merchant).",
+   "Not verified: the account has no Merchant ID; an unknown id answers 404 \"There is no resource of type 'merchantIds' with id ...\", so the path exists (2026-11-23)."
   ],
   "status": "observed",
   "source": [
@@ -1768,14 +1777,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -1795,13 +1816,14 @@
   ],
   "notes": [
    "cloudContainer is the resource id.",
-   "Also the CSRF primer for the legacy container writes."
+   "Also the CSRF primer for the legacy container writes.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
   ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "cloud_containers.create",
@@ -1896,7 +1918,7 @@
   "source": [
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "cloud_containers.create_v1",
@@ -1993,14 +2015,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -2021,14 +2055,15 @@
   ],
   "notes": [
    "applicationGroup is the opaque resource id.",
-   "Also the CSRF primer for the App Group writes."
+   "Also the CSRF primer for the App Group writes.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
   ],
   "status": "observed_live_by_source",
   "source": [
    "fastlane",
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "app_groups.create",
@@ -2116,7 +2151,7 @@
   "source": [
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "app_groups.get_v1",
@@ -2145,7 +2180,7 @@
   "source": [
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "app_groups.create_v1",
@@ -2253,14 +2288,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -2285,13 +2332,14 @@
    "appIds[].associatedIdentifiersCount"
   ],
   "notes": [
-   "Also the CSRF primer for the App ID writes."
+   "Also the CSRF primer for the App ID writes.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
   ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "app_ids.get",
@@ -2338,7 +2386,7 @@
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "app_ids.create",
@@ -2972,14 +3020,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -3000,9 +3060,8 @@
    "certRequests[].canDownload",
    "certRequests[].certificateTypeDisplayId",
    "certRequests[].certificateType.certificateTypeDisplayId",
-   "certRequests[].serialNumber",
+   "certRequests[].serialNum",
    "certRequests[].certificateType.name",
-   "certRequests[].certificateType.platform",
    "certRequests[].certificateType.permissionType",
    "certRequests[].certificateType.distributionType",
    "certRequests[].certificateType.ownerType",
@@ -3012,13 +3071,15 @@
   "notes": [
    "ownerType is team or bundle.",
    "platform is mac for the Mac certificate types, else ios.",
-   "Also the CSRF primer for the certificate writes."
+   "Also the CSRF primer for the certificate writes.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23).",
+   "types takes only the path platform's type ids: all known ids at once on ios answered \"An invalid value ... was provided for the parameter 'types'\" (2026-11-23)."
   ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "certificates.create",
@@ -3560,14 +3621,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -3620,13 +3693,14 @@
   ],
   "notes": [
    "deviceNumber is the UDID; status c is enabled, r is disabled.",
-   "Also the CSRF primer for devices.register."
+   "Also the CSRF primer for devices.register.",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23)."
   ],
   "status": "observed",
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "devices.register",
@@ -3827,14 +3901,26 @@
    {
     "name": "pageNumber",
     "in": "form",
-    "required": false,
-    "note": "1-based page"
+    "required": true,
+    "note": "1-based page",
+    "values": [
+     {
+      "value": "1",
+      "label": "first page"
+     }
+    ]
    },
    {
     "name": "pageSize",
     "in": "form",
-    "required": false,
-    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last"
+    "required": true,
+    "note": "sources send 500 (asc-cli 500 or 1000); a page shorter than pageSize is the last",
+    "values": [
+     {
+      "value": "500",
+      "label": "500 rows, as the sources send"
+     }
+    ]
    },
    {
     "name": "sort",
@@ -3865,22 +3951,23 @@
    "provisioningProfiles[].type",
    "provisioningProfiles[].version",
    "provisioningProfiles[].proProPlatform",
-   "provisioningProfiles[].proProSubPlatform",
-   "provisioningProfiles[].managingApp",
-   "provisioningProfiles[].appId",
    "provisioningProfiles[].isTemplateProfile",
-   "provisioningProfiles[].template"
+   "provisioningProfiles[].certificateIds",
+   "provisioningProfiles[].deviceIds",
+   "provisioningProfiles[].isTeamProfile"
   ],
   "notes": [
    "distributionMethod is limited, store, adhoc, inhouse or direct; managingApp Xcode marks an Xcode-managed profile.",
-   "Also the CSRF primer for the profile writes (sources read it with pageSize=1)."
+   "Also the CSRF primer for the profile writes (sources read it with pageSize=1).",
+   "pageNumber and pageSize are required: without them the site answers resultCode non-zero, \"An invalid value '0' was provided for the parameter 'pageNumber'\" (2026-11-23).",
+   "No list row carried proProSubPlatform, managingApp, appId or template on 2026-11-23; profiles.get carries appId."
   ],
   "status": "observed",
   "source": [
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "profiles.get",
@@ -3924,7 +4011,7 @@
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "profiles.create",
@@ -4290,7 +4377,7 @@
    "asc-cli",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "bundle_ids.get",
@@ -4344,7 +4431,7 @@
    "fastlane",
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "bundle_ids.create",
@@ -4636,16 +4723,19 @@
    }
   ],
   "answer": [
-   "data[].attributes.capabilityType",
+   "data[].attributes.enabled",
+   "data[].relationships.capability",
    "data[].attributes.settings"
   ],
-  "notes": [],
+  "notes": [
+   "There is no capabilityType attribute; the capability is the capability relationship and the row id's suffix (2026-11-23)."
+  ],
   "status": "observed",
   "source": [
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "capabilities.create",
@@ -4997,7 +5087,6 @@
    "data[].id",
    "data[].attributes.name",
    "data[].attributes.description",
-   "data[].attributes.entitlement",
    "data[].attributes.isPublic",
    "data[].attributes.editable",
    "data[].attributes.canRequestFromPortal",
@@ -5005,14 +5094,15 @@
   ],
   "notes": [
    "data[].id is the capability type.",
-   "canRequestFromPortal tells which capabilities the Capability Requests tab would offer; no source shows how a request is filed."
+   "canRequestFromPortal tells which capabilities the Capability Requests tab would offer; no source shows how a request is filed.",
+   "There is no entitlement attribute: fields[capabilities]=entitlement answers 400 \"'entitlement' does not exist\" (2026-11-23). limit is ignored; the whole list (about 130 rows) comes at once."
   ],
   "status": "observed",
   "source": [
    "fastlane",
    "asc-cli"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "certificates.list_v1",
@@ -5044,7 +5134,7 @@
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "certificates.get_v1",
@@ -5083,7 +5173,7 @@
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "certificates.create_v1",
@@ -5257,7 +5347,7 @@
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "devices.list_v1",
@@ -5285,7 +5375,7 @@
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "devices.register_v1",
@@ -5377,7 +5467,7 @@
   "source": [
    "fastlane"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "devices.update",
@@ -5482,7 +5572,7 @@
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "profiles.create_v1",
@@ -5620,7 +5710,7 @@
    "fastlane",
    "expo"
   ],
-  "verified": ""
+  "verified": "2026-11-23"
  },
  {
   "id": "profiles.list_for_bundle_id",
@@ -5657,6 +5747,3020 @@
   "source": [
    "fastlane",
    "expo"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "session.get_teams",
+  "ref": "W1",
+  "group": "session",
+  "title": "Teams with membership, program and agent details",
+  "method": "POST",
+  "path": "QH65B2/account/getTeams",
+  "wire": "json",
+  "read": true,
+  "params": [
+   {
+    "name": "includeTSI",
+    "in": "json",
+    "required": false,
+    "note": "1 to add TSI data"
+   },
+   {
+    "name": "includeInMigrationTeams",
+    "in": "json",
+    "required": false,
+    "note": "1"
+   }
+  ],
+  "answer": [
+   "teams[].teamId",
+   "teams[].name",
+   "teams[].status",
+   "teams[].entityType",
+   "teams[].program.{name,type,status,dateExpires,autoRenew,autoRenewPrice}",
+   "teams[].agent.{firstName,lastName,email,teamMemberId,personId,developerStatus}",
+   "teams[].userRoles[]",
+   "teams[].teamMemberId",
+   "teams[].memberCount",
+   "teams[].adminCount",
+   "teams[].serverCount",
+   "teams[].address",
+   "teams[].phone",
+   "teams[].acceptedLatestAgreement",
+   "teams[].appRenewalEligibility",
+   "teams[].isFeeWaiverApproved",
+   "teams[].nextDeviceResetDate",
+   "teams[].paymentPlatform",
+   "enrollment",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "The membership details card: expiry, auto-renewal, roles, team agent.",
+   "The site sends {} (no teamId); the tool's added teamId did no harm live."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "session.view_developer",
+  "ref": "W2",
+  "group": "session",
+  "title": "The signed-in developer's record",
+  "method": "POST",
+  "path": "QH65B2/account/viewDeveloper.action",
+  "wire": "form",
+  "read": true,
+  "params": [],
+  "answer": [
+   "developer.developerId",
+   "developer.personId",
+   "developer.firstName",
+   "developer.lastName",
+   "developer.email",
+   "developer.developerStatus",
+   "developer.countryCode",
+   "developer.isAgentOfAnyActiveTeam",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "session.check_permissions",
+  "ref": "W3",
+  "group": "session",
+  "title": "Which permissions the user has on the team",
+  "method": "POST",
+  "path": "checkPermissions",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "permissions",
+    "in": "form",
+    "required": true,
+    "note": "comma-separated permission keys, e.g. team.members.invite"
+   },
+   {
+    "name": "ownerDisplayId",
+    "in": "form",
+    "required": false,
+    "note": "scope to an identifier's resource id"
+   },
+   {
+    "name": "merchantId",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "permissions[].permission",
+   "permissions[].accessAllowed",
+   "permissions[].reason.{resultCode,resultString,userString,httpCode}",
+   "isAdmin",
+   "isAgent",
+   "isMember",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Path has no QH65B2/account prefix.",
+   "With permission objects ({permissionKey,attributes}) the site posts the same path as JSON."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "session.get_agreement_details",
+  "ref": "W4",
+  "group": "session",
+  "title": "An agreement group's latest agreement text",
+  "method": "POST",
+  "path": "agreement/getAgreementDetails",
+  "wire": "json",
+  "read": true,
+  "params": [
+   {
+    "name": "groupId",
+    "in": "json",
+    "required": true,
+    "note": "a capability's optInAgreementGroupId"
+   },
+   {
+    "name": "fetchContent",
+    "in": "json",
+    "required": false,
+    "note": "true"
+   }
+  ],
+  "answer": [
+   "agreements[].agreementId",
+   "agreements[].title",
+   "agreements[].agreementText",
+   "agreements[].checkboxText",
+   "agreements[].agreementDownloadUrl"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Not run live: no agreement group id was at hand."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "session.accept_agreement",
+  "ref": "W5",
+  "group": "session",
+  "title": "Accept one agreement by id",
+  "method": "POST",
+  "path": "agreement/acceptAgreement",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "agreementId",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "The site writes the path as QH65B2/account/../../agreement/acceptAgreement."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "session.get_agent_transfer_agreement",
+  "ref": "W6",
+  "group": "session",
+  "title": "The Account Holder transfer agreement",
+  "method": "POST",
+  "path": "QH65B2/account/getAgentTransferAgreement",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "agreement.agreementId",
+   "agreement.title",
+   "agreement.agreementText",
+   "agreement.checkboxText",
+   "agreement.status",
+   "agreement.version",
+   "agreement.dateEffective",
+   "agreement.dateAgreeBy",
+   "agreement.languageIsoCode",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "team.get_provisioning_settings",
+  "ref": "W7",
+  "group": "team",
+  "title": "Team provisioning settings",
+  "method": "POST",
+  "path": "getTeamProvisioningSettings",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "settings.createAppIds",
+   "settings.registerDevices",
+   "settings.updateAppIds",
+   "isAdmin",
+   "isAgent",
+   "isMember",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Account home > Provisioning card (Xcode automatic provisioning switches)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "team.set_provisioning_settings",
+  "ref": "W8",
+  "group": "team",
+  "title": "Change team provisioning settings",
+  "method": "POST",
+  "path": "setTeamProvisioningSettings",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "settings",
+    "in": "json",
+    "required": true,
+    "note": "{createAppIds,registerDevices,updateAppIds}"
+   }
+  ],
+  "answer": [
+   "settings"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.get_eligible_agent_candidates",
+  "ref": "W9",
+  "group": "team",
+  "title": "Members who can become Account Holder",
+  "method": "POST",
+  "path": "QH65B2/account/getEligibleAgentCandidates",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "teamMembers[]",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Live: teamMembers was empty on a one-person team."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "team.initiate_agent_transfer",
+  "ref": "W10",
+  "group": "team",
+  "title": "Start an Account Holder transfer",
+  "method": "POST",
+  "path": "QH65B2/account/initiateAgentTransfer",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "agreementId",
+    "in": "json",
+    "required": false
+   },
+   {
+    "name": "newAgentMemberId",
+    "in": "json",
+    "required": false
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Also sent with teamId only (resend).",
+   "Irreversible once accepted."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.accept_agent_transfer",
+  "ref": "W11",
+  "group": "team",
+  "title": "Accept an Account Holder transfer",
+  "method": "POST",
+  "path": "QH65B2/account/acceptAgentTransfer",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "agreementId",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "team.cancel_agent_transfer",
+  "ref": "W12",
+  "group": "team",
+  "title": "Cancel an Account Holder transfer",
+  "method": "POST",
+  "path": "QH65B2/account/cancelAgentTransfer",
+  "wire": "json",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "account.get_user_profile",
+  "ref": "W13",
+  "group": "account",
+  "title": "The Apple Account's developer profile",
+  "method": "POST",
+  "path": "QH65B2/account/getUserProfile",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "userProfile.developerId",
+   "userProfile.personId",
+   "userProfile.firstName",
+   "userProfile.lastName",
+   "userProfile.email",
+   "userProfile.developerStatus",
+   "userProfile.appleId.{countryCode,languageCode,emailVerified,idVerified,twoFAEnabled,primaryPhoneNumberVerified}",
+   "userProfile.isAgentOfAnyActiveTeam",
+   "externalProperties.{appStoreConnectUrl,cloudKitUrl,mapKitUrl}",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "The site sends {}."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "account.get_comm_prefs",
+  "ref": "W14",
+  "group": "account",
+  "title": "E-mail subscription preferences",
+  "method": "POST",
+  "path": "QH65B2/account/getCommPrefs",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "subscriptions[].key",
+   "subscriptions[].isSubscribed",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Account home > Emails card.",
+   "Live keys: four wwdr-* lists."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "account.set_comm_prefs",
+  "ref": "W15",
+  "group": "account",
+  "title": "Change e-mail subscription preferences",
+  "method": "POST",
+  "path": "QH65B2/account/setCommPrefs",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "subscriptions",
+    "in": "json",
+    "required": true,
+    "note": "as account.get_comm_prefs returns them; exact body shape not resolved"
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "account.get_support_requests",
+  "ref": "W16",
+  "group": "account",
+  "title": "Code-level support (TSI) balance and prices",
+  "method": "POST",
+  "path": "QH65B2/account/getSupportRequests",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "availableTSIs[].{type,qty,dateExpires}",
+   "tsiHistory[]",
+   "products.<sku>.{price,currency}",
+   "onlineStoreOptions[].{storeId,languageIsoCode,languageLabel,accountSetupUrl}",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "account.purchase_support_requests",
+  "ref": "W17",
+  "group": "account",
+  "title": "Get a purchase URL for TSIs",
+  "method": "POST",
+  "path": "QH65B2/account/purchaseSupportRequests",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "languageIsoCode",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "storeId",
+    "in": "json",
+    "required": false,
+    "note": "name inferred from onlineStoreOptions"
+   }
+  ],
+  "answer": [
+   "purchaseUrl"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Costs money once the returned store URL is completed."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "account.get_developer_profile",
+  "ref": "W18",
+  "group": "account",
+  "title": "Public developer profile attributes",
+  "method": "GET",
+  "path": "QH65B2/v1/profile",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "userLocale",
+    "in": "query",
+    "required": true,
+    "note": "e.g. en_US"
+   }
+  ],
+  "answer": [
+   "status",
+   "attributes[]"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "A real GET that answers JSON (not a file); under QH65B2/, so not a JSON:API v1 path.",
+   "The site only reads with this call, but tool.DevSiteIsRead counts it as a write (method/path), so it needs approval; not run live.",
+   "Its writes are PATCH QH65B2/v1/profile/attribute/{id}, /attributes and /status with application/json: a legacy PATCH has no wire in the catalog."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "account.get_preferences",
+  "ref": "W19",
+  "group": "account",
+  "title": "Stored UI preferences by key",
+  "method": "GET",
+  "path": "QH65B2/developer/preferences",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "keys",
+    "in": "query",
+    "required": true,
+    "note": "comma-separated"
+   }
+  ],
+  "answer": [
+   "values"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "A real GET that answers JSON.",
+   "The site only reads with this call, but tool.DevSiteIsRead counts it as a write (method/path), so it needs approval; not run live.",
+   "Written with PATCH (application/json, {values:{...}}): no wire in the catalog."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "membership.submit_renewal",
+  "ref": "W20",
+  "group": "membership",
+  "title": "Start a membership renewal purchase",
+  "method": "POST",
+  "path": "renewal/submitRenewal",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "languageIsoCode",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "renewal"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Money or membership state: a human decision."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "membership.renew_fee_waiver",
+  "ref": "W21",
+  "group": "membership",
+  "title": "Renew a fee-waived membership",
+  "method": "POST",
+  "path": "renewal/renewFeeWaiverTeam",
+  "wire": "json",
+  "read": false,
+  "params": [],
+  "answer": [
+   "renewal"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Money or membership state: a human decision."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "membership.decline_renewal",
+  "ref": "W22",
+  "group": "membership",
+  "title": "Decline the membership renewal",
+  "method": "POST",
+  "path": "renewal/declineTeamRenewal",
+  "wire": "json",
+  "read": false,
+  "params": [],
+  "answer": [
+   "renewal"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Money or membership state: a human decision."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "membership.update_auto_renewal",
+  "ref": "W23",
+  "group": "membership",
+  "title": "Turn membership auto-renewal on or off",
+  "method": "POST",
+  "path": "QH65B2/account/updateAutoRenewal",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "autoRenewal",
+    "in": "json",
+    "required": true,
+    "note": "boolean"
+   }
+  ],
+  "answer": [
+   "autoRenewal"
+  ],
+  "notes": [
+   "Screen: account home (index-C7ZbnVIG.js and its bundles).",
+   "Money or membership state: a human decision."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.list_realms",
+  "ref": "W24",
+  "group": "keys",
+  "title": "Identifiers a key service can be scoped to",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/realms/list",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "serviceId",
+    "in": "form",
+    "required": true,
+    "note": "a key service id from getKeysMeta.json"
+   },
+   {
+    "name": "keyId",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "name%3dasc"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "realms[]",
+   "totalRecords"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Keys > configure a service.",
+   "Tried live with serviceId U27F4V844T: answered 'An unexpected error occurred' (that service takes no realms), so not verified."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "keys.create_related",
+  "ref": "W25",
+  "group": "keys",
+  "title": "Create a related key for a key",
+  "method": "POST",
+  "path": "QH65B2/account/auth/key/{id}/related/U27F4V844T",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "the parent keyId"
+   },
+   {
+    "name": "name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "environment",
+    "in": "json",
+    "required": true,
+    "note": "sandbox or production"
+   }
+  ],
+  "answer": [
+   "keys[0].keyId",
+   "resultCode"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "U27F4V844T is a fixed service id in the site's code."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "pass_type_ids.update",
+  "ref": "W26",
+  "group": "pass_type_ids",
+  "title": "Rename a Pass Type ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/updatePassTypeId.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "website_push_ids.update",
+  "ref": "W27",
+  "group": "website_push_ids",
+  "title": "Rename a Website Push ID",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/updateWebsitePushId.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.update_v1",
+  "ref": "W28",
+  "group": "merchant_ids",
+  "title": "Update a Merchant ID",
+  "method": "PATCH",
+  "path": "v1/merchantIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "merchantIds"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "merchant_ids.download_psp_verification_file",
+  "ref": "W29",
+  "group": "merchant_ids",
+  "title": "Download a merchant's PSP domain file",
+  "method": "GET",
+  "path": "QH65B2/account/ios/identifiers/downloadPSPVerificationFile",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "merchantId",
+    "in": "query",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "cloud_containers.update",
+  "ref": "W30",
+  "group": "cloud_containers",
+  "title": "Rename or hide an iCloud container",
+  "method": "POST",
+  "path": "QH65B2/account/cloudContainer/updateCloudContainer.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "app_groups.update",
+  "ref": "W31",
+  "group": "app_groups",
+  "title": "Rename an App Group",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/updateApplicationGroup.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.list_for_owner",
+  "ref": "W32",
+  "group": "certificates",
+  "title": "Certificates of one identifier",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/certificate/listCertificatesForOwner.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "ownerDisplayId",
+    "in": "form",
+    "required": true,
+    "note": "the identifier's resource id"
+   },
+   {
+    "name": "types",
+    "in": "form",
+    "required": true,
+    "note": "comma-separated certificate type ids, e.g. JKG5JZ54H7,BKLRAVXMGM,UPV3DW712I (push)"
+   },
+   {
+    "name": "platform",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "certificates[]",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "App ID / Pass Type ID / Merchant ID pages: the push and service certificates.",
+   "Live: certificates was empty for an extension's App ID."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "certificates.update_v1",
+  "ref": "W33",
+  "group": "certificates",
+  "title": "Switch a certificate's auto-rotation",
+  "method": "PATCH",
+  "path": "v1/certificates/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "certificates"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.autoRotationEnabled",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.rotate_manually",
+  "ref": "W34",
+  "group": "certificates",
+  "title": "Rotate a managed certificate now",
+  "method": "POST",
+  "path": "account/certificate/manualCertificateRotation",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "certificateId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Path has no QH65B2 prefix."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.activate",
+  "ref": "W35",
+  "group": "certificates",
+  "title": "Activate a certificate",
+  "method": "POST",
+  "path": "QH65B2/account/ios/certificate/activateCertificate.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page; names not resolved."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.approve_safari_request",
+  "ref": "W36",
+  "group": "certificates",
+  "title": "Approve a Safari extension certificate request",
+  "method": "POST",
+  "path": "QH65B2/account/safari/certificate/approveCertificateRequest.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Legacy Safari extensions."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.decline_safari_request",
+  "ref": "W37",
+  "group": "certificates",
+  "title": "Decline a Safari extension certificate request",
+  "method": "POST",
+  "path": "QH65B2/account/safari/certificate/declineCertificateRequest.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Legacy Safari extensions."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.validate_ask",
+  "ref": "W38",
+  "group": "certificates",
+  "title": "Validate a FairPlay application secret key",
+  "method": "POST",
+  "path": "QH65B2/account/ios/certificate/validateAsk.action",
+  "wire": "form",
+  "read": true,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "FairPlay Streaming certificate creation; body passed through (ASK value).",
+   "A read by the rule, but it takes secret input; not run live."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.download_pask",
+  "ref": "W39",
+  "group": "certificates",
+  "title": "Download or check a FairPlay PASK",
+  "method": "POST",
+  "path": "certificate/downloadPask",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "checkPask",
+    "in": "json",
+    "required": false,
+    "note": "true only checks; otherwise the answer is a file (Accept: application/octet-stream)"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Key material."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "certificates.list_for_order_type_id",
+  "ref": "W40",
+  "group": "certificates",
+  "title": "Certificates of an Order Type ID",
+  "method": "GET",
+  "path": "v1/orderTypeIds/{id}/certificates",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "fields[certificates]",
+    "in": "query",
+    "required": false,
+    "note": "name,certificateTypeName,expirationDate,certificateTypeId,~permissions.download,~permissions.revoke"
+   }
+  ],
+  "answer": [
+   "data[]"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Not run live: the team has no Order Type ID."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.get_v1",
+  "ref": "W41",
+  "group": "devices",
+  "title": "One device",
+  "method": "GET",
+  "path": "v1/devices/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "fields[devices]",
+    "in": "query",
+    "required": false,
+    "note": "name,udid,platform,model,status,devicePlatformLabel"
+   }
+  ],
+  "answer": [
+   "data.id",
+   "data.attributes.name",
+   "data.attributes.udid",
+   "data.attributes.platform",
+   "data.attributes.model",
+   "data.attributes.status",
+   "data.attributes.devicePlatformLabel"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "devices.validate",
+  "ref": "W42",
+  "group": "devices",
+  "title": "Check device rows before registering",
+  "method": "POST",
+  "path": "QH65B2/account/device/validateDevices.action",
+  "wire": "form",
+  "read": true,
+  "params": [],
+  "answer": [
+   "devices[]",
+   "failedDevices[]"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Register devices > Continue. Body as devices.register (names, UDIDs, platform); not run live to avoid sending made-up UDIDs.",
+   "Answer keys inferred from the review screen (deviceList, failedDeviceList)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.register_bulk",
+  "ref": "W43",
+  "group": "devices",
+  "title": "Register validated devices (no platform segment)",
+  "method": "POST",
+  "path": "QH65B2/account/device/addDevices.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "The site's current register call; body passed through from the validate step."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.update_legacy",
+  "ref": "W44",
+  "group": "devices",
+  "title": "Rename a device (legacy)",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/device/updateDevice.action",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "devicePlatform",
+    "in": "form",
+    "required": false,
+    "note": "IOS picks ios, anything else mac"
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.disable_bulk",
+  "ref": "W45",
+  "group": "devices",
+  "title": "Disable several devices",
+  "method": "POST",
+  "path": "QH65B2/account/device/deleteDevices.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page (device ids)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.reset_list",
+  "ref": "W46",
+  "group": "devices",
+  "title": "Reset the device list at membership renewal",
+  "method": "POST",
+  "path": "QH65B2/account/device/resetDevices.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Yearly reset: removes chosen devices for good."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.mark_for_deletion",
+  "ref": "W47",
+  "group": "devices",
+  "title": "Mark devices to drop at the yearly reset",
+  "method": "POST",
+  "path": "QH65B2/account/expiry/markForDeviceDeletion",
+  "wire": "json",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "devices.download_csv",
+  "ref": "W48",
+  "group": "devices",
+  "title": "Download the device list as a file",
+  "method": "GET",
+  "path": "QH65B2/account/device/generateCSVReport.action",
+  "wire": "download",
+  "read": false,
+  "params": [],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Also posted as a form (empty body) to prepare the report."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "profiles.get_v1",
+  "ref": "W49",
+  "group": "profiles",
+  "title": "One provisioning profile with its parts",
+  "method": "GET",
+  "path": "v1/profiles/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "include",
+    "in": "query",
+    "required": false,
+    "note": "bundleId,certificates,devices,bundleId.bundleIdCapabilities,bundleId.bundleIdCapabilities.macBundleId"
+   },
+   {
+    "name": "fields[profiles]",
+    "in": "query",
+    "required": false
+   }
+  ],
+  "answer": [
+   "data.id",
+   "data.attributes.name",
+   "data.attributes.platform",
+   "data.attributes.profileState",
+   "data.attributes.profileTypeLabel",
+   "data.attributes.expirationDate",
+   "included[]"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "included certificates carry certificateContent; ask for narrow fields."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "profiles.list_templates",
+  "ref": "W50",
+  "group": "profiles",
+  "title": "Profile templates for a distribution type",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/profile/listProfileTemplates.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "distributionType",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "subPlatform",
+    "in": "form",
+    "required": false,
+    "note": "tvOS or empty"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "templates[]",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Live: templates was null (no custom templates on the team)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "profiles.delete_bulk",
+  "ref": "W51",
+  "group": "profiles",
+  "title": "Delete several provisioning profiles",
+  "method": "POST",
+  "path": "QH65B2/account/profile/deleteProvisioningProfiles.action",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page (profile ids)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.list_feature_requests",
+  "ref": "W52",
+  "group": "capabilities",
+  "title": "An App ID capability's request history",
+  "method": "POST",
+  "path": "v1/featureRequest",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "values": [
+     {
+      "value": "featureRequest",
+      "label": "the only type"
+     }
+    ]
+   },
+   {
+    "name": "data.attributes.bundleId",
+    "in": "json",
+    "required": true,
+    "note": "the bundleIds resource id (the page's identifierId)"
+   },
+   {
+    "name": "data.attributes.capabilityId",
+    "in": "json",
+    "required": true,
+    "note": "the capability id, e.g. USERNOTIFICATION_FILTERING"
+   }
+  ],
+  "answer": [
+   "data.attributes.featureRequests[].requestId",
+   "data.attributes.featureRequests[].requestDate",
+   "data.attributes.featureRequests[].requestBy",
+   "data.attributes.featureRequests[].ownerName",
+   "data.attributes.featureRequests[].ownerType",
+   "data.attributes.featureRequests[].status",
+   "data.attributes.featureRequests[].note"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Identifiers > App ID > Capability Requests > 'View Requests (n)' / status button opens the Request History modal with this call.",
+   "A POST that only reads: tool.DevSiteIsRead lists it by path. Run live on 2026-11-23 after a request was sent through Apple's form: it answered that request (requestId as on the form's thank-you page, status Submitted) and the capability's featureRequestCount stayed 1.",
+   "It does not file a request: the Request control is a plain link to the capability's attributes.requestFormUrl (a developer.apple.com/contact/request/... form). No call in the site's code submits a capability request.",
+   "note is Apple's note on the request ('Note From Apple'); status Approved is shown as Assigned. The team id goes into data.attributes.teamId (the read tool adds it)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "capabilities.get_team_capability",
+  "ref": "W53",
+  "group": "capabilities",
+  "title": "A team capability's configuration",
+  "method": "GET",
+  "path": "v1/teamCapabilities/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "<teamId>_<capability>, e.g. <teamId>_APPLE_ID_AUTH_TEAM_CONFIGURATION or <teamId>_CONNECT_WITH_APPLE"
+   }
+  ],
+  "answer": [
+   "data.id",
+   "data.type",
+   "data.attributes.enabled",
+   "data.attributes.settings",
+   "data.attributes.inputs",
+   "data.attributes.ownerType",
+   "data.attributes.removeConfiguration",
+   "data.relationships.capability"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Services > Sign in with Apple for Email Communication (team domains and e-mail sources).",
+   "Live: settings and inputs were null on a team without the configuration."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "capabilities.update_team_capability",
+  "ref": "W54",
+  "group": "capabilities",
+  "title": "Update a team capability's configuration",
+  "method": "PATCH",
+  "path": "v1/teamCapabilities/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "<teamId>_<capability>"
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "teamCapabilities"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.settings",
+    "in": "json",
+    "required": false
+   },
+   {
+    "name": "data.attributes.enabled",
+    "in": "json",
+    "required": false
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "SIWA e-mail sources (APPLE_ID_AUTH_TEAM_CONFIGURATION) and Sign in with Apple groupings (CONNECT_WITH_APPLE, settings key CWA_SCOPES_SETTING)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.update_bundle_id_capability",
+  "ref": "W55",
+  "group": "capabilities",
+  "title": "Update one capability of a bundle ID",
+  "method": "PATCH",
+  "path": "v1/bundleIdCapabilities/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "note": "<bundleIds resource id>_<capability>, e.g. ..._APPLE_ID_AUTH"
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "bundleIdCapabilities"
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.enabled",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.settings",
+    "in": "json",
+    "required": false,
+    "note": "e.g. [{key:APPLE_ID_AUTH_APP_CONSENT,options:[{key:PRIMARY_APP_CONSENT,enabled:true}]}]"
+   },
+   {
+    "name": "data.relationships.bundleId.data",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Sign in with Apple: make an App ID a primary App ID."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.opt_in",
+  "ref": "W56",
+  "group": "capabilities",
+  "title": "Opt an App ID in to a capability",
+  "method": "POST",
+  "path": "QH65B2/account/capability/optin",
+  "wire": "json",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "App ID capabilities with optInTargetEntity; body passed through from the page (bundle id, capability enumKey).",
+   "Parameter names beyond the pass-through object were not resolved from the code."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "capabilities.accept_opt_in_agreement",
+  "ref": "W57",
+  "group": "capabilities",
+  "title": "Accept a capability's opt-in agreement",
+  "method": "POST",
+  "path": "QH65B2/account/capability/optinAgreement",
+  "wire": "json",
+  "read": false,
+  "params": [
+   {
+    "name": "optInAgreementId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "enumKey",
+    "in": "json",
+    "required": true,
+    "note": "the capability id"
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Shown before capabilities.opt_in when the capability has optInAgreementGroupId."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.list",
+  "ref": "W58",
+  "group": "identifiers",
+  "title": "Identifiers of a type (new format)",
+  "method": "GET",
+  "path": "v1/identifiers",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[identifierType]",
+    "in": "query",
+    "required": true,
+    "note": "MEDIASHARINGPROTOCOLID, DELEGATEID, ..."
+   },
+   {
+    "name": "sort",
+    "in": "query",
+    "required": false,
+    "note": "name"
+   },
+   {
+    "name": "limit",
+    "in": "query",
+    "required": false
+   }
+  ],
+  "answer": [
+   "data[]",
+   "meta.paging.total",
+   "meta.paging.limit"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Live: empty list for MEDIASHARINGPROTOCOLID."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "identifiers.get",
+  "ref": "W59",
+  "group": "identifiers",
+  "title": "One new-format identifier",
+  "method": "GET",
+  "path": "v1/identifiers/{id}",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.create",
+  "ref": "W60",
+  "group": "identifiers",
+  "title": "Register a new-format identifier",
+  "method": "POST",
+  "path": "v1/identifiers",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "identifiers"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifierType",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "The site posts to v1/<data.type> generically; attribute names inferred from the list call."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.delete",
+  "ref": "W61",
+  "group": "identifiers",
+  "title": "Remove a new-format identifier",
+  "method": "DELETE",
+  "path": "v1/identifiers/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Generic v1/<type>/<id> delete in the site's code."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.list_order_type_ids",
+  "ref": "W62",
+  "group": "identifiers",
+  "title": "Order Type IDs",
+  "method": "GET",
+  "path": "v1/orderTypeIds",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "limit",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "sort",
+    "in": "query",
+    "required": false,
+    "note": "name"
+   },
+   {
+    "name": "filter[OR][name]",
+    "in": "query",
+    "required": false
+   },
+   {
+    "name": "filter[OR][identifier]",
+    "in": "query",
+    "required": false
+   }
+  ],
+  "answer": [
+   "data[]",
+   "meta.paging.total"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Live: empty list."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "identifiers.create_order_type_id",
+  "ref": "W63",
+  "group": "identifiers",
+  "title": "Register an Order Type ID",
+  "method": "POST",
+  "path": "v1/orderTypeIds",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "orderTypeIds"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.identifier",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Generic v1/<data.type> post."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.update_order_type_id",
+  "ref": "W64",
+  "group": "identifiers",
+  "title": "Rename an Order Type ID",
+  "method": "PATCH",
+  "path": "v1/orderTypeIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Generic v1/<type>/<id> patch."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.delete_order_type_id",
+  "ref": "W65",
+  "group": "identifiers",
+  "title": "Remove an Order Type ID",
+  "method": "DELETE",
+  "path": "v1/orderTypeIds/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.list_app_id_prefixes",
+  "ref": "W66",
+  "group": "identifiers",
+  "title": "App ID prefixes of the team",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/listAppIdPrefixes.action",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   }
+  ],
+  "answer": [
+   "appIdPrefixes[]",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Register an App ID: the prefix menu."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "identifiers.list_available_by_cert_type",
+  "ref": "W67",
+  "group": "identifiers",
+  "title": "Identifiers a certificate type can be made for",
+  "method": "POST",
+  "path": "QH65B2/account/{platform}/identifiers/listAvailableIdentifiersByCertType",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "platform",
+    "in": "path",
+    "required": true,
+    "note": "platform slug; ios when not given",
+    "values": [
+     {
+      "value": "ios",
+      "label": "iOS, tvOS, watchOS"
+     },
+     {
+      "value": "mac",
+      "label": "macOS"
+     }
+    ]
+   },
+   {
+    "name": "certificateTypeDisplayId",
+    "in": "form",
+    "required": true,
+    "note": "e.g. BKLRAVXMGM"
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "name=asc"
+   },
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "identifierList[].displayId",
+   "identifierList[].identifier",
+   "identifierList[].prefix",
+   "totalRecords",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Create a certificate: the identifier menu."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "identifiers.list_music_ids",
+  "ref": "W68",
+  "group": "identifiers",
+  "title": "Media IDs",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/music/list",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "name=asc"
+   },
+   {
+    "name": "search",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "onlyCountLists",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "musicIdList[]",
+   "pageNumber",
+   "pageSize",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Live: empty list."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "identifiers.create_music_id",
+  "ref": "W69",
+  "group": "identifiers",
+  "title": "Register a Media ID",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/music/add",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page (name, identifier)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.update_music_id",
+  "ref": "W70",
+  "group": "identifiers",
+  "title": "Rename a Media ID",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/music/update",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.delete_music_id",
+  "ref": "W71",
+  "group": "identifiers",
+  "title": "Remove a Media ID",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/music/delete",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "musicId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.list_maps_ids",
+  "ref": "W72",
+  "group": "identifiers",
+  "title": "Maps IDs",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/maps/list",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "pageSize",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "pageNumber",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "sort",
+    "in": "form",
+    "required": false,
+    "note": "name=asc"
+   },
+   {
+    "name": "search",
+    "in": "form",
+    "required": false
+   },
+   {
+    "name": "onlyCountLists",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "mapsIdList[]",
+   "pageNumber",
+   "pageSize",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Live: empty list."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "identifiers.create_maps_id",
+  "ref": "W73",
+  "group": "identifiers",
+  "title": "Register a Maps ID",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/maps/add",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page (name, identifier)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.update_maps_id",
+  "ref": "W74",
+  "group": "identifiers",
+  "title": "Rename a Maps ID",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/maps/update",
+  "wire": "form",
+  "read": false,
+  "params": [],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Body passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.delete_maps_id",
+  "ref": "W75",
+  "group": "identifiers",
+  "title": "Remove a Maps ID",
+  "method": "POST",
+  "path": "QH65B2/account/identifiers/maps/delete",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "mapsId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.list_domains",
+  "ref": "W76",
+  "group": "identifiers",
+  "title": "Web domains of an identifier",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/listDomainsForIdentifier",
+  "wire": "form",
+  "read": true,
+  "params": [
+   {
+    "name": "identifierType",
+    "in": "form",
+    "required": true,
+    "note": "e.g. DELEGATEID"
+   },
+   {
+    "name": "identifierDisplayId",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "domains[]",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Not run live: no such identifier at hand."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.register_domain",
+  "ref": "W77",
+  "group": "identifiers",
+  "title": "Add a web domain to an identifier",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/registerIdentifierDomain",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "identifierType",
+    "in": "form",
+    "required": true
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Other fields passed through from the page."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.verify_domain",
+  "ref": "W78",
+  "group": "identifiers",
+  "title": "Verify an identifier's web domain",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/verifyIdentifierDomain",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "identifierType",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "domainId",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.remove_domain",
+  "ref": "W79",
+  "group": "identifiers",
+  "title": "Remove an identifier's web domain",
+  "method": "POST",
+  "path": "QH65B2/account/ios/identifiers/removeIdentifierDomain",
+  "wire": "form",
+  "read": false,
+  "params": [
+   {
+    "name": "identifierType",
+    "in": "form",
+    "required": true
+   },
+   {
+    "name": "domainId",
+    "in": "form",
+    "required": false
+   }
+  ],
+  "answer": [
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.download_domain_verification_file",
+  "ref": "W80",
+  "group": "identifiers",
+  "title": "Download an identifier's domain file",
+  "method": "GET",
+  "path": "QH65B2/account/ios/identifiers/downloadIdentifierDomainVerificationFile",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "identifierType",
+    "in": "query",
+    "required": true
+   },
+   {
+    "name": "domainId",
+    "in": "query",
+    "required": true
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "identifiers.get_siwa_configurations",
+  "ref": "W81",
+  "group": "identifiers",
+  "title": "Sign in with Apple app groupings",
+  "method": "POST",
+  "path": "QH65B2/identifiers/getConfigurations",
+  "wire": "json",
+  "read": true,
+  "params": [],
+  "answer": [
+   "configurations[].primaryApp.{appIdId,identifier,name}",
+   "configurations[].scopes",
+   "configurations[].scopesList",
+   "legacy envelope: resultCode, creationTimestamp, userLocale"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Services > Sign in with Apple groupings.",
+   "Live: configurations was empty."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": "2026-11-23"
+ },
+ {
+  "id": "licenses.list",
+  "ref": "W82",
+  "group": "licenses",
+  "title": "Enterprise licenses of the team",
+  "method": "GET",
+  "path": "v1/licenses",
+  "wire": "v1",
+  "read": true,
+  "params": [
+   {
+    "name": "filter[licenseTypeId]",
+    "in": "query",
+    "required": true,
+    "note": "VISIONOS_ENTERPRISE"
+   }
+  ],
+  "answer": [
+   "data[]"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Services > Licenses (visionOS enterprise APIs).",
+   "Tried live: 403 'not allowed' on a team without the entitlement, so not verified."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "licenses.create",
+  "ref": "W83",
+  "group": "licenses",
+  "title": "Create or renew an enterprise license",
+  "method": "POST",
+  "path": "v1/licenses",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "licenses"
+   },
+   {
+    "name": "data.attributes.licenseTypeId",
+    "in": "json",
+    "required": true,
+    "note": "VISIONOS_ENTERPRISE"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.updatingLicenseId",
+    "in": "json",
+    "required": false,
+    "note": "renewal"
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "licenses.update",
+  "ref": "W84",
+  "group": "licenses",
+  "title": "Rename an enterprise license",
+  "method": "PATCH",
+  "path": "v1/licenses/{id}",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "id",
+    "in": "path",
+    "required": true
+   },
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.id",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.licenseTypeId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.name",
+    "in": "json",
+    "required": true
+   }
+  ],
+  "answer": [
+   "data"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js)."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "licenses.download",
+  "ref": "W85",
+  "group": "licenses",
+  "title": "Download an enterprise license file",
+  "method": "GET",
+  "path": "license/download",
+  "wire": "download",
+  "read": false,
+  "params": [
+   {
+    "name": "displayId",
+    "in": "query",
+    "required": true,
+    "note": "the license id"
+   }
+  ],
+  "answer": [],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "The answer is base64 text the page saves as Enterprise.license."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "service_usage.weatherkit",
+  "ref": "W86",
+  "group": "service_usage",
+  "title": "WeatherKit usage for a date range",
+  "method": "POST",
+  "path": "v1/subscriptions",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "subscriptions"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.serviceTypeId",
+    "in": "json",
+    "required": true,
+    "note": "weatherkitUsage"
+   },
+   {
+    "name": "data.attributes.dailyUsageStartDate",
+    "in": "json",
+    "required": true,
+    "note": "YYYY-MM-DDT00:00:00"
+   },
+   {
+    "name": "data.attributes.dailyUsageEndDate",
+    "in": "json",
+    "required": true,
+    "note": "YYYY-MM-DDT23:59:59"
+   },
+   {
+    "name": "data.attributes.granularity",
+    "in": "json",
+    "required": true,
+    "note": "day or month"
+   }
+  ],
+  "answer": [
+   "data.attributes.serviceUsage.{available,currentUsage,expiryDate}",
+   "data.attributes.dailyUsage",
+   "data.attributes.usageByIdentifier"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Services > WeatherKit dashboard.",
+   "The site only reads with this call, but tool.DevSiteIsRead counts it as a write (method/path), so it needs approval; not run live."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
+  ],
+  "verified": ""
+ },
+ {
+  "id": "service_usage.mapkit",
+  "ref": "W87",
+  "group": "service_usage",
+  "title": "MapKit usage dashboard",
+  "method": "POST",
+  "path": "v1/mapkitDashboard",
+  "wire": "v1",
+  "read": false,
+  "params": [
+   {
+    "name": "data.type",
+    "in": "json",
+    "required": true,
+    "note": "mapkitDashboard"
+   },
+   {
+    "name": "data.attributes.teamId",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.dailyUsageStartDate",
+    "in": "json",
+    "required": true
+   },
+   {
+    "name": "data.attributes.spanCount",
+    "in": "json",
+    "required": true,
+    "note": "days"
+   }
+  ],
+  "answer": [
+   "data.attributes.dailyUsageByType",
+   "data.attributes.usageByDomain",
+   "data.attributes.servicesUsage",
+   "data.attributes.usageByIdentifier"
+  ],
+  "notes": [
+   "Screen: Certificates, Identifiers & Profiles (main.36cf9be3.js).",
+   "Services > MapKit JS dashboard.",
+   "The site only reads with this call, but tool.DevSiteIsRead counts it as a write (method/path), so it needs approval; not run live."
+  ],
+  "status": "observed",
+  "source": [
+   "site-js"
   ],
   "verified": ""
  }

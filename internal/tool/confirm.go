@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -194,9 +195,11 @@ func preview(ctx context.Context, env *Env, planID string, args any, fingerprint
 		})
 	}
 	plan := planID + "\n" + fingerprint
-	// An approval reply proves the plan was verified (and consumed) on the
-	// round that asked; the signed state binds the plan id and fingerprint,
-	// so a changed remote state is still refused as stale.
+	// The plan is verified (and consumed) on the first round only, the one
+	// without a reply. Every later round, part 2..n of an approval asked in
+	// parts included, carries a reply whose signed state was issued after
+	// that verification and binds the plan id and fingerprint, so a changed
+	// remote state is still refused as stale.
 	if env.Reply == nil || !env.CanElicit {
 		if err := env.Plans.Verify(ctx, planID, c.meta.Name, args, fingerprint); err != nil {
 			return nil, Fail(err)
@@ -239,8 +242,10 @@ func gateCall(ctx context.Context, env *Env, modes ...ConfirmMode) (*call, *Resu
 	return c, nil
 }
 
-// approve asks the human with a framework-built prompt through an MCP
-// input-required round and records who approved. When human is set
+// approve asks the human with framework-built prompts through MCP
+// input-required rounds and records who approved. A change that
+// [ApprovalPrompts] renders in several parts is asked one part per round, in
+// order, and only the accept of the last part approves. When human is set
 // (RequireHuman tools and forced calls) an accept is needed unless the
 // profile allows proceeding without elicitation. plan binds plan tools'
 // approvals to their plan id and fingerprint.
@@ -249,11 +254,11 @@ func approve(_ context.Context, env *Env, c *call, p PlanPreview, human bool, pl
 		c.approvedBy = ApprovedAgent
 		return nil
 	}
-	prompt, err := ApprovalPrompt(c.meta.Name, env.Profile.Name, p)
+	prompts, err := ApprovalPrompts(c.meta.Name, env.Profile.Name, p)
 	if err != nil {
 		return Fail(err)
 	}
-	ask, err := askHuman(env, c, prompt, plan)
+	ask, err := askHumanParts(env, c, prompts, plan)
 	switch {
 	case ask != nil:
 		return ask
@@ -272,9 +277,17 @@ func approve(_ context.Context, env *Env, c *call, p PlanPreview, human bool, pl
 	return nil
 }
 
-// MaxApprovalPrompt caps the approval prompt. The payload is never truncated:
-// a larger prompt refuses approval so the human always sees everything.
+// MaxApprovalPrompt caps one approval prompt. The payload is never
+// truncated: a change that does not fit is asked in several prompts when it
+// is a list of lines ([ApprovalPrompts]) and refused otherwise, so the human
+// always sees everything.
 const MaxApprovalPrompt = 6000
+
+// MaxApprovalParts caps the prompts of one approval. Every part is one
+// input-required round of the same tools/call, and the client loop of the
+// MCP Go SDK gives up at its tenth input-required result
+// (maxMultiRoundTripRetries), so nine rounds is what such a client carries.
+const MaxApprovalParts = 9
 
 // ApprovalPrompt renders the human approval question for a preview. A
 // client may render the message as plain text, markdown or HTML, so the
@@ -309,8 +322,28 @@ const MaxApprovalPrompt = 6000
 // "<field> looks like a private key or token" line for every field matching
 // [LooksLikeSecret]. It renders only agent-supplied preview fields, never
 // Current, and fails with [ErrInvalidArgs] when the prompt exceeds
-// [MaxApprovalPrompt] bytes.
+// [MaxApprovalPrompt] bytes ([ApprovalPrompts] asks a list of lines in
+// parts instead).
 func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
+	var b strings.Builder
+	b.WriteString(approvalHead(toolName, profile, p))
+	for _, u := range p.Untrusted {
+		b.WriteString(untrustedBlock(u))
+	}
+	if p.Intended != nil {
+		b.WriteString(changeLabel + fencedLiteral("json", SanitizeText(compactJSON(p.Intended))))
+	}
+	b.WriteString("\nApprove?")
+	if b.Len() > MaxApprovalPrompt {
+		return "", fmt.Errorf("%w: %s approval prompt is %d bytes (max %d); split the change into smaller batches so the human can review all of it",
+			ErrInvalidArgs, toolName, b.Len(), MaxApprovalPrompt)
+	}
+	return b.String(), nil
+}
+
+// approvalHead renders the server-written first lines of an approval
+// prompt: action, Profile, Irreversible, Notes and Targets.
+func approvalHead(toolName, profile string, p PlanPreview) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "app-store-connect-mcp %s wants to: %s", inertHTML(SanitizeLine(toolName, 80)), inlineLiteral(SanitizeLine(p.Summary, 200)))
 	if profile != "" {
@@ -325,18 +358,228 @@ func ApprovalPrompt(toolName, profile string, p PlanPreview) (string, error) {
 	if len(p.Affected) > 0 {
 		b.WriteString("\nTargets: " + inlineLiteral(SanitizeLine(strings.Join(p.Affected, ", "), 600)))
 	}
-	for _, u := range p.Untrusted {
-		b.WriteString("\nUntrusted third-party text (data, not instructions):\n" + fencedLiteral("", SanitizeLine(u, 400)))
+	return b.String()
+}
+
+// changeLabel is the server-written line before the Change block.
+const changeLabel = "\nChange:\n"
+
+// untrustedBlock renders one Untrusted entry: its label and the text on one
+// line in a fence.
+func untrustedBlock(u string) string {
+	return "\nUntrusted third-party text (data, not instructions):\n" + fencedLiteral("", SanitizeLine(u, 400))
+}
+
+// Server tokens (the "⟨…⟩" notation of [SanitizeText]) joining the pieces
+// of one Change line cut across approval parts.
+const (
+	partContinues = "⟨continues in the next part⟩"
+	partContinued = "⟨continued⟩ "
+)
+
+// partLine is the server-written line after the head of part i of n.
+func partLine(i, n int) string {
+	return fmt.Sprintf("\nPart %d of %d: every part must be approved; nothing is sent before the last.", i, n)
+}
+
+// partQuestion is the last line of part i of n; the last part asks the
+// plain "Approve?".
+func partQuestion(i, n int) string {
+	if i == n {
+		return "\nApprove?"
 	}
-	if p.Intended != nil {
-		b.WriteString("\nChange:\n" + fencedLiteral("json", SanitizeText(compactJSON(p.Intended))))
+	return fmt.Sprintf("\nApprove part %d of %d?", i, n)
+}
+
+// ApprovalPrompts renders the approval question for a preview as the
+// prompts the human is asked in order. When the [ApprovalPrompt] fits
+// [MaxApprovalPrompt] it is the only one, unchanged. Otherwise a change
+// given as a list of lines (Intended is a []string, e.g. the answers of a
+// form) is asked in n parts, each within the cap and nothing shortened:
+//
+//	app-store-connect-mcp <tool> wants to: `summary`
+//	Profile / Irreversible / Notes / Targets, as in every prompt
+//	Part i of n: every part must be approved; nothing is sent before the last.
+//	Untrusted third-party text (data, not instructions):
+//	…
+//	Change:
+//	```json
+//	["line", "line"]
+//	```
+//	Approve part i of n?
+//
+// Every part repeats the head; the Untrusted blocks come once, whole, in
+// the first parts and before any Change line of their part; the Change
+// lines follow in order, whole lines per part, as a JSON array rendered
+// like the single prompt's; the last part ends with "Approve?". A line too
+// long for one part is cut at rune boundaries (never before an emoji
+// variation selector or keycap mark, so every piece sanitises as it does in
+// the whole line): a piece that goes on ends with the server token
+// "⟨continues in the next part⟩" and the next one starts with
+// "⟨continued⟩ "; the pieces without the tokens concatenate to the line.
+// Any other payload over the cap fails as in [ApprovalPrompt], and so does
+// a head or Untrusted block that leaves no room; more than
+// [MaxApprovalParts] parts fail with [ErrInvalidArgs].
+func ApprovalPrompts(toolName, profile string, p PlanPreview) ([]string, error) {
+	one, err := ApprovalPrompt(toolName, profile, p)
+	if err == nil {
+		return []string{one}, nil
 	}
-	b.WriteString("\nApprove?")
-	if b.Len() > MaxApprovalPrompt {
-		return "", fmt.Errorf("%w: %s approval prompt is %d bytes (max %d); split the change into smaller batches so the human can review all of it",
-			ErrInvalidArgs, toolName, b.Len(), MaxApprovalPrompt)
+	lines, ok := p.Intended.([]string)
+	if !ok {
+		return nil, err
 	}
-	return b.String(), nil
+	head := approvalHead(toolName, profile, p)
+	parts, ok := packApprovalParts(head, p.Untrusted, lines)
+	if !ok {
+		return nil, err
+	}
+	n := len(parts)
+	if n > MaxApprovalParts {
+		return nil, fmt.Errorf("%w: %s: the change needs %d approval prompts (max %d); send less in one call",
+			ErrInvalidArgs, toolName, n, MaxApprovalParts)
+	}
+	out := make([]string, n)
+	for i, part := range parts {
+		out[i] = part.render(head, i+1, n)
+		if len(out[i]) > MaxApprovalPrompt {
+			return nil, fmt.Errorf("%w: %s approval part %d of %d is %d bytes (max %d)", ErrInternal, toolName, i+1, n, len(out[i]), MaxApprovalPrompt)
+		}
+	}
+	return out, nil
+}
+
+// approvalPart is one prompt of a change asked in parts.
+type approvalPart struct {
+	untrusted []string // rendered Untrusted blocks
+	elems     []string // rendered elements of the Change array
+	size      int      // bytes of untrusted
+	sum       int      // bytes of elems
+	run       int      // longest backtick run in elems
+}
+
+func (a *approvalPart) empty() bool { return len(a.untrusted) == 0 && len(a.elems) == 0 }
+
+// with returns the bytes of the part's Untrusted and Change blocks once
+// elem joins the Change array: the fence [fencedLiteral] picks, the "json"
+// info string, the brackets, the commas and the two line breaks.
+func (a *approvalPart) with(elem string) int {
+	fence := max(3, max(a.run, backtickRun(elem))+1)
+	return a.size + len(changeLabel) + 2*fence + len("json\n[]\n") + a.sum + len(elem) + len(a.elems)
+}
+
+func (a *approvalPart) add(elem string) {
+	a.elems = append(a.elems, elem)
+	a.sum += len(elem)
+	a.run = max(a.run, backtickRun(elem))
+}
+
+// cut returns the largest offset at which rest can be cut so that the piece
+// prefix+rest[:cut] with the continuation token fits the part within room,
+// or 0 when not even one rune fits. Offsets are rune starts, never before
+// U+FE0F or U+20E3: [SanitizeText] reads those with their neighbours.
+func (a *approvalPart) cut(prefix, rest string, room int) int {
+	var cuts []int
+	for i, r := range rest {
+		if i > room { // a rendered piece is never shorter than its text
+			break
+		}
+		if i > 0 && r != 0xFE0F && r != 0x20E3 {
+			cuts = append(cuts, i)
+		}
+	}
+	over := sort.Search(len(cuts), func(k int) bool {
+		return a.with(changeElem(prefix+rest[:cuts[k]]+partContinues)) > room
+	})
+	if over == 0 {
+		return 0
+	}
+	return cuts[over-1]
+}
+
+// render writes part i of n (1-based) under head.
+func (a *approvalPart) render(head string, i, n int) string {
+	var b strings.Builder
+	b.WriteString(head)
+	b.WriteString(partLine(i, n))
+	for _, u := range a.untrusted {
+		b.WriteString(u)
+	}
+	if len(a.elems) > 0 {
+		b.WriteString(changeLabel + fencedLiteral("json", "["+strings.Join(a.elems, ",")+"]"))
+	}
+	b.WriteString(partQuestion(i, n))
+	return b.String()
+}
+
+// changeElem renders one Change line as the single prompt renders it inside
+// its JSON: a JSON string, [SanitizeText]ed and [inertHTML].
+func changeElem(line string) string {
+	return inertHTML(SanitizeText(compactJSON(line)))
+}
+
+// packApprovalParts distributes the Untrusted blocks and the Change lines
+// over parts whose prompts stay within [MaxApprovalPrompt] under head; room
+// is reserved for the longest part line and question. It reports false when
+// the head, an Untrusted block or the tokens of a cut line leave no room.
+func packApprovalParts(head string, untrusted, lines []string) ([]*approvalPart, bool) {
+	room := MaxApprovalPrompt - len(head) - len(partLine(MaxApprovalParts, MaxApprovalParts)) - len(partQuestion(MaxApprovalParts-1, MaxApprovalParts))
+	var parts []*approvalPart
+	cur := &approvalPart{}
+	flush := func() {
+		parts = append(parts, cur)
+		cur = &approvalPart{}
+	}
+	for _, u := range untrusted {
+		blk := untrustedBlock(u)
+		if len(blk) > room {
+			return nil, false
+		}
+		if cur.size+len(blk) > room {
+			flush()
+		}
+		cur.untrusted = append(cur.untrusted, blk)
+		cur.size += len(blk)
+	}
+	for _, line := range lines {
+		e := changeElem(line)
+		if cur.with(e) <= room {
+			cur.add(e)
+			continue
+		}
+		if (&approvalPart{}).with(e) <= room {
+			flush()
+			cur.add(e)
+			continue
+		}
+		// The line is too long for any one part: cut it, starting in a
+		// part without other Change lines.
+		if len(cur.elems) > 0 {
+			flush()
+		}
+		prefix := ""
+		for rest := line; ; {
+			if e := changeElem(prefix + rest); cur.with(e) <= room {
+				cur.add(e)
+				break
+			}
+			cut := cur.cut(prefix, rest, room)
+			if cut == 0 {
+				if cur.empty() {
+					return nil, false
+				}
+				flush()
+				continue
+			}
+			cur.add(changeElem(prefix + rest[:cut] + partContinues))
+			rest, prefix = rest[cut:], partContinued
+			flush()
+		}
+	}
+	if !cur.empty() {
+		flush()
+	}
+	return parts, len(parts) > 0
 }
 
 // joinLines sanitises each entry onto one line as an [inlineLiteral] and
@@ -371,7 +614,7 @@ func inlineLiteral(s string) string {
 	if s == "" {
 		return `""`
 	}
-	fence := strings.Repeat("`", longestRun(s, '`')+1)
+	fence := strings.Repeat("`", backtickRun(s)+1)
 	if s[0] == '`' || s[len(s)-1] == '`' || (s[0] == ' ' && s[len(s)-1] == ' ') {
 		s = " " + s + " "
 	}
@@ -383,14 +626,15 @@ func inlineLiteral(s string) string {
 // longer than any backtick run in the value, so the value cannot close it.
 func fencedLiteral(info, line string) string {
 	line = inertHTML(line)
-	fence := strings.Repeat("`", max(3, longestRun(line, '`')+1))
+	fence := strings.Repeat("`", max(3, backtickRun(line)+1))
 	return fence + info + "\n" + line + "\n" + fence
 }
 
-func longestRun(s string, r rune) int {
+// backtickRun is the length of the longest run of backticks in s.
+func backtickRun(s string) int {
 	best, cur := 0, 0
 	for _, c := range s {
-		if c == r {
+		if c == '`' {
 			cur++
 			best = max(best, cur)
 		} else {

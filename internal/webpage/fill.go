@@ -89,7 +89,7 @@ func (f Form) Fill(a Answers) (Filled, []Problem) {
 			if answered && fd.Kind != KindTextarea && fd.Kind != KindHidden {
 				v = strings.NewReplacer("\r", "", "\n", "").Replace(v)
 			}
-			if fd.Required && v == "" {
+			if fd.Required && !fd.Readonly && v == "" {
 				problem(fd.Name, "is required")
 			}
 			if answered && fd.MaxLength > 0 {
@@ -175,6 +175,12 @@ func (f Form) assignValues(answers map[string][]string, problem func(string, str
 			problem(name, "is disabled")
 			continue
 		}
+		writable := keepIf(enabled, func(i int) bool { return !f.Fields[i].Readonly })
+		if len(writable) == 0 {
+			problem(name, "readonly: the page sets this value")
+			continue
+		}
+		enabled = writable
 		switch {
 		case len(enabled) == 1:
 			out[enabled[0]] = vals

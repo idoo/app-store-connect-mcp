@@ -155,18 +155,25 @@ var elicitors sync.Map
 // Elicit declares form elicitation on the Kit's Env and installs a handler
 // that accepts (or declines) every approval ask, recording the prompts.
 func (k *Kit) Elicit(accept bool) *[]string {
-	asked := &[]string{}
-	var mu sync.Mutex
 	action := "decline"
 	if accept {
 		action = "accept"
 	}
+	return k.ElicitFunc(func(int, string) string { return action })
+}
+
+// ElicitFunc is [Kit.Elicit] with answer choosing the action ("accept",
+// "decline", "cancel") for each ask: round counts the asks answered so far
+// (0 for the first), prompt is the one asked. It records the prompts.
+func (k *Kit) ElicitFunc(answer func(round int, prompt string) string) *[]string {
+	asked := &[]string{}
+	var mu sync.Mutex
 	k.Env.CanElicit = true
 	elicitors.Store(k.Env, func(prompt string) string {
 		mu.Lock()
 		defer mu.Unlock()
 		*asked = append(*asked, prompt)
-		return action
+		return answer(len(*asked)-1, prompt)
 	})
 	return asked
 }

@@ -976,7 +976,7 @@
     "toolset": "developer",
     "class": "R",
     "title": "Describe a developer account operation",
-    "description": "One known developer account operation: method, path, params with known values, answer keys, notes, and the ready developer_api_get or developer_api_request call. From open-source clients, not verified live.",
+    "description": "One known developer account operation: method, path, params with known values, answer keys, notes, and the ready developer_api_get or developer_api_request call. verified: the day it answered live, if any.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": false,
@@ -1034,7 +1034,7 @@
         },
         "json": {
           "additionalProperties": true,
-          "description": "legacy JSON read's body; teamId added when absent",
+          "description": "JSON read's body (legacy, or a v1 read the site sends as POST); teamId added when absent",
           "type": "object"
         },
         "path": {
@@ -1134,7 +1134,7 @@
     "toolset": "developer",
     "class": "R",
     "title": "Find a developer account operation",
-    "description": "Find a developer account operation (keys, identifiers, certificates, devices, profiles, capabilities) by words in the catalog of known services-account calls; then developer_api_describe.",
+    "description": "Find a developer account operation (keys, identifiers, certificates, devices, profiles, capabilities, membership) by words in the catalog of known services-account calls; then developer_api_describe.",
     "annotations": {
       "idempotentHint": true,
       "openWorldHint": false,
@@ -1148,6 +1148,8 @@
           "enum": [
             "session",
             "team",
+            "account",
+            "membership",
             "keys",
             "services_ids",
             "pass_type_ids",
@@ -1160,7 +1162,10 @@
             "devices",
             "profiles",
             "capabilities",
-            "bundle_ids"
+            "bundle_ids",
+            "identifiers",
+            "licenses",
+            "service_usage"
           ],
           "type": "string"
         },

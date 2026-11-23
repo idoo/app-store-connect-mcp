@@ -65,10 +65,18 @@ type Field struct {
 	// Label is what the page calls the field: its <label for>, a label
 	// wrapping it, aria-label, a fieldset's legend for a group, else its
 	// placeholder.
-	Label    string
+	Label string
+	// Caption is the short text that stands just before the control, or
+	// before the outermost wrapper the control comes first in: a question
+	// in a paragraph or a heading above an input. It is never merged into
+	// Label, and a hidden control has none.
+	Caption  string
 	Required bool
 	Multiple bool
 	Disabled bool
+	// Readonly marks a text control the page fills in itself: its value is
+	// sent, and Fill refuses an answer to it.
+	Readonly bool
 	// Values are the field's defaults as a browser would send them
 	// untouched: the value attribute, a textarea's text, the selected
 	// options, the checked boxes.

@@ -91,6 +91,37 @@ func TestAPIGetLegacyFormAndJSON(t *testing.T) {
 	}
 }
 
+// The site reads a capability's request history with a v1 POST; it is the
+// one v1 POST the read tool sends, and no other v1 path becomes a read by
+// carrying a body.
+func TestAPIGetV1ReadSentAsPost(t *testing.T) {
+	k := tooltest.New(t).WebSession()
+	k.DevSite.HandleAPIJSON("POST", "v1/featureRequest", `{"data":{"type":"featureRequest","attributes":{"featureRequests":[]}}}`)
+	in := `{"path":"v1/featureRequest","team_id":"` + team + `","json":{"data":{"type":"featureRequest","attributes":{"bundleId":"B1","capabilityId":"USERNOTIFICATION_FILTERING"}}}}`
+	tooltest.MustOK(t, call(t, k, "developer_api_get", in))
+	calls := callsOf(k, "api")
+	if len(calls) != 1 || calls[0].Method != "POST" || calls[0].Path != "v1/featureRequest" {
+		t.Fatalf("calls = %+v", calls)
+	}
+	body, _ := calls[0].JSON.(map[string]any)
+	data, _ := body["data"].(map[string]any)
+	attrs, _ := data["attributes"].(map[string]any)
+	if attrs["teamId"] != team || attrs["bundleId"] != "B1" || body["teamId"] != nil {
+		t.Errorf("body = %v", calls[0].JSON)
+	}
+	for _, args := range []string{
+		`{"path":"v1/bundleIds","team_id":"` + team + `","json":{"data":{"type":"bundleIds"}}}`,
+		`{"path":"v1/featureRequests","team_id":"` + team + `","json":{"data":{}}}`,
+		`{"path":"v1/featureRequest","team_id":"` + team + `","json":{"data":{}},"query":{"limit":"1"}}`,
+		`{"path":"v1/featureRequest","team_id":"` + team + `","form":{"a":"b"}}`,
+	} {
+		tooltest.MustFail(t, call(t, k, "developer_api_get", args), tool.ErrInvalidArgs.Code)
+	}
+	if n := len(callsOf(k, "api")); n != 1 {
+		t.Fatalf("refused calls reached the site: %d", n)
+	}
+}
+
 func TestAPIGetRefusesWrites(t *testing.T) {
 	k := tooltest.New(t).WebSession()
 	for _, p := range []string{"QH65B2/account/auth/key/create", "QH65B2/account/auth/key/download", "v1/../x", "https://evil.example/v1/x"} {
@@ -352,7 +383,7 @@ func TestFormPlanShowsVisiblePairsOnly(t *testing.T) {
 	p := k.Plans.Proposed[0]
 	s := tooltest.JSON(t, p)
 	if strings.Contains(s, "TOKEN-") || !strings.Contains(s, `"appName: Hjul"`) || !strings.Contains(s, "kind: a") ||
-		!strings.Contains(s, "hidden fields (sent, not shown): csrf") || !slices.Contains(p.Untrusted, "label of appName: App name") {
+		!strings.Contains(s, "hidden fields (sent, not shown): csrf") || !strings.Contains(strings.Join(p.Untrusted, "\n"), "label of appName: App name") {
 		t.Fatalf("preview = %s", s)
 	}
 	if len(callsOf(k, "submit")) != 0 {
@@ -802,5 +833,102 @@ func TestFormAnswerNotHTMLShowsNoBody(t *testing.T) {
 				t.Fatalf("answer = %v", answer)
 			}
 		})
+	}
+}
+
+// captionPage is Apple's request form markup (legacy-form dev-form),
+// trimmed: questions stand in paragraphs before the controls.
+const captionPage = `<html><head><title>Request</title></head><body>
+<form id="contactForm" name="contactForm" method="post" action="/contact/request/notification-service">
+<input type="hidden" name="token" value="CAPTION-TOKEN">
+<p><strong>App Name</strong></p>
+<label for="app_name"><input type="text" name="app_name" id="app_name" maxlength="100" value="" required=""></label>
+<p><strong>Name</strong></p>
+<label for="contact_name" class="readonly"><input type="text" id="contact_name" name="contact_name" value="Verevkin Ivan" readonly></label>
+<p><strong>Explain why existing APIs are not adequate for your app.</strong></p>
+<label for="why"><textarea id="why" name="why" maxlength="2000" required=""></textarea></label>
+</form></body></html>`
+
+func TestPageGetShowsCaptionAndReadonly(t *testing.T) {
+	k := tooltest.New(t).WebSession()
+	k.DevSite.HandlePage("contact/request/notification-service", captionPage)
+	res := tooltest.MustOK(t, call(t, k, "developer_page_get", `{"path":"contact/request/notification-service"}`))
+	var out struct {
+		Forms []struct {
+			Fields []map[string]any `json:"fields"`
+		} `json:"forms"`
+	}
+	if err := json.Unmarshal([]byte(tooltest.JSON(t, res.Data)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Forms) != 1 {
+		t.Fatalf("forms = %+v", out.Forms)
+	}
+	got := map[string]map[string]any{}
+	for _, f := range out.Forms[0].Fields {
+		got[f["name"].(string)] = f
+	}
+	untrusted := func(s string) any { return map[string]any{"untrusted": s} }
+	for name, want := range map[string]map[string]any{
+		"app_name":     {"caption": untrusted("App Name"), "readonly": nil},
+		"contact_name": {"caption": untrusted("Name"), "readonly": true},
+		"why":          {"caption": untrusted("Explain why existing APIs are not adequate for your app."), "readonly": nil},
+		"token":        {"caption": nil, "readonly": nil},
+	} {
+		for key, w := range want {
+			if g, ok := got[name][key]; fmt.Sprint(g) != fmt.Sprint(w) || (w == nil) == ok {
+				t.Errorf("%s.%s = %v (present %v), want %v", name, key, g, ok, w)
+			}
+		}
+	}
+	if s := tooltest.JSON(t, res.Data); strings.Contains(s, "CAPTION-TOKEN") {
+		t.Errorf("token value shown: %s", s)
+	}
+}
+
+func TestFormPreviewShowsCaptions(t *testing.T) {
+	k := tooltest.New(t).WebSession()
+	k.DevSite.HandlePage("contact/request/notification-service", captionPage)
+	p := previewOf(t, tooltest.MustOK(t, call(t, k, "developer_form_submit",
+		`{"path":"contact/request/notification-service","fields":{"app_name":"Hjul","why":"Filter spam calls"}}`)))
+	un := fmt.Sprint(p["untrusted"])
+	for _, want := range []string{
+		"caption of app_name: App Name", "caption of contact_name: Name",
+		"caption of why: Explain why existing APIs are not adequate for your app.",
+	} {
+		if !strings.Contains(un, want) {
+			t.Errorf("untrusted lacks %q: %s", want, un)
+		}
+	}
+	intended := fmt.Sprint(p["intended"])
+	if strings.Contains(intended, "caption of") || !strings.Contains(intended, "contact_name: Verevkin Ivan") {
+		t.Errorf("intended = %s", intended)
+	}
+}
+
+func TestFormReadonlyAnswerIsAProblem(t *testing.T) {
+	k := tooltest.New(t).WebSession()
+	k.DevSite.HandlePage("contact/request/notification-service", captionPage)
+	res := call(t, k, "developer_form_submit", `{"path":"contact/request/notification-service","fields":{"app_name":"Hjul","why":"x","contact_name":"Someone Else"}}`)
+	if !res.IsError {
+		t.Fatalf("res = %s", tooltest.JSON(t, res.Data))
+	}
+	if s := tooltest.JSON(t, res.Data); !strings.Contains(s, `{"field":"contact_name","message":"readonly: the page sets this value"}`) {
+		t.Fatalf("body = %s", s)
+	}
+	if len(k.Plans.Proposed) != 0 || len(callsOf(k, "submit")) != 0 {
+		t.Error("a plan or a post for a refused form")
+	}
+}
+
+func TestPackLines(t *testing.T) {
+	long := strings.Repeat("é", 30)
+	got := packLines([]string{"a", "bb", long, "ccc", "d"}, 12)
+	want := []string{"a | bb", long, "ccc | d"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("packLines = %q, want %q", got, want)
+	}
+	if got := packLines(nil, 12); len(got) != 0 {
+		t.Fatalf("no lines = %q", got)
 	}
 }

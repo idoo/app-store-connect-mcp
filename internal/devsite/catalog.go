@@ -1,7 +1,8 @@
 // Package devsite is the catalog of the Apple Developer account site's
 // known services-account operations, as open-source clients (fastlane,
-// asc-cli, expo) call them. Nothing in it was verified against the live
-// site by this project: every operation's Verified is empty until it is.
+// asc-cli, expo) call them and as the site's own JavaScript does
+// (source "site-js", refs W…). An operation's Verified is the day this
+// project last saw it answer live; empty means never.
 package devsite
 
 import (
@@ -18,8 +19,9 @@ var operationsJSON []byte
 
 // Groups are the operation groups, in catalog order.
 var Groups = []string{
-	"session", "team", "keys", "services_ids", "pass_type_ids", "website_push_ids", "merchant_ids",
+	"session", "team", "account", "membership", "keys", "services_ids", "pass_type_ids", "website_push_ids", "merchant_ids",
 	"cloud_containers", "app_groups", "app_ids", "certificates", "devices", "profiles", "capabilities", "bundle_ids",
+	"identifiers", "licenses", "service_usage",
 }
 
 // Wire values: how an operation goes to the site.

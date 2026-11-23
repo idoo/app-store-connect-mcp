@@ -47,9 +47,11 @@ type fieldOut struct {
 	Name      string           `json:"name"`
 	Kind      string           `json:"kind"`
 	Label     tool.Untrusted   `json:"label,omitempty"`
+	Caption   tool.Untrusted   `json:"caption,omitempty"`
 	Required  bool             `json:"required,omitempty"`
 	Multiple  bool             `json:"multiple,omitempty"`
 	Disabled  bool             `json:"disabled,omitempty"`
+	Readonly  bool             `json:"readonly,omitempty"`
 	Value     *tool.Untrusted  `json:"value,omitempty"`
 	Values    []tool.Untrusted `json:"values,omitempty"`
 	Options   []optionOut      `json:"options,omitempty"`
@@ -192,7 +194,8 @@ func describeForm(i int, f webpage.Form) formOut {
 			fo.Fields = append(fo.Fields, o)
 			continue
 		}
-		o.Label, o.Required, o.Multiple, o.Disabled, o.MaxLength = tool.Untrusted(fd.Label), fd.Required, fd.Multiple, fd.Disabled, fd.MaxLength
+		o.Label, o.Caption, o.Required, o.Multiple, o.Disabled, o.Readonly, o.MaxLength =
+			tool.Untrusted(fd.Label), tool.Untrusted(fd.Caption), fd.Required, fd.Multiple, fd.Disabled, fd.Readonly, fd.MaxLength
 		group := fd.Multiple || fd.Kind == webpage.KindCheckbox
 		switch {
 		case len(fd.Values) == 1 && !group:

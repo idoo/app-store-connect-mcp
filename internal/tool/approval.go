@@ -39,7 +39,9 @@ type ApprovalReply struct {
 
 // approvalClaims is the signed payload of an approval requestState. It binds
 // the approval to one call: tool, canonical args, profile, plan and the exact
-// prompt the human saw.
+// prompt the human saw. An approval asked in parts also binds the prompt's
+// place (Part, 0-based) and the hash of the whole set of prompts (Set); a
+// one-part approval leaves both zero, so its claims are unchanged.
 type approvalClaims struct {
 	Nonce   string `json:"n"`
 	Tool    string `json:"t"`
@@ -47,6 +49,8 @@ type approvalClaims struct {
 	Profile string `json:"p"`
 	Plan    string `json:"f,omitempty"`
 	Prompt  string `json:"q"`
+	Part    int    `json:"k,omitempty"`
+	Set     string `json:"s,omitempty"`
 	Issued  int64  `json:"i"`
 	Expires int64  `json:"e"`
 }
@@ -103,29 +107,40 @@ func (s *approvalSigner) issue(c approvalClaims, now time.Time) (string, error) 
 // A state for the same call whose plan or remote state changed fails with
 // [ErrStalePlan]; anything else fails with errApprovalMismatch.
 func (s *approvalSigner) redeem(state string, want approvalClaims, now time.Time) error {
+	_, err := s.redeemPart(state, want, []string{want.Prompt}, now)
+	return err
+}
+
+// redeemPart is redeem for an approval asked as the prompts whose hashes
+// are prompts, and returns the 0-based part the state was issued for. The
+// part is read from the signed state once its signature verified; the
+// state must carry the hash of this whole set ([partsSet]) and the hash of
+// the prompt at its part, so a part out of range, a reordered or edited set
+// fail with errApprovalMismatch. want gives tool, args, profile and plan.
+func (s *approvalSigner) redeemPart(state string, want approvalClaims, prompts []string, now time.Time) (int, error) {
 	payload, sig, ok := strings.Cut(state, ".")
 	if !ok || !hmac.Equal([]byte(sig), []byte(s.sign(payload))) {
-		return errApprovalMismatch
+		return 0, errApprovalMismatch
 	}
 	b, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
-		return errApprovalMismatch
+		return 0, errApprovalMismatch
 	}
 	var got approvalClaims
 	if err := json.Unmarshal(b, &got); err != nil || got.Nonce == "" {
-		return errApprovalMismatch
+		return 0, errApprovalMismatch
 	}
 	if !now.Before(time.Unix(got.Expires, 0)) {
-		return errApprovalMismatch
+		return 0, errApprovalMismatch
 	}
 	if got.Tool != want.Tool || got.Args != want.Args || got.Profile != want.Profile {
-		return errApprovalMismatch
+		return 0, errApprovalMismatch
 	}
 	if got.Plan != want.Plan {
-		return fmt.Errorf("%w: the remote state changed after approval was asked; preview again", ErrStalePlan)
+		return 0, fmt.Errorf("%w: the remote state changed after approval was asked; preview again", ErrStalePlan)
 	}
-	if got.Prompt != want.Prompt {
-		return errApprovalMismatch
+	if got.Part < 0 || got.Part >= len(prompts) || got.Set != partsSet(prompts) || got.Prompt != prompts[got.Part] {
+		return 0, errApprovalMismatch
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -135,10 +150,19 @@ func (s *approvalSigner) redeem(state string, want approvalClaims, now time.Time
 		}
 	}
 	if _, dup := s.used[got.Nonce]; dup {
-		return errApprovalMismatch
+		return 0, errApprovalMismatch
 	}
 	s.used[got.Nonce] = time.Unix(got.Expires, 0)
-	return nil
+	return got.Part, nil
+}
+
+// partsSet is the hash binding an approval asked in parts to the whole set
+// of its prompt hashes, in order; "" for a one-part approval.
+func partsSet(prompts []string) string {
+	if len(prompts) < 2 {
+		return ""
+	}
+	return sha256Hex([]byte(fmt.Sprintf("%d\n%s", len(prompts), strings.Join(prompts, "\n"))))
 }
 
 func sha256Hex(b []byte) string {
@@ -164,6 +188,17 @@ func AskHuman(ctx context.Context, env *Env, prompt string) (*Result, error) {
 // client's reply on the retry. plan binds plan tools to their plan id and
 // state fingerprint.
 func askHuman(env *Env, c *call, prompt, plan string) (*Result, error) {
+	return askHumanParts(env, c, []string{prompt}, plan)
+}
+
+// askHumanParts asks prompts in order, one per input-required round of the
+// same call. The first round (no reply) asks part 1. A retry carries the
+// signed state of the part it answers: once redeemed with accept, the next
+// part is asked with a fresh state; the accept of the last part returns
+// (nil, nil), the only approval. Any other answer is [ErrDeclined]. Since
+// each state is one-shot and part i+1 is issued only on redeeming an
+// accepted part i, no part can be skipped or answered twice.
+func askHumanParts(env *Env, c *call, prompts []string, plan string) (*Result, error) {
 	if !env.CanElicit {
 		return nil, ErrElicitationUnavailable
 	}
@@ -171,29 +206,43 @@ func askHuman(env *Env, c *call, prompt, plan string) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: approval args: %v", ErrInternal, err)
 	}
+	hashes := make([]string, len(prompts))
+	for i, p := range prompts {
+		hashes[i] = sha256Hex([]byte(p))
+	}
 	want := approvalClaims{
 		Tool:    c.meta.Name,
 		Args:    sha256Hex(args),
 		Profile: env.Profile.Name,
 		Plan:    plan,
-		Prompt:  sha256Hex([]byte(prompt)),
+		Set:     partsSet(hashes),
 	}
 	now := env.Clock.Now()
-	if env.Reply == nil {
-		state, err := approvals.issue(want, now)
+	askPart := func(i int) (*Result, error) {
+		claims := want
+		claims.Part = i
+		claims.Prompt = hashes[i]
+		state, err := approvals.issue(claims, now)
 		if err != nil {
 			return nil, err
 		}
-		return &Result{Ask: &ApprovalAsk{Prompt: prompt, State: state}}, nil
+		return &Result{Ask: &ApprovalAsk{Prompt: prompts[i], State: state}}, nil
+	}
+	if env.Reply == nil {
+		return askPart(0)
 	}
 	if env.Reply.Action == "" {
 		return nil, errApprovalMismatch
 	}
-	if err := approvals.redeem(env.Reply.State, want, now); err != nil {
+	part, err := approvals.redeemPart(env.Reply.State, want, hashes, now)
+	if err != nil {
 		return nil, err
 	}
 	if env.Reply.Action != "accept" {
 		return nil, ErrDeclined
+	}
+	if part+1 < len(prompts) {
+		return askPart(part + 1)
 	}
 	return nil, nil
 }

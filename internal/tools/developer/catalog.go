@@ -11,8 +11,25 @@ import (
 const (
 	searchLimitDefault = 10
 	searchLimitMax     = 30
-	sourceNote         = "from open-source clients (fastlane, asc-cli, expo); not yet verified against the live site by this server"
+	siteJS             = "site-js"
 )
+
+// sourceNote says where the catalog has o from and whether it ever answered
+// on the live site.
+func sourceNote(o devsite.Operation) string {
+	var from []string
+	for _, s := range o.Source {
+		if s == siteJS {
+			s = "the account site's own JavaScript"
+		}
+		from = append(from, s)
+	}
+	note := "from " + strings.Join(from, ", ")
+	if o.Verified == "" {
+		return note + "; not yet verified against the live site by this server"
+	}
+	return note + "; it answered as described on the live site on " + o.Verified
+}
 
 func init() {
 	groups := make([]any, len(devsite.Groups))
@@ -23,7 +40,7 @@ func init() {
 		Name: "developer_api_search", Toolset: tool.Developer, Class: tool.Read, Idempotent: true, Local: true,
 		Title: "Find a developer account operation",
 		Description: "Find a developer account operation (keys, identifiers, certificates, devices, profiles, " +
-			"capabilities) by words in the catalog of known services-account calls; then developer_api_describe.",
+			"capabilities, membership) by words in the catalog of known services-account calls; then developer_api_describe.",
 		Enums:  map[string][]any{"group": groups},
 		Ranges: map[string][2]int{"limit": {1, searchLimitMax}},
 	}, apiSearch))
@@ -31,7 +48,7 @@ func init() {
 		Name: "developer_api_describe", Toolset: tool.Developer, Class: tool.Read, Idempotent: true, Local: true,
 		Title: "Describe a developer account operation",
 		Description: "One known developer account operation: method, path, params with known values, answer keys, " +
-			"notes, and the ready developer_api_get or developer_api_request call. From open-source clients, not verified live.",
+			"notes, and the ready developer_api_get or developer_api_request call. verified: the day it answered live, if any.",
 		Enums: map[string][]any{"portal_platform": {"ios", "mac"}},
 	}, apiDescribe))
 }
@@ -49,13 +66,14 @@ type apiDescribeIn struct {
 }
 
 type operationRow struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Group    string `json:"group"`
-	Method   string `json:"method"`
-	Path     string `json:"path"`
-	Read     bool   `json:"read"`
-	Verified bool   `json:"verified"`
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Group  string `json:"group"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Read   bool   `json:"read"`
+	// Verified is the day the operation answered on the live site.
+	Verified string `json:"verified,omitempty"`
 }
 
 func apiSearch(_ context.Context, _ *tool.Env, in apiSearchIn) (*tool.Result, error) {
@@ -67,7 +85,7 @@ func apiSearch(_ context.Context, _ *tool.Env, in apiSearchIn) (*tool.Result, er
 	ops := devsite.Search(in.Query, in.Group, limit)
 	rows := make([]operationRow, len(ops))
 	for i, o := range ops {
-		rows[i] = operationRow{ID: o.ID, Title: o.Title, Group: o.Group, Method: o.Method, Path: o.Path, Read: o.Read, Verified: o.Verified != ""}
+		rows[i] = operationRow{ID: o.ID, Title: o.Title, Group: o.Group, Method: o.Method, Path: o.Path, Read: o.Read, Verified: o.Verified}
 	}
 	out := map[string]any{"count": len(rows), "operations": rows}
 	if strings.TrimSpace(in.Query) == "" && in.Group == "" {
@@ -76,11 +94,10 @@ func apiSearch(_ context.Context, _ *tool.Env, in apiSearchIn) (*tool.Result, er
 	return tool.OK(out), nil
 }
 
-// described is an operation as developer_api_describe shows it; Verified
-// replaces the catalog's date with whether it was verified at all.
+// described is an operation as developer_api_describe shows it; its
+// verified is the catalog's date, empty for an operation never run live.
 type described struct {
 	devsite.Operation
-	Verified   bool          `json:"verified"`
 	Call       describedCall `json:"call"`
 	SourceNote string        `json:"source_note"`
 }
@@ -100,8 +117,7 @@ func apiDescribe(_ context.Context, _ *tool.Env, in apiDescribeIn) (*tool.Result
 	name, args := o.Call(map[string]string{"platform": in.Platform, "id": in.ID})
 	return tool.OK(described{
 		Operation:  o,
-		Verified:   o.Verified != "",
 		Call:       describedCall{Tool: name, Arguments: args},
-		SourceNote: sourceNote,
+		SourceNote: sourceNote(o),
 	}), nil
 }

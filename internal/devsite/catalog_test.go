@@ -13,13 +13,16 @@ import (
 // sharedRefs are the reference rows that describe several calls at once.
 var sharedRefs = []string{"N26", "N35", "J11", "J12", "J14"}
 
+// dateRE is the form of an operation's Verified day.
+var dateRE = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+
 func TestCatalogParsesAndIsConsistent(t *testing.T) {
 	ops := All()
 	if len(ops) < 90 {
 		t.Fatalf("operations = %d, want at least 90", len(ops))
 	}
 	idRE := regexp.MustCompile(`^[a-z_]+\.[a-z0-9_]+$`)
-	refRE := regexp.MustCompile(`^[SKNACDJ][0-9]+$`)
+	refRE := regexp.MustCompile(`^[SKNACDJW][0-9]+$`)
 	ids, refs := map[string]bool{}, map[string]int{}
 	for _, o := range ops {
 		if !idRE.MatchString(o.ID) || ids[o.ID] {
@@ -43,12 +46,12 @@ func TestCatalogParsesAndIsConsistent(t *testing.T) {
 			t.Errorf("%s: no source", o.ID)
 		}
 		for _, s := range o.Source {
-			if !slices.Contains([]string{"fastlane", "asc-cli", "expo"}, s) {
+			if !slices.Contains([]string{"fastlane", "asc-cli", "expo", "site-js"}, s) {
 				t.Errorf("%s: source %q", o.ID, s)
 			}
 		}
-		if o.Verified != "" {
-			t.Errorf("%s: verified %q, but nothing was verified live", o.ID, o.Verified)
+		if o.Verified != "" && (!dateRE.MatchString(o.Verified) || !o.Read) {
+			t.Errorf("%s: verified %q; only a read is verified, by a YYYY-MM-DD day", o.ID, o.Verified)
 		}
 	}
 	for ref, n := range refs {
@@ -212,8 +215,13 @@ func TestCall(t *testing.T) {
 	}{
 		{"services_ids.list", nil, "developer_api_get", `{"path":"v1/bundleIds","query":{"filter[platform]":"SERVICES"}}`},
 		{"keys.get", nil, "developer_api_get", `{"form":{"keyId":"\u003ckeyId\u003e"},"path":"QH65B2/account/auth/key/get"}`},
-		{"team.list_members", nil, "developer_api_get", `{"json":{},"path":"QH65B2/account/getTeamMembers"}`},
-		{"app_ids.list", map[string]string{"platform": "mac"}, "developer_api_get", `{"path":"QH65B2/account/mac/identifiers/listAppIds.action"}`},
+		{"session.get_notifications", nil, "developer_api_get", `{"json":{},"path":"QH65B2/account/getNotifications"}`},
+		{
+			"app_ids.list",
+			map[string]string{"platform": "mac"},
+			"developer_api_get",
+			`{"form":{"pageNumber":"1","pageSize":"500"},"path":"QH65B2/account/mac/identifiers/listAppIds.action"}`,
+		},
 		{"bundle_ids.get", nil, "developer_api_get", `{"path":"v1/bundleIds/{id}"}`},
 		{
 			"keys.revoke",

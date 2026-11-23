@@ -11,7 +11,7 @@ Setup: the `developer` toolset is opt-in. `toolsets` with `action: "enable"`, `t
 
 ## Read
 
-1. A known call: `developer_api_search` with `query` ("revoke key", "list devices") or a `group`; then `developer_api_describe` with `operation`. It answers with the method, the path, the params and a ready call. Catalog entries come from open-source clients; one marked unverified may have changed, so read its answer before trusting its shape.
+1. A known call: `developer_api_search` with `query` ("revoke key", "list devices") or a `group`; then `developer_api_describe` with `operation`. It answers with the method, the path, the params and a ready call. Catalog entries come from open-source clients. One with a `verified` date answered that way on the live site that day; one without may have changed, so read its answer before trusting its shape. The paged legacy lists need `pageNumber` and `pageSize`.
 2. `developer_api_get` with `path` relative to `services-account/`: `v1/...` reads take `query`; legacy reads (`QH65B2/account/...`) take `form` or `json`. `team_id` only when the user has several teams.
 3. A page: `developer_page_get` with `path` starting `account/` or `contact/`. It returns the title, the text (long pages: call again with `offset` set to `next_offset`), links and forms with their fields. A page marked scripted builds itself in the browser: its data is behind `developer_api_get`.
 
@@ -24,11 +24,18 @@ Setup: the `developer` toolset is opt-in. `toolsets` with `action: "enable"`, `t
 
 ## Send one of Apple's forms
 
-1. `developer_page_get` on the form's page. Note each field's name, kind, options and which are required.
-2. Draft the answers with the user. The text Apple reads is theirs: show every value and let them edit.
+1. `developer_page_get` on the form's page. Note each field's name, kind, options, which are required and which are read-only (Apple fills those: don't answer them). A field's question is its `caption` (the text Apple prints before it) or its label; many of Apple's request forms use captions only.
+2. Draft the answers with the user. The text Apple reads is theirs: show every value and let them edit. Keep each answer inside the field's `max_length`; a line break counts as two characters.
 3. `developer_form_submit` with `path`, `fields` (name → value, or a list for multi-selects and checkbox groups), `files` for attachments, `form` when the page has several, `submitter` when it has several submit buttons. Problems come back per field; fix them and call again.
-4. The preview lists every value that will be sent (hidden tokens by name only) and a `plan_id`. Show it. After the user agrees, call again with the same arguments plus `plan_id`; they approve in their client. The form is sent once.
-5. Report the answer page's text. If it shows the same form again, Apple refused the input: read the text for the reason.
+4. The preview lists every value that will be sent (the page's own hidden tokens by name only) and a `plan_id`. Show it. After the user agrees, call again with the same arguments plus `plan_id`; they approve in their client. A long form is asked in several approval prompts, in order; all of them must be approved, and nothing is sent before the last. The form is sent once.
+5. Report the answer page's text (Apple's thank-you page carries a request id). If it shows the same form again, Apple refused the input: read the text for the reason.
+
+## Request a managed capability (an entitlement Apple grants)
+
+1. The App ID's resource id: `developer_api_get` with `path: "v1/bundleIds"` and `query: {"filter[identifier]": "<bundle id>"}`.
+2. What can be requested, and where: `developer_api_get` with `path: "v1/capabilities"` and a `query` of `filter[bundleId]` (that id), `filter[platform]: "IOS,MACOS"`, `filter[capabilityType]: "capability,service"`, `filter[includeRequestable]: "true"` and `fields[capabilities]: "requestFormUrl"`. Ask for few attributes at a time: the whole list is some 400 KB, and a large answer comes as `data_resource`.
+3. The request itself is Apple's form at that capability's `requestFormUrl` (under `contact/request/`): send it as above. The site has no other call that files a request.
+4. Its state afterwards: the same read with `fields[capabilities]: "hasExistingFeatureRequest,currentFeatureRequestStatus,featureRequestCount"`, or the request history (`developer_api_describe` with `operation: "capabilities.list_feature_requests"`), which also carries Apple's note. Apple answers by e-mail.
 
 ## Rules
 

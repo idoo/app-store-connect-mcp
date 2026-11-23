@@ -106,7 +106,7 @@ func TestParseGroups(t *testing.T) {
 <input type=checkbox name=off disabled checked>
 </form>`)
 	want := []Field{
-		{Name: "plan", Kind: KindRadio, Label: "Plan", Required: true, Values: []string{"c"}, Options: []Option{
+		{Name: "plan", Kind: KindRadio, Label: "Plan", Caption: "Plan", Required: true, Values: []string{"c"}, Options: []Option{
 			{Value: "a", Label: "A"}, {Value: "b", Label: "B"}, {Value: "c", Selected: true}, {Value: "d", Disabled: true},
 		}},
 		{Name: "between", Kind: "text", Values: []string{""}},
@@ -188,6 +188,159 @@ func TestParseLabels(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("labels (-want +got):\n%s", diff)
+	}
+}
+
+// requestForm is Apple's request form markup (template legacy-form
+// dev-form), trimmed, with a fake token.
+const requestForm = `<form id="contactForm" name="contactForm" method="post" action="/contact/request/notification-service">
+<input type="hidden" name="token" value="FAKE-TOKEN">
+<input type="hidden" name="contact_team_id" value="ABCDE12345">
+<p><strong>App Name</strong></p>
+<label for="app_name"><input type="text" name="app_name" id="app_name" maxlength="100" value="" required=""></label>
+
+<p><strong>Apple ID of App</strong></p>
+<label id="app-id" for="app_id"><input type="text" name="app_id" id="app_id" maxlength="10" required=""><span class="instruction"><a href="/help/app-id">How to find this ID</a></span></label>
+
+<p><strong>Name</strong></p>
+<label for="contact_name" class="readonly"><input type="text" id="contact_name" name="contact_name" value="Verevkin Ivan" onfocus="this.blur()" readonly></label>
+
+<p><strong>My app needs the entitlement because it:</strong></p>
+<label for="request_reason"><div class="form-box">
+  <label><input type="radio" name="request_reason" value="Provides an end-to-end service" required>Provides an end-to-end service</label>
+  <label><input type="radio" name="request_reason" value="Provides critical alerts" required>Provides critical alerts</label>
+</div></label>
+
+<p><strong>Explain why existing APIs are not adequate for your app.</strong></p>
+<label for="reason_why_not_adequate"><textarea id="reason_why_not_adequate" name="reason_why_not_adequate" maxlength="2000" required=""></textarea></label>
+
+<!-- a comment between -->
+<h3>Describe the notifications.</h3>
+<label for="notifications"><textarea id="notifications" name="notifications"></textarea></label>
+<input type="submit" name="submit" value="Submit">
+</form>`
+
+func TestParseRequestForm(t *testing.T) {
+	type row struct {
+		Caption, Label string
+		Readonly       bool
+	}
+	want := map[string]row{
+		"token":                   {},
+		"contact_team_id":         {},
+		"app_name":                {Caption: "App Name"},
+		"app_id":                  {Caption: "Apple ID of App", Label: "How to find this ID"},
+		"contact_name":            {Caption: "Name", Readonly: true},
+		"request_reason":          {Caption: "My app needs the entitlement because it:"},
+		"reason_why_not_adequate": {Caption: "Explain why existing APIs are not adequate for your app."},
+		"notifications":           {Caption: "Describe the notifications."},
+		"submit":                  {Label: "Submit"},
+	}
+	got := map[string]row{}
+	for _, fd := range onlyForm(t, requestForm).Fields {
+		got[fd.Name] = row{Caption: fd.Caption, Label: fd.Label, Readonly: fd.Readonly}
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("fields (-want +got):\n%s", diff)
+	}
+}
+
+func TestParseCaptionRule(t *testing.T) {
+	long := strings.Repeat("é", maxLabelRunes+1)
+	limit := strings.Repeat("é", maxLabelRunes)
+	tests := []struct {
+		name, body string // body goes inside <form>; the field is named a
+		want       string
+	}{
+		{"previous paragraph", `<p>Question?</p><input name=a>`, "Question?"},
+		{"heading", `<h2>Head</h2><textarea name=a></textarea>`, "Head"},
+		{"text and comments skipped", "<p>Q</p>\n  <!-- c -->\n <input name=a>", "Q"},
+		{"text between ends the search", `<p>Q</p> Your answer: <input name=a>`, ""},
+		{"climb four levels", `<p>Q</p><div><div><div><span><input name=a></span></div></div></div>`, "Q"},
+		{"no climb past four levels", `<p>Q</p><div><div><div><div><span><input name=a></span></div></div></div></div>`, ""},
+		{"not first in its wrapper", `<p>Q</p><div><b>x</b><input name=a></div>`, "x"},
+		{"sibling of a disallowed kind", `<p>Q</p><a href=/x>link</a><input name=a>`, ""},
+		{"sibling is a label", `<label>L</label><input name=a>`, ""},
+		{"sibling holds a control", `<div>Other <input name=b></div><input name=a>`, ""},
+		{"sibling holds a label", `<div><label>L</label></div><input name=a>`, ""},
+		{"sibling holds a button", `<p>Q <button type=button>x</button></p><input name=a>`, ""},
+		{"empty sibling", `<p> </p><input name=a>`, ""},
+		{"longer than the cap", `<p>` + long + `</p><input name=a>`, ""},
+		{"exactly the cap", `<p>` + limit + `</p><input name=a>`, limit},
+		{"climb stops at a fieldset", `<p>Q</p><fieldset><input name=a></fieldset>`, ""},
+		{"climb stops at a section", `<p>Q</p><section><input name=a></section>`, ""},
+		{"climb stops at a table row", `<p>Q</p><table><tr><td><input name=a></td></tr></table>`, ""},
+		{"climb stops at the form", `<input name=a>`, ""},
+		{"legend sibling", `<fieldset><legend>Plan</legend><select name=a><option>x</option></select></fieldset>`, "Plan"},
+		{"dt sibling", `<dl><dt>Term</dt><dd><input name=a></dd></dl>`, "Term"},
+		{"hidden control has none", `<p>Q</p><input type=hidden name=a value=v>`, ""},
+		{"group takes its first member's", `<p>Pick:</p><label><input type=checkbox name=a value=1> One</label><p>Not this</p><label><input type=checkbox name=a value=2> Two</label>`, "Pick:"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := mustParse(t, `<body><form>`+tt.body+`</form></body>`)
+			for _, fd := range p.Forms[0].Fields {
+				if fd.Name != "a" {
+					continue
+				}
+				if fd.Caption != tt.want {
+					t.Errorf("Caption = %q, want %q", fd.Caption, tt.want)
+				}
+				if fd.Label != "" && fd.Label == fd.Caption {
+					t.Errorf("caption merged into the label: %q", fd.Label)
+				}
+				return
+			}
+			t.Fatal("no field a")
+		})
+	}
+}
+
+func TestParseReadonly(t *testing.T) {
+	f := onlyForm(t, `<form>
+<input name=text readonly value=t><textarea name=area readonly>x</textarea><input type=email name=mail readonly>
+<input name=plain><input type=hidden name=hid readonly><input type=checkbox name=box readonly>
+<select name=sel readonly><option>a</option></select><input type=submit name=go readonly><input type=file name=up readonly>
+</form>`)
+	want := map[string]bool{"text": true, "area": true, "mail": true, "plain": false, "hid": false, "box": false, "sel": false, "go": false, "up": false}
+	got := map[string]bool{}
+	for _, fd := range f.Fields {
+		got[fd.Name] = fd.Readonly
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("readonly (-want +got):\n%s", diff)
+	}
+}
+
+// A caption candidate that holds controls is refused without reading its
+// text: here every h<i> stands after a nested div that holds the controls
+// deeper in and, at the bottom, one 200 000-rune paragraph.
+func TestParseCaptionCostBounded(t *testing.T) {
+	const depth = 400 // the parser refuses more than 512 open elements
+	var b strings.Builder
+	b.WriteString(`<form>`)
+	for i := range depth {
+		b.WriteString(`<div><input name=f` + strconv.Itoa(i) + `>`)
+	}
+	b.WriteString(`<p>` + strings.Repeat("é", 200000) + `</p><input name=last>`)
+	for i := depth - 1; i >= 0; i-- {
+		b.WriteString(`</div><input name=h` + strconv.Itoa(i) + `>`)
+	}
+	b.WriteString(`</form>`)
+	src := b.String()
+	var f Form
+	bytes := allocated(func() { f = onlyForm(t, src) })
+	t.Logf("page %d bytes, parse allocated %d bytes", len(src), bytes)
+	if len(f.Fields) != 2*depth+1 {
+		t.Fatalf("got %d fields, want %d", len(f.Fields), 2*depth+1)
+	}
+	for _, fd := range f.Fields {
+		if fd.Caption != "" {
+			t.Fatalf("%s has caption %.40q", fd.Name, fd.Caption)
+		}
+	}
+	if bytes > captionCostAllocBound {
+		t.Errorf("parse allocated %d bytes, want at most %d: captions must not read text per control", bytes, captionCostAllocBound)
 	}
 }
 

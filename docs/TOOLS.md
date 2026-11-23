@@ -185,10 +185,10 @@
 
 |Tool|Class|Confirm|Description|
 |---|---|---|---|
-|[`developer_api_describe`](#developer_api_describe)|R|none|One known developer account operation: method, path, params with known values, answer keys, notes, and the ready developer_api_get or developer_api_request call. From open-source clients, not verified live.|
+|[`developer_api_describe`](#developer_api_describe)|R|none|One known developer account operation: method, path, params with known values, answer keys, notes, and the ready developer_api_get or developer_api_request call. verified: the day it answered live, if any.|
 |[`developer_api_get`](#developer_api_get)|R|none|Read any developer.apple.com services-account endpoint with the Apple ID sign-in (web_login): v1 JSON:API GETs (query) or legacy reads (form or json). Answers are Apple's JSON as third-party data. Writes and downloads: developer_api_request.|
 |[`developer_api_request`](#developer_api_request)|D|human|Send one developer.apple.com services-account write or legacy download with the Apple ID sign-in (web_login). Previews first; needs confirm:true and human approval. Downloads need save_to: the body goes to a file, never to you. Reads: developer_api_get.|
-|[`developer_api_search`](#developer_api_search)|R|none|Find a developer account operation (keys, identifiers, certificates, devices, profiles, capabilities) by words in the catalog of known services-account calls; then developer_api_describe.|
+|[`developer_api_search`](#developer_api_search)|R|none|Find a developer account operation (keys, identifiers, certificates, devices, profiles, capabilities, membership) by words in the catalog of known services-account calls; then developer_api_describe.|
 |[`developer_form_submit`](#developer_form_submit)|D|plan|Send a form of a developer.apple.com account or contact page (Apple's request forms) with the Apple ID sign-in (web_login). Without plan_id fills it and previews every value; with plan_id sends it once after human approval. Read the page first: developer_page_get.|
 |[`developer_page_get`](#developer_page_get)|R|none|Read a developer.apple.com account or contact page with the Apple ID sign-in (web_login): title, text paged by offset, links, forms with their fields (hidden values never shown), as third-party data. Send a form: developer_form_submit.|
 
@@ -387,7 +387,7 @@
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
 |`form`|object|||legacy read's form fields|
-|`json`|object|||legacy JSON read's body; teamId added when absent|
+|`json`|object|||JSON read's body (legacy, or a v1 read the site sends as POST); teamId added when absent|
 |`path`|string|yes||relative to services-account/, e.g. v1/bundleIds or QH65B2/account/auth/key/list|
 |`query`|object|||v1 read query; values a string or a list of strings|
 |`team_id`|string|||developer team id; default the API key's team|
@@ -409,7 +409,7 @@
 
 |Name|Type|Required|Enum|Description|
 |---|---|---|---|---|
-|`group`|string||`session`, `team`, `keys`, `services_ids`, `pass_type_ids`, `website_push_ids`, `merchant_ids`, `cloud_containers`, `app_groups`, `app_ids`, `certificates`, `devices`, `profiles`, `capabilities`, `bundle_ids`||
+|`group`|string||`session`, `team`, `account`, `membership`, `keys`, `services_ids`, `pass_type_ids`, `website_push_ids`, `merchant_ids`, `cloud_containers`, `app_groups`, `app_ids`, `certificates`, `devices`, `profiles`, `capabilities`, `bundle_ids`, `identifiers`, `licenses`, `service_usage`||
 |`limit`|integer|||default 10|
 |`query`|string|||words, e.g. revoke key; empty lists the group or all|
 

@@ -193,6 +193,49 @@ func TestFillSecretBesideVisible(t *testing.T) {
 	}
 }
 
+func TestFillReadonly(t *testing.T) {
+	f := onlyForm(t, `<form method=post>
+<input name=who value="Page Name" readonly required>
+<input name=empty readonly required>
+<input name=row value=fixed readonly><input name=row value=open>
+<textarea name=note readonly>kept</textarea>
+</form>`)
+	t.Run("unanswered sends the page's values", func(t *testing.T) {
+		got, problems := f.Fill(Answers{})
+		if problems != nil {
+			t.Fatalf("problems: %v", problems)
+		}
+		want := []Pair{{Name: "who", Value: "Page Name"}, {Name: "empty"}, {Name: "row", Value: "fixed"}, {Name: "row", Value: "open"}, {Name: "note", Value: "kept"}}
+		if diff := cmp.Diff(want, got.Pairs); diff != "" {
+			t.Errorf("Pairs (-want +got):\n%s", diff)
+		}
+		if string(got.Body) != "who=Page+Name&empty=&row=fixed&row=open&note=kept" {
+			t.Errorf("Body = %q", got.Body)
+		}
+	})
+	t.Run("an answer to a readonly field is refused", func(t *testing.T) {
+		for _, name := range []string{"who", "note"} {
+			got, problems := f.Fill(Answers{Values: map[string][]string{name: {"Other"}}})
+			want := []Problem{{Field: name, Message: "readonly: the page sets this value"}}
+			if diff := cmp.Diff(want, problems); diff != "" {
+				t.Errorf("%s problems (-want +got):\n%s", name, diff)
+			}
+			if !cmp.Equal(got, Filled{}) {
+				t.Errorf("%s: Filled = %+v, want zero", name, got)
+			}
+		}
+	})
+	t.Run("a shared name goes to the writable field", func(t *testing.T) {
+		got, problems := f.Fill(Answers{Values: map[string][]string{"row": {"mine"}}})
+		if problems != nil {
+			t.Fatalf("problems: %v", problems)
+		}
+		if !bytes.Contains(got.Body, []byte("row=fixed&row=mine")) {
+			t.Errorf("Body = %q", got.Body)
+		}
+	})
+}
+
 func TestSecretKind(t *testing.T) {
 	tests := []struct {
 		kind string

@@ -31,13 +31,28 @@ var inputTypes = map[string]bool{
 // controls costs its length once, not once per control.
 type formReader struct {
 	*document
-	texts map[*html.Node]string
+	texts map[*html.Node]nodeText
+	// holds marks every element with a control, a label or a form inside.
+	holds map[*html.Node]bool
+}
+
+// nodeText is a node's visible text cut to maxLabelRunes; long reports
+// that the whole text was longer.
+type nodeText struct {
+	text string
+	long bool
 }
 
 // forms reads every <form> of the page with the controls it owns.
 func (d *document) forms() []Form {
 	var forms, controls []*html.Node
 	order := map[*html.Node]int{}
+	holds := map[*html.Node]bool{}
+	mark := func(n *html.Node) {
+		for p := n.Parent; p != nil && !holds[p]; p = p.Parent {
+			holds[p] = true
+		}
+	}
 	var visit func(n *html.Node)
 	visit = func(n *html.Node) {
 		if isElement(n) {
@@ -47,9 +62,13 @@ func (d *document) forms() []Form {
 			case "form":
 				order[n] = len(order)
 				forms = append(forms, n)
+				mark(n)
 			case "input", "textarea", "select", "button":
 				order[n] = len(order)
 				controls = append(controls, n)
+				mark(n)
+			case "label":
+				mark(n)
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -77,7 +96,7 @@ func (d *document) forms() []Form {
 			owned[f] = append(owned[f], c)
 		}
 	}
-	r := &formReader{document: d, texts: map[*html.Node]string{}}
+	r := &formReader{document: d, texts: map[*html.Node]nodeText{}, holds: holds}
 	out := make([]Form, 0, len(forms))
 	for _, f := range forms {
 		out = append(out, r.form(f, owned[f]))
@@ -114,12 +133,86 @@ func (d *document) owner(c *html.Node, emptied map[*html.Node][]*html.Node, orde
 
 // text is n's visible text cut to maxLabelRunes, computed once per node.
 func (d *formReader) text(n *html.Node) string {
+	return d.nodeText(n).text
+}
+
+func (d *formReader) nodeText(n *html.Node) nodeText {
 	if t, ok := d.texts[n]; ok {
 		return t
 	}
-	t := cutLabel(visibleText(n))
+	whole := visibleText(n)
+	t := nodeText{text: cutLabel(whole)}
+	t.long = len(t.text) < len(whole)
 	d.texts[n] = t
 	return t
+}
+
+// captionTags are the elements whose text can be a caption.
+var captionTags = map[string]bool{
+	"p": true, "h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"legend": true, "div": true, "span": true, "strong": true, "b": true, "dt": true,
+}
+
+// maxCaptionClimb is how many wrappers caption climbs out of.
+const maxCaptionClimb = 4
+
+// caption is the short text just before c, or before the outermost of up
+// to maxCaptionClimb wrappers c comes first in; climbing stops at a form,
+// fieldset, section, body or table part. The element before must be a
+// caption tag that holds no control, label or form, with 1 to
+// maxLabelRunes runes of text; a longer text is no caption.
+func (d *formReader) caption(c *html.Node) string {
+	n := c
+	for climbed := 0; ; climbed++ {
+		prev, blocked := previousElement(n)
+		switch {
+		case blocked:
+			return ""
+		case prev != nil:
+			if !captionTags[prev.Data] || d.holds[prev] {
+				return ""
+			}
+			if t := d.nodeText(prev); !t.long {
+				return t.text
+			}
+			return ""
+		}
+		p := n.Parent
+		if climbed == maxCaptionClimb || p == nil || !isElement(p) || stopsCaption(p) {
+			return ""
+		}
+		n = p
+	}
+}
+
+// previousElement is the element before n, white-space text and comments
+// skipped; blocked reports other text standing between.
+func previousElement(n *html.Node) (prev *html.Node, blocked bool) {
+	for s := n.PrevSibling; s != nil; s = s.PrevSibling {
+		switch s.Type {
+		case html.ElementNode:
+			return s, false
+		case html.TextNode:
+			if strings.TrimSpace(s.Data) != "" {
+				return nil, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func stopsCaption(n *html.Node) bool {
+	switch n.Data {
+	case "form", "fieldset", "section", "body":
+		return true
+	}
+	return isTablePart(n)
+}
+
+// readonlyKinds are the kinds a readonly attribute applies to.
+var readonlyKinds = map[string]bool{
+	KindTextarea: true, "text": true, "search": true, "tel": true, "url": true, "email": true, "password": true,
+	"date": true, "month": true, "week": true, "time": true, "datetime-local": true, "number": true,
 }
 
 // cutLabel is s cut to at most maxLabelRunes runes, at a rune boundary.
@@ -260,6 +353,7 @@ func (d *formReader) fields(controls []*html.Node) []Field {
 		g := &out[i]
 		g.Disabled = allDisabled[i]
 		g.Label = d.legend(c)
+		g.Caption = d.caption(c)
 		if g.Label == "" && len(g.Options) == 1 {
 			g.Label = g.Options[0].Label
 		}
@@ -298,6 +392,10 @@ func (d *formReader) field(c *html.Node, name, kind string) Field {
 		Required: hasAttr(c, "required") && kind != KindHidden && kind != KindSubmit,
 		Multiple: hasAttr(c, "multiple"),
 		Disabled: controlDisabled(c),
+		Readonly: hasAttr(c, "readonly") && readonlyKinds[kind],
+	}
+	if kind != KindHidden {
+		f.Caption = d.caption(c)
 	}
 	if v, ok := attr(c, "maxlength"); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 0 {

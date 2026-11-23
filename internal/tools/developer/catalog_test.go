@@ -15,7 +15,7 @@ type searchOut struct {
 		ID       string `json:"id"`
 		Group    string `json:"group"`
 		Read     bool   `json:"read"`
-		Verified bool   `json:"verified"`
+		Verified string `json:"verified"`
 	} `json:"operations"`
 	Groups []string `json:"groups"`
 }
@@ -25,7 +25,7 @@ type describeOut struct {
 	Method   string `json:"method"`
 	Path     string `json:"path"`
 	Read     bool   `json:"read"`
-	Verified bool   `json:"verified"`
+	Verified string `json:"verified"`
 	Call     struct {
 		Tool      string         `json:"tool"`
 		Arguments map[string]any `json:"arguments"`
@@ -36,7 +36,7 @@ type describeOut struct {
 func TestAPISearch(t *testing.T) {
 	k := tooltest.New(t)
 	got := tooltest.Decode[searchOut](t, tooltest.MustOK(t, call(t, k, "developer_api_search", `{"query":"revoke key"}`)))
-	if got.Count == 0 || got.Count != len(got.Operations) || got.Operations[0].ID != "keys.revoke" || got.Operations[0].Read || got.Operations[0].Verified || got.Groups != nil {
+	if got.Count == 0 || got.Count != len(got.Operations) || got.Operations[0].ID != "keys.revoke" || got.Operations[0].Read || got.Operations[0].Verified != "" || got.Groups != nil {
 		t.Fatalf("revoke key = %+v", got)
 	}
 	got = tooltest.Decode[searchOut](t, tooltest.MustOK(t, call(t, k, "developer_api_search", `{"group":"keys","limit":2}`)))
@@ -56,7 +56,8 @@ func TestAPISearch(t *testing.T) {
 func describe(t *testing.T, k *tooltest.Kit, args string) describeOut {
 	t.Helper()
 	d := tooltest.Decode[describeOut](t, tooltest.MustOK(t, call(t, k, "developer_api_describe", args)))
-	if d.Verified || d.SourceNote == "" {
+	// The note says whether the operation ever answered live, and when.
+	if (d.Verified == "") != strings.Contains(d.SourceNote, "not yet verified") || (d.Verified != "" && !strings.HasSuffix(d.SourceNote, d.Verified)) {
 		t.Fatalf("describe %s = %+v", args, d)
 	}
 	return d

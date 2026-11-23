@@ -144,18 +144,40 @@ type (
 // approvalProbe records that a tool call returned an approval ask.
 type approvalProbe struct{ asked atomic.Bool }
 
-// approvalMiddleware wraps the SDK's multi round-trip bridge. When a legacy
-// client rejects the bridged elicitation/create at the protocol level, the
-// call is re-run as for a client without elicitation (human gates fail
-// closed); any other failure to ask becomes an isError result. Nothing was
-// written in either case: an ask is returned before write capability.
+// approvalMiddleware wraps the SDK's multi round-trip bridge. The bridge
+// answers one input-required round for a client older than 2026-07-28 and
+// re-runs the call once; an approval asked in parts returns another ask on
+// that re-run, so this middleware asks it through elicitation/create and
+// re-runs the call with the answer and the echoed state, round after round,
+// until the call stops asking (at most [tool.MaxApprovalParts] rounds).
+// Clients on 2026-07-28 and later get every ask as an input-required result
+// and retry themselves. When a legacy client rejects the elicitation/create
+// at the protocol level, the call is re-run as for a client without
+// elicitation (human gates fail closed); any other failure to ask becomes an
+// isError result. Nothing was written in either case: an ask is returned
+// before write capability.
 func (s *session) approvalMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		if method != "tools/call" {
 			return next(ctx, method, req)
 		}
 		probe := &approvalProbe{}
-		res, err := next(context.WithValue(ctx, approvalProbeKey{}, probe), method, req)
+		pctx := context.WithValue(ctx, approvalProbeKey{}, probe)
+		res, err := next(pctx, method, req)
+		for round := 0; err == nil; round++ {
+			retry, ok, rerr := legacyApprovalRetry(pctx, req, res)
+			if !ok {
+				break
+			}
+			if rerr == nil && round >= tool.MaxApprovalParts {
+				rerr = fmt.Errorf("%w: more than %d approval rounds", tool.ErrInternal, tool.MaxApprovalParts)
+			}
+			if rerr != nil {
+				err = rerr
+				break
+			}
+			res, err = next(pctx, method, retry)
+		}
 		if err == nil || !probe.asked.Load() {
 			return res, err
 		}
@@ -168,6 +190,37 @@ func (s *session) approvalMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 		}
 		return s.render(tool.Fail(fmt.Errorf("ask for confirmation: %w", err))), nil
 	}
+}
+
+// legacyApprovalRetry reports whether res is an approval ask the SDK bridge
+// left unanswered for a client older than 2026-07-28 (input requests on a
+// result not marked input-required). If so it asks each request through
+// elicitation/create and returns req with the answers and the echoed state.
+func legacyApprovalRetry(ctx context.Context, req mcp.Request, res mcp.Result) (mcp.Request, bool, error) {
+	cr, ok := res.(*mcp.CallToolResult)
+	if !ok || len(cr.InputRequests) == 0 || cr.NeedsInput() {
+		return nil, false, nil
+	}
+	r, ok := req.(*mcp.CallToolRequest)
+	if !ok || r.Session == nil || r.Params == nil {
+		return nil, false, nil
+	}
+	answers := make(mcp.InputResponseMap, len(cr.InputRequests))
+	for id, ir := range cr.InputRequests {
+		ep, ok := ir.(*mcp.ElicitParams)
+		if !ok {
+			return nil, true, fmt.Errorf("%w: input request %q is %T, not a form", tool.ErrInternal, id, ir)
+		}
+		a, err := r.Session.Elicit(ctx, ep)
+		if err != nil {
+			return nil, true, err
+		}
+		answers[id] = a
+	}
+	p := *r.Params
+	p.InputResponses = answers
+	p.RequestState = cr.RequestState
+	return &mcp.CallToolRequest{Session: r.Session, Params: &p, Extra: r.Extra}, true, nil
 }
 
 // rootsFunc lists the client's root URIs, or is nil when the client did not

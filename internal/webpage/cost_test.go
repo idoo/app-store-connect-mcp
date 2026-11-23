@@ -18,6 +18,12 @@ const (
 	// ~80 MB with the node's text computed once: 100 000 × 401 bytes, built
 	// up by doubling).
 	labelledByAllocBound = 32 << 20
+	// TestParseCaptionCostBounded: the page is ~0.42 MB, 400 nested divs
+	// each standing before a control and holding the rest, with one
+	// 200 000-rune paragraph at the bottom. Refusing a div that holds a
+	// control before reading its text, a parse allocates ~7 MB; reading
+	// each candidate's text first, ~800 MB.
+	captionCostAllocBound = 56 << 20
 )
 
 // allocated is the bytes run allocates. TotalAlloc counts the whole

@@ -163,13 +163,15 @@ func (c *devSiteClient) API(ctx context.Context, call tool.DevSiteCall) (tool.De
 		if err := c.gate(ctx, label); err != nil {
 			return tool.DevSiteAnswer{}, err
 		}
-		if !c.d.hasCSRF() {
-			// Priming failing is not fatal: the write goes without a pair.
-			prime := devPortalRequest{method: http.MethodPost, referer: r.referer}
-			_, _, _, _ = c.d.send(ctx, prime, c.d.p.base+devSitePrimePath)
-			if err := ctx.Err(); err != nil {
-				return tool.DevSiteAnswer{}, fmt.Errorf("app: developer site: %s: %w", label, err)
-			}
+	}
+	// Apple wants its csrf pair on every write and on a real v1 POST even
+	// when it only reads (the request history): seen live as a 421 without.
+	if (r.write || (call.Method == http.MethodPost && devSiteJSONAPI(call.Path))) && !c.d.hasCSRF() {
+		// Priming failing is not fatal: the call goes without a pair.
+		prime := devPortalRequest{method: http.MethodPost, referer: r.referer}
+		_, _, _, _ = c.d.send(ctx, prime, c.d.p.base+devSitePrimePath)
+		if err := ctx.Err(); err != nil {
+			return tool.DevSiteAnswer{}, fmt.Errorf("app: developer site: %s: %w", label, err)
 		}
 	}
 	u := c.d.p.base + call.Path

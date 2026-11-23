@@ -37,7 +37,7 @@ type apiGetIn struct {
 	Path   string         `json:"path" jsonschema:"relative to services-account/, e.g. v1/bundleIds or QH65B2/account/auth/key/list"`
 	Query  map[string]any `json:"query,omitempty" jsonschema:"v1 read query; values a string or a list of strings"`
 	Form   map[string]any `json:"form,omitempty" jsonschema:"legacy read's form fields"`
-	JSON   map[string]any `json:"json,omitempty" jsonschema:"legacy JSON read's body; teamId added when absent"`
+	JSON   map[string]any `json:"json,omitempty" jsonschema:"JSON read's body (legacy, or a v1 read the site sends as POST); teamId added when absent"`
 	TeamID string         `json:"team_id,omitempty" jsonschema:"developer team id; default the API key's team"`
 }
 
@@ -60,8 +60,11 @@ func apiGet(ctx context.Context, env *tool.Env, in apiGetIn) (*tool.Result, erro
 	if err != nil {
 		return nil, err
 	}
+	// A v1 read is a GET with a query, or one of the few POSTs with a JSON
+	// body the site itself only reads with; a legacy read is a POST.
+	v1 := isV1(path)
 	method := http.MethodPost
-	if isV1(path) {
+	if v1 && in.JSON == nil {
 		method = http.MethodGet
 	}
 	if !tool.DevSiteIsRead(method, path) {
@@ -73,9 +76,11 @@ func apiGet(ctx context.Context, env *tool.Env, in apiGetIn) (*tool.Result, erro
 	switch {
 	case in.Form != nil && in.JSON != nil:
 		return nil, tool.InvalidArgs("pass form or json, not both")
-	case method == http.MethodGet && (in.Form != nil || in.JSON != nil):
-		return nil, tool.InvalidArgs("a v1 read takes query only; form and json are for legacy reads")
-	case method == http.MethodPost && in.Query != nil:
+	case v1 && in.Form != nil:
+		return nil, tool.InvalidArgs("a v1 read takes query, or json for a read the site sends as POST; form is for legacy reads")
+	case v1 && in.JSON != nil && in.Query != nil:
+		return nil, tool.InvalidArgs("a v1 read with a json body takes no query")
+	case !v1 && in.Query != nil:
 		return nil, tool.InvalidArgs("a legacy read takes form or json; query is for v1 reads")
 	}
 	if call.Query, err = values("query", in.Query); err != nil {
@@ -90,11 +95,7 @@ func apiGet(ctx context.Context, env *tool.Env, in apiGetIn) (*tool.Result, erro
 	}
 	call.TeamID = team
 	if in.JSON != nil {
-		body := maps.Clone(in.JSON)
-		if _, ok := body["teamId"]; !ok {
-			body["teamId"] = team
-		}
-		call.JSON, call.Form = body, nil
+		call.JSON, call.Form = withTeam(in.JSON, team, v1), nil
 	}
 	ans, err := env.DevSite.API(ctx, call)
 	if err != nil {
@@ -102,6 +103,28 @@ func apiGet(ctx context.Context, env *tool.Env, in apiGetIn) (*tool.Result, erro
 	}
 	out := map[string]any{"status": ans.Status, "team_id": team}
 	return answerResult(ctx, env, out, path, ans)
+}
+
+// withTeam is a copy of a JSON read's body carrying the team id where the
+// site expects it, unless the caller put one there: at the top of a legacy
+// body, in data.attributes of a v1 body.
+func withTeam(in map[string]any, team string, v1 bool) map[string]any {
+	body := maps.Clone(in)
+	at := body
+	if v1 {
+		data, _ := body["data"].(map[string]any)
+		attrs, _ := data["attributes"].(map[string]any)
+		if attrs == nil {
+			return body
+		}
+		data, attrs = maps.Clone(data), maps.Clone(attrs)
+		data["attributes"], body["data"] = attrs, data
+		at = attrs
+	}
+	if _, ok := at["teamId"]; !ok {
+		at["teamId"] = team
+	}
+	return body
 }
 
 // answerResult adds the decoded answer to out as data (JSON) or text,

@@ -36,8 +36,9 @@ func Call(t testing.TB, tl tool.Tool, env *tool.Env, argsJSON string) *tool.Resu
 	return res
 }
 
-// maxApprovalRounds bounds the approval retries of one [Call].
-const maxApprovalRounds = 3
+// maxApprovalRounds bounds the approval retries of one [Call]: one per part
+// of an approval asked in parts.
+const maxApprovalRounds = tool.MaxApprovalParts
 
 // MustOK fails the test if res is an error result and returns res.
 func MustOK(t testing.TB, res *tool.Result) *tool.Result {

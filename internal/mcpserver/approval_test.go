@@ -3,7 +3,9 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,4 +218,113 @@ func TestApprovalStateRefused(t *testing.T) {
 		res, body = retry(t, h, "release_submit", args, state, "accept")
 		refused(t, res, body, fake, 1)
 	})
+}
+
+// partsDeps returns deps with a human-gated tool whose change is a list of
+// lines asked in n approval parts; it DELETEs a beta tester once approved.
+func partsDeps(t *testing.T, n int) (Deps, *tooltest.FakeASC) {
+	t.Helper()
+	fake := tooltest.NewFakeASC(t)
+	fake.Handle(http.MethodDelete, "/v1/betaTesters/{id}", http.StatusNoContent, "")
+	var p tool.PlanPreview
+	for count := 1; ; count++ {
+		lines := make([]string, count)
+		for i := range lines {
+			lines[i] = fmt.Sprintf("answer %03d: %s", i, strings.Repeat("x", 290))
+		}
+		p = tool.PlanPreview{Summary: "send form", Intended: lines}
+		parts, err := tool.ApprovalPrompts("form_submit", "work", p)
+		if err != nil || len(parts) > n {
+			t.Fatalf("no line count gives %d parts: %d, %v", n, len(parts), err)
+		}
+		if len(parts) == n {
+			break
+		}
+	}
+	m := tool.Meta{
+		Name: "form_submit", Toolset: tool.Release, Title: "form_submit", Description: "stub form_submit",
+		Class: tool.Destructive, Confirm: tool.ConfirmByFlag, RequireHuman: true,
+	}
+	tl := tool.New(m, func(ctx context.Context, env *tool.Env, in stubIn) (*tool.Result, error) {
+		wctx, res := tool.RequireConfirm(ctx, env, in.Confirm, p)
+		if res != nil {
+			return res, nil
+		}
+		if _, err := env.ASC.Do(wctx, tool.Request{Method: http.MethodDelete, Path: "/v1/betaTesters/" + in.App, Write: true}); err != nil {
+			return nil, err
+		}
+		return tool.OK(map[string]any{"removed": in.App}), nil
+	})
+	deps := Deps{Tools: []tool.Tool{tl}, Profile: team(true)}
+	deps.Env.ASC = fake
+	deps.Env.Clock = tooltest.NewFakeClock()
+	return deps, fake
+}
+
+// partsClient connects a client on version that answers forms with elicit.
+// A 2025-11-25 client runs without the SDK's client retry loop, as a client
+// that predates input-required results: every part reaches it only through
+// elicitation/create from the server.
+func partsClient(t *testing.T, deps Deps, version string, elicit func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) *harness {
+	t.Helper()
+	opts := &mcp.ClientOptions{ElicitationHandler: elicit}
+	if version < "2026-07-28" {
+		opts.MultiRoundTrip = &mcp.MultiRoundTripOptions{Disabled: true}
+	}
+	return connectOpts(t, deps, "test", opts, version)
+}
+
+// TestApprovalInParts runs approvals asked in parts on both protocol paths:
+// the 2026-07-28 client (the SDK's own retry loop) retries each
+// input-required result itself, a 2025-11-25 client is asked each part
+// through elicitation/create. tool.MaxApprovalParts parts must get through
+// the SDK client's retry limit.
+func TestApprovalInParts(t *testing.T) {
+	confirm := map[string]any{"app": "t1", "confirm": true}
+	for _, version := range []string{"2026-07-28", "2025-11-25"} {
+		for _, n := range []int{2, tool.MaxApprovalParts} {
+			t.Run(fmt.Sprintf("%s/accept %d parts", version, n), func(t *testing.T) {
+				deps, fake := partsDeps(t, n)
+				var prompts []string
+				h := partsClient(t, deps, version, func(_ context.Context, r *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+					prompts = append(prompts, r.Params.Message)
+					return &mcp.ElicitResult{Action: "accept", Content: map[string]any{}}, nil
+				})
+				res, body := h.call(t, "form_submit", confirm)
+				if res.IsError || dataOf(body)["removed"] != "t1" || approvedBy(body) != tool.ApprovedHuman {
+					t.Fatalf("result = %v", body)
+				}
+				if len(prompts) != n {
+					t.Fatalf("asked %d prompts, want %d", len(prompts), n)
+				}
+				for i, p := range prompts {
+					if !strings.Contains(p, fmt.Sprintf("Part %d of %d:", i+1, n)) {
+						t.Errorf("prompt %d is not part %d of %d", i, i+1, n)
+					}
+				}
+				if m := len(fake.Mutations()); m != 1 {
+					t.Fatalf("mutations = %d, want 1", m)
+				}
+			})
+		}
+		t.Run(version+"/second declined", func(t *testing.T) {
+			deps, fake := partsDeps(t, 2)
+			asked := 0
+			h := partsClient(t, deps, version, func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+				asked++
+				action := "accept"
+				if asked == 2 {
+					action = "decline"
+				}
+				return &mcp.ElicitResult{Action: action, Content: map[string]any{}}, nil
+			})
+			res, body := h.call(t, "form_submit", confirm)
+			if !res.IsError || dataOf(body)["error"] != tool.ErrDeclined.Code {
+				t.Fatalf("result = %v", body)
+			}
+			if asked != 2 || len(fake.Mutations()) != 0 {
+				t.Fatalf("asked = %d, mutations = %d; want 2, 0", asked, len(fake.Mutations()))
+			}
+		})
+	}
 }
