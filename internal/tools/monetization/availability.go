@@ -2,7 +2,10 @@ package monetization
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"slices"
 	"sort"
@@ -14,13 +17,14 @@ import (
 type prcAvailIn struct {
 	Add                       []string `json:"add,omitempty" jsonschema:"territories to make the app available in"`
 	Remove                    []string `json:"remove,omitempty" jsonschema:"territories to remove the app from sale in"`
-	AvailableInNewTerritories *bool    `json:"available_in_new_territories,omitempty" jsonschema:"only settable when availability is first created"`
+	AvailableInNewTerritories *bool    `json:"available_in_new_territories,omitempty" jsonschema:"on an existing availability changed through the web session (web_login)"`
 }
 
 // prcTA is one territory availability record.
 type prcTA struct {
 	ID        string `json:"id"`
 	Available bool   `json:"available"`
+	PreOrder  bool   `json:"pre_order,omitempty"`
 }
 
 // prcAvail is an app's current availability (appAvailabilities v2).
@@ -71,7 +75,7 @@ func prcReadAvail(ctx context.Context, env *tool.Env, appID string) (prcAvail, e
 	a.AvailableInNew, _ = r.Bool("availableInNewTerritories")
 	res, err := env.ASC.List(ctx, "/v2/appAvailabilities/"+url.PathEscape(r.ID)+"/territoryAvailabilities", tool.ListOptions{
 		Include:  []string{"territory"},
-		Fields:   map[string][]string{"territoryAvailabilities": {"available", "territory"}, "territories": {"currency"}},
+		Fields:   map[string][]string{"territoryAvailabilities": {"available", "preOrderEnabled", "territory"}, "territories": {"currency"}},
 		Limit:    200,
 		MaxItems: 1000,
 	})
@@ -81,8 +85,9 @@ func prcReadAvail(ctx context.Context, env *tool.Env, appID string) (prcAvail, e
 	a.Territories = make(map[string]prcTA, len(res.Data))
 	for _, t := range res.Data {
 		av, _ := t.Bool("available")
+		pre, _ := t.Bool("preOrderEnabled")
 		if terr := t.RelID("territory"); terr != "" {
-			a.Territories[terr] = prcTA{ID: t.ID, Available: av}
+			a.Territories[terr] = prcTA{ID: t.ID, Available: av, PreOrder: pre}
 		}
 	}
 	return a, nil
@@ -103,7 +108,14 @@ type prcAvailPlan struct {
 	AvailableInNewTerritories *bool            `json:"available_in_new_territories,omitempty"`
 	Changes                   []prcAvailChange `json:"changes"`
 	Calls                     int              `json:"calls"`
-	Manual                    []string         `json:"manual,omitempty"`
+	// NewTerritoriesViaWeb: the flag of an existing availability changes.
+	// The public API cannot (POST /v2/appAvailabilities answers 409, there
+	// is no PATCH); ASC's Pricing and Availability page sends iris
+	// POST /v1/bulkUpdateAppAvailabilities, so this goes through env.Web.
+	NewTerritoriesViaWeb bool `json:"new_territories_via_web_session,omitempty"`
+	// anchor is the one territory the bulk update carries, with the state
+	// it has once Changes are applied (Apple's page always sends some).
+	anchor prcAvailChange
 }
 
 // prcPlanAvail diffs the wanted availability against cur. Creating needs
@@ -152,7 +164,14 @@ func prcPlanAvail(ctx context.Context, env *tool.Env, cur prcAvail, in prcAvailI
 		return p, nil
 	}
 	if in.AvailableInNewTerritories != nil && *in.AvailableInNewTerritories != cur.AvailableInNew {
-		p.Manual = append(p.Manual, "available_in_new_territories can only be set when availability is created; change it in App Store Connect > Pricing and Availability")
+		if _, err := env.Web.Get(ctx, "/v2/appAvailabilities/"+url.PathEscape(cur.ID), url.Values{
+			"fields[appAvailabilities]": {"availableInNewTerritories"},
+		}); err != nil {
+			return nil, tool.WithNext(fmt.Errorf("availability: Apple changes available_in_new_territories of an existing availability only through "+
+				"App Store Connect's web session (the API key cannot): %w", err), tool.NextStep{Tool: "web_login"})
+		}
+		want := *in.AvailableInNewTerritories
+		p.AvailableInNewTerritories, p.NewTerritoriesViaWeb = &want, true
 	}
 	want := map[string]bool{}
 	for _, t := range add {
@@ -172,7 +191,39 @@ func prcPlanAvail(ctx context.Context, env *tool.Env, cur prcAvail, in prcAvailI
 	}
 	sort.Slice(p.Changes, func(i, j int) bool { return p.Changes[i].Territory < p.Changes[j].Territory })
 	p.Calls = len(p.Changes)
+	if p.NewTerritoriesViaWeb {
+		anchor, ok := prcAnchor(cur, want)
+		if !ok {
+			return nil, tool.InvalidArgs("availability: no territory without a pre-order to carry the available_in_new_territories change; change it in App Store Connect > Pricing and Availability")
+		}
+		p.anchor = anchor
+		p.Calls++
+	}
 	return p, nil
+}
+
+// prcAnchor picks the territory the bulk update carries: its final state
+// is sent unchanged, so nothing but the flag moves. An unavailable one is
+// preferred (no release data to repeat); pre-orders are never picked.
+func prcAnchor(cur prcAvail, want map[string]bool) (prcAvailChange, bool) {
+	terrs := make([]string, 0, len(cur.Territories))
+	for t := range cur.Territories {
+		terrs = append(terrs, t)
+	}
+	sort.Strings(terrs)
+	for _, avail := range []bool{false, true} {
+		for _, t := range terrs {
+			ta := cur.Territories[t]
+			final, ok := want[t]
+			if !ok {
+				final = ta.Available
+			}
+			if !ta.PreOrder && final == avail {
+				return prcAvailChange{Territory: t, ID: ta.ID, Available: final}, true
+			}
+		}
+	}
+	return prcAvailChange{}, false
 }
 
 // prcAllTerritories lists every App Store territory code.
@@ -234,5 +285,38 @@ func prcApplyAvail(ctx context.Context, env *tool.Env, appID string, p *prcAvail
 		}
 		done++
 	}
+	if p.NewTerritoriesViaWeb {
+		if _, err := env.Web.Do(ctx, prcBulkAvailRequest(appID, *p.AvailableInNewTerritories, p.anchor)); err != nil {
+			return done, fmt.Errorf("set available_in_new_territories through the web session: %w", err)
+		}
+		done++
+	}
 	return done, nil
+}
+
+// prcBulkAvailRequest is the request ASC's Pricing and Availability page
+// sends when its "make available in new territories" box changes: iris
+// POST /v1/bulkUpdateAppAvailabilities, territory records inline with the
+// local id "${base64 {"s":app,"t":territory}}" the page builds.
+func prcBulkAvailRequest(appID string, newTerrs bool, anchor prcAvailChange) tool.Request {
+	raw, _ := json.Marshal(struct {
+		S string `json:"s"`
+		T string `json:"t"`
+	}{appID, anchor.Territory})
+	lid := "${" + base64.StdEncoding.EncodeToString(raw) + "}"
+	return tool.Request{Method: http.MethodPost, Path: "/v1/bulkUpdateAppAvailabilities", Write: true, Body: map[string]any{
+		"data": map[string]any{
+			"type":       "bulkUpdateAppAvailabilities",
+			"attributes": map[string]any{"availableInNewTerritories": newTerrs},
+			"relationships": map[string]any{
+				"app":                     prcRel("apps", appID),
+				"territoryAvailabilities": map[string]any{"data": []any{map[string]any{"type": "territoryAvailabilities", "id": lid}}},
+			},
+		},
+		"included": []any{map[string]any{
+			"type": "territoryAvailabilities", "id": lid,
+			"attributes":    map[string]any{"available": anchor.Available},
+			"relationships": map[string]any{"territory": prcRel("territories", anchor.Territory)},
+		}},
+	}}
 }

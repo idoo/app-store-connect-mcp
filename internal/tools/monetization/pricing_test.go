@@ -1,6 +1,7 @@
 package monetization
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -358,11 +359,7 @@ func prcTADoc(id, terr string, avail bool) string {
 
 func TestPricingAvailabilityExistingPatches(t *testing.T) {
 	k := newKit(t)
-	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appAvailabilityV2", http.StatusOK,
-		`{"data":{"type":"appAvailabilities","id":"av1","attributes":{"availableInNewTerritories":true}}}`)
-	k.ASC.Handle(http.MethodGet, "/v2/appAvailabilities/{id}/territoryAvailabilities", http.StatusOK, jsonapiDoc(`[`+
-		prcTADoc("ta-usa", "USA", true)+`,`+prcTADoc("ta-gbr", "GBR", true)+`,`+prcTADoc("ta-swe", "SWE", false)+`]`))
-	k.ASC.Handle(http.MethodPatch, "/v1/territoryAvailabilities/{id}", http.StatusOK, `{"data":{"type":"territoryAvailabilities","id":"x"}}`)
+	prcExistingAvailFixture(k)
 	plan, res := prcPlanThenApply(t, k, `{"availability":{"add":["swe","USA"],"remove":["GBR"]}}`)
 	if plan.Calls != 2 || plan.Avail == nil || plan.Avail.Create || len(plan.Avail.Changes) != 2 {
 		t.Fatalf("plan = %+v", plan)
@@ -407,6 +404,60 @@ func TestPricingAvailabilityMissingSinglePost(t *testing.T) {
 	}
 	if len(got) != 3 || got["GBR"] != false || got["USA"] != true || got["SWE"] != true {
 		t.Fatalf("territories = %v", got)
+	}
+}
+
+// prcExistingAvailFixture: availability av1 (new territories on) with USA
+// and GBR available, SWE not.
+func prcExistingAvailFixture(k *tooltest.Kit) {
+	k.ASC.Handle(http.MethodGet, "/v1/apps/{id}/appAvailabilityV2", http.StatusOK,
+		`{"data":{"type":"appAvailabilities","id":"av1","attributes":{"availableInNewTerritories":true}}}`)
+	k.ASC.Handle(http.MethodGet, "/v2/appAvailabilities/{id}/territoryAvailabilities", http.StatusOK, jsonapiDoc(`[`+
+		prcTADoc("ta-usa", "USA", true)+`,`+prcTADoc("ta-gbr", "GBR", true)+`,`+prcTADoc("ta-swe", "SWE", false)+`]`))
+	k.ASC.Handle(http.MethodPatch, "/v1/territoryAvailabilities/{id}", http.StatusOK, `{"data":{"type":"territoryAvailabilities","id":"x"}}`)
+}
+
+// An existing availability's new-territories flag changes through the web
+// session, as ASC's Pricing and Availability page does it; the one
+// territory the call carries keeps the state the PATCHes leave it in.
+func TestPricingAvailabilityNewTerritoriesViaWeb(t *testing.T) {
+	k := newKit(t).WebSession()
+	prcExistingAvailFixture(k)
+	k.Web.Handle(http.MethodGet, "/v2/appAvailabilities/{id}", http.StatusOK,
+		`{"data":{"type":"appAvailabilities","id":"av1","attributes":{"availableInNewTerritories":true}}}`)
+	k.Web.Handle(http.MethodPost, "/v1/bulkUpdateAppAvailabilities", http.StatusCreated, `{"data":{"type":"bulkUpdateAppAvailabilities","id":"app1"}}`)
+	plan, res := prcPlanThenApply(t, k, `{"availability":{"remove":["GBR"],"available_in_new_territories":false}}`)
+	if plan.Calls != 2 {
+		t.Fatalf("plan = %+v", plan)
+	}
+	out := tooltest.Decode[pricingApplyOut](t, tooltest.MustOK(t, res))
+	if out.AvailabilityCalls != 2 {
+		t.Fatalf("out = %+v", out)
+	}
+	equalLines(t, requestLog(k.ASC.Mutations()), []string{"PATCH /v1/territoryAvailabilities/ta-gbr"})
+	webMuts := k.Web.Mutations()
+	equalLines(t, requestLog(webMuts), []string{"POST /v1/bulkUpdateAppAvailabilities"})
+	if a := reqAttrs(t, webMuts[0]); a["availableInNewTerritories"] != false {
+		t.Fatalf("attrs = %v", a)
+	}
+	if reqRel(t, webMuts[0], "app") != "apps/app1" {
+		t.Fatalf("app rel = %s", reqRel(t, webMuts[0], "app"))
+	}
+	inc := prcIncluded(t, webMuts[0])
+	wantID := "${" + base64.StdEncoding.EncodeToString([]byte(`{"s":"app1","t":"GBR"}`)) + "}"
+	if len(inc) != 1 || inc[0]["id"] != wantID || prcRelOf(inc[0], "territory") != "territories/GBR" ||
+		inc[0]["attributes"].(map[string]any)["available"] != false {
+		t.Fatalf("included = %v", inc)
+	}
+}
+
+func TestPricingAvailabilityNewTerritoriesNeedsWebSession(t *testing.T) {
+	k := newKit(t)
+	prcExistingAvailFixture(k)
+	res := tooltest.Call(t, mustTool(t, "pricing_plan"), k.Env, `{"availability":{"available_in_new_territories":false}}`)
+	tooltest.MustFail(t, res, "web_session_required")
+	if len(k.ASC.Mutations()) != 0 {
+		t.Fatal("mutated without a web session")
 	}
 }
 

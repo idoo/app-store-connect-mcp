@@ -259,12 +259,14 @@ func prcCompute(ctx context.Context, env *tool.Env, in pricingPlanIn) (*prcPlan,
 			return nil, err
 		}
 		p.state["availability"] = cur
-		p.manualSteps = append(p.manualSteps, p.Avail.Manual...)
 		switch {
 		case p.Avail.Create:
 			p.CallPlan = append(p.CallPlan, prcCall{Method: "POST", Path: "/v2/appAvailabilities", Count: 1})
-		case p.Avail.Calls > 0:
-			p.CallPlan = append(p.CallPlan, prcCall{Method: "PATCH", Path: "/v1/territoryAvailabilities/{id}", Count: p.Avail.Calls})
+		case len(p.Avail.Changes) > 0:
+			p.CallPlan = append(p.CallPlan, prcCall{Method: "PATCH", Path: "/v1/territoryAvailabilities/{id}", Count: len(p.Avail.Changes)})
+		}
+		if p.Avail.NewTerritoriesViaWeb {
+			p.CallPlan = append(p.CallPlan, prcCall{Method: "POST", Path: "/iris/v1/bulkUpdateAppAvailabilities (web session)", Count: 1})
 		}
 		p.Calls += p.Avail.Calls
 	}
@@ -557,9 +559,35 @@ func (p *prcPlan) preview() tool.PlanPreview {
 			}
 		}
 	}
-	if p.Avail != nil && p.Avail.Calls > 0 {
-		sum += fmt.Sprintf("; availability: %d territories", len(p.Avail.Changes))
-		intended["availability"] = p.Avail
+	if a := p.Avail; a != nil && a.Calls > 0 {
+		// Territory codes only (no record ids): a whole-world removal stays
+		// far below the 6000-byte approval prompt cap.
+		var add, remove []string
+		for _, c := range a.Changes {
+			if c.Available {
+				add = append(add, c.Territory)
+			} else {
+				remove = append(remove, c.Territory)
+			}
+		}
+		av := map[string]any{"create": a.Create}
+		if len(add) > 0 {
+			av["available_in"] = add
+		}
+		if len(remove) > 0 {
+			av["unavailable_in"] = remove
+		}
+		if a.AvailableInNewTerritories != nil && (a.Create || a.NewTerritoriesViaWeb) {
+			av["available_in_new_territories"] = *a.AvailableInNewTerritories
+		}
+		if a.NewTerritoriesViaWeb {
+			av["via"] = "available_in_new_territories through the App Store Connect web session"
+			sum += fmt.Sprintf("; available in new territories: %t", *a.AvailableInNewTerritories)
+		}
+		if len(a.Changes) > 0 {
+			sum += fmt.Sprintf("; availability: %d territories", len(a.Changes))
+		}
+		intended["availability"] = av
 	}
 	return tool.PlanPreview{Summary: sum, Intended: intended, Affected: affected, Irreversible: p.irreversible}
 }

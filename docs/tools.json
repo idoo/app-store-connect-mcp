@@ -2398,7 +2398,7 @@
               "type": "array"
             },
             "available_in_new_territories": {
-              "description": "only settable when availability is first created",
+              "description": "on an existing availability changed through the web session (web_login)",
               "type": "boolean"
             },
             "remove": {
@@ -2565,7 +2565,7 @@
               "type": "array"
             },
             "available_in_new_territories": {
-              "description": "only settable when availability is first created",
+              "description": "on an existing availability changed through the web session (web_login)",
               "type": "boolean"
             },
             "remove": {

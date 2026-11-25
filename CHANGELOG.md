@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-25
+
+### Added
+
+- `pricing_plan` / `pricing_apply` change `availability.available_in_new_territories` of an app that already has an availability. The public API cannot (a second `POST /v2/appAvailabilities` answers 409, and there is no PATCH), so the change goes through the web session exactly as App Store Connect's Pricing and Availability page sends it: `POST /iris/v1/bulkUpdateAppAvailabilities`, carrying one territory in the state it already has (or will have after the plan's other changes), never a pre-order. The plan checks the session first and fails `web_session_required` with `web_login` as the next step instead of planning a call it cannot make; the call plan lists the web call separately. Before, the plan only said to change it by hand.
+
+### Changed
+
+- The approval prompt of an availability change names the territories by code (`available_in`, `unavailable_in`) instead of repeating every territory record id: removing an app from sale everywhere (174 territories) now fits one prompt instead of five batches.
+
 ## [0.28.0] - 2026-11-23
 
 ### Added
@@ -555,7 +565,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/idoo/app-store-connect-mcp/compare/v0.26.0...v0.26.1
