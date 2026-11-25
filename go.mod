@@ -5,8 +5,8 @@ go 1.26.0
 toolchain go1.27.4
 
 require (
-	github.com/chromedp/cdproto v0.160.0
-	github.com/chromedp/chromedp v0.23.0
+	github.com/chromedp/cdproto v0.160.1
+	github.com/chromedp/chromedp v0.24.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
