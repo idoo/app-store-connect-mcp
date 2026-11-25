@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [Sem
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-25
+
+### Fixed
+
+- Homebrew, `install.sh` and the MCP Registry install again. The repository was recreated, and GitHub keeps the names of tags that had immutable releases reserved, so v0.8.0 to v0.29.0 can't be tagged again and their downloads are gone. 0.29.1 has the same code as 0.29.0, built and signed with a new Developer ID certificate.
+
 ## [0.29.0] - 2026-11-25
 
 ### Added
@@ -565,7 +571,8 @@ First public release.
 - Team and individual API keys, profiles, keychain storage, and per-project `.hamn.toml` pins that can only narrow permissions.
 - Ships via Homebrew, signed release binaries, Docker, a Claude Desktop `.mcpb` and the MCP Registry, plus agent skills you install with `hamn skills install`.
 
-[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/4c721a56e4da...HEAD
+[Unreleased]: https://github.com/idoo/app-store-connect-mcp/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/idoo/app-store-connect-mcp/compare/4c721a56e4da...v0.29.1
 [0.29.0]: https://github.com/idoo/app-store-connect-mcp/compare/ac9f25290e29...4c721a56e4da
 [0.28.0]: https://github.com/idoo/app-store-connect-mcp/compare/024b7e645843...ac9f25290e29
 [0.27.0]: https://github.com/idoo/app-store-connect-mcp/compare/281351c7e6b1...024b7e645843
